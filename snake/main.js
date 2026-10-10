@@ -9,7 +9,8 @@
   const remote = { snakes: new Map(), food: [] };                 // 참가자 화면용
   let clientAC = null;
   const behaviors = new Map();                                   // 지렁이별 행동 감지 (혼자/방장이 계산)
-  const settings = { name: "", ai: { level: "hard", count: 5 }, helper: "none", hue: 48 };
+  const settings = { name: "", ai: { level: "hard", count: 5 }, helper: "none", hue: 48, gameMode: "free" };
+  const hostPlayers = new Map();                                 // 방장: 들어온 친구들 (새 판 시작할 때 다시 넣기)
 
   fetch("brains.json").then(r => r.json()).then(b => { BRAINS = b; });
 
@@ -29,6 +30,9 @@
   seg("aiLevel", v => settings.ai.level = v);
   seg("aiCount", v => settings.ai.count = v, Number);
   seg("helperSel", v => settings.helper = v);
+  const MODE_HELP = { free: "언제든 들어오고 나가는 기본 방식이에요.", round: "3분 동안 가장 길게 자란 지렁이가 1등. 죽어도 다시 시작할 수 있어요.",
+    royale: "20초 뒤부터 경기장이 점점 줄어요(밖으로 나가면 탈락). 부활 없이 마지막까지 살아남으면 승리!" };
+  seg("gameMode", v => { settings.gameMode = v; $("modeHelp").textContent = MODE_HELP[v]; });
   const roomParam = new URLSearchParams(location.search).get("room");
   if (roomParam) $("code").value = roomParam.toUpperCase();
   const msg = t => { $("msg").textContent = t; };
@@ -55,7 +59,7 @@
   function startSolo() {
     if (!BRAINS) return msg("AI 불러오는 중… 잠시 뒤 다시");
     mode = "solo"; meId = "me";
-    sim = new SNK.Sim(BRAINS);
+    sim = new SNK.Sim(BRAINS, settings.gameMode);
     const me = sim.add("me", "human", myName(), settings.hue); me.helper = settings.helper !== "none";
     sim.inputs.me = input;
     addAIs(); enterGame(); $("myAc").hidden = false;
@@ -68,14 +72,14 @@
     try {
       await NET.init();
       mode = "host"; meId = NET.uid;
-      sim = new SNK.Sim(BRAINS);
+      sim = new SNK.Sim(BRAINS, settings.gameMode); hostPlayers.clear();
       const me = sim.add(meId, "human", myName(), settings.hue); me.helper = settings.helper !== "none";
       sim.inputs[meId] = input;
       addAIs();
       hostCtl = await NET.host({ name: settings.name, hue: settings.hue, helper: me.helper, ai: settings.ai }, sim, {
-        join(uid, p) { if (!sim.snakes.find(s => s.id === uid)) { const s = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; } },
-        update(uid, p) { const s = sim.snakes.find(x => x.id === uid); if (s) s.helper = !!p.helper; },
-        leave(uid) { sim.remove(uid); behaviors.delete(uid); },
+        join(uid, p) { hostPlayers.set(uid, p); if (!sim.snakes.find(s => s.id === uid)) { const s = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; } },
+        update(uid, p) { hostPlayers.set(uid, p); const s = sim.snakes.find(x => x.id === uid); if (s) s.helper = !!p.helper; },
+        leave(uid) { hostPlayers.delete(uid); sim.remove(uid); behaviors.delete(uid); },
       });
       enterGame(); showRoom(hostCtl.code, true);
       clearInterval(tickTimer); tickTimer = setInterval(stepSim, 1000 / HZ);
@@ -108,8 +112,8 @@
     clearInterval(tickTimer); clearInterval(reportTimer);
     if (hostCtl) { hostCtl.leave(); hostCtl = null; }
     if (joinCtl) { joinCtl.leave(); joinCtl = null; }
-    mode = "menu"; sim = null; behaviors.clear(); paused = false; respawnedAtDeaths = 0; stopSpectate();
-    $("menu").hidden = false; ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc"].forEach(id => $(id).hidden = true);
+    mode = "menu"; sim = null; behaviors.clear(); paused = false; respawnedAtDeaths = 0; stopSpectate(); remote.g = null;
+    $("menu").hidden = false; ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc", "timer", "results"].forEach(id => $(id).hidden = true);
     if (window.__snakeHelper) window.__snakeHelper.off();
     msg("");
   }
@@ -156,10 +160,12 @@
     if (v.k <= stateK) return;                                              // 직접 연결은 순서가 바뀌어 올 수 있음 → 옛것 버림
     stateGap = Math.max(1, Math.min(4, v.k - stateK)); stateK = v.k;
     lastStateAt = performance.now();
+    if (v.g) remote.g = v.g;
     for (const e of v.s || []) {
       const s = ensure(e[0]);
-      const wasAlive = s.alive, prevK = s.k ?? -9;
-      s.prev = wasAlive && s.body.length ? { head: s.head, pts: s.pts } : null;
+      let wasAlive = s.alive; const prevK = s.k ?? -9;
+      if (wasAlive && s.body.length && Math.hypot(e[3] - s.head[0], e[4] - s.head[1]) > 6) wasAlive = false;   // 새 판에서 순간이동
+      s.prev = wasAlive && s.body.length ? { head: s.head, pts: s.body.slice(1, Math.floor(s.length) + 4) } : null;
       s.ang = e[5]; s.length = e[6] / 10; s.alive = !!e[7]; s.boosting = !!e[8]; s.deaths = e[9]; s.kills = e[10]; s.prot = !!e[11];
       const sp = s.boosting ? C.BOOST : C.SPEED;
       if (s.alive && (!wasAlive || !s.body.length)) { s.body = SNK.straightBody([e[3], e[4]], s.ang, C.NMAX); s.prev = null; }   // 새로 태어남
@@ -205,7 +211,7 @@
       if (!s.alive || !s.body || !s.body.length) { smoothLen.delete(s.id); return s; }
       let head, body, ang = s.ang;
       if (client && s.id === meId) { const p = predicted(s, now); head = p.head; body = p.body; ang = p.ang; }   // 내 지렁이: 예측해서 앞서
-      else if (s.prev) { head = mix(s.prev.head, s.head, t); body = [head, ...s.pts.map((p, i) => s.prev.pts[i] ? mix(s.prev.pts[i], p, t) : p)]; if (s.body[s.pts.length + 1]) body.push(s.body[s.pts.length + 1]); }
+      else if (s.prev) { head = mix(s.prev.head, s.head, t); body = [head, ...s.prev.pts.map((p, i) => s.body[i + 1] ? mix(p, s.body[i + 1], t) : p)]; }   // 꼬리 끝 마디까지 섞어서
       else { head = s.head; body = s.body.slice(0, Math.floor(s.length) + 2); }
       // 길이도 부드럽게: 보이는 길이가 실제 길이를 천천히 따라가고, 마지막 마디는 비율만큼
       const dl = (smoothLen.get(s.id) ?? s.length), L = dl + (s.length - dl) * 0.12;
@@ -219,14 +225,42 @@
   let hudAt = 0;
   function loop(t) {
     if (mode !== "menu") {
-      RND.frame(displayList(t), foods(), meId, spectating && specId ? specId : meId);
+      RND.frame(displayList(t), foods(), meId, spectating && specId ? specId : meId, gs().R);
     } else RND.frame([], sim ? sim.food : demoFood, null);
     requestAnimationFrame(loop);
   }
   const demoFood = Array.from({ length: 300 }, () => { const r = (C.R_ARENA - 2) * Math.sqrt(Math.random()), a = Math.random() * 6.283; return [r * Math.cos(a), r * Math.sin(a), SNK.FOOD_HUES[Math.floor(Math.random() * 9)], 1]; });
   requestAnimationFrame(loop);
   setInterval(() => { if (mode !== "menu") hud(); }, 250);
+  // 게임 방식 정보 (혼자·방장은 내 시뮬레이션, 참가자는 방장이 보낸 것)
+  function gs() {
+    if (mode === "client") { const g = remote.g || {}; return { mode: g.m || "free", R: g.R || C.R_ARENA, tl: g.tl ?? -1, over: !!g.o, res: g.res }; }
+    if (!sim) return { mode: "free", R: C.R_ARENA, tl: -1, over: false };
+    return { mode: sim.mode, R: sim.R, tl: sim.timeLeft == null ? -1 : Math.ceil(sim.timeLeft), over: sim.over, res: sim.results };
+  }
+  const mmss = t => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
+  function modeHud() {
+    const g = gs(), el = $("timer");
+    if (g.mode === "free") { el.hidden = true; } else {
+      el.hidden = false;
+      const alive = list().filter(s => s.alive).length;
+      el.innerHTML = g.mode === "round" ? `라운드 · 남은 시간 <b style="color:var(--me)">${mmss(Math.max(0, g.tl))}</b>`
+        : `배틀로얄 · 생존 <b style="color:var(--me)">${alive}</b>명 · ${g.R < C.R_ARENA - 0.5 ? "<span style='color:var(--danger)'>경기장 줄어드는 중</span>" : "곧 경기장이 줄어요"} · ${mmss(Math.max(0, g.tl))}`;
+    }
+    if (g.over && g.res) {
+      if ($("results").hidden) {
+        $("dead").hidden = true; stopSpectate();
+        const win = g.res[0];
+        $("resTitle").textContent = win ? (win.id === meId ? "🏆 우승!" : `🏆 ${win.name} 우승`) : "결과";
+        $("resList").innerHTML = g.res.slice(0, 10).map(r => `<li style="${r.id === meId ? "color:var(--me);font-weight:700" : ""}">${esc(r.name)} <span class="small">길이 ${r.len} · 잡음 ${r.kills}${g.mode === "royale" ? (r.alive ? " · 생존" : " · 탈락") : ""}</span></li>`).join("");
+        $("again").hidden = mode === "client";
+        $("resNote").textContent = mode === "client" ? "방장이 다시 시작하면 바로 이어져요." : g.mode === "round" ? "순위 = 라운드 동안 가장 길었던 길이" : "순위 = 살아남은 순서";
+        $("results").hidden = false;
+      }
+    } else $("results").hidden = true;
+  }
   function hud() {
+    modeHud();
     const all = list().filter(s => s.alive).sort((a, b) => b.length - a.length);
     $("lb").querySelector("ol").innerHTML = all.slice(0, 10).map(s => `<li class="${s.id === meId ? "me" : ""}">${(s.helper ? "🧪" : "") + esc(s.name)} <span style="float:right">${Math.floor(s.length)}</span></li>`).join("");
     const me = list().find(s => s.id === meId);
@@ -235,8 +269,12 @@
       const boostTxt = input.boost ? (me.length > C.L_MIN + 1 ? " · <b style='color:var(--me);font-size:13px'>부스트</b>" : " · <span style='color:var(--danger)'>부스트 불가 (길이 7 이하)</span>") : "";
       $("me").innerHTML = `내 길이 <b>${Math.floor(me.length)}</b> · 순위 ${rank || "-"}/${all.length}<br><span class="small">죽음 ${me.deaths} · 잡음 ${me.kills}${boostTxt}</span>`;
       if (spectating) { const t = list().find(x => x.id === specId); if (!t || !t.alive) cycleSpec(1); }
-      const showDead = !me.alive && me.deaths > respawnedAtDeaths && $("pause").hidden && !spectating;   // '새로 시작'을 누른 뒤 또 죽기 전까지는 안 띄움
-      if (showDead && $("dead").hidden) $("deadMsg").textContent = `최고 길이 ${Math.floor(me.best || me.length)} · 잡은 수 ${me.kills} · 죽은 횟수 ${me.deaths}`;
+      const showDead = !me.alive && me.deaths > respawnedAtDeaths && $("pause").hidden && !spectating && !gs().over;   // '새로 시작'을 누른 뒤 또 죽기 전까지는 안 띄움
+      if (showDead && $("dead").hidden) {
+        const royale = gs().mode === "royale";
+        $("deadMsg").textContent = royale ? `탈락! 길이 ${Math.floor(me.length)} · 잡은 수 ${me.kills}. 관전하며 끝까지 볼 수 있어요.` : `최고 길이 ${Math.floor(me.best || me.length)} · 잡은 수 ${me.kills} · 죽은 횟수 ${me.deaths}`;
+        $("respawn").hidden = royale; $("deadNote").hidden = royale;
+      }
       $("dead").hidden = !showDead;
     }
     if (!$("admin").hidden) renderAdmin();
@@ -395,7 +433,7 @@
     paused = on && mode === "solo";                                       // 친구랑 할 땐 다른 사람이 있어 멈추지 않음
     $("pause").hidden = !on;
     $("pauseTitle").textContent = mode === "solo" ? "잠깐 멈춤" : "메뉴";
-    $("newGame").hidden = mode !== "solo";
+    $("newGame").hidden = mode === "client";
     $("pauseNote").textContent = mode === "solo" ? "게임이 멈춰 있어요." : "친구들과 하는 중이라 게임은 계속 진행돼요.";
     if (on) $("dead").hidden = true;
   }
@@ -403,7 +441,20 @@
   $("resume").onclick = () => setPause(false);
   $("quit").onclick = () => { setPause(false); backToMenu(); };
   $("pauseAdmin").onclick = () => { setPause(false); openAdmin(); };
-  function newGame() { const m = mode; setPause(false); if (m === "solo") { backToMenu(); startSolo(); } }
+  // 새 판: 혼자는 처음부터, 방장은 같은 방에서 친구들 그대로 새 판 (라운드·배틀로얄 다시 하기)
+  function newGame() {
+    setPause(false); $("results").hidden = true;
+    if (mode === "solo") { backToMenu(); startSolo(); return; }
+    if (mode !== "host") return;
+    const old = sim, next = new SNK.Sim(BRAINS, old.mode);
+    next.inputs = old.inputs;
+    const me = next.add(meId, "human", settings.name, settings.hue); me.helper = settings.helper !== "none";
+    for (const [uid, p] of hostPlayers) { const s = next.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; }
+    sim = next; addAIs(); behaviors.clear(); respawnedAtDeaths = 0; stopSpectate();
+    hostCtl.setSim(next);
+  }
+  $("again").onclick = newGame;
+  $("resMenu").onclick = () => { $("results").hidden = true; backToMenu(); };
   $("newGame").onclick = newGame;
   window.addEventListener("keydown", e => {
     const ok = e.key === "Enter" || e.key === " ";
@@ -415,6 +466,7 @@
     if (e.key === "Escape") { setPause($("pause").hidden); e.preventDefault(); return; }
     if (spectating && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { cycleSpec(e.key === "ArrowRight" ? 1 : -1); e.preventDefault(); return; }
     if (ok && (!$("dead").hidden || spectating)) { e.preventDefault(); if (!e.repeat) respawn(); return; }
+    if (ok && !$("results").hidden) { e.preventDefault(); if (mode !== "client" && !e.repeat) newGame(); return; }
     if (ok && !$("pause").hidden) { e.preventDefault(); if (mode === "solo") newGame(); else setPause(false); }
   });
 

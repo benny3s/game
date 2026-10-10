@@ -102,7 +102,7 @@ const RND = (() => {
     ctx.globalAlpha = 1;
   }
 
-  function frame(snakes, food, meId, camId = meId) {
+  function frame(snakes, food, meId, camId = meId, zoneR = C.R_ARENA) {
     if (!W) resize();
     const me = snakes.find(s => s.id === meId), tgt = snakes.find(s => s.id === camId) || me;
     if (cam.whole || !tgt) { cam.x = 0; cam.y = 0; cam.ppu = Math.min(W, H) / (C.R_ARENA * 2 + 4); }
@@ -124,7 +124,13 @@ const RND = (() => {
     ctx.translate(-cam.x * cam.ppu + W / 2, cam.y * cam.ppu + H / 2); ctx.scale(k20, k20);
     ctx.fillStyle = pattern; ctx.fillRect(-C.R_ARENA * 20 - 60, -C.R_ARENA * 20 - 60, C.R_ARENA * 40 + 120, C.R_ARENA * 40 + 120);
     ctx.restore();
-    // 경계 (붉은 띠)
+    // 경계 (붉은 띠). 배틀로얄로 줄어든 경기장이면 바깥을 붉게 어둡게 + 줄어든 경계를 깜빡이는 띠로
+    if (zoneR < C.R_ARENA - 0.3) {
+      ctx.save(); ctx.beginPath(); ctx.arc(sx(0), sy(0), C.R_ARENA * cam.ppu, 0, TAU); ctx.arc(sx(0), sy(0), zoneR * cam.ppu, 0, TAU, true);
+      ctx.fillStyle = "rgba(120,10,25,.45)"; ctx.fill("evenodd"); ctx.restore();
+      ctx.strokeStyle = `rgba(255,70,90,${0.6 + 0.3 * Math.sin(performance.now() / 200)})`; ctx.lineWidth = Math.max(4, cam.ppu * 0.6);
+      ctx.beginPath(); ctx.arc(sx(0), sy(0), zoneR * cam.ppu, 0, TAU); ctx.stroke();
+    }
     ctx.strokeStyle = "rgba(255,60,80,.55)"; ctx.lineWidth = Math.max(3, cam.ppu * 0.5);
     ctx.beginPath(); ctx.arc(sx(0), sy(0), C.R_ARENA * cam.ppu, 0, TAU); ctx.stroke();
     // 먹이 (반짝임)
@@ -141,14 +147,15 @@ const RND = (() => {
     // 지렁이 (내 것은 맨 위)
     for (const s of snakes) if (s.alive && s.id !== meId) drawSnake(s, false);
     if (me && me.alive) drawSnake(me, true);
-    drawMini(snakes, meId);
+    drawMini(snakes, meId, zoneR);
   }
 
-  function drawMini(snakes, meId) {
+  function drawMini(snakes, meId, zoneR) {
     const m = mini.width, c = m / 2, k = (m / 2 - 3) / C.R_ARENA;
     mctx.clearRect(0, 0, m, m);
     mctx.fillStyle = "rgba(20,26,32,.75)"; mctx.beginPath(); mctx.arc(c, c, m / 2 - 1, 0, TAU); mctx.fill();
     mctx.strokeStyle = "rgba(255,255,255,.25)"; mctx.lineWidth = 1; mctx.stroke();
+    if (zoneR < C.R_ARENA - 0.3) { mctx.strokeStyle = "rgba(255,70,90,.9)"; mctx.lineWidth = 2; mctx.beginPath(); mctx.arc(c, c, zoneR * k, 0, TAU); mctx.stroke(); }
     for (const s of snakes) {
       if (!s.alive) continue;
       const me = s.id === meId;

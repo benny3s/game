@@ -42,6 +42,7 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 #preview{width:150px;height:44px;border-radius:8px;background:#151b22}
 .go{display:flex;flex-wrap:wrap;gap:8px}
 .go .btn{flex:1 1 140px;padding:12px;font-size:15px}
+.go[style*="column"] .btn{flex:0 0 auto}
 .btn.primary{background:var(--ai);border-color:var(--ai);color:#06110f}
 #dead,#pause{background:rgba(6,9,8,.45)}
 #admin{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 40px);width:min(420px,calc(100vw - 20px));max-height:calc(100dvh - 60px);overflow:auto;z-index:8;background:rgba(20,16,10,.95);border:1px solid #6b5426;border-radius:12px;padding:12px;display:grid;gap:8px;font-size:13px}
@@ -61,6 +62,13 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 <div class="hud" id="lb" hidden><b>순위</b><ol></ol></div>
 <div class="hud" id="me" hidden></div>
 <div class="hud" id="room" hidden></div>
+<div class="hud" id="timer" hidden style="left:50%;top:calc(env(safe-area-inset-top,0px) + 46px);transform:translateX(-50%);text-align:center;font:600 15px/1.4 var(--mono);color:#fff"></div>
+<div class="card" id="results" hidden><div style="text-align:center;width:min(420px,100%)">
+  <h1 style="font-size:24px" id="resTitle">결과</h1>
+  <ol id="resList" style="text-align:left;margin:0;padding-left:24px;display:grid;gap:4px;font-size:15px"></ol>
+  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="again">다시 하기 (Space · Enter)</button><button class="btn" type="button" id="resMenu">메뉴로</button></div>
+  <p class="small" id="resNote"></p>
+</div></div>
 <div class="hud" id="spec" hidden style="left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);text-align:center;font-size:14px;pointer-events:auto"></div>
 <div class="topbtn" id="topbtn" hidden>
   <button class="btn" type="button" id="toMenu">메뉴 (ESC)</button>
@@ -72,7 +80,7 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <h1 style="font-size:24px">죽었어요</h1>
   <p class="lede" id="deadMsg" style="margin:0 auto"></p>
   <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="respawn">새로 시작 (Space · Enter)</button><button class="btn" type="button" id="spectate">관전하기</button><button class="btn" type="button" id="deadMenu">메뉴로</button></div>
-  <p class="small">새로 시작하면 다른 지렁이에게서 먼 곳에서, 2초 동안 보호(반투명) 상태로 시작해요.</p>
+  <p class="small" id="deadNote">새로 시작하면 다른 지렁이에게서 먼 곳에서, 2초 동안 보호(반투명) 상태로 시작해요.</p>
 </div></div>
 <div class="card" id="pause" hidden><div style="text-align:center;width:min(360px,100%)">
   <h1 style="font-size:22px" id="pauseTitle">잠깐 멈춤</h1>
@@ -87,6 +95,14 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <p class="lede">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 손가락 쪽으로 돌고 왼쪽 아래 버튼이 부스트예요.</p>
   <label class="field"><span>내 이름</span><input type="text" id="name" maxlength="12" placeholder="이름"></label>
   <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
+  <div class="field"><span>게임 방식</span>
+    <div class="seg" id="gameMode">
+      <button class="btn" type="button" data-v="free" aria-pressed="true">자유 (끝없이)</button>
+      <button class="btn" type="button" data-v="round">라운드 3분</button>
+      <button class="btn" type="button" data-v="royale">배틀로얄</button>
+    </div>
+    <span class="small" id="modeHelp">언제든 들어오고 나가는 기본 방식이에요.</span>
+  </div>
   <div class="field"><span>AI 상대</span>
     <div class="seg" id="aiLevel">
       <button class="btn" type="button" data-v="raw">학습 전</button>
@@ -125,10 +141,10 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <div class="go"><button class="btn" type="button" id="loginCancel">취소</button><button class="btn primary" type="button" id="loginGo">들어가기</button></div>
 </div></div>
 
-<script src="core.js?v=8"></script>
-<script src="render.js?v=8"></script>
-<script src="ac.js?v=8"></script>
-<script src="net.js?v=8"></script>
-<script src="main.js?v=8"></script>
+<script src="core.js?v=10"></script>
+<script src="render.js?v=10"></script>
+<script src="ac.js?v=10"></script>
+<script src="net.js?v=10"></script>
+<script src="main.js?v=10"></script>
 </body>
 </html>
