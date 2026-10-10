@@ -243,21 +243,74 @@
   const cv = $("cv"), ctx = cv.getContext("2d"), mainCtx = ctx, mini = $("mini"), mctx = mini.getContext("2d");
   let W = 0, H = 0, DPR = 1;
   function resize() { DPR = Math.min(devicePixelRatio || 1, 2); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; }
-  addEventListener("resize", resize);
+  addEventListener("resize", () => { resize(); camSent = ""; layoutConsole(); });
   const cam = { x: 2048, y: 2048, z: 1 };
   const ARENA = 900;                                                    // 미니맵에 보이는 범위 (중앙 ± 900)
   let cur = null, prev = null, curAt = 0, gap = 84, sel = new Set(), mode = null, drag = null, flashes = [], marks = [], groups = {}, lastGroupKey = { k: null, at: 0 };
   let stGaps = [], reacts = [], pend = null, resultShown = null;
   const S = (x, y) => [(x - cam.x) * cam.z + W / 2, (y - cam.y) * cam.z + H / 2];
   const Wd = (sx, sy) => [(sx - W / 2) / cam.z + cam.x, (sy - H / 2) / cam.z + cam.y];
-  function enterGame() { show("game"); sel.clear(); resultShown = null; $("banner").textContent = ""; $("endBox").style.display = "none"; buildCard(); SND.go(); }
-  function leaveGame() { show("lobby"); $("startBtn").disabled = false; renderLobby(); }
+  let realOn = HOST, camSent = "", camT = 0;
+  const classicScale = () => Math.max(0.5, Math.min(W / 640, H / 480));   // 640×480 기준 배율 (작은 창이면 줄임)
+  function sendCam(force) {
+    if (!isHost || !realOn || !W) return;
+    const s = cam.z, vw = Math.ceil(W / s), vh = Math.ceil(H / s);
+    const x = Math.round(cam.x - vw / 2), y = Math.round(cam.y - vh / 2), key = `${x},${y},${vw},${vh}`, now = performance.now();
+    if (key === camSent || (!force && now - camT < 40)) return;
+    camSent = key; camT = now;
+    fetch("/cam", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ x, y, w: vw, h: vh }) }).catch(() => {});
+  }
+  function setReal(on) {
+    realOn = on && isHost;
+    $("game").classList.toggle("classic", realOn); resize(); cam.z = realOn ? classicScale() : 1; layoutConsole();
+    const img = $("real"); img.style.display = realOn ? "block" : "none";
+    if (realOn) { img.src = "/video?" + Date.now(); camSent = ""; sendCam(true); } else img.removeAttribute("src");
+  }
+  // ── 원작 콘솔: 엔진 서버가 블리자드 데이터에서 꺼낸 저그 콘솔 그림 (친구 페이지엔 없음)
+  let consoleImg = null;
+  async function layoutConsole() {
+    const g = $("game");
+    if (!realOn) { g.style.removeProperty("--s"); return; }
+    if (!consoleImg) {
+      try { const r = await fetch("/asset?f=" + encodeURIComponent("game\\zconsole.pcx") + "&crop=1"); const top = +(r.headers.get("X-Top") || 290); consoleImg = { url: URL.createObjectURL(await r.blob()), top }; } catch (e) { consoleImg = { url: "", top: 330 }; }
+    }
+    const s = classicScale(), cw = 640 * s;
+    g.style.setProperty("--s", s); g.style.setProperty("--ct", consoleImg.top + "px"); g.style.setProperty("--ch", (480 - consoleImg.top) + "px");
+    g.style.setProperty("--cx", Math.round((g.clientWidth - cw) / 2) + "px"); g.style.setProperty("--cimg", `url(${consoleImg.url})`);
+  }
+  // ── 원작 소리: 선택하면 대사, 명령하면 대답, 공격·죽음 소리 (같은 소리 겹침은 제한)
+  const SFX = {
+    43: { what: ["Zerg\\Mutalid\\ZMuWht00", "Zerg\\Mutalid\\ZMuWht01", "Zerg\\Mutalid\\ZMuWht02", "Zerg\\Mutalid\\ZMuWht03"], yes: ["Zerg\\Mutalid\\ZMuYes00", "Zerg\\Mutalid\\ZMuYes01", "Zerg\\Mutalid\\ZMuYes02", "Zerg\\Mutalid\\ZMuYes03"], fire: ["Bullet\\zmuFir00"], die: ["Zerg\\Mutalid\\ZMuDth00"] },
+    60: { what: ["Protoss\\Corsair\\PCoWht00", "Protoss\\Corsair\\PCoWht01"], yes: ["Protoss\\Corsair\\PCoYes00", "Protoss\\Corsair\\PCoYes01"], fire: ["Protoss\\Corsair\\PCorhit1", "Protoss\\Corsair\\PCorhit2"], die: ["Misc\\ExploMed"] },
+    47: { what: ["Zerg\\AVENGER\\ZAvWht00", "Zerg\\AVENGER\\ZAvWht01"], yes: ["Zerg\\AVENGER\\ZAvYes00", "Zerg\\AVENGER\\ZAvYes01"], fire: ["Zerg\\AVENGER\\ZAvHit00"], die: ["Zerg\\AVENGER\\ZAvDth00"] },
+  };
+  const bufs = {}, playingAt = {};
+  async function sfxBuf(name) {
+    if (name in bufs) return bufs[name];
+    bufs[name] = null; const a = audio(); if (!a) return null;
+    for (const ext of [".wav", ".WAV"]) {
+      try { const r = await fetch("/asset?f=" + encodeURIComponent("sound\\" + name + ext)); if (!r.ok) continue; bufs[name] = await a.decodeAudioData(await r.arrayBuffer()); return bufs[name]; } catch (e) {}
+    }
+    return null;
+  }
+  async function sfx(type, kind, vol = 0.7, minGap = 60) {
+    if (!realOn) return;
+    const set = SFX[type] && SFX[type][kind]; if (!set) return;
+    const k = type + kind, now = performance.now(); if (now - (playingAt[k] || 0) < minGap) return; playingAt[k] = now;
+    const b = await sfxBuf(set[Math.floor(Math.random() * set.length)]); const a = audio(); if (!b || !a) return;
+    const src = a.createBufferSource(), g = a.createGain(); g.gain.value = vol; src.buffer = b; src.connect(g).connect(a.destination); src.start();
+  }
+  const onScreen = (x, y) => { const [sx, sy] = S(x, y); return sx > -40 && sy > -40 && sx < W + 40 && sy < H + 40; };
+  function enterGame() { show("game"); if (isHost) setReal(realOn || HOST); sel.clear(); resultShown = null; $("banner").textContent = ""; $("endBox").style.display = "none"; buildCard(); SND.go(); }
+  function leaveGame() { if (isHost) $("real").removeAttribute("src"); show("lobby"); $("startBtn").disabled = false; renderLobby(); }
   function onState(s) {
     const now = performance.now();
     if (!cur) { cam.x = s.c[0] - (isTeam1() ? 0 : 0); cam.y = s.c[1]; }
+    const sById = new Map(s.u.map(u => [u[0], u]));
     if (cur) {
       const g = now - curAt; stGaps.push(g); if (stGaps.length > 60) stGaps.shift(); gap = Math.max(40, Math.min(220, g));
-      for (const u of s.u) { const o = cur.byId.get(u[0]); if (o && u[10] > o[10] + 3) flashes.push({ a: u[0], t: u[12], at: now }); }
+      for (const u of s.u) { const o = cur.byId.get(u[0]); if (o && u[10] > o[10] + 3) { flashes.push({ a: u[0], t: u[12], at: now }); if (onScreen(u[3], u[4])) sfx(u[2], "fire", 0.35, 90); } }
+      for (const o of cur.u) if (!sById.has(o[0]) && onScreen(o[3], o[4])) sfx(o[2], "die", 0.8, 120);
     }
     s.byId = new Map(s.u.map(u => [u[0], u])); prev = cur; cur = s; curAt = now;
     for (const id of [...sel]) if (!cur.byId.has(id)) sel.delete(id);
@@ -277,7 +330,7 @@
     const u = cur && cur.byId.get(ids[0]); if (u) pend = { id: ids[0], order: u[11], target: u[12], at: performance.now() };
     const m = { t: "c", ids, kind, x: Math.round(x), y: Math.round(y), target, q };
     if (isHost) engineCmd(m); else ctl.send(m);
-    SND.cmd();
+    if (realOn && u) sfx(u[2], "yes", 0.8, 700); else SND.cmd();
   }
   // 명령 버튼 (스타 콘솔 오른쪽 3×3)
   const CARD = [["move", "<u>M</u>이동", "m"], ["stop", "<u>S</u>정지", "s"], ["amove", "<u>A</u>공격", "a"], ["patrol", "<u>P</u>순찰", "p"], ["hold", "<u>H</u>그 자리", "h"]];
@@ -335,10 +388,10 @@
     } else {
       for (const u of cur.u) if (myUnits.has(u[0]) && u[3] >= ax && u[3] <= bx && u[4] >= ay && u[4] <= by) { if (sel.size >= 12) break; sel.add(u[0]); }   // 스타처럼 한 번에 12기
     }
-    if (sel.size) SND.sel();
+    if (sel.size) { SND.sel(); const u = cur.byId.get([...sel][0]); if (u && myUnits.has(u[0])) sfx(u[2], "what", 0.8, 900); }
     drag = null;
   });
-  cv.addEventListener("wheel", e => { e.preventDefault(); cam.z = Math.max(0.5, Math.min(2, cam.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); }, { passive: false });
+  cv.addEventListener("wheel", e => { e.preventDefault(); if (realOn) return; cam.z = Math.max(0.5, Math.min(2, cam.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); }, { passive: false });
   // 미니맵: 누르면 화면 이동, 오른쪽은 이동 명령
   const miniW = (e) => { const r = mini.getBoundingClientRect(), k = (e.clientX - r.left) / r.width, j = (e.clientY - r.top) / r.height; const c = cur ? cur.c : [2048, 2048]; return [c[0] - ARENA + k * 2 * ARENA, c[1] - ARENA + j * 2 * ARENA]; };
   let miniDrag = false;
@@ -369,6 +422,7 @@
     }
     if (["m", "s", "a", "p", "h"].includes(k) && !e.ctrlKey) { pressCmd({ m: "move", s: "stop", a: "amove", p: "patrol", h: "hold" }[k]); e.preventDefault(); }
     if (e.key === " ") { centerOnSel(); e.preventDefault(); }
+    if (e.key === "F2" && isHost) { setReal(!realOn); e.preventDefault(); }
   });
   addEventListener("keyup", e => keys.delete(e.key));
   function centerOnSel() { const us = [...sel].map(i => cur && cur.byId.get(i)).filter(Boolean); const src = us.length ? us : (cur ? cur.u.filter(u => myUnits.has(u[0])) : []); if (src.length) { cam.x = src.reduce((s, u) => s + u[3], 0) / src.length; cam.y = src.reduce((s, u) => s + u[4], 0) / src.length; } }
@@ -410,10 +464,11 @@
     if (keys.has("ArrowLeft") || (mouse && mouse[0] < 6)) cam.x -= sp; if (keys.has("ArrowRight") || (mouse && mouse[0] > W - 6)) cam.x += sp;
     if (keys.has("ArrowUp") || (mouse && mouse[1] < 6)) cam.y -= sp; if (keys.has("ArrowDown") || (mouse && mouse[1] > H - 6)) cam.y += sp;
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    ctx.fillStyle = "#04060a"; ctx.fillRect(0, 0, W, H);
-    for (const [x, y, r, p] of stars) { const sx = ((x - cam.x * (0.3 + p * 0.3)) % 4096 + 4096) % 4096 * (W / 4096) * 2.2 % W, sy = ((y - cam.y * (0.3 + p * 0.3)) % 4096 + 4096) % 4096 * (H / 4096) * 2.2 % H; ctx.fillStyle = `rgba(200,220,255,${0.25 + p * 0.5})`; ctx.fillRect(sx, sy, r, r); }
+    if (realOn) { cam.z = classicScale(); sendCam(); ctx.clearRect(0, 0, W, H); }
+    else { ctx.fillStyle = "#04060a"; ctx.fillRect(0, 0, W, H); }
+    if (!realOn) for (const [x, y, r, p] of stars) { const sx = ((x - cam.x * (0.3 + p * 0.3)) % 4096 + 4096) % 4096 * (W / 4096) * 2.2 % W, sy = ((y - cam.y * (0.3 + p * 0.3)) % 4096 + 4096) % 4096 * (H / 4096) * 2.2 % H; ctx.fillStyle = `rgba(200,220,255,${0.25 + p * 0.5})`; ctx.fillRect(sx, sy, r, r); }
     // 전장 바닥판 (우주 플랫폼 느낌의 큰 격자)
-    if (cur) {
+    if (cur && !realOn) {
       const [x0, y0] = S(cur.c[0] - ARENA, cur.c[1] - ARENA), sz = 2 * ARENA * cam.z;
       ctx.fillStyle = "rgba(40,55,70,.18)"; ctx.fillRect(x0, y0, sz, sz);
       ctx.strokeStyle = "rgba(110,140,170,.12)"; ctx.lineWidth = 1; ctx.beginPath();
@@ -428,12 +483,12 @@
     // 선택 원 (내 것 초록, 같은 편 노랑, 적 빨강) — 스타처럼 유닛 아래 납작한 원
     for (const id of sel) { const u = cur.byId.get(id), p = pos.get(id); if (!u || !p) continue; const [x, y] = S(...p); ctx.strokeStyle = myUnits.has(id) ? "#3cff6a" : u[1] === myTeam() ? "#f4e05d" : "#ff4b4b"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.ellipse(x, y + 10 * cam.z, 17 * cam.z, 8 * cam.z, 0, 0, 7); ctx.stroke(); }
     flashes = flashes.filter(f => now - f.at < 160);
-    for (const f of flashes) { const a = pos.get(f.a), b = pos.get(f.t); if (!a || !b) continue; const [x1, y1] = S(...a), [x2, y2] = S(...b); const g = ctx.createLinearGradient(x1, y1, x2, y2); g.addColorStop(0, "rgba(160,255,140,0)"); g.addColorStop(1, "rgba(200,255,170,.95)"); ctx.strokeStyle = g; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.fillStyle = "rgba(230,255,200,.9)"; ctx.beginPath(); ctx.arc(x2, y2, 4, 0, 7); ctx.fill(); }
+    if (!realOn) for (const f of flashes) { const a = pos.get(f.a), b = pos.get(f.t); if (!a || !b) continue; const [x1, y1] = S(...a), [x2, y2] = S(...b); const g = ctx.createLinearGradient(x1, y1, x2, y2); g.addColorStop(0, "rgba(160,255,140,0)"); g.addColorStop(1, "rgba(200,255,170,.95)"); ctx.strokeStyle = g; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.fillStyle = "rgba(230,255,200,.9)"; ctx.beginPath(); ctx.arc(x2, y2, 4, 0, 7); ctx.fill(); }
     // 그림자 → 유닛 (공중 유닛이라 그림자가 아래로 떨어져 보이게)
-    for (const u of cur.u) { const [x, y] = S(...pos.get(u[0])); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(x + 6 * cam.z, y + 22 * cam.z, 11 * cam.z, 5 * cam.z, 0, 0, 7); ctx.fill(); }
+    if (!realOn) for (const u of cur.u) { const [x, y] = S(...pos.get(u[0])); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(x + 6 * cam.z, y + 22 * cam.z, 11 * cam.z, 5 * cam.z, 0, 0, 7); ctx.fill(); }
     for (const u of cur.u) {
       const [x, y] = S(...pos.get(u[0])), hue = ownerHue(u);
-      ctx.save(); ctx.translate(x, y); ctx.scale(cam.z, cam.z); ctx.rotate(u[9]); shape(u[2], hue == null ? "#999" : colorOf(hue)); ctx.restore();
+      if (!realOn) { ctx.save(); ctx.translate(x, y); ctx.scale(cam.z, cam.z); ctx.rotate(u[9]); shape(u[2], hue == null ? "#999" : colorOf(hue)); ctx.restore(); }
       if (sel.has(u[0]) || mouse && Math.hypot(mouse[0] - x, mouse[1] - y) < 20) {          // 체력 칸 (스타처럼 칸으로 나뉜 막대)
         const hp = u[5] / Math.max(1, u[7]), sh = u[8] ? u[6] / u[8] : 0, bw = 30 * cam.z, cells = 8, y0 = y + 20 * cam.z;
         for (let i = 0; i < cells; i++) { const on = (i + 1) / cells <= hp + 1e-6 || (i / cells < hp); ctx.fillStyle = on ? (hp > .66 ? "#2fd34f" : hp > .33 ? "#e6d23a" : "#e2412f") : "#202a20"; ctx.fillRect(x - bw / 2 + i * bw / cells, y0, bw / cells - 1, 3); }

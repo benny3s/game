@@ -60,6 +60,16 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
 #endBox{position:absolute;left:50%;top:52%;transform:translateX(-50%);display:none;gap:8px}
 #warn{left:50%;top:10px;transform:translateX(-50%);background:rgba(150,30,40,.9);padding:6px 14px;border-radius:99px;font-weight:600;display:none}
 #menuBtn{position:absolute;left:10px;top:8px}
+/* 원작 화면 (이 PC 방장 · 진짜 그래픽): 640×480 기준을 s배로 키움. 콘솔 그림의 빈 곳으로 전장이 보임 */
+#game.classic #cv,#game.classic #real{height:100%}
+#game.classic #real{image-rendering:pixelated;object-fit:fill}
+#game.classic #console{left:var(--cx);right:auto;width:calc(640px * var(--s));height:calc(var(--ch) * var(--s));background:var(--cimg) left bottom/100% 100% no-repeat;border:0;padding:0;display:block;pointer-events:none;image-rendering:pixelated}
+#game.classic #mini{position:absolute;left:calc(6px * var(--s));top:calc((348px - var(--ct)) * var(--s));width:calc(128px * var(--s));height:calc(128px * var(--s));border:0;pointer-events:auto}
+#game.classic #selp{position:absolute;left:calc(160px * var(--s));top:calc((392px - var(--ct)) * var(--s));width:calc(250px * var(--s));height:calc(80px * var(--s));background:transparent;border:0;pointer-events:auto;transform-origin:left top}
+#game.classic #card{position:absolute;left:calc(505px * var(--s));top:calc((358px - var(--ct)) * var(--s));grid-template-columns:repeat(3,calc(40px * var(--s)));grid-auto-rows:calc(36px * var(--s));gap:calc(5px * var(--s));pointer-events:auto}
+#game.classic #card button{font-size:calc(9px * var(--s));background:rgba(0,0,0,.35);border-color:rgba(120,140,90,.6)}
+#game.classic #msgs{bottom:calc(var(--ch) * var(--s) + 6px)}
+#game.classic #gchat{bottom:calc(var(--ch) * var(--s) + 4px)}
 </style>
 </head>
 <body>
@@ -104,6 +114,7 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
 
 <!-- 3. 게임 -->
 <section id="game">
+  <img id="real" alt="" style="position:absolute;left:0;top:0;width:100%;height:calc(100% - 150px);object-fit:none;object-position:left top;display:none;image-rendering:pixelated">
   <canvas id="cv"></canvas>
   <button class="btn" id="menuBtn" style="padding:4px 10px;font-size:12px">메뉴 (F10)</button>
   <div class="hud" id="top"></div>
@@ -123,6 +134,6 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="../common/glog.js?v=1"></script>
 <script src="net.js?v=4"></script>
-<script src="sc.js?v=5"></script>
+<script src="sc.js?v=8"></script>
 </body>
 </html>
