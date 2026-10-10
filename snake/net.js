@@ -141,11 +141,12 @@ const NET = (() => {
       hooks.join(snap.key, snap.val());
       newPeer(snap.key);
     });
-    S.on(room.child("players"), "child_changed", snap => hooks.update && hooks.update(snap.key, snap.val()));
+    S.on(room.child("players"), "child_changed", snap => { if (snap.key !== user.uid) hooks.update && hooks.update(snap.key, snap.val()); });
     S.on(room.child("players"), "value", snap => { const v = snap.val() || {}; const k = Object.keys(v).length; if (k && k !== nPlayers) { nPlayers = k; writeIdx(); } hooks.players && hooks.players(v); });   // 대기실 참가자 목록
     S.on(room.child("players"), "child_removed", snap => { if (snap.key === user.uid) return; hooks.leave(snap.key); const p = peers.get(snap.key); if (p) { p.close(); peers.delete(snap.key); } });
-    S.on(room.child("inputs"), "child_added", snap => { if (sim) sim.inputs[snap.key] = unpackInput(snap.val()); });
-    S.on(room.child("inputs"), "child_changed", snap => { const v = unpackInput(snap.val()); if (sim) sim.inputs[snap.key] = v; hooks.input && hooks.input(snap.key, v); });
+    // 방장 자신의 입력 자리는 절대 덮어쓰지 않음 (같은 계정으로 다른 기기가 들어오면 방장 지렁이가 멈추던 문제)
+    S.on(room.child("inputs"), "child_added", snap => { if (sim && snap.key !== user.uid) sim.inputs[snap.key] = unpackInput(snap.val()); });
+    S.on(room.child("inputs"), "child_changed", snap => { if (snap.key === user.uid) return; const v = unpackInput(snap.val()); if (sim) sim.inputs[snap.key] = v; hooks.input && hooks.input(snap.key, v); });
     // 끊긴 직접 연결은 3초마다 살펴서 다시 붙임 (그동안은 Realtime DB로 이어짐)
     const healT = setInterval(() => { for (const [uid, p] of peers) if (p.dead()) newPeer(uid); }, 3000);
     let n = 0;
