@@ -87,7 +87,7 @@
   const aimPoint = (me, action) => { const dir = me.ang + (action % 3 - 1) * 0.6; return [me.head[0] + 8 * Math.cos(dir), me.head[1] + 8 * Math.sin(dir)]; };
   let boosting = false;
   function steer(world, boost) {
-    if (opt.how === "var") { G.input.target = world; G.input.turn = 0; G.input.boost = boost; return; }
+    if (opt.how === "var") { const me = G.me; G.input.aim = Math.atan2(world[1] - me.head[1], world[0] - me.head[0]); G.input.target = null; G.input.turn = 0; G.input.boost = boost; return; }
     const [x, y] = G.view.toScreen(world), r = cv.getBoundingClientRect();
     const ev = t => new PointerEvent(t, { clientX: r.left + x, clientY: r.top + y, bubbles: true, pointerId: 7, pointerType: "mouse" });
     cv.dispatchEvent(ev("pointermove"));

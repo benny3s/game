@@ -22,7 +22,7 @@ const AC = (() => {
         if (kind === "move") { if (st.lastEvt) st.intervals.push(t - st.lastEvt); st.lastEvt = t; if (st.intervals.length > 200) st.intervals.shift(); }
       },
       onStep(now) {
-        const tgt = input.target ? input.target[0].toFixed(3) + "," + input.target[1].toFixed(3) : "";
+        const tgt = (input.target ? input.target[0].toFixed(3) + "," + input.target[1].toFixed(3) : "") + "|" + (input.aim != null ? input.aim.toFixed(4) : "") + "|" + (input.turn || 0);
         if (tgt !== st.lastSeen) {
           if (st.lastSeen !== null && now - st.lastEventAt > 150 && !input._own) { if (!st.tamper) say("입력 변조: 마우스 이벤트 없이 목표 좌표가 바뀜"); st.tamper++; }
           st.lastSeen = tgt;

@@ -55,11 +55,12 @@ const SNK = (() => {
     for (let k = 0; k < C.N_SECT; k++) { const danger = Math.max(o[k * 4 + 2], o[k * 4 + 3]); const sc = o[k * 4] + 0.5 * o[k * 4 + 1] - 3 * (danger > 0.6) - 1.5 * danger; if (sc > bs) { bs = sc; best = k; } }
     return ((best >= 1 && best <= 7) ? 1 : (best >= 9 && best <= 14) ? -1 : 0) + 1;
   }
-  // 사람 입력(목표 지점·방향키·부스트) → 행동. 한 번에 0.25라디안만 (AI와 같은 조건)
+  // 사람 입력 → 행동. 한 번에 0.25라디안만 (AI와 같은 조건)
+  //   우선순위: 방향키(turn) > 마우스 방향(aim: 화면 가운데=내 머리 기준 각도, slither 방식) > 목표 지점(target: 헬퍼 변수 방식)
   function humanAction(s, inp) {
     let turn = inp.turn || 0;
-    if (turn === 0 && inp.target) {
-      const want = Math.atan2(inp.target[1] - s.head[1], inp.target[0] - s.head[0]);
+    if (turn === 0 && (inp.aim != null || inp.target)) {
+      const want = inp.aim != null ? inp.aim : Math.atan2(inp.target[1] - s.head[1], inp.target[0] - s.head[0]);
       const diff = ((want - s.ang) % TAU + TAU * 1.5) % TAU - Math.PI;
       turn = Math.abs(diff) < C.TURN / 2 ? 0 : diff > 0 ? 1 : -1;
     }

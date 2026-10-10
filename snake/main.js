@@ -193,7 +193,8 @@
     const me = list().find(s => s.id === meId);
     if (me) {
       const rank = all.indexOf(me) + 1;
-      $("me").innerHTML = `내 길이 <b>${Math.floor(me.length)}</b> · 순위 ${rank || "-"}/${all.length}<br><span class="small">죽음 ${me.deaths} · 잡음 ${me.kills}${input.boost ? " · 부스트" : ""}</span>`;
+      const boostTxt = input.boost ? (me.length > C.L_MIN + 1 ? " · <b style='color:var(--me);font-size:13px'>부스트</b>" : " · <span style='color:var(--danger)'>부스트 불가 (길이 7 이하)</span>") : "";
+      $("me").innerHTML = `내 길이 <b>${Math.floor(me.length)}</b> · 순위 ${rank || "-"}/${all.length}<br><span class="small">죽음 ${me.deaths} · 잡음 ${me.kills}${boostTxt}</span>`;
       const showDead = !me.alive && me.deaths > respawnedAtDeaths && $("pause").hidden;   // '다시 태어나기'를 누른 뒤 또 죽기 전까지는 안 띄움
       if (showDead && $("dead").hidden) $("deadMsg").textContent = `최고 길이 ${Math.floor(me.best || me.length)} · 잡은 수 ${me.kills} · 죽은 횟수 ${me.deaths}`;
       $("dead").hidden = !showDead;
@@ -204,9 +205,11 @@
 
   // ── 입력: PC 마우스 / 휴대폰 손가락 / 키보드
   const cv = RND.canvas, coarse = matchMedia("(pointer: coarse)").matches;
-  cv.addEventListener("pointermove", e => { clientAC && clientAC.onEvent("move", e); input.target = RND.toWorld(e.clientX, e.clientY); });
+  // 마우스·손가락은 '화면 가운데(=내 머리)에서 본 방향'으로 조준 (slither 방식). 바닥의 한 점을 노리면 그 점 주위를 빙빙 돎
+  const aimFrom = e => { const r = cv.getBoundingClientRect(); return Math.atan2(-(e.clientY - (r.top + r.height / 2)), e.clientX - (r.left + r.width / 2)); };
+  cv.addEventListener("pointermove", e => { clientAC && clientAC.onEvent("move", e); input.aim = aimFrom(e); input.target = null; });
   cv.addEventListener("pointerdown", e => {
-    clientAC && clientAC.onEvent("down", e); input.target = RND.toWorld(e.clientX, e.clientY);
+    clientAC && clientAC.onEvent("down", e); input.aim = aimFrom(e); input.target = null;
     if (e.pointerType === "mouse") input.boost = true;                     // 휴대폰은 손가락이 늘 닿아 있으니 부스트는 버튼으로
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
   });
@@ -216,11 +219,15 @@
   ["pointerup", "pointercancel", "pointerleave"].forEach(t => bb.addEventListener(t, () => { input.boost = false; bb.classList.remove("on"); }));
   window.addEventListener("keydown", e => {
     if (mode === "menu" || e.target.tagName === "INPUT") return;
+    if (!$("dead").hidden || !$("pause").hidden) return;                 // 창이 떠 있을 땐 Space/Enter가 창 버튼 몫
     if (["ArrowLeft", "ArrowRight", " "].includes(e.key)) { clientAC && clientAC.onEvent("key", e); e.preventDefault(); }
-    if (e.key === "ArrowLeft") input.turn = 1; if (e.key === "ArrowRight") input.turn = -1; if (e.key === " ") input.boost = true;
+    // 방향키를 쓰면 마우스 조준을 끔 → 키를 떼면 직진 (마우스를 다시 움직이면 마우스 조준)
+    if (e.key === "ArrowLeft") { input.turn = 1; input.aim = null; input.target = null; }
+    if (e.key === "ArrowRight") { input.turn = -1; input.aim = null; input.target = null; }
+    if (e.key === " ") input.boost = true;
   });
   window.addEventListener("keyup", e => {
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") input.turn = 0;
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") { clientAC && clientAC.onEvent("key", e); input.turn = 0; }
     if (e.key === " ") input.boost = false;
   });
 
@@ -317,6 +324,7 @@
     paused = on && mode === "solo";                                       // 친구랑 할 땐 다른 사람이 있어 멈추지 않음
     $("pause").hidden = !on;
     $("pauseTitle").textContent = mode === "solo" ? "잠깐 멈춤" : "메뉴";
+    $("newGame").hidden = mode !== "solo";
     $("pauseNote").textContent = mode === "solo" ? "게임이 멈춰 있어요." : "친구들과 하는 중이라 게임은 계속 진행돼요.";
     if (on) $("dead").hidden = true;
   }
@@ -324,10 +332,18 @@
   $("resume").onclick = () => setPause(false);
   $("quit").onclick = () => { setPause(false); backToMenu(); };
   $("pauseAdmin").onclick = () => { setPause(false); openAdmin(); };
+  function newGame() { const m = mode; setPause(false); if (m === "solo") { backToMenu(); startSolo(); } }
+  $("newGame").onclick = newGame;
   window.addEventListener("keydown", e => {
-    if (mode === "menu" || e.target.tagName === "INPUT") return;
-    if (e.key === "Escape") { setPause($("pause").hidden); e.preventDefault(); }
-    if (e.key === "Enter" && !$("dead").hidden) { respawn(); e.preventDefault(); }
+    const ok = e.key === "Enter" || e.key === " ";
+    if (mode === "menu") {                                                // 첫 메뉴: Space/Enter = 혼자 연습 (이름 칸에서 Enter도)
+      if (ok && $("login").hidden && (e.target.tagName !== "INPUT" || (e.key === "Enter" && e.target.id === "name"))) { e.preventDefault(); startSolo(); }
+      return;
+    }
+    if (e.target.tagName === "INPUT") return;
+    if (e.key === "Escape") { setPause($("pause").hidden); e.preventDefault(); return; }
+    if (ok && !$("dead").hidden) { respawn(); e.preventDefault(); return; }
+    if (ok && !$("pause").hidden) { e.preventDefault(); if (mode === "solo") newGame(); else setPause(false); }
   });
 
   // ── 헬퍼가 읽는 공개 변수 (실제 slither.io 클라이언트가 상태를 전역 변수에 두던 것과 같은 구조)
