@@ -82,7 +82,7 @@
     msg("들어가는 중…");
     try {
       await NET.init();
-      mode = "client"; meId = NET.uid;
+      mode = "client"; meId = NET.uid; stateK = -1;
       remote.snakes.clear(); remote.food = [];
       joinCtl = await NET.join(code, { name: myName(), hue: (settings.hue + 137 * Math.random()) % 360, helper: settings.helper !== "none" }, {
         state: onState, sync: onSync, closed() { alert("방장이 나가서 방이 끝났어요"); backToMenu(); },
@@ -95,14 +95,14 @@
   function showRoom(code, isHost) {
     const el = $("room"); el.hidden = false;
     const link = location.origin + location.pathname + "?room=" + code;
-    el.innerHTML = `<span class="chip">방 ${code}${isHost ? " · 방장" : ""}</span> <button class="btn" type="button" style="padding:5px 8px;font-size:12px">링크 복사</button>`;
+    el.innerHTML = `<span class="chip">방 ${code}${isHost ? " · 방장" : ""}</span> <button class="btn" type="button" style="padding:5px 8px;font-size:12px">링크 복사</button><div class="small" id="netInfo" style="margin-top:4px"></div>`;
     el.querySelector("button").onclick = () => navigator.clipboard.writeText(link).then(() => el.querySelector("button").textContent = "복사됨", () => prompt("이 링크를 보내세요", link));
   }
   function backToMenu() {
     clearInterval(tickTimer); clearInterval(reportTimer);
     if (hostCtl) { hostCtl.leave(); hostCtl = null; }
     if (joinCtl) { joinCtl.leave(); joinCtl = null; }
-    mode = "menu"; sim = null; behaviors.clear(); paused = false; respawnedAtDeaths = 0;
+    mode = "menu"; sim = null; behaviors.clear(); paused = false; respawnedAtDeaths = 0; stopSpectate();
     $("menu").hidden = false; ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc"].forEach(id => $(id).hidden = true);
     if (window.__snakeHelper) window.__snakeHelper.off();
     msg("");
@@ -114,7 +114,6 @@
     if (paused) return;
     const now = performance.now();
     lastTickAt = now;
-    if (hostCtl) hostCtl.recordHeads();
     sim.step(now, {
       human(s, a, obsFn) {
         let b = behaviors.get(s.id); if (!b) { b = AC.behavior(); behaviors.set(s.id, b); }
@@ -123,7 +122,7 @@
       },
       death(s) { const b = behaviors.get(s.id); if (b) b.onDeath(); },
     });
-    if (hostCtl) { hostCtl.recordHeads(); if (sim.tick % 2 === 0) hostCtl.broadcast(); }
+    if (hostCtl) hostCtl.tick();
   }
 
   // ── 참가자: 방장이 보낸 상태로 화면 만들기
@@ -143,19 +142,45 @@
     }
     for (const id of [...remote.snakes.keys()]) if (v.info && !v.info[id]) remote.snakes.delete(id);
   }
+  let stateK = -1, stateGap = 2;
   function onState(v) {
+    if (v.k <= stateK) return;                                              // 직접 연결은 순서가 바뀌어 올 수 있음 → 옛것 버림
+    stateGap = Math.max(1, Math.min(4, v.k - stateK)); stateK = v.k;
     lastStateAt = performance.now();
     for (const e of v.s || []) {
       const s = ensure(e[0]);
-      const wasAlive = s.alive;
-      s.ang = e[5]; s.length = e[6] / 10; s.alive = !!e[7]; s.boosting = !!e[8]; s.deaths = e[9]; s.kills = e[10];
-      if (s.alive && !wasAlive) s.trail = [];
-      s.trail.unshift([e[1], e[2]]); s.trail.unshift([e[3], e[4]]);
+      const wasAlive = s.alive, prevK = s.k ?? -9;
+      s.ang = e[5]; s.length = e[6] / 10; s.alive = !!e[7]; s.boosting = !!e[8]; s.deaths = e[9]; s.kills = e[10]; s.prot = !!e[11];
+      if (s.alive && (!wasAlive || !s.trail.length)) {                        // 새로 태어남: 머리 뒤로 곧게 뻗은 몸부터
+        s.trail = Array.from({ length: Math.floor(s.length) * C.SPACING + 4 }, (_, i) => [e[3] - Math.cos(s.ang) * C.SPEED * i, e[4] - Math.sin(s.ang) * C.SPEED * i]);
+      } else if (v.k === prevK + 1) s.trail.unshift([e[3], e[4]]);           // 매 틱 (직접 연결)
+      else { s.trail.unshift([e[1], e[2]]); s.trail.unshift([e[3], e[4]]); }  // 두 틱마다 (Realtime DB) 또는 하나 빠짐
+      s.k = v.k;
       if (s.trail.length > C.T_TRAIL) s.trail.length = C.T_TRAIL;
       s.head = s.trail[0]; rebuildPts(s);
       if (s.id === meId) s.best = Math.max(s.best || 0, s.length);
     }
     for (const f of v.fd || []) remote.food[f[0]] = [f[1], f[2], f[3]];
+  }
+
+  // ── 내 지렁이 예측 (참가자): 방장이 보낸 마지막 위치에서, 그 뒤 지난 시간만큼 내 입력으로 미리 움직여 그림
+  //   매번 방장의 최신 위치에서 다시 계산하므로 오차가 쌓이지 않음. 길이·생사·먹기는 방장 판정 그대로
+  function predictedTrail(s, now) {
+    const lat = (joinCtl && joinCtl.p2p ? (joinCtl.rtt || 40) / 2 : 120) + (now - lastStateAt);     // 방장 상태가 만들어진 뒤 지난 시간(ms)
+    const n = Math.min(12, lat / 50);
+    let ang = s.ang, x = s.trail[0][0], y = s.trail[0][1];
+    const pts = [];
+    const steps = Math.ceil(n);
+    for (let i = 0; i < steps; i++) {
+      let turn = input.turn || 0;
+      if (!turn && input.aim != null) { const d = ((input.aim - ang) % SNK.TAU + SNK.TAU * 1.5) % SNK.TAU - Math.PI; turn = Math.abs(d) < C.TURN / 2 ? 0 : d > 0 ? 1 : -1; }
+      ang += C.TURN * turn;
+      const v = input.boost && s.length > C.L_MIN + 1 ? C.BOOST : C.SPEED;
+      const f = i === steps - 1 ? n - (steps - 1) : 1;                       // 마지막 걸음은 남은 비율만큼
+      x += v * Math.cos(ang) * f; y += v * Math.sin(ang) * f;
+      pts.unshift([x, y]);
+    }
+    return { trail: pts.concat(s.trail), ang };
   }
 
   // ── 화면 그리기 (초당 60번)
@@ -165,22 +190,26 @@
   //   혼자·방장: 한 틱(0.05초) 뒤를 그림 / 참가자: 세 틱(0.15초) 뒤를 그려 통신 흔들림까지 흡수
   function displayList(now) {
     const T = C.T_TRAIL, SP = C.SPACING, client = mode === "client";
-    const k = client ? Math.max(0, Math.min(3, 3 - (now - lastStateAt) / 50)) : Math.max(0, Math.min(1, 1 - (now - lastTickAt) / (1000 / HZ)));
-    const at = client ? (s, i) => s.trail[Math.min(i, s.trail.length - 1)] : (s, i) => s.trail[((s.ptr - i) % T + T) % T];
-    const lerp = (s, x) => { const i = Math.floor(x), f = x - i, a = at(s, i), b = at(s, i + 1); if (!a) return null; if (!b || !f) return a; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
+    // 참가자: 직접 연결(매 틱 받음)이면 1.5틱, Realtime DB(두 틱마다)면 3틱 늦게 그려 흔들림 흡수
+    const buf = client ? (joinCtl && joinCtl.p2p ? 1.5 : 3) : 1;
+    const k = client ? Math.max(0, Math.min(buf, buf - (now - lastStateAt) / 50)) : Math.max(0, Math.min(1, 1 - (now - lastTickAt) / (1000 / HZ)));
+    const ringAt = (s, i) => s.trail[((s.ptr - i) % T + T) % T], arrAt = (tr, i) => tr[Math.min(i, tr.length - 1)];
     return list().map(s => {
       if (!s.alive || !s.trail || !s.trail.length) return s;
-      const head = lerp(s, k) || s.head, back = lerp(s, k + 1) || head;
+      let at = client ? (i => arrAt(s.trail, i)) : (i => ringAt(s, i)), kk = k;
+      if (client && s.id === meId && s.trail.length > 2) { const p = predictedTrail(s, now); at = i => arrAt(p.trail, i); kk = 0; }   // 내 지렁이는 예측해서 앞서 그림
+      const lerp = x => { const i = Math.floor(x), f = x - i, a = at(i), b = at(i + 1); if (!a) return null; if (!b || !f) return a; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
+      const head = lerp(kk) || s.head, back = lerp(kk + 1) || head;
       const n = Math.min(Math.floor(s.length), T / SP), pts = [];
-      for (let i = 0; i < n; i++) { const p = lerp(s, k + SP * (i + 1)); if (!p) break; pts.push(p); }
+      for (let i = 0; i < n; i++) { const p = lerp(kk + SP * (i + 1)); if (!p) break; pts.push(p); }
       const ang = Math.hypot(head[0] - back[0], head[1] - back[1]) > 1e-6 ? Math.atan2(head[1] - back[1], head[0] - back[0]) : s.ang;
-      return { id: s.id, name: s.name, hue: s.hue, helper: s.helper, boosting: s.boosting, alive: true, length: s.length, ang, head, pts };
+      return { id: s.id, name: s.name, hue: s.hue, helper: s.helper, boosting: s.boosting, alive: true, length: s.length, ang, head, pts, prot: s.prot };
     });
   }
   let hudAt = 0;
   function loop(t) {
     if (mode !== "menu") {
-      RND.frame(displayList(t), foods(), meId);
+      RND.frame(displayList(t), foods(), meId, spectating && specId ? specId : meId);
     } else RND.frame([], sim ? sim.food : demoFood, null);
     requestAnimationFrame(loop);
   }
@@ -195,11 +224,18 @@
       const rank = all.indexOf(me) + 1;
       const boostTxt = input.boost ? (me.length > C.L_MIN + 1 ? " · <b style='color:var(--me);font-size:13px'>부스트</b>" : " · <span style='color:var(--danger)'>부스트 불가 (길이 7 이하)</span>") : "";
       $("me").innerHTML = `내 길이 <b>${Math.floor(me.length)}</b> · 순위 ${rank || "-"}/${all.length}<br><span class="small">죽음 ${me.deaths} · 잡음 ${me.kills}${boostTxt}</span>`;
-      const showDead = !me.alive && me.deaths > respawnedAtDeaths && $("pause").hidden;   // '다시 태어나기'를 누른 뒤 또 죽기 전까지는 안 띄움
+      if (spectating) { const t = list().find(x => x.id === specId); if (!t || !t.alive) cycleSpec(1); }
+      const showDead = !me.alive && me.deaths > respawnedAtDeaths && $("pause").hidden && !spectating;   // '새로 시작'을 누른 뒤 또 죽기 전까지는 안 띄움
       if (showDead && $("dead").hidden) $("deadMsg").textContent = `최고 길이 ${Math.floor(me.best || me.length)} · 잡은 수 ${me.kills} · 죽은 횟수 ${me.deaths}`;
       $("dead").hidden = !showDead;
     }
     if (!$("admin").hidden) renderAdmin();
+    // 연결 상태 표시: 직접 연결(WebRTC)인지, Firebase(싱가포르) 경유인지
+    const net = $("netInfo");
+    if (net) {
+      if (mode === "client" && joinCtl) net.textContent = joinCtl.p2p ? `직접 연결 · ${Math.round(joinCtl.rtt || 0)}ms` : "Firebase 경유 (직접 연결 시도 중)";
+      else if (mode === "host" && hostCtl) { const ps = hostCtl.peers(); net.textContent = ps.length ? `친구 ${ps.length}명 · 직접 연결 ${ps.filter(p => p[1]).length}명` : "친구를 기다리는 중"; }
+    }
   }
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -315,9 +351,34 @@
   $("solo").onclick = startSolo; $("hostBtn").onclick = startHost; $("joinBtn").onclick = startJoin;
 
   // ── 죽었을 때: 다시 태어날지 묻기 / ESC: 멈춤 메뉴
-  let respawnedAtDeaths = 0;
-  function respawn() { input.respawn++; const me = list().find(s => s.id === meId); respawnedAtDeaths = me ? me.deaths : 0; $("dead").hidden = true; }
+  let respawnedAtDeaths = 0, spectating = false, specId = null;
+  // 죽은 상태에서 한 번만 받음 (부스트로 스페이스를 누르고 있다 죽으면 키 반복이 여러 번 눌러서 다음 죽음 때 저절로 살아나던 문제)
+  function respawn() {
+    const me = list().find(s => s.id === meId);
+    if (!me || me.alive || me.deaths <= respawnedAtDeaths) return;
+    input.respawn++; respawnedAtDeaths = me.deaths; input.boost = false;
+    $("dead").hidden = true; stopSpectate();
+  }
+  function startSpectate() {
+    spectating = true; $("dead").hidden = true;
+    const alive = list().filter(s => s.alive && s.id !== meId).sort((a, b) => b.length - a.length);
+    specId = alive.length ? alive[0].id : null; specHud();
+  }
+  function stopSpectate() { spectating = false; specId = null; $("spec").hidden = true; }
+  function specHud() {
+    const s = list().find(x => x.id === specId);
+    $("spec").hidden = false;
+    $("spec").innerHTML = `관전 중: <b>${s ? esc(s.name) : "-"}</b> · ←→ 다른 지렁이 · <button class="btn" type="button" id="specGo" style="padding:5px 9px;font-size:12px">새로 시작 (Space)</button>`;
+    $("specGo").onclick = respawn;
+  }
+  function cycleSpec(d) {
+    const alive = list().filter(s => s.alive && s.id !== meId).sort((a, b) => b.length - a.length);
+    if (!alive.length) return;
+    const i = Math.max(0, alive.findIndex(s => s.id === specId));
+    specId = alive[(i + d + alive.length) % alive.length].id; specHud();
+  }
   $("respawn").onclick = respawn;
+  $("spectate").onclick = startSpectate;
   $("deadMenu").onclick = backToMenu;
   function setPause(on) {
     if (mode === "menu") return;
@@ -342,7 +403,8 @@
     }
     if (e.target.tagName === "INPUT") return;
     if (e.key === "Escape") { setPause($("pause").hidden); e.preventDefault(); return; }
-    if (ok && !$("dead").hidden) { respawn(); e.preventDefault(); return; }
+    if (spectating && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { cycleSpec(e.key === "ArrowRight" ? 1 : -1); e.preventDefault(); return; }
+    if (ok && (!$("dead").hidden || spectating)) { e.preventDefault(); if (!e.repeat) respawn(); return; }
     if (ok && !$("pause").hidden) { e.preventDefault(); if (mode === "solo") newGame(); else setPause(false); }
   });
 

@@ -12,8 +12,21 @@ const SNK = (() => {
       respawnAt: 0, best: C.L0, deaths: 0, eaten: 0, kills: 0, pts: [], boosting: false, helper: false };
     spawn(s); return s;
   }
-  function spawn(s) {
-    const p = randPoint(C.R_ARENA * 0.75), ang = Math.random() * TAU, back = [-Math.cos(ang) * C.SPEED, -Math.sin(ang) * C.SPEED];
+  // 다시 태어날 자리: 후보 16곳 중 다른 지렁이(머리·몸)에서 가장 먼 곳
+  function safePoint(others) {
+    let best = null, bestD = -1;
+    for (let i = 0; i < 16; i++) {
+      const p = randPoint(C.R_ARENA * 0.75);
+      let d = 1e9;
+      for (const t of others) { if (!t.alive) continue; d = Math.min(d, Math.hypot(t.head[0] - p[0], t.head[1] - p[1]) - 3); for (let j = 0; j < t.pts.length; j += 3) d = Math.min(d, Math.hypot(t.pts[j][0] - p[0], t.pts[j][1] - p[1])); }
+      if (d > bestD) { bestD = d; best = p; }
+    }
+    return best;
+  }
+  function spawn(s, others = [], now = 0) {
+    const p = others.length ? safePoint(others.filter(t => t !== s)) : randPoint(C.R_ARENA * 0.75);
+    const ang = Math.atan2(-p[1], -p[0]) + (Math.random() - 0.5), back = [-Math.cos(ang) * C.SPEED, -Math.sin(ang) * C.SPEED];   // 처음엔 대략 가운데 쪽을 보게
+    s.protectUntil = now + 2000;                                           // 2초 보호: 부딪혀도 안 죽고, 남도 안 죽임 (반투명)
     for (let k = 0; k < C.T_TRAIL; k++) { const m = Math.min(k, 40); s.trail[((s.ptr - k) % C.T_TRAIL + C.T_TRAIL) % C.T_TRAIL] = [p[0] + back[0] * m, p[1] + back[1] * m]; }
     s.head = p; s.ang = ang; s.length = C.L0; s.alive = true; s.pts = bodyPoints(s);
   }
@@ -78,7 +91,11 @@ const SNK = (() => {
 
   class Sim {
     constructor(brains) { this.brains = brains; this.snakes = []; this.food = Array.from({ length: C.N_FOOD }, newFood); this.tick = 0; this.foodChanged = new Set(); this.events = []; this.inputs = {}; }
-    add(id, kind, name, hue) { const s = newSnake(id, kind, name, hue); s.respawnSeq = (this.inputs[id] || {}).respawn || 0; this.snakes.push(s); return s; }
+    add(id, kind, name, hue) {
+      const s = newSnake(id, kind, name, hue); s.respawnSeq = (this.inputs[id] || {}).respawn || 0;
+      if (this.snakes.length) spawn(s, this.snakes, performance.now());   // 나중에 들어온 지렁이도 빈 자리에서, 보호 2초
+      this.snakes.push(s); return s;
+    }
     remove(id) { this.snakes = this.snakes.filter(s => s.id !== id); }
     step(now, hooks = {}) {
       const { snakes, food } = this;
@@ -86,7 +103,7 @@ const SNK = (() => {
         if (!s.alive) {
           // AI는 1.5초 뒤 자동으로, 사람은 '다시 하기'를 눌러야(입력의 respawn 숫자가 올라가야) 다시 태어남
           const want = s.kind === "human" ? ((this.inputs[s.id] || {}).respawn || 0) > (s.respawnSeq || 0) : now > s.respawnAt;
-          if (want) { if (s.kind === "human") s.respawnSeq = this.inputs[s.id].respawn; spawn(s); this.events.push(["spawn", s.id]); }
+          if (want) { if (s.kind === "human") s.respawnSeq = this.inputs[s.id].respawn; spawn(s, snakes, now); this.events.push(["spawn", s.id]); }
           continue;
         }
         let a;
@@ -105,11 +122,13 @@ const SNK = (() => {
       }
       for (const s of snakes) s.pts = s.alive ? bodyPoints(s) : [];
       const dead = [];
+      for (const s of snakes) s.prot = s.alive && now < (s.protectUntil || 0);
       for (const s of snakes) {
         if (!s.alive) continue;
-        if (Math.hypot(s.head[0], s.head[1]) > C.R_ARENA) { dead.push([s, null]); continue; }
+        if (Math.hypot(s.head[0], s.head[1]) > C.R_ARENA) { if (s.prot) { s.ang = Math.atan2(-s.head[1], -s.head[0]); continue; } dead.push([s, null]); continue; }
+        if (s.prot) continue;
         for (const t of snakes) {
-          if (t === s || !t.alive) continue;
+          if (t === s || !t.alive || t.prot) continue;
           const rad = radius(t.length) + 0.3;
           if (t.pts.some(p => Math.abs(p[0] - s.head[0]) < rad && Math.hypot(p[0] - s.head[0], p[1] - s.head[1]) < rad)) { dead.push([s, t]); break; }
         }

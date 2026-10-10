@@ -44,8 +44,14 @@ const RND = (() => {
     const pts = s.pts;
     const hx = sx(s.head[0]), hy = sy(s.head[1]);
     const sat = isMe ? 85 : 65;
-    // 몸: 이어진 관 (진한 테두리 → 본색 → 가운데 밝은 줄 = 입체감) + 3마디마다 줄무늬
-    const path = () => { ctx.beginPath(); ctx.moveTo(hx, hy); for (const p of pts) ctx.lineTo(sx(p[0]), sy(p[1])); };
+    // 몸: 이어진 관 (진한 테두리 → 본색 → 가운데 밝은 줄 = 입체감) + 3마디마다 줄무늬. 마디 사이는 곡선으로 매끈하게
+    const path = () => {
+      ctx.beginPath(); ctx.moveTo(hx, hy);
+      let px = hx, py = hy;
+      for (const p of pts) { const x = sx(p[0]), y = sy(p[1]); ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2); px = x; py = y; }
+      ctx.lineTo(px, py);
+    };
+    if (s.prot) ctx.globalAlpha = 0.45 + 0.2 * Math.sin(performance.now() / 120);   // 보호 중: 반투명 깜빡임
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     if (s.boosting) { path(); ctx.strokeStyle = `hsla(${s.hue},100%,65%,.35)`; ctx.lineWidth = r * 3.2; ctx.stroke(); }   // 부스트 빛 (그림자 효과는 휴대폰에서 무거워서 굵은 반투명 선으로)
     path(); ctx.strokeStyle = `hsl(${s.hue},${sat}%,30%)`; ctx.lineWidth = r * 2.1; ctx.stroke();
@@ -66,16 +72,21 @@ const RND = (() => {
     ctx.font = `600 ${Math.max(11, Math.min(15, r * 0.9))}px "IBM Plex Sans KR", system-ui, sans-serif`;
     ctx.textAlign = "center"; ctx.fillStyle = isMe ? "#ffe9a8" : "rgba(230,236,234,.85)";
     ctx.fillText((s.helper ? "🧪 " : "") + s.name, hx, hy - r * 1.9);
+    ctx.globalAlpha = 1;
   }
 
-  function frame(snakes, food, meId) {
+  function frame(snakes, food, meId, camId = meId) {
     if (!W) resize();
-    const me = snakes.find(s => s.id === meId);
-    if (cam.whole || !me) { cam.x = 0; cam.y = 0; cam.ppu = Math.min(W, H) / (C.R_ARENA * 2 + 4); }
+    const me = snakes.find(s => s.id === meId), tgt = snakes.find(s => s.id === camId) || me;
+    if (cam.whole || !tgt) { cam.x = 0; cam.y = 0; cam.ppu = Math.min(W, H) / (C.R_ARENA * 2 + 4); }
     else {
-      const viewR = Math.min(30, 17 + me.length * 0.06);                 // 길어질수록 조금씩 멀리 보기
-      cam.ppu = Math.sqrt(W * H) / (2 * viewR);                          // 세로 휴대폰에서도 너무 확대되지 않게 면적 기준
-      if (me.alive) { cam.x += (me.head[0] - cam.x) * 0.35; cam.y += (me.head[1] - cam.y) * 0.35; }
+      const viewR = Math.min(30, 17 + tgt.length * 0.06);                // 길어질수록 조금씩 멀리 보기
+      const ppu = Math.sqrt(W * H) / (2 * viewR);                        // 세로 휴대폰에서도 너무 확대되지 않게 면적 기준
+      cam.ppu += (ppu - cam.ppu) * 0.1;                                  // 확대 비율은 천천히
+      if (tgt.alive) {                                                   // 머리는 이미 보간돼 부드러우니 거의 그대로 따라감 (관전 대상 바꿀 땐 미끄러지듯)
+        const f = Math.hypot(tgt.head[0] - cam.x, tgt.head[1] - cam.y) > 6 ? 0.15 : 0.85;
+        cam.x += (tgt.head[0] - cam.x) * f; cam.y += (tgt.head[1] - cam.y) * f;
+      }
     }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     // 바닥: 무늬는 한 번만 만들고 확대·축소는 변환으로 (크기가 바뀔 때마다 새로 만들면 끊김)

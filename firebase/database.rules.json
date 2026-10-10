@@ -19,6 +19,9 @@
               ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 12)"
             }
           },
+          "rtc": {
+            "$uid": { ".write": "auth != null && (auth.uid === $uid || root.child('snake/rooms/' + $code + '/meta/host').val() === auth.uid)" }
+          },
           "inputs": {
             "$uid": { ".write": "auth != null && (auth.uid === $uid || root.child('snake/rooms/' + $code + '/meta/host').val() === auth.uid)" }
           },
