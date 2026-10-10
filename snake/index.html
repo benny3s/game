@@ -35,6 +35,11 @@ body{padding:0}
 input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d1312;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
 .seg .btn{padding:8px 10px}
+.swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sw{width:34px;height:34px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;box-shadow:inset -4px -5px 8px rgba(0,0,0,.35),inset 3px 3px 6px rgba(255,255,255,.35)}
+.sw[aria-checked="true"]{border-color:#fff;transform:scale(1.12)}
+.sw:focus-visible{outline:2px solid var(--me);outline-offset:2px}
+#preview{width:150px;height:44px;border-radius:8px;background:#151b22}
 .go{display:flex;flex-wrap:wrap;gap:8px}
 .go .btn{flex:1 1 140px;padding:12px;font-size:15px}
 .btn.primary{background:var(--ai);border-color:var(--ai);color:#06110f}
@@ -76,11 +81,12 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 </div></div>
 <section id="admin" hidden aria-label="관리자 패널"></section>
 
-<div class="card" id="menu"><div>
+<div class="card" id="menu"><div class="menu-card">
   <p class="crumb"><a href="../">← 게임 목록</a></p>
   <h1>🐍 지렁이 대결</h1>
   <p class="lede">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 손가락 쪽으로 돌고 왼쪽 아래 버튼이 부스트예요.</p>
   <label class="field"><span>내 이름</span><input type="text" id="name" maxlength="12" placeholder="이름"></label>
+  <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
   <div class="field"><span>AI 상대</span>
     <div class="seg" id="aiLevel">
       <button class="btn" type="button" data-v="raw">학습 전</button>
@@ -119,10 +125,10 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <div class="go"><button class="btn" type="button" id="loginCancel">취소</button><button class="btn primary" type="button" id="loginGo">들어가기</button></div>
 </div></div>
 
-<script src="core.js?v=5"></script>
-<script src="render.js?v=5"></script>
-<script src="ac.js?v=5"></script>
-<script src="net.js?v=5"></script>
-<script src="main.js?v=5"></script>
+<script src="core.js?v=7"></script>
+<script src="render.js?v=7"></script>
+<script src="ac.js?v=7"></script>
+<script src="net.js?v=7"></script>
+<script src="main.js?v=7"></script>
 </body>
 </html>

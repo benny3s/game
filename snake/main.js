@@ -14,8 +14,14 @@
   fetch("brains.json").then(r => r.json()).then(b => { BRAINS = b; });
 
   // ── 메뉴 선택지
-  try { settings.name = localStorage.getItem("snake-name") || ""; } catch (e) {}
+  try { settings.name = localStorage.getItem("snake-name") || ""; const h = localStorage.getItem("snake-hue"); if (h != null) settings.hue = Number(h); } catch (e) {}
   $("name").value = settings.name;
+  // 내 색 고르기 (기억해 둠)
+  const HUES = [[48, "노랑"], [25, "주황"], [0, "빨강"], [330, "분홍"], [285, "보라"], [230, "파랑"], [195, "하늘"], [165, "청록"], [120, "초록"], [85, "연두"]];
+  $("colors").innerHTML = HUES.map(([h, n]) => `<button type="button" class="sw" role="radio" data-h="${h}" aria-label="${n}" title="${n}" style="background:radial-gradient(circle at 38% 35%, hsl(${h},85%,72%), hsl(${h},80%,50%) 55%, hsl(${h},75%,28%))"></button>`).join("");
+  const markColor = () => $("colors").querySelectorAll(".sw").forEach(b => b.setAttribute("aria-checked", String(Number(b.dataset.h) === settings.hue)));
+  $("colors").querySelectorAll(".sw").forEach(b => b.addEventListener("click", () => { settings.hue = Number(b.dataset.h); try { localStorage.setItem("snake-hue", settings.hue); } catch (e) {} markColor(); }));
+  markColor();
   const seg = (id, key, cast = v => v) => $(id).querySelectorAll("[data-v]").forEach(b => b.addEventListener("click", () => {
     $(id).querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
     key(cast(b.dataset.v));
@@ -84,7 +90,7 @@
       await NET.init();
       mode = "client"; meId = NET.uid; stateK = -1;
       remote.snakes.clear(); remote.food = [];
-      joinCtl = await NET.join(code, { name: myName(), hue: (settings.hue + 137 * Math.random()) % 360, helper: settings.helper !== "none" }, {
+      joinCtl = await NET.join(code, { name: myName(), hue: settings.hue, helper: settings.helper !== "none" }, {
         state: onState, sync: onSync, closed() { alert("방장이 나가서 방이 끝났어요"); backToMenu(); },
       });
       enterGame(); showRoom(code, false);
@@ -188,6 +194,7 @@
   const foods = () => mode === "client" ? remote.food : (sim ? sim.food : []);
   // 보간: 게임 계산(초당 20번, 참가자는 받는 게 초당 10번) 사이를 자취 위에서 부드럽게 이어 그림
   //   혼자·방장: 한 틱(0.05초) 뒤를 그림 / 참가자: 세 틱(0.15초) 뒤를 그려 통신 흔들림까지 흡수
+  const smoothLen = new Map();
   function displayList(now) {
     const T = C.T_TRAIL, SP = C.SPACING, client = mode === "client";
     // 참가자: 직접 연결(매 틱 받음)이면 1.5틱, Realtime DB(두 틱마다)면 3틱 늦게 그려 흔들림 흡수
@@ -195,13 +202,17 @@
     const k = client ? Math.max(0, Math.min(buf, buf - (now - lastStateAt) / 50)) : Math.max(0, Math.min(1, 1 - (now - lastTickAt) / (1000 / HZ)));
     const ringAt = (s, i) => s.trail[((s.ptr - i) % T + T) % T], arrAt = (tr, i) => tr[Math.min(i, tr.length - 1)];
     return list().map(s => {
-      if (!s.alive || !s.trail || !s.trail.length) return s;
+      if (!s.alive || !s.trail || !s.trail.length) { smoothLen.delete(s.id); return s; }
       let at = client ? (i => arrAt(s.trail, i)) : (i => ringAt(s, i)), kk = k;
       if (client && s.id === meId && s.trail.length > 2) { const p = predictedTrail(s, now); at = i => arrAt(p.trail, i); kk = 0; }   // 내 지렁이는 예측해서 앞서 그림
       const lerp = x => { const i = Math.floor(x), f = x - i, a = at(i), b = at(i + 1); if (!a) return null; if (!b || !f) return a; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
       const head = lerp(kk) || s.head, back = lerp(kk + 1) || head;
-      const n = Math.min(Math.floor(s.length), T / SP), pts = [];
+      // 길이도 부드럽게: 먹으면 꼬리가 한 마디씩 툭 늘던 것을, 보이는 길이가 실제 길이를 천천히 따라가게 + 마지막 마디는 비율만큼
+      const dl = (smoothLen.get(s.id) ?? s.length), L = dl + (s.length - dl) * 0.12;
+      smoothLen.set(s.id, L);
+      const n = Math.min(Math.floor(L), T / SP), frac = L - Math.floor(L), pts = [];
       for (let i = 0; i < n; i++) { const p = lerp(kk + SP * (i + 1)); if (!p) break; pts.push(p); }
+      if (frac > 0.02 && pts.length === n) { const p = lerp(kk + SP * (n + frac)); if (p) pts.push(p); }
       const ang = Math.hypot(head[0] - back[0], head[1] - back[1]) > 1e-6 ? Math.atan2(head[1] - back[1], head[0] - back[0]) : s.ang;
       return { id: s.id, name: s.name, hue: s.hue, helper: s.helper, boosting: s.boosting, alive: true, length: s.length, ang, head, pts, prot: s.prot };
     });

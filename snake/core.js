@@ -129,7 +129,7 @@ const SNK = (() => {
         if (s.prot) continue;
         for (const t of snakes) {
           if (t === s || !t.alive || t.prot) continue;
-          const rad = radius(t.length) + 0.3;
+          const rad = radius(t.length);                                 // 머리 중심이 몸 안에 들어가야 죽음 = 보이는 그대로 (사이를 비집고 지나갈 수 있게, 예전엔 +0.3 여유가 있어 닿기 전에 죽었음)
           if (t.pts.some(p => Math.abs(p[0] - s.head[0]) < rad && Math.hypot(p[0] - s.head[0], p[1] - s.head[1]) < rad)) { dead.push([s, t]); break; }
         }
       }

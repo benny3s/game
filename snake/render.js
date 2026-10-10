@@ -39,34 +39,61 @@ const RND = (() => {
 
   const sx = x => (x - cam.x) * cam.ppu + W / 2, sy = y => -(y - cam.y) * cam.ppu + H / 2;
 
+  // 몸 구슬: 색마다 '가운데 밝고 가장자리 어두운' 둥근 그림을 미리 만들어 두고 찍기 (slither처럼 구슬을 겹친 입체 몸)
+  const beads = {};
+  function bead(hue, light) {
+    const key = hue + "|" + light;
+    if (beads[key]) return beads[key];
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const g = c.getContext("2d"), grd = g.createRadialGradient(26, 24, 2, 32, 32, 32);
+    grd.addColorStop(0, `hsl(${hue},85%,${light + 22}%)`);
+    grd.addColorStop(0.55, `hsl(${hue},80%,${light}%)`);
+    grd.addColorStop(0.92, `hsl(${hue},75%,${Math.max(8, light - 22)}%)`);
+    grd.addColorStop(1, `hsla(${hue},75%,${Math.max(5, light - 28)}%,0)`);
+    g.fillStyle = grd; g.beginPath(); g.arc(32, 32, 32, 0, TAU); g.fill();
+    return (beads[key] = c);
+  }
+  const glows = {};
+  function glow(hue) {
+    if (glows[hue]) return glows[hue];
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const g = c.getContext("2d"), grd = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+    grd.addColorStop(0, `hsla(${hue},100%,70%,.28)`); grd.addColorStop(1, `hsla(${hue},100%,60%,0)`);
+    g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+    return (glows[hue] = c);
+  }
+
   function drawSnake(s, isMe) {
-    const r = Math.max(2.5, radius(s.length) * cam.ppu * 1.05);
-    const pts = s.pts;
+    const r = Math.max(2.5, radius(s.length) * cam.ppu);                 // 그리는 굵기 = 부딪힘 굵기
     const hx = sx(s.head[0]), hy = sy(s.head[1]);
-    const sat = isMe ? 85 : 65;
-    // 몸: 이어진 관 (진한 테두리 → 본색 → 가운데 밝은 줄 = 입체감) + 3마디마다 줄무늬. 마디 사이는 곡선으로 매끈하게
-    const path = () => {
-      ctx.beginPath(); ctx.moveTo(hx, hy);
-      let px = hx, py = hy;
-      for (const p of pts) { const x = sx(p[0]), y = sy(p[1]); ctx.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2); px = x; py = y; }
-      ctx.lineTo(px, py);
-    };
+    // 머리 → 꼬리 점들을 촘촘히 (구슬 사이가 벌어지지 않게 반지름의 0.45배 간격으로 채움)
+    const chain = [[hx, hy], ...s.pts.map(p => [sx(p[0]), sy(p[1])])];
+    const dots = [];
+    for (let i = 0; i < chain.length - 1; i++) {
+      const [ax, ay] = chain[i], [bx, by] = chain[i + 1], d = Math.hypot(bx - ax, by - ay), m = Math.max(1, Math.ceil(d / (r * 0.45)));
+      for (let j = 0; j < m; j++) dots.push([ax + (bx - ax) * j / m, ay + (by - ay) * j / m, i]);
+    }
+    if (chain.length) dots.push([...chain[chain.length - 1], chain.length - 1]);
     if (s.prot) ctx.globalAlpha = 0.45 + 0.2 * Math.sin(performance.now() / 120);   // 보호 중: 반투명 깜빡임
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
-    if (s.boosting) { path(); ctx.strokeStyle = `hsla(${s.hue},100%,65%,.35)`; ctx.lineWidth = r * 3.2; ctx.stroke(); }   // 부스트 빛 (그림자 효과는 휴대폰에서 무거워서 굵은 반투명 선으로)
-    path(); ctx.strokeStyle = `hsl(${s.hue},${sat}%,30%)`; ctx.lineWidth = r * 2.1; ctx.stroke();
-    path(); ctx.strokeStyle = `hsl(${s.hue},${sat}%,48%)`; ctx.lineWidth = r * 1.8; ctx.stroke();
-    ctx.fillStyle = `hsl(${s.hue},${sat}%,40%)`;
-    for (let i = 2; i < pts.length; i += 6) { const p = pts[i]; ctx.beginPath(); ctx.arc(sx(p[0]), sy(p[1]), r * 0.85, 0, TAU); ctx.fill(); }
-    path(); ctx.strokeStyle = `hsla(${s.hue},${sat}%,72%,.45)`; ctx.lineWidth = r * 0.55; ctx.stroke();
-    ctx.fillStyle = `hsl(${s.hue},${sat}%,52%)`;
-    ctx.beginPath(); ctx.arc(hx, hy, r * 1.1, 0, TAU); ctx.fill();
-    // 눈: 머리가 향하는 쪽
+    if (s.boosting) {                                                     // 부스트: 몸 주위 은은한 빛
+      const gl = glow(s.hue), gr = r * 2.6;
+      ctx.globalCompositeOperation = "lighter";
+      for (let i = 0; i < dots.length; i += 4) { const d = dots[i]; ctx.drawImage(gl, d[0] - gr, d[1] - gr, gr * 2, gr * 2); }
+      ctx.globalCompositeOperation = "source-over";
+    }
+    const base = isMe ? 52 : 46, bA = bead(s.hue, base), bB = bead(s.hue, base - 9);   // 3마디마다 살짝 어두운 줄무늬
+    for (let i = dots.length - 1; i >= 0; i--) {
+      const d = dots[i];
+      if (d[0] < -r || d[1] < -r || d[0] > W + r || d[1] > H + r) continue;
+      ctx.drawImage(Math.floor(d[2] / 3) % 2 ? bB : bA, d[0] - r, d[1] - r, r * 2, r * 2);
+    }
+    ctx.drawImage(bead(s.hue, base + 4), hx - r * 1.08, hy - r * 1.08, r * 2.16, r * 2.16);
+    // 눈: 크고 흰 눈 + 앞을 보는 검은 눈동자
     const fx = Math.cos(s.ang), fy = -Math.sin(s.ang), px = -fy, py = fx;
     for (const side of [-1, 1]) {
-      const ex = hx + fx * r * 0.45 + px * side * r * 0.5, ey = hy + fy * r * 0.45 + py * side * r * 0.5;
-      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex, ey, r * 0.38, 0, TAU); ctx.fill();
-      ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(ex + fx * r * 0.14, ey + fy * r * 0.14, r * 0.2, 0, TAU); ctx.fill();
+      const ex = hx + fx * r * 0.4 + px * side * r * 0.48, ey = hy + fy * r * 0.4 + py * side * r * 0.48;
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex, ey, r * 0.42, 0, TAU); ctx.fill();
+      ctx.fillStyle = "#151515"; ctx.beginPath(); ctx.arc(ex + fx * r * 0.17, ey + fy * r * 0.17, r * 0.22, 0, TAU); ctx.fill();
     }
     // 이름
     ctx.font = `600 ${Math.max(11, Math.min(15, r * 0.9))}px "IBM Plex Sans KR", system-ui, sans-serif`;
