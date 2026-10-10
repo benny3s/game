@@ -77,7 +77,7 @@ const NET = (() => {
       leave() { room.remove(); },
     };
   }
-  const unpackInput = v => v ? { target: v.t ? [v.t[0], v.t[1]] : null, boost: !!v.b, turn: v.r || 0, at: v.at || 0 } : {};
+  const unpackInput = v => v ? { target: v.t ? [v.t[0], v.t[1]] : null, boost: !!v.b, turn: v.r || 0, respawn: v.rs || 0, at: v.at || 0 } : {};
 
   // ── 참가자
   async function join(code, settings, handlers) {
@@ -93,7 +93,7 @@ const NET = (() => {
     room.child("meta").on("value", s => { if (!s.exists()) handlers.closed(); });
     let last = "", lastAt = 0, pending = null;
     function sendInput(inp) {
-      const v = { t: inp.target ? [r2(inp.target[0]), r2(inp.target[1])] : null, b: inp.boost ? 1 : 0, r: inp.turn || 0 };
+      const v = { t: inp.target ? [r2(inp.target[0]), r2(inp.target[1])] : null, b: inp.boost ? 1 : 0, r: inp.turn || 0, rs: inp.respawn || 0 };
       const key = JSON.stringify(v), now = performance.now();
       if (key === last) return;
       if (now - lastAt < 66) { pending = inp; return; }                         // 초당 15번까지만

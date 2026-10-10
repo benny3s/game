@@ -47,9 +47,8 @@ const RND = (() => {
     // 몸: 이어진 관 (진한 테두리 → 본색 → 가운데 밝은 줄 = 입체감) + 3마디마다 줄무늬
     const path = () => { ctx.beginPath(); ctx.moveTo(hx, hy); for (const p of pts) ctx.lineTo(sx(p[0]), sy(p[1])); };
     ctx.lineCap = "round"; ctx.lineJoin = "round";
-    if (s.boosting) { ctx.shadowColor = `hsl(${s.hue},100%,60%)`; ctx.shadowBlur = r * 1.8; }
+    if (s.boosting) { path(); ctx.strokeStyle = `hsla(${s.hue},100%,65%,.35)`; ctx.lineWidth = r * 3.2; ctx.stroke(); }   // 부스트 빛 (그림자 효과는 휴대폰에서 무거워서 굵은 반투명 선으로)
     path(); ctx.strokeStyle = `hsl(${s.hue},${sat}%,30%)`; ctx.lineWidth = r * 2.1; ctx.stroke();
-    ctx.shadowBlur = 0;
     path(); ctx.strokeStyle = `hsl(${s.hue},${sat}%,48%)`; ctx.lineWidth = r * 1.8; ctx.stroke();
     ctx.fillStyle = `hsl(${s.hue},${sat}%,40%)`;
     for (let i = 2; i < pts.length; i += 6) { const p = pts[i]; ctx.beginPath(); ctx.arc(sx(p[0]), sy(p[1]), r * 0.85, 0, TAU); ctx.fill(); }
@@ -79,12 +78,13 @@ const RND = (() => {
       if (me.alive) { cam.x += (me.head[0] - cam.x) * 0.35; cam.y += (me.head[1] - cam.y) * 0.35; }
     }
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    // 바닥
-    const tileSize = Math.max(8, cam.ppu * 1.4);
-    if (!pattern || Math.abs(patternSize - tileSize) > 0.5) { pattern = ctx.createPattern(hexTile(tileSize), "repeat"); patternSize = tileSize; }
+    // 바닥: 무늬는 한 번만 만들고 확대·축소는 변환으로 (크기가 바뀔 때마다 새로 만들면 끊김)
+    if (!pattern) { pattern = ctx.createPattern(hexTile(28), "repeat"); patternSize = 28; }
     ctx.fillStyle = "#0b0e12"; ctx.fillRect(0, 0, W, H);
     ctx.save(); ctx.beginPath(); ctx.arc(sx(0), sy(0), C.R_ARENA * cam.ppu, 0, TAU); ctx.clip();
-    ctx.translate(-cam.x * cam.ppu + W / 2, cam.y * cam.ppu + H / 2); ctx.fillStyle = pattern; ctx.fillRect(-C.R_ARENA * cam.ppu - tileSize * 4, -C.R_ARENA * cam.ppu - tileSize * 4, C.R_ARENA * cam.ppu * 2 + tileSize * 8, C.R_ARENA * cam.ppu * 2 + tileSize * 8);
+    const k20 = cam.ppu / 20;                                            // 무늬 28px = 게임 1.4칸
+    ctx.translate(-cam.x * cam.ppu + W / 2, cam.y * cam.ppu + H / 2); ctx.scale(k20, k20);
+    ctx.fillStyle = pattern; ctx.fillRect(-C.R_ARENA * 20 - 60, -C.R_ARENA * 20 - 60, C.R_ARENA * 40 + 120, C.R_ARENA * 40 + 120);
     ctx.restore();
     // 경계 (붉은 띠)
     ctx.strokeStyle = "rgba(255,60,80,.55)"; ctx.lineWidth = Math.max(3, cam.ppu * 0.5);

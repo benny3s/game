@@ -77,12 +77,17 @@ const SNK = (() => {
 
   class Sim {
     constructor(brains) { this.brains = brains; this.snakes = []; this.food = Array.from({ length: C.N_FOOD }, newFood); this.tick = 0; this.foodChanged = new Set(); this.events = []; this.inputs = {}; }
-    add(id, kind, name, hue) { const s = newSnake(id, kind, name, hue); this.snakes.push(s); return s; }
+    add(id, kind, name, hue) { const s = newSnake(id, kind, name, hue); s.respawnSeq = (this.inputs[id] || {}).respawn || 0; this.snakes.push(s); return s; }
     remove(id) { this.snakes = this.snakes.filter(s => s.id !== id); }
     step(now, hooks = {}) {
       const { snakes, food } = this;
       for (const s of snakes) {
-        if (!s.alive) { if (now > s.respawnAt) { spawn(s); this.events.push(["spawn", s.id]); } continue; }
+        if (!s.alive) {
+          // AI는 1.5초 뒤 자동으로, 사람은 '다시 하기'를 눌러야(입력의 respawn 숫자가 올라가야) 다시 태어남
+          const want = s.kind === "human" ? ((this.inputs[s.id] || {}).respawn || 0) > (s.respawnSeq || 0) : now > s.respawnAt;
+          if (want) { if (s.kind === "human") s.respawnSeq = this.inputs[s.id].respawn; spawn(s); this.events.push(["spawn", s.id]); }
+          continue;
+        }
         let a;
         if (s.kind === "human") { const inp = this.inputs[s.id] || {}; a = humanAction(s, inp); if (hooks.human) hooks.human(s, a, () => observe(s, snakes, food), inp); }
         else { const o = observe(s, snakes, food), k = AI_KINDS[s.kind]; a = k.brain ? sample(logits(this.brains[k.brain], o)) : ruleBot(o); }

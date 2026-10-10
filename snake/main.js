@@ -4,7 +4,8 @@
   const $ = id => document.getElementById(id);
   const HZ = 20;
   let BRAINS = null, mode = "menu", sim = null, meId = "me", hostCtl = null, joinCtl = null, tickTimer = null, reportTimer = null;
-  const input = { target: null, boost: false, turn: 0, _own: false };
+  const input = { target: null, boost: false, turn: 0, respawn: 0, _own: false };
+  let paused = false;
   const remote = { snakes: new Map(), food: [] };                 // 참가자 화면용
   let clientAC = null;
   const behaviors = new Map();                                   // 지렁이별 행동 감지 (혼자/방장이 계산)
@@ -101,15 +102,18 @@
     clearInterval(tickTimer); clearInterval(reportTimer);
     if (hostCtl) { hostCtl.leave(); hostCtl = null; }
     if (joinCtl) { joinCtl.leave(); joinCtl = null; }
-    mode = "menu"; sim = null; behaviors.clear();
-    $("menu").hidden = false; ["lb", "me", "topbtn", "room", "boost", "dead", "admin", "myAc"].forEach(id => $(id).hidden = true);
+    mode = "menu"; sim = null; behaviors.clear(); paused = false; respawnedAtDeaths = 0;
+    $("menu").hidden = false; ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc"].forEach(id => $(id).hidden = true);
     if (window.__snakeHelper) window.__snakeHelper.off();
     msg("");
   }
 
   // ── 한 틱 (혼자·방장)
+  let lastTickAt = 0, lastStateAt = 0;
   function stepSim() {
+    if (paused) return;
     const now = performance.now();
+    lastTickAt = now;
     if (hostCtl) hostCtl.recordHeads();
     sim.step(now, {
       human(s, a, obsFn) {
@@ -130,6 +134,9 @@
     for (const [id, inf] of Object.entries(v.info || {})) { const s = ensure(id); [s.kind, s.name, s.hue, s.helper] = [inf[0], inf[1], inf[2], !!inf[3]]; }
     for (const [id, flat] of Object.entries(v.b || {})) {          // 4틱 간격 몸 마디 → 1틱 간격 자취로 채우기
       const s = ensure(id); const pts = []; for (let i = 0; i + 1 < (flat || []).length; i += 2) pts.push([flat[i], flat[i + 1]]);
+      // 이미 자취가 충분하고 몸 끝이 거의 맞으면 그대로 둠 (1.5초마다 몸이 툭 바뀌어 보이는 것 방지)
+      const need = Math.floor(s.length) * C.SPACING + 2, tail = pts[pts.length - 1], mine = s.trail[Math.min(s.trail.length - 1, 2 + 4 * (pts.length - 1))];
+      if (s.trail.length >= need && tail && mine && Math.hypot(tail[0] - mine[0], tail[1] - mine[1]) < 1.5) continue;
       const tr = [s.head]; const marks = [[0, s.head], ...pts.map((p, j) => [2 + 4 * j, p])];
       for (let m = 1; m < marks.length; m++) { const [t0, a] = marks[m - 1], [t1, b] = marks[m]; for (let t = t0 + 1; t <= t1; t++) { const u = (t - t0) / (t1 - t0); tr[t] = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u]; } }
       s.trail = tr; rebuildPts(s);
@@ -137,6 +144,7 @@
     for (const id of [...remote.snakes.keys()]) if (v.info && !v.info[id]) remote.snakes.delete(id);
   }
   function onState(v) {
+    lastStateAt = performance.now();
     for (const e of v.s || []) {
       const s = ensure(e[0]);
       const wasAlive = s.alive;
@@ -153,16 +161,32 @@
   // ── 화면 그리기 (초당 60번)
   const list = () => mode === "client" ? [...remote.snakes.values()] : (sim ? sim.snakes : []);
   const foods = () => mode === "client" ? remote.food : (sim ? sim.food : []);
+  // 보간: 게임 계산(초당 20번, 참가자는 받는 게 초당 10번) 사이를 자취 위에서 부드럽게 이어 그림
+  //   혼자·방장: 한 틱(0.05초) 뒤를 그림 / 참가자: 세 틱(0.15초) 뒤를 그려 통신 흔들림까지 흡수
+  function displayList(now) {
+    const T = C.T_TRAIL, SP = C.SPACING, client = mode === "client";
+    const k = client ? Math.max(0, Math.min(3, 3 - (now - lastStateAt) / 50)) : Math.max(0, Math.min(1, 1 - (now - lastTickAt) / (1000 / HZ)));
+    const at = client ? (s, i) => s.trail[Math.min(i, s.trail.length - 1)] : (s, i) => s.trail[((s.ptr - i) % T + T) % T];
+    const lerp = (s, x) => { const i = Math.floor(x), f = x - i, a = at(s, i), b = at(s, i + 1); if (!a) return null; if (!b || !f) return a; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
+    return list().map(s => {
+      if (!s.alive || !s.trail || !s.trail.length) return s;
+      const head = lerp(s, k) || s.head, back = lerp(s, k + 1) || head;
+      const n = Math.min(Math.floor(s.length), T / SP), pts = [];
+      for (let i = 0; i < n; i++) { const p = lerp(s, k + SP * (i + 1)); if (!p) break; pts.push(p); }
+      const ang = Math.hypot(head[0] - back[0], head[1] - back[1]) > 1e-6 ? Math.atan2(head[1] - back[1], head[0] - back[0]) : s.ang;
+      return { id: s.id, name: s.name, hue: s.hue, helper: s.helper, boosting: s.boosting, alive: true, length: s.length, ang, head, pts };
+    });
+  }
   let hudAt = 0;
   function loop(t) {
     if (mode !== "menu") {
-      RND.frame(list(), foods(), meId);
-      if (t - hudAt > 250) { hudAt = t; hud(); }
+      RND.frame(displayList(t), foods(), meId);
     } else RND.frame([], sim ? sim.food : demoFood, null);
     requestAnimationFrame(loop);
   }
   const demoFood = Array.from({ length: 120 }, () => { const r = 38 * Math.sqrt(Math.random()), a = Math.random() * 6.283; return [r * Math.cos(a), r * Math.sin(a), SNK.FOOD_HUES[Math.floor(Math.random() * 9)]]; });
   requestAnimationFrame(loop);
+  setInterval(() => { if (mode !== "menu") hud(); }, 250);
   function hud() {
     const all = list().filter(s => s.alive).sort((a, b) => b.length - a.length);
     $("lb").querySelector("ol").innerHTML = all.slice(0, 10).map(s => `<li class="${s.id === meId ? "me" : ""}">${(s.helper ? "🧪" : "") + esc(s.name)} <span style="float:right">${Math.floor(s.length)}</span></li>`).join("");
@@ -170,7 +194,9 @@
     if (me) {
       const rank = all.indexOf(me) + 1;
       $("me").innerHTML = `내 길이 <b>${Math.floor(me.length)}</b> · 순위 ${rank || "-"}/${all.length}<br><span class="small">죽음 ${me.deaths} · 잡음 ${me.kills}${input.boost ? " · 부스트" : ""}</span>`;
-      $("dead").hidden = me.alive; $("deadMsg").textContent = "다시 태어나는 중…";
+      const showDead = !me.alive && me.deaths > respawnedAtDeaths && $("pause").hidden;   // '다시 태어나기'를 누른 뒤 또 죽기 전까지는 안 띄움
+      if (showDead && $("dead").hidden) $("deadMsg").textContent = `최고 길이 ${Math.floor(me.best || me.length)} · 잡은 수 ${me.kills} · 죽은 횟수 ${me.deaths}`;
+      $("dead").hidden = !showDead;
     }
     if (!$("admin").hidden) renderAdmin();
   }
@@ -280,7 +306,29 @@
   }
 
   $("solo").onclick = startSolo; $("hostBtn").onclick = startHost; $("joinBtn").onclick = startJoin;
-  $("toMenu").onclick = backToMenu;
+
+  // ── 죽었을 때: 다시 태어날지 묻기 / ESC: 멈춤 메뉴
+  let respawnedAtDeaths = 0;
+  function respawn() { input.respawn++; const me = list().find(s => s.id === meId); respawnedAtDeaths = me ? me.deaths : 0; $("dead").hidden = true; }
+  $("respawn").onclick = respawn;
+  $("deadMenu").onclick = backToMenu;
+  function setPause(on) {
+    if (mode === "menu") return;
+    paused = on && mode === "solo";                                       // 친구랑 할 땐 다른 사람이 있어 멈추지 않음
+    $("pause").hidden = !on;
+    $("pauseTitle").textContent = mode === "solo" ? "잠깐 멈춤" : "메뉴";
+    $("pauseNote").textContent = mode === "solo" ? "게임이 멈춰 있어요." : "친구들과 하는 중이라 게임은 계속 진행돼요.";
+    if (on) $("dead").hidden = true;
+  }
+  $("toMenu").onclick = () => setPause(true);
+  $("resume").onclick = () => setPause(false);
+  $("quit").onclick = () => { setPause(false); backToMenu(); };
+  $("pauseAdmin").onclick = () => { setPause(false); openAdmin(); };
+  window.addEventListener("keydown", e => {
+    if (mode === "menu" || e.target.tagName === "INPUT") return;
+    if (e.key === "Escape") { setPause($("pause").hidden); e.preventDefault(); }
+    if (e.key === "Enter" && !$("dead").hidden) { respawn(); e.preventDefault(); }
+  });
 
   // ── 헬퍼가 읽는 공개 변수 (실제 slither.io 클라이언트가 상태를 전역 변수에 두던 것과 같은 구조)
   window.game = {

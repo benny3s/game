@@ -38,8 +38,7 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 .go{display:flex;flex-wrap:wrap;gap:8px}
 .go .btn{flex:1 1 140px;padding:12px;font-size:15px}
 .btn.primary{background:var(--ai);border-color:var(--ai);color:#06110f}
-.dead{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;z-index:3}
-.dead b{display:block;font-size:26px;color:#fff}
+#dead,#pause{background:rgba(6,9,8,.45)}
 #admin{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 40px);width:min(420px,calc(100vw - 20px));max-height:calc(100dvh - 60px);overflow:auto;z-index:8;background:rgba(20,16,10,.95);border:1px solid #6b5426;border-radius:12px;padding:12px;display:grid;gap:8px;font-size:13px}
 #admin h2{margin:0;font-size:15px;color:#ffd38a}
 .acrow{border-top:1px dashed #4a3a1c;padding-top:6px;display:grid;gap:3px}
@@ -58,12 +57,21 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 <div class="hud" id="me" hidden></div>
 <div class="hud" id="room" hidden></div>
 <div class="topbtn" id="topbtn" hidden>
-  <button class="btn" type="button" id="toMenu">메뉴</button>
+  <button class="btn" type="button" id="toMenu">메뉴 (ESC)</button>
   <button class="btn" type="button" id="myAc" hidden>내 감지기</button>
   <button class="btn" type="button" id="adminBtn2">관리자</button>
 </div>
 <button id="boost" type="button" hidden>부스트</button>
-<div class="dead" id="dead" hidden><b>죽었어요</b><span id="deadMsg"></span></div>
+<div class="card" id="dead" hidden><div style="text-align:center;width:min(360px,100%)">
+  <h1 style="font-size:24px">죽었어요</h1>
+  <p class="lede" id="deadMsg" style="margin:0 auto"></p>
+  <div class="go"><button class="btn primary" type="button" id="respawn">다시 태어나기 (Enter)</button><button class="btn" type="button" id="deadMenu">메뉴로</button></div>
+</div></div>
+<div class="card" id="pause" hidden><div style="text-align:center;width:min(360px,100%)">
+  <h1 style="font-size:22px" id="pauseTitle">잠깐 멈춤</h1>
+  <p class="small" id="pauseNote"></p>
+  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="resume">계속 (ESC)</button><button class="btn" type="button" id="quit">메뉴로 나가기</button><button class="btn" type="button" id="pauseAdmin">관리자</button></div>
+</div></div>
 <section id="admin" hidden aria-label="관리자 패널"></section>
 
 <div class="card" id="menu"><div>
