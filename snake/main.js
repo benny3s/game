@@ -31,7 +31,9 @@
   }));
   seg("aiLevel", v => settings.ai.level = v);
   seg("aiCount", v => settings.ai.count = v, Number);
-  seg("helperSel", v => settings.helper = v);
+  seg("helperSel", v => { settings.helper = v; markHelper(); });
+  seg("lbHelper", v => { settings.helper = v; markHelper(); const c = hostCtl || joinCtl; if (c) c.setMe({ helper: v !== "none" }); });
+  function markHelper() { ["helperSel", "lbHelper"].forEach(id => $(id).querySelectorAll("[data-v]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (settings.helper === "none" ? "none" : "on"))))); }
   const MODE_HELP = { free: "언제든 들어오고 나가는 기본 방식이에요.", round: "3분 동안 가장 길게 자란 지렁이가 1등. 죽어도 다시 시작할 수 있어요.",
     royale: "20초 뒤부터 경기장이 점점 줄어요(밖으로 나가면 탈락). 부활 없이 마지막까지 살아남으면 승리!" };
   seg("speedSel", v => settings.hz = v, Number);
@@ -69,13 +71,17 @@
   function enterGame() {
     $("menu").hidden = true; ["lb", "me", "topbtn"].forEach(id => $(id).hidden = false);
     $("boost").hidden = !matchMedia("(pointer: coarse)").matches;
+    $("chatBtn").hidden = mode === "solo";
     RND.resize();
     clientAC = AC.client(input);
-    if (settings.helper !== "none") loadHelper(settings.helper);
+    if (settings.helper !== "none") loadHelper(settings.helper === "on" ? "see" : settings.helper);
     NET.init().then(updateAdminButtons).catch(() => {});
   }
+  let soloSetup = false;
+  function openSoloSetup() { myName(); soloSetup = true; showLobby("solo"); }
   function startSolo() {
     if (!BRAINS) return msg("AI 불러오는 중… 잠시 뒤 다시");
+    if (lobby) hideLobby(); soloSetup = false;
     mode = "solo"; meId = "me";
     HZ = settings.hz; sim = new SNK.Sim(BRAINS, settings.gameMode); sim.hz = HZ;
     const me = sim.add("me", "human", myName(), settings.hue); me.helper = settings.helper !== "none";
@@ -96,10 +102,11 @@
         update(uid, p) { hostPlayers.set(uid, p); const s = sim && sim.snakes.find(x => x.id === uid); if (s) { s.helper = !!p.helper; if (p.name) s.name = p.name; if (p.hue != null) s.hue = p.hue; } },
         leave(uid) { hostPlayers.delete(uid); if (sim) sim.remove(uid); behaviors.delete(uid); },
         players(v) { lobbyPlayers = v; if (lobby) renderLobby(); },
+        chat: onChat,
         conn(c) { connBanner(c ? "" : "인터넷 연결이 끊겼어요 · 다시 연결하는 중…"); },
       });
       roomCode = hostCtl.code; msg("");
-      showLobby(true);
+      showLobby("host");
     } catch (e) { msg("방을 못 만들었어요: " + (e.message || e)); mode = "menu"; }
   }
   // 방장: 대기실에서 '게임 시작'
@@ -120,7 +127,7 @@
   function hostToLobby() {
     if (mode !== "host" || !hostCtl) return;
     clearInterval(tickTimer); sim = null; hostCtl.setSim(null); hostCtl.setPhase("lobby", cfg());
-    showLobby(true);
+    showLobby("host");
   }
   async function startJoin() {
     const code = ($("code").value || "").trim().toUpperCase();
@@ -133,17 +140,18 @@
       joinCtl = await NET.join(code, { name: settings.name, hue: settings.hue, helper: settings.helper !== "none" }, {
         state: onState, sync: onSync, meta: onMeta,
         players(v) { lobbyPlayers = v; if (lobby) renderLobby(); },
+        chat: onChat,
         conn(c, why) { connBanner(c ? "" : (why || "연결이 끊겼어요") + " · 다시 연결하는 중…"); },
         closed() { connBanner(""); alert("방장이 나가서 방이 끝났어요"); backToMenu(); },
       });
       joining = false; mode = "client"; meId = NET.uid; roomCode = code; msg("");
-      if (lastMeta && lastMeta.phase === "lobby") showLobby(false); else clientPlay();
+      if (lastMeta && lastMeta.phase === "lobby") showLobby("guest"); else clientPlay();
     } catch (e) { joining = false; msg(e.message || String(e)); mode = "menu"; }
   }
   function onMeta(v) {
     lastMeta = v;
     if (joining || mode !== "client") return;
-    if (v.phase === "lobby" && !lobby) showLobby(false);
+    if (v.phase === "lobby" && !lobby) showLobby("guest");
     else if (v.phase !== "lobby" && lobby) clientPlay();
     if (lobby) renderLobby();
   }
@@ -163,8 +171,7 @@
   // 방장이 정하는 설정 칸(속도·게임 방식·AI)은 대기실로 옮겨서 거기서 고름, 메뉴로 돌아가면 제자리로
   const optFields = [...document.querySelectorAll(".menu-card .hostopt")];
   const optAnchor = optFields.length ? optFields[optFields.length - 1].nextSibling : null;
-  const optsToLobby = () => optFields.forEach(el => $("lbOpts").appendChild(el));
-  const optsHome = () => optFields.forEach(el => optAnchor.parentNode.insertBefore(el, optAnchor));
+  const optsToLobby = () => {}, optsHome = () => {};
   $("lbOpts").addEventListener("click", e => { if (lobby && mode === "host" && e.target.closest("[data-v]")) setTimeout(() => hostCtl && hostCtl.setPhase("lobby", cfg()), 0); });
   $("lbColors").innerHTML = $("colors").innerHTML;
   const markLbColor = () => $("lbColors").querySelectorAll(".sw").forEach(b => b.setAttribute("aria-checked", String(Number(b.dataset.h) === settings.hue)));
@@ -185,15 +192,20 @@
     ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc", "timer", "results", "spec"].forEach(id => $(id).hidden = true);
     stopSpectate(); if (window.__snakeHelper) window.__snakeHelper.off();
   }
-  function showLobby(isHost) {
+  function showLobby(kind) {                                              // kind: host 방장 · guest 참가자 · solo 혼자 연습
     lobby = true; paused = false;
     hideGameHud(); $("menu").hidden = true; $("lobby").hidden = false;
-    const link = location.origin + location.pathname + "?room=" + roomCode;
-    $("lbCode").textContent = roomCode; $("lbLink").textContent = link;
-    $("lbName").value = settings.name; markLbColor();
-    if (isHost) optsToLobby();
-    $("lbStart").hidden = !isHost; $("lbCfg").hidden = isHost;
-    renderLobby();
+    $("lobbyBox").dataset.kind = kind;
+    $("lbTitle").textContent = kind === "solo" ? "혼자 연습 설정" : "대기실";
+    $("lbStart").textContent = kind === "solo" ? "시작 (Enter)" : "게임 시작 (Enter)";
+    $("lbLeave").textContent = kind === "solo" ? "뒤로" : "나가기";
+    $("lbStart").hidden = kind === "guest";
+    if (kind !== "solo") {
+      const link = location.origin + location.pathname + "?room=" + roomCode;
+      $("lbCode").textContent = roomCode; $("lbLink").textContent = link;
+      $("lbName").value = settings.name; markLbColor(); markHelper();
+      renderLobby(); renderChat();
+    }
   }
   function hideLobby() { lobby = false; $("lobby").hidden = true; optsHome(); }
   function renderLobby() {
@@ -206,8 +218,42 @@
     else { $("lbCfg").innerHTML = cfgText(lastMeta && lastMeta.cfg); $("lbMsg").textContent = "방장이 게임을 시작하기를 기다리는 중…"; }
   }
   $("lbCopy").onclick = () => { const link = $("lbLink").textContent; navigator.clipboard.writeText(link).then(() => { $("lbCopy").textContent = "복사됨 ✓"; setTimeout(() => $("lbCopy").textContent = "초대 링크 복사", 1500); }, () => { const r = document.createRange(); r.selectNodeContents($("lbLink")); getSelection().removeAllRanges(); getSelection().addRange(r); }); };
-  $("lbStart").onclick = hostStartGame;
-  $("lbLeave").onclick = () => backToMenu();
+  $("lbStart").onclick = () => soloSetup ? startSolo() : hostStartGame();
+  $("lbLeave").onclick = () => { soloSetup = false; backToMenu(); };
+  // ── 채팅 (대기실 · 게임 중: PC는 Enter, 휴대폰은 💬)
+  const chatLog = [];
+  let chatAt = 0;
+  function onChat(m) {
+    if (!m || !m.m) return;
+    chatLog.push(m); if (chatLog.length > 60) chatLog.shift();
+    renderChat();
+    if (!lobby && mode !== "menu") {                                      // 게임 중엔 왼쪽 아래에 8초 보였다 사라짐
+      const li = document.createElement("li"); li.innerHTML = chatLine(m);
+      $("gchat").hidden = false; $("gchat").appendChild(li);
+      while ($("gchat").children.length > 5) $("gchat").firstChild.remove();
+      setTimeout(() => li.classList.add("old"), 8000); setTimeout(() => li.remove(), 8700);
+    }
+  }
+  const chatLine = m => `<b style="color:hsl(${hueOf(m.u)},80%,70%)">${esc(m.n || "?")}</b>${esc(m.m)}`;
+  const hueOf = uid => { const p = lobbyPlayers[uid]; return p && p.hue != null ? p.hue : 200; };
+  function renderChat() {
+    const ul = $("lbChat"); if (!ul) return;
+    ul.innerHTML = chatLog.length ? chatLog.map(m => `<li>${chatLine(m)}</li>`).join("") : '<li class="sys">아직 메시지가 없어요. 인사해 보세요!</li>';
+    ul.scrollTop = ul.scrollHeight;
+  }
+  function sendChat(inputEl) {
+    const t = inputEl.value.trim(), c = hostCtl || joinCtl;
+    if (!t || !c) return false;
+    if (performance.now() - chatAt < 700) return false;                  // 도배 방지
+    chatAt = performance.now(); inputEl.value = ""; c.chat(t).catch(() => {});
+    return true;
+  }
+  $("lbChatForm").addEventListener("submit", e => { e.preventDefault(); sendChat($("lbChatIn")); });
+  function openGameChat() { if (mode === "solo" || mode === "menu") return; $("gchatForm").hidden = false; $("gchatIn").focus(); }
+  function closeGameChat() { $("gchatForm").hidden = true; $("gchatIn").blur(); }
+  $("gchatForm").addEventListener("submit", e => { e.preventDefault(); sendChat($("gchatIn")); closeGameChat(); });
+  $("gchatIn").addEventListener("keydown", e => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeGameChat(); } });
+  $("chatBtn").onclick = openGameChat;
   // 연결 끊김 알림 (화면 위 가운데)
   function connBanner(text) {
     let el = $("netWarn");
@@ -226,6 +272,7 @@
     if (joinCtl) { joinCtl.leave(); joinCtl = null; }
     mode = "menu"; sim = null; behaviors.clear(); paused = false; respawnedAtDeaths = 0; stopSpectate(); remote.g = null;
     if (lobby) hideLobby(); lastMeta = null; roomCode = null; reportsFor = null; joining = false; connBanner("");
+    chatLog.length = 0; $("gchat").innerHTML = ""; $("gchat").hidden = true; closeGameChat(); soloSetup = false;
     $("menu").hidden = false; ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc", "timer", "results"].forEach(id => $(id).hidden = true);
     if (window.__snakeHelper) window.__snakeHelper.off();
     msg("");
@@ -537,7 +584,7 @@
     const s = document.createElement("script"); s.src = "helper.js?" + Date.now(); document.body.appendChild(s);
   }
 
-  $("solo").onclick = startSolo; $("hostBtn").onclick = openRooms; $("joinBtn").onclick = startJoin;
+  $("solo").onclick = openSoloSetup; $("hostBtn").onclick = openRooms; $("joinBtn").onclick = startJoin;
   // ── 방 목록 (4초마다 새로고침)
   let roomsT = null;
   const MODE_SHORT = { free: "자유", round: "라운드", royale: "배틀로얄" };
@@ -628,8 +675,8 @@
   window.addEventListener("keydown", e => {
     const ok = e.key === "Enter" || e.key === " ";
     if (mode === "menu") {                                                // 첫 메뉴: Space/Enter = 혼자 연습 (이름 칸에서 Enter도)
-      if (lobby) { if (ok && mode === "host" && e.target.tagName !== "INPUT") { e.preventDefault(); hostStartGame(); } return; }
-      if (ok && $("login").hidden && (e.target.tagName !== "INPUT" || (e.key === "Enter" && e.target.id === "name"))) { e.preventDefault(); if (roomParam) startJoin(); else startSolo(); }
+      if (lobby) { if (ok && soloSetup && e.target.tagName !== "INPUT") { e.preventDefault(); startSolo(); } return; }
+      if (ok && $("login").hidden && (e.target.tagName !== "INPUT" || (e.key === "Enter" && e.target.id === "name"))) { e.preventDefault(); if (roomParam) startJoin(); else openSoloSetup(); }
       return;
     }
     if (lobby) { if (ok && mode === "host" && e.target.tagName !== "INPUT") { e.preventDefault(); hostStartGame(); } return; }
@@ -638,7 +685,8 @@
     if (spectating && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { cycleSpec(e.key === "ArrowRight" ? 1 : -1); e.preventDefault(); return; }
     if (ok && (!$("dead").hidden || spectating)) { e.preventDefault(); if (!e.repeat) respawn(); return; }
     if (ok && !$("results").hidden) { e.preventDefault(); if (mode !== "client" && !e.repeat) newGame(); return; }
-    if (ok && !$("pause").hidden) { e.preventDefault(); if (mode === "solo") newGame(); else setPause(false); }
+    if (ok && !$("pause").hidden) { e.preventDefault(); if (mode === "solo") newGame(); else setPause(false); return; }
+    if (e.key === "Enter" && mode !== "solo" && $("dead").hidden && $("results").hidden) { e.preventDefault(); openGameChat(); }
   });
 
   // ── 헬퍼가 읽는 공개 변수 (실제 slither.io 클라이언트가 상태를 전역 변수에 두던 것과 같은 구조)

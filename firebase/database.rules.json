@@ -33,7 +33,13 @@
               ".write": "auth != null && (auth.uid === $uid || root.child('snake/rooms/' + $code + '/meta/host').val() === auth.uid)"
             }
           },
-          ".write": "auth != null && !newData.exists() && (root.child('snake/rooms/' + $code + '/meta/host').val() === auth.uid || (!data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists()))"
+          ".write": "auth != null && !newData.exists() && (root.child('snake/rooms/' + $code + '/meta/host').val() === auth.uid || (!data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists()))",
+          "chat": {
+            "$id": {
+              ".write": "auth != null && !data.exists() && newData.child('u').val() === auth.uid && root.child('snake/rooms/' + $code + '/players/' + auth.uid).exists()",
+              ".validate": "newData.child('m').isString() && newData.child('m').val().length <= 120 && newData.child('m').val().length > 0 && newData.child('n').isString() && newData.child('n').val().length <= 12"
+            }
+          }
         }
       },
       "ac": {

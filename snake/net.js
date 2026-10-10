@@ -147,6 +147,7 @@ const NET = (() => {
     // 방장 자신의 입력 자리는 절대 덮어쓰지 않음 (같은 계정으로 다른 기기가 들어오면 방장 지렁이가 멈추던 문제)
     S.on(room.child("inputs"), "child_added", snap => { if (sim && snap.key !== user.uid) sim.inputs[snap.key] = unpackInput(snap.val()); });
     S.on(room.child("inputs"), "child_changed", snap => { if (snap.key === user.uid) return; const v = unpackInput(snap.val()); if (sim) sim.inputs[snap.key] = v; hooks.input && hooks.input(snap.key, v); });
+    S.on(room.child("chat").limitToLast(50), "child_added", s => hooks.chat && hooks.chat(s.val()));
     // 끊긴 직접 연결은 3초마다 살펴서 다시 붙임 (그동안은 Realtime DB로 이어짐)
     const healT = setInterval(() => { for (const [uid, p] of peers) if (p.dead()) newPeer(uid); }, 3000);
     let n = 0;
@@ -189,6 +190,7 @@ const NET = (() => {
       get connected() { return conn; },
       setPhase(phase, cfg) { meta = { ...meta, phase, cfg: cfg || null }; writeIdx(); return room.child("meta").update({ phase, cfg: cfg || null }); },   // 대기실 ↔ 게임 (친구들 화면도 따라 바뀜)
       setMe(p) { mine = { ...mine, ...p }; if (p.name) writeIdx(); return room.child(`players/${user.uid}`).update(p); },     // 대기실에서 이름·색 바꾸기
+      chat(text) { return room.child("chat").push({ u: user.uid, n: mine.name, m: String(text).slice(0, 120), t: TS() }); },
       leave() { clearInterval(healT); S.off(); for (const p of peers.values()) p.close(); room.onDisconnect().cancel(); idx.onDisconnect().cancel(); room.remove(); idx.remove(); },
     };
   }
@@ -239,6 +241,7 @@ const NET = (() => {
       if (c && !conn) { seat().catch(() => {}); if (!(peer && peer.open())) newPeer(); }
       conn = c; handlers.conn && handlers.conn(c, c ? "" : "인터넷 연결이 끊겼어요");
     });
+    S.on(room.child("chat").limitToLast(50), "child_added", s => handlers.chat && handlers.chat(s.val()));
     const pingT = setInterval(() => { if (peer && peer.open()) peer.send({ t: "p", c: performance.now() }); }, 1000);
     let last = "", lastAt = 0, pending = null;
     function sendInput(inp) {
@@ -257,6 +260,7 @@ const NET = (() => {
     return {
       code, meta, sendInput,
       setMe(p) { mine = { ...mine, ...p }; return room.child(`players/${user.uid}`).update(p); },
+      chat(text) { return room.child("chat").push({ u: user.uid, n: mine.name, m: String(text).slice(0, 120), t: TS() }); },
       get p2p() { return !!(peer && peer.open()); }, get rtt() { return rtt; }, get connected() { return conn; },
       leave() {
         left = true; clearInterval(pingT); clearInterval(pendT); clearTimeout(goneT); clearTimeout(reseatT); S.off(); if (peer) peer.close();
