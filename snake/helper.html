@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>헬퍼 만들기 실습</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="../common/ui.css">
+<style>
+/* 레이아웃: 설명서 한 장 — 설치 → 헬퍼 구조 → 감지기 구조 → 실습 순서 */
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:8px}
+h2{margin:0;font-size:17px}
+p,li{max-width:70ch}
+code,pre{font-family:var(--mono);font-size:12.5px}
+pre{background:#0a0f0e;border:1px solid var(--line);border-radius:6px;padding:10px;overflow-x:auto;margin:0;white-space:pre-wrap;word-break:break-all}
+.bm{display:inline-block;padding:9px 14px;border-radius:8px;background:#2a1f3d;border:1px solid #6b4fa0;color:#e6d6ff;font-weight:700;text-decoration:none}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;min-width:520px;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600}
+ol{margin:0;padding-left:20px;display:grid;gap:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="crumb"><a href="./">← 지렁이 대결</a></p>
+  <h1>헬퍼 만들기 실습</h1>
+  <p class="lede">브라우저 게임 헬퍼가 어떻게 돌아가는지, 그리고 운영자는 어떻게 잡아내는지 우리 게임에서 직접 해 봅니다. <b>이 게임 전용</b>이고, 다른 사람들과 하는 실제 게임에서는 쓰지 않습니다.</p>
+
+  <section>
+    <h2>1. 헬퍼 켜기 (PC)</h2>
+    <p>아래 보라색 버튼을 브라우저 <b>북마크바로 끌어다 놓으세요</b>. 지렁이 대결 화면에서 그 북마크를 누르면 헬퍼가 페이지에 주입되고 오른쪽 위에 패널이 뜹니다.</p>
+    <p><a class="bm" id="bm" href="#">🧪 지렁이 헬퍼</a></p>
+    <p class="help">북마크바가 안 보이면 Ctrl+Shift+B. 끌어 놓기가 안 되면: 지렁이 대결 화면에서 F12 → Console에 아래 한 줄을 붙여 넣고 Enter.</p>
+    <pre id="snippet"></pre>
+  </section>
+
+  <section>
+    <h2>2. 헬퍼는 이렇게 생겼다 (<code>helper.js</code>)</h2>
+    <div class="tbl"><table>
+      <tr><th>층</th><th>이 헬퍼</th><th>실제 헬퍼들</th></tr>
+      <tr><td>① 읽기</td><td>페이지 변수 <code>window.game</code>에서 지렁이·먹이·내 위치를 읽고, B 방식 관찰값(16방향 × 먹이·몸·벽)을 직접 계산</td><td>게임 자바스크립트가 들고 있는 전역 변수를 읽음(옛 slither 봇), 통신 메시지 해석, 화면 픽셀 분석</td></tr>
+      <tr><td>② 판단</td><td>셀프플레이로 학습한 신경망이 6개 행동 중 하나</td><td>대부분 규칙(위험 원 안에 몸이 들어오면 반대로, 먹이 덩어리 쪽으로)</td></tr>
+      <tr><td>③ 조작</td><td><b>마우스 이벤트 넣기</b>: 가짜 PointerEvent를 캔버스에 보냄<br><b>게임 변수 직접 바꾸기</b>: <code>game.input.target</code>을 고침</td><td>마우스 이벤트 만들기, 또는 게임의 '마우스 좌표' 전역 변수를 직접 고침</td></tr>
+      <tr><td>그리기</td><td>게임 캔버스 위에 투명 캔버스를 하나 더 얹어 레이더·화살표</td><td>줌아웃, 레이더, 미니맵 등</td></tr>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>3. 감지기는 이렇게 잡는다 (<code>game.js</code>의 AC)</h2>
+    <div class="tbl"><table>
+      <tr><th>신호</th><th>무엇을 보나</th><th>점수</th></tr>
+      <tr><td>가짜 입력</td><td>스크립트가 만든 이벤트는 <code>isTrusted=false</code>. 브라우저가 붙이는 표시라 웹 페이지에서는 위조 불가</td><td>40</td></tr>
+      <tr><td>입력 변조</td><td>마우스 이벤트가 없었는데 목표 좌표가 바뀜 → 변수를 직접 고친 것</td><td>35</td></tr>
+      <tr><td>주입 흔적</td><td>처음에 없던 스크립트·캔버스가 페이지에 생김 (MutationObserver)</td><td>20</td></tr>
+      <tr><td>반응 속도</td><td>정면에 위험이 나타난 순간부터 반대로 틀기까지. 사람은 보통 0.2초 이상</td><td>25</td></tr>
+      <tr><td>입력 규칙성</td><td>마우스 이벤트 간격의 변동. 사람 손은 들쭉날쭉, 타이머는 일정</td><td>15</td></tr>
+      <tr><td>완벽한 회피</td><td>위험 장면 10번 이상 중 95% 이상을 피함</td><td>10</td></tr>
+    </table></div>
+    <p class="help">60점 이상 = 헬퍼 의심 높음, 25점 이상 = 주의. 실제 서비스는 이 판단을 서버에서 하고(클라이언트 코드는 헬퍼가 고칠 수 있으니까), 여러 판의 기록을 모아 봅니다.</p>
+  </section>
+
+  <section>
+    <h2>4. 실습 순서</h2>
+    <ol>
+      <li>지렁이 대결에서 <b>관리자: 헬퍼 감지기</b>를 켜고 그냥 몇 판 → 내 손의 점수(0~10점대)와 반응 속도를 확인</li>
+      <li>헬퍼 켜기 → 레이더·화살표만 → 감지기에 <b>주입 흔적</b>이 바로 잡히는지</li>
+      <li>"위험할 때만 대신 피하기" + <b>마우스 이벤트</b> → 가짜 입력으로 즉시 걸림</li>
+      <li>조작 방식을 <b>게임 변수 직접 바꾸기</b>로 → 가짜 입력은 피하지만 입력 변조로 걸림</li>
+      <li><b>사람처럼 위장</b>까지 켜기 → 반응 속도·규칙성 신호는 피하는지, 그래도 남는 신호는 무엇인지</li>
+      <li>자동 조종으로 학습된 AI ×5와 대결 → 내 손과 길이·죽음 비교</li>
+      <li>(도전) 감지기를 더 똑똑하게: 예를 들어 "위험 장면에서만 유난히 정확함"을 잡는 신호를 <code>game.js</code>에 추가</li>
+    </ol>
+  </section>
+</div>
+<script>
+  const code = "(()=>{const s=document.createElement('script');s.src=new URL('helper.js',location.href).href+'?'+Date.now();document.body.appendChild(s)})()";
+  document.getElementById("bm").href = "javascript:" + code;
+  document.getElementById("snippet").textContent = code;
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+/* 베니 게임 공통: 어두운 오락실 화면 하나 (모든 게임이 같이 씀) */
+:root{
+  --bg:#0c1211; --panel:#141c1a; --ink:#e3ebe8; --muted:#8fa19b; --line:#25312d;
+  --me:#ffd666; --ai:#5ec4b6; --bot:#f08a4b; --raw:#b48cf0; --good:#4ade80; --danger:#ff5a78;
+  --sans:"IBM Plex Sans KR",system-ui,"Malgun Gothic",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 var(--sans);padding-inline:16px;padding-block:14px 32px}
+a{color:var(--ai)}
+[hidden]{display:none!important}
+.wrap{max-width:780px;margin:0 auto;display:grid;gap:10px}
+h1{margin:0;font-size:24px;text-wrap:balance}
+.lede{margin:0;color:var(--muted);font-size:13.5px;max-width:68ch}
+.crumb{margin:0;font-size:13px}
+.pick,.opts{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.opts{font-size:13px;color:var(--muted)}
+.btn{font:600 13px/1 var(--sans);padding:9px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+.btn[aria-pressed="true"]{border-color:var(--me);color:var(--me)}
+.btn:focus-visible,a:focus-visible{outline:2px solid var(--me);outline-offset:2px}
+.help{font-size:12.5px;color:var(--muted);margin:0}
+select{font:inherit;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
