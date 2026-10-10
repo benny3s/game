@@ -12,6 +12,7 @@
   const behaviors = new Map();                                   // 지렁이별 행동 감지 (혼자/방장이 계산)
   const settings = { name: "", ai: { level: "hard", count: 5 }, helper: "none", hue: 48, gameMode: "free", hz: 14 };
   const hostPlayers = new Map();                                 // 방장: 들어온 친구들 (새 판 시작할 때 다시 넣기)
+  let lobby = false, lobbyPlayers = {}, lastMeta = null, joining = false, roomCode = null, reportsFor = null;   // 대기실
 
   fetch("brains.json?v=v2a-2m").then(r => r.json()).then(b => { BRAINS = b; });
 
@@ -36,8 +37,23 @@
   seg("speedSel", v => settings.hz = v, Number);
   seg("gameMode", v => { settings.gameMode = v; $("modeHelp").textContent = MODE_HELP[v]; });
   const roomParam = new URLSearchParams(location.search).get("room");
-  if (roomParam) $("code").value = roomParam.toUpperCase();
   const msg = t => { $("msg").textContent = t; };
+  if (roomParam) {                                                       // 초대 링크로 왔으면: 이름·색·들어가기만
+    const code = roomParam.toUpperCase().slice(0, 4);
+    $("code").value = code;
+    document.querySelector(".menu-card").classList.add("invite");
+    $("inviteHead").hidden = false; $("inviteHead").textContent = `방 ${code}에 초대받았어요. 이름과 색을 고르고 들어가세요.`;
+    $("joinBtn").textContent = "들어가기"; $("joinBtn").classList.add("primary");
+    document.querySelectorAll(".invite-only").forEach(e => e.hidden = false);
+  }
+  // 친구랑 할 땐 이름이 꼭 있어야 함 (전엔 비우면 모두 '나'로 보여서 누가 누군지 몰랐음)
+  function needName() {
+    const n = ($("name").value || "").trim();
+    if (n) { $("name").classList.remove("need"); return myName(); }
+    $("name").classList.add("need"); $("name").focus(); msg("이름을 먼저 정해 주세요 (친구들에게 보여요)");
+    return null;
+  }
+  $("name").addEventListener("input", () => $("name").classList.remove("need"));
 
   function myName() { const n = ($("name").value || "").trim() || "나"; settings.name = n; try { localStorage.setItem("snake-name", n); } catch (e) {} return n; }
   function aiList() {
@@ -70,39 +86,133 @@
   }
   async function startHost() {
     if (!BRAINS) return msg("AI 불러오는 중… 잠시 뒤 다시");
+    if (!needName()) return;
     msg("방 만드는 중…");
     try {
       await NET.init();
-      mode = "host"; meId = NET.uid;
-      HZ = settings.hz; sim = new SNK.Sim(BRAINS, settings.gameMode); sim.hz = HZ; hostPlayers.clear();
-      const me = sim.add(meId, "human", myName(), settings.hue); me.helper = settings.helper !== "none";
-      sim.inputs[meId] = input;
-      addAIs();
-      hostCtl = await NET.host({ name: settings.name, hue: settings.hue, helper: me.helper, ai: settings.ai }, sim, {
-        join(uid, p) { hostPlayers.set(uid, p); if (!sim.snakes.find(s => s.id === uid)) { const s = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; } },
-        update(uid, p) { hostPlayers.set(uid, p); const s = sim.snakes.find(x => x.id === uid); if (s) s.helper = !!p.helper; },
-        leave(uid) { hostPlayers.delete(uid); sim.remove(uid); behaviors.delete(uid); },
+      mode = "host"; meId = NET.uid; sim = null; hostPlayers.clear(); lobbyPlayers = {};
+      hostCtl = await NET.host({ name: settings.name, hue: settings.hue, helper: settings.helper !== "none", ai: settings.ai, cfg: cfg() }, null, {
+        join(uid, p) { hostPlayers.set(uid, p); if (sim && !sim.snakes.find(s => s.id === uid)) { const s = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; } },
+        update(uid, p) { hostPlayers.set(uid, p); const s = sim && sim.snakes.find(x => x.id === uid); if (s) { s.helper = !!p.helper; if (p.name) s.name = p.name; if (p.hue != null) s.hue = p.hue; } },
+        leave(uid) { hostPlayers.delete(uid); if (sim) sim.remove(uid); behaviors.delete(uid); },
+        players(v) { lobbyPlayers = v; if (lobby) renderLobby(); },
+        conn(c) { connBanner(c ? "" : "인터넷 연결이 끊겼어요 · 다시 연결하는 중…"); },
       });
-      enterGame(); showRoom(hostCtl.code, true);
-      clearInterval(tickTimer); tickTimer = setInterval(stepSim, 1000 / HZ);
-      startReports(hostCtl.code);
-    } catch (e) { msg("방을 못 만들었어요: " + (e.message || e)); }
+      roomCode = hostCtl.code; msg("");
+      showLobby(true);
+    } catch (e) { msg("방을 못 만들었어요: " + (e.message || e)); mode = "menu"; }
+  }
+  // 방장: 대기실에서 '게임 시작'
+  function hostStartGame() {
+    if (mode !== "host" || !hostCtl || !BRAINS) return;
+    hideLobby();
+    HZ = settings.hz; sim = new SNK.Sim(BRAINS, settings.gameMode); sim.hz = HZ;
+    const me = sim.add(meId, "human", settings.name, settings.hue); me.helper = settings.helper !== "none";
+    sim.inputs[meId] = input;
+    for (const [uid, p] of hostPlayers) { const x = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); x.helper = !!p.helper; }
+    addAIs(); behaviors.clear(); respawnedAtDeaths = 0;
+    hostCtl.setSim(sim); hostCtl.setPhase("play", cfg());
+    enterGame(); showRoom(roomCode, true);
+    clearInterval(tickTimer); tickTimer = setInterval(stepSim, 1000 / HZ);
+    if (reportsFor !== roomCode) startReports(roomCode);
+  }
+  // 방장: 모두 대기실로
+  function hostToLobby() {
+    if (mode !== "host" || !hostCtl) return;
+    clearInterval(tickTimer); sim = null; hostCtl.setSim(null); hostCtl.setPhase("lobby", cfg());
+    showLobby(true);
   }
   async function startJoin() {
     const code = ($("code").value || "").trim().toUpperCase();
     if (code.length !== 4) return msg("방 코드 4자리를 넣어 주세요");
+    if (!needName()) return;
     msg("들어가는 중…");
     try {
       await NET.init();
-      mode = "client"; meId = NET.uid; stateK = -1;
-      remote.snakes.clear(); remote.food = [];
-      joinCtl = await NET.join(code, { name: myName(), hue: settings.hue, helper: settings.helper !== "none" }, {
-        state: onState, sync: onSync, closed() { alert("방장이 나가서 방이 끝났어요"); backToMenu(); },
+      joining = true; lastMeta = null;
+      joinCtl = await NET.join(code, { name: settings.name, hue: settings.hue, helper: settings.helper !== "none" }, {
+        state: onState, sync: onSync, meta: onMeta,
+        players(v) { lobbyPlayers = v; if (lobby) renderLobby(); },
+        conn(c, why) { connBanner(c ? "" : (why || "연결이 끊겼어요") + " · 다시 연결하는 중…"); },
+        closed() { connBanner(""); alert("방장이 나가서 방이 끝났어요"); backToMenu(); },
       });
-      enterGame(); showRoom(code, false);
-      clearInterval(tickTimer); tickTimer = setInterval(() => { clientAC.onStep(performance.now()); joinCtl.sendInput(input); }, 50);
-      startReports(code);
-    } catch (e) { msg(e.message || String(e)); mode = "menu"; }
+      joining = false; mode = "client"; meId = NET.uid; roomCode = code; msg("");
+      if (lastMeta && lastMeta.phase === "lobby") showLobby(false); else clientPlay();
+    } catch (e) { joining = false; msg(e.message || String(e)); mode = "menu"; }
+  }
+  function onMeta(v) {
+    lastMeta = v;
+    if (joining || mode !== "client") return;
+    if (v.phase === "lobby" && !lobby) showLobby(false);
+    else if (v.phase !== "lobby" && lobby) clientPlay();
+    if (lobby) renderLobby();
+  }
+  function clientPlay() {
+    hideLobby();
+    stateK = -1; remote.snakes.clear(); remote.food = []; remote.g = null;
+    enterGame(); showRoom(roomCode, false);
+    clearInterval(tickTimer); tickTimer = setInterval(() => { clientAC.onStep(performance.now()); joinCtl.sendInput(input); }, 50);
+    if (reportsFor !== roomCode) startReports(roomCode);
+  }
+
+  // ── 대기실
+  const MODE_NAME = { free: "자유", round: "라운드 3분", royale: "배틀로얄" }, HZ_NAME = { 10: "느리게", 14: "보통", 20: "빠르게" };
+  const AI_NAME = { raw: "학습 전", rule: "규칙 봇", easy: "초급", mid: "중급", hard: "상급", mix: "섞어서" };
+  const cfg = () => ({ m: settings.gameMode, hz: settings.hz, ai: { level: settings.ai.level, count: settings.ai.count } });
+  const cfgText = c => c ? `게임 방식 <b>${MODE_NAME[c.m] || c.m}</b> · 속도 <b>${HZ_NAME[c.hz] || c.hz}</b> · AI <b>${c.ai && c.ai.count ? AI_NAME[c.ai.level] + " " + c.ai.count + "마리" : "없음"}</b>` : "방장이 설정을 고르는 중";
+  // 방장이 정하는 설정 칸(속도·게임 방식·AI)은 대기실로 옮겨서 거기서 고름, 메뉴로 돌아가면 제자리로
+  const optFields = [...document.querySelectorAll(".menu-card .hostopt")];
+  const optAnchor = optFields.length ? optFields[optFields.length - 1].nextSibling : null;
+  const optsToLobby = () => optFields.forEach(el => $("lbOpts").appendChild(el));
+  const optsHome = () => optFields.forEach(el => optAnchor.parentNode.insertBefore(el, optAnchor));
+  $("lbOpts").addEventListener("click", e => { if (lobby && mode === "host" && e.target.closest("[data-v]")) setTimeout(() => hostCtl && hostCtl.setPhase("lobby", cfg()), 0); });
+  $("lbColors").innerHTML = $("colors").innerHTML;
+  const markLbColor = () => $("lbColors").querySelectorAll(".sw").forEach(b => b.setAttribute("aria-checked", String(Number(b.dataset.h) === settings.hue)));
+  $("lbColors").querySelectorAll(".sw").forEach(b => b.addEventListener("click", () => {
+    settings.hue = Number(b.dataset.h); try { localStorage.setItem("snake-hue", settings.hue); } catch (e) {}
+    markColor(); markLbColor(); const c = hostCtl || joinCtl; if (c) c.setMe({ hue: settings.hue });
+  }));
+  let nameT = null;
+  $("lbName").addEventListener("input", () => {
+    clearTimeout(nameT);
+    nameT = setTimeout(() => {
+      const n = $("lbName").value.trim().slice(0, 12); if (!n) return;
+      settings.name = n; $("name").value = n; try { localStorage.setItem("snake-name", n); } catch (e) {}
+      const c = hostCtl || joinCtl; if (c) c.setMe({ name: n });
+    }, 350);
+  });
+  function hideGameHud() {
+    ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc", "timer", "results", "spec"].forEach(id => $(id).hidden = true);
+    stopSpectate(); if (window.__snakeHelper) window.__snakeHelper.off();
+  }
+  function showLobby(isHost) {
+    lobby = true; paused = false;
+    hideGameHud(); $("menu").hidden = true; $("lobby").hidden = false;
+    const link = location.origin + location.pathname + "?room=" + roomCode;
+    $("lbCode").textContent = roomCode; $("lbLink").textContent = link;
+    $("lbName").value = settings.name; markLbColor();
+    if (isHost) optsToLobby();
+    $("lbStart").hidden = !isHost; $("lbCfg").hidden = isHost;
+    renderLobby();
+  }
+  function hideLobby() { lobby = false; $("lobby").hidden = true; optsHome(); }
+  function renderLobby() {
+    const hostId = mode === "host" ? meId : lastMeta && lastMeta.host;
+    const ps = Object.entries(lobbyPlayers).sort((a, b) => (b[0] === hostId) - (a[0] === hostId));
+    $("lbCount").textContent = `${ps.length}명`;
+    $("lbPlayers").innerHTML = ps.map(([uid, p]) => `<li><span class="dot" style="background:radial-gradient(circle at 38% 35%, hsl(${p.hue ?? 200},85%,72%), hsl(${p.hue ?? 200},80%,50%) 55%, hsl(${p.hue ?? 200},75%,28%))"></span><span class="nm">${p.helper ? "🧪 " : ""}${esc(p.name || "이름 없음")}</span>${uid === hostId ? '<span class="tg host">방장</span>' : ""}${uid === meId ? '<span class="tg">나</span>' : ""}</li>`).join("")
+      + (ps.length < 2 ? '<li class="empty">친구를 기다리는 중 — 위 초대 링크를 보내 주세요</li>' : "");
+    if (mode === "host") $("lbMsg").textContent = ps.length < 2 ? "혼자서도 시작할 수 있어요. 시작한 뒤에 들어온 친구도 바로 같이 해요." : "모두 모이면 '게임 시작'을 누르세요.";
+    else { $("lbCfg").innerHTML = cfgText(lastMeta && lastMeta.cfg); $("lbMsg").textContent = "방장이 게임을 시작하기를 기다리는 중…"; }
+  }
+  $("lbCopy").onclick = () => { const link = $("lbLink").textContent; navigator.clipboard.writeText(link).then(() => { $("lbCopy").textContent = "복사됨 ✓"; setTimeout(() => $("lbCopy").textContent = "초대 링크 복사", 1500); }, () => { const r = document.createRange(); r.selectNodeContents($("lbLink")); getSelection().removeAllRanges(); getSelection().addRange(r); }); };
+  $("lbStart").onclick = hostStartGame;
+  $("lbLeave").onclick = () => backToMenu();
+  // 연결 끊김 알림 (화면 위 가운데)
+  function connBanner(text) {
+    let el = $("netWarn");
+    if (!el) { el = document.createElement("div"); el.id = "netWarn"; el.className = "hud"; el.style.cssText = "left:50%;top:calc(env(safe-area-inset-top,0px) + 80px);transform:translateX(-50%);padding:8px 14px;border-radius:99px;background:rgba(160,30,40,.92);color:#fff;font:600 14px/1.3 var(--sans);z-index:20;text-align:center"; document.body.appendChild(el); }
+    el.hidden = !text; el.textContent = text;
   }
   function showRoom(code, isHost) {
     const el = $("room"); el.hidden = false;
@@ -115,6 +225,7 @@
     if (hostCtl) { hostCtl.leave(); hostCtl = null; }
     if (joinCtl) { joinCtl.leave(); joinCtl = null; }
     mode = "menu"; sim = null; behaviors.clear(); paused = false; respawnedAtDeaths = 0; stopSpectate(); remote.g = null;
+    if (lobby) hideLobby(); lastMeta = null; roomCode = null; reportsFor = null; joining = false; connBanner("");
     $("menu").hidden = false; ["lb", "me", "topbtn", "room", "boost", "dead", "pause", "admin", "myAc", "timer", "results"].forEach(id => $(id).hidden = true);
     if (window.__snakeHelper) window.__snakeHelper.off();
     msg("");
@@ -159,6 +270,7 @@
   }
   let stateK = -1, stateGap = 2;
   function onState(v) {
+    if (v.k < stateK - 60) { stateK = -1; remote.snakes.clear(); }         // 방장이 새 판을 시작함 (틱 번호가 0부터)
     if (v.k <= stateK) return;                                              // 직접 연결은 순서가 바뀌어 올 수 있음 → 옛것 버림
     stateGap = Math.max(1, Math.min(4, v.k - stateK)); stateK = v.k;
     lastStateAt = performance.now();
@@ -229,14 +341,14 @@
   }
   let hudAt = 0;
   function loop(t) {
-    if (mode !== "menu") {
+    if (mode !== "menu" && !lobby) {
       RND.frame(displayList(t), foods(), meId, spectating && specId ? specId : meId, gs().R, mode === "client" ? stateK : (sim ? sim.tick : 0));
     } else RND.frame([], sim ? sim.food : demoFood, null);
     requestAnimationFrame(loop);
   }
   const demoFood = Array.from({ length: 300 }, () => { const r = (C.R_ARENA - 2) * Math.sqrt(Math.random()), a = Math.random() * 6.283; return [r * Math.cos(a), r * Math.sin(a), SNK.FOOD_HUES[Math.floor(Math.random() * 9)], 1]; });
   requestAnimationFrame(loop);
-  setInterval(() => { if (mode !== "menu") hud(); }, 250);
+  setInterval(() => { if (mode !== "menu" && !lobby) hud(); }, 250);
   // 게임 방식 정보 (혼자·방장은 내 시뮬레이션, 참가자는 방장이 보낸 것)
   function gs() {
     if (mode === "client") { const g = remote.g || {}; return { mode: g.m || "free", R: g.R || C.R_ARENA, tl: g.tl ?? -1, over: !!g.o, res: g.res }; }
@@ -258,8 +370,8 @@
         const win = g.res[0];
         $("resTitle").textContent = win ? (win.id === meId ? "🏆 우승!" : `🏆 ${win.name} 우승`) : "결과";
         $("resList").innerHTML = g.res.slice(0, 10).map(r => `<li style="${r.id === meId ? "color:var(--me);font-weight:700" : ""}">${esc(r.name)} <span class="small">길이 ${r.len} · 잡음 ${r.kills}${g.mode === "royale" ? (r.alive ? " · 생존" : " · 탈락") : ""}</span></li>`).join("");
-        $("again").hidden = mode === "client";
-        $("resNote").textContent = mode === "client" ? "방장이 다시 시작하면 바로 이어져요." : g.mode === "round" ? "순위 = 라운드가 끝날 때 길이 (순위표와 같음)" : "순위 = 살아남은 순서";
+        $("again").hidden = mode === "client"; $("resLobby").hidden = mode !== "host";
+        $("resNote").textContent = mode === "client" ? "방장이 다시 시작하거나 대기실로 가면 따라가요." : g.mode === "round" ? "순위 = 라운드가 끝날 때 길이 (순위표와 같음)" : "순위 = 살아남은 순서";
         $("results").hidden = false;
       }
     } else $("results").hidden = true;
@@ -285,6 +397,7 @@
     }
     if (!$("admin").hidden) renderAdmin();
     // 연결 상태 표시: 직접 연결(WebRTC)인지, Firebase(싱가포르) 경유인지
+    if (mode === "client" && lastStateAt && joinCtl && joinCtl.connected) connBanner(performance.now() - lastStateAt > 3000 ? "방장 화면 신호가 끊겼어요 · 기다리는 중…" : "");
     const net = $("netInfo");
     if (net) {
       if (mode === "client" && joinCtl) net.textContent = joinCtl.p2p ? `직접 연결 · ${Math.round(joinCtl.rtt || 0)}ms` : "Firebase 경유 (직접 연결 시도 중)";
@@ -297,16 +410,31 @@
   const cv = RND.canvas, coarse = matchMedia("(pointer: coarse)").matches;
   // 마우스·손가락은 '화면 가운데(=내 머리)에서 본 방향'으로 조준 (slither 방식). 바닥의 한 점을 노리면 그 점 주위를 빙빙 돎
   const aimFrom = e => { const r = cv.getBoundingClientRect(); return Math.atan2(-(e.clientY - (r.top + r.height / 2)), e.clientX - (r.left + r.width / 2)); };
-  cv.addEventListener("pointermove", e => { clientAC && clientAC.onEvent("move", e); input.aim = aimFrom(e); input.target = null; });
+  // 휴대폰: 손가락을 처음 댄 자리가 조이스틱 가운데 → 끄는 방향으로 머리가 돎 (어디를 눌러도 됨, 손가락이 지렁이를 가리지 않음)
+  let joy = null;
+  const joyEl = $("joy"), joyKnob = joyEl ? joyEl.firstElementChild : null;
+  const showJoy = (x, y, kx, ky) => { if (!joyEl) return; joyEl.hidden = false; joyEl.style.left = x + "px"; joyEl.style.top = y + "px"; joyKnob.style.transform = `translate(${kx}px, ${ky}px)`; };
+  cv.addEventListener("pointermove", e => {
+    clientAC && clientAC.onEvent("move", e);
+    if (e.pointerType === "mouse") { input.aim = aimFrom(e); input.target = null; return; }
+    if (!joy || e.pointerId !== joy.id) return;
+    const dx = e.clientX - joy.x, dy = e.clientY - joy.y, d = Math.hypot(dx, dy);
+    if (d > 6) { input.aim = Math.atan2(-dy, dx); input.target = null; }
+    const k = Math.min(1, 44 / (d || 1)); showJoy(joy.x, joy.y, dx * k, dy * k);
+  });
   cv.addEventListener("pointerdown", e => {
-    clientAC && clientAC.onEvent("down", e); input.aim = aimFrom(e); input.target = null;
-    if (e.pointerType === "mouse") input.boost = true;                     // 휴대폰은 손가락이 늘 닿아 있으니 부스트는 버튼으로
+    clientAC && clientAC.onEvent("down", e); input.target = null;
+    if (e.pointerType === "mouse") { input.aim = aimFrom(e); input.boost = true; }
+    else if (!joy) { joy = { id: e.pointerId, x: e.clientX, y: e.clientY }; showJoy(joy.x, joy.y, 0, 0); }
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
   });
-  cv.addEventListener("pointerup", e => { clientAC && clientAC.onEvent("up", e); if (e.pointerType === "mouse") input.boost = false; });
+  const joyEnd = e => { if (joy && e.pointerId === joy.id) { joy = null; if (joyEl) joyEl.hidden = true; } };   // 손을 떼도 그 방향으로 계속 감
+  cv.addEventListener("pointerup", e => { clientAC && clientAC.onEvent("up", e); if (e.pointerType === "mouse") input.boost = false; joyEnd(e); });
+  cv.addEventListener("pointercancel", joyEnd);
   const bb = $("boost");
   bb.addEventListener("pointerdown", e => { e.preventDefault(); input.boost = true; bb.classList.add("on"); clientAC && clientAC.onEvent("key", e); });
   ["pointerup", "pointercancel", "pointerleave"].forEach(t => bb.addEventListener(t, () => { input.boost = false; bb.classList.remove("on"); }));
+  bb.addEventListener("contextmenu", e => e.preventDefault());
   window.addEventListener("keydown", e => {
     if (mode === "menu" || e.target.tagName === "INPUT") return;
     if (!$("dead").hidden || !$("pause").hidden) return;                 // 창이 떠 있을 땐 Space/Enter가 창 버튼 몫
@@ -323,6 +451,7 @@
 
   // ── 감지 기록: 5초마다 관리자 전용 위치에 (혼자: solo, 같이: 방 코드)
   function startReports(roomKey) {
+    reportsFor = roomKey;
     clearInterval(reportTimer);
     reportTimer = setInterval(() => {
       if (!NET.ready || !NET.uid) return;
@@ -408,7 +537,33 @@
     const s = document.createElement("script"); s.src = "helper.js?" + Date.now(); document.body.appendChild(s);
   }
 
-  $("solo").onclick = startSolo; $("hostBtn").onclick = startHost; $("joinBtn").onclick = startJoin;
+  $("solo").onclick = startSolo; $("hostBtn").onclick = openRooms; $("joinBtn").onclick = startJoin;
+  // ── 방 목록 (4초마다 새로고침)
+  let roomsT = null;
+  const MODE_SHORT = { free: "자유", round: "라운드", royale: "배틀로얄" };
+  async function refreshRooms() {
+    try {
+      const rows = await NET.listRooms();
+      if ($("rooms").hidden) return;
+      $("roomList").innerHTML = rows.length ? rows.map(r => `<li class="${r.empty ? "empty" : ""}"><span class="cd">${esc(r.code)}</span><span class="inf"><b>${r.empty ? "빈 방" : esc(r.h || "?") + "의 방"}</b><span class="small">${r.n}명 · ${r.empty ? "아무도 없음" : (r.ph === "lobby" ? "대기실" : "게임 중") + " · " + (MODE_SHORT[r.m] || "자유")}</span></span>${r.empty ? `<button class="btn danger" type="button" data-del="${esc(r.code)}">삭제</button>` : `<button class="btn primary" type="button" data-join="${esc(r.code)}">들어가기</button>`}</li>`).join("")
+        : '<li class="none">열린 방이 없어요. 새 방을 만들어 보세요.</li>';
+    } catch (e) { $("roomList").innerHTML = `<li class="none">목록을 못 불러왔어요: ${esc(e.message || e)}</li>`; }
+  }
+  function openRooms() {
+    if (!needName()) return;
+    $("menu").hidden = true; $("rooms").hidden = false; $("roomsMsg").textContent = "아무도 없거나 방장이 나간 방은 누구나 지울 수 있어요.";
+    refreshRooms(); clearInterval(roomsT); roomsT = setInterval(refreshRooms, 4000);
+  }
+  function closeRooms() { clearInterval(roomsT); $("rooms").hidden = true; }
+  $("roomList").addEventListener("click", async e => {
+    const j = e.target.closest("[data-join]"), d = e.target.closest("[data-del]");
+    if (j) { $("code").value = j.dataset.join; closeRooms(); $("menu").hidden = false; startJoin(); }
+    if (d) { d.disabled = true; d.textContent = "지우는 중…"; try { await NET.deleteRoom(d.dataset.del); $("roomsMsg").textContent = `방 ${d.dataset.del}을 지웠어요.`; } catch (err) { $("roomsMsg").textContent = "못 지웠어요 (그새 누가 들어왔을 수 있어요)"; } refreshRooms(); }
+  });
+  $("newRoom").onclick = () => { closeRooms(); $("menu").hidden = false; startHost(); };
+  $("joinBtn2").onclick = () => { $("code").value = ($("code2").value || "").trim().toUpperCase(); closeRooms(); $("menu").hidden = false; startJoin(); };
+  $("roomsRefresh").onclick = refreshRooms;
+  $("roomsBack").onclick = () => { closeRooms(); $("menu").hidden = false; };
 
   // ── 죽었을 때: 다시 태어날지 묻기 / ESC: 멈춤 메뉴
   let respawnedAtDeaths = 0, spectating = false, specId = null;
@@ -445,7 +600,7 @@
     paused = on && mode === "solo";                                       // 친구랑 할 땐 다른 사람이 있어 멈추지 않음
     $("pause").hidden = !on;
     $("pauseTitle").textContent = mode === "solo" ? "잠깐 멈춤" : "메뉴";
-    $("newGame").hidden = mode === "client";
+    $("newGame").hidden = mode === "client"; $("toLobby").hidden = mode !== "host";
     $("pauseNote").textContent = mode === "solo" ? "게임이 멈춰 있어요." : "친구들과 하는 중이라 게임은 계속 진행돼요.";
     if (on) $("dead").hidden = true;
   }
@@ -466,14 +621,18 @@
     hostCtl.setSim(next);
   }
   $("again").onclick = newGame;
+  $("resLobby").onclick = () => { $("results").hidden = true; hostToLobby(); };
+  $("toLobby").onclick = () => { setPause(false); hostToLobby(); };
   $("resMenu").onclick = () => { $("results").hidden = true; backToMenu(); };
   $("newGame").onclick = newGame;
   window.addEventListener("keydown", e => {
     const ok = e.key === "Enter" || e.key === " ";
     if (mode === "menu") {                                                // 첫 메뉴: Space/Enter = 혼자 연습 (이름 칸에서 Enter도)
-      if (ok && $("login").hidden && (e.target.tagName !== "INPUT" || (e.key === "Enter" && e.target.id === "name"))) { e.preventDefault(); startSolo(); }
+      if (lobby) { if (ok && mode === "host" && e.target.tagName !== "INPUT") { e.preventDefault(); hostStartGame(); } return; }
+      if (ok && $("login").hidden && (e.target.tagName !== "INPUT" || (e.key === "Enter" && e.target.id === "name"))) { e.preventDefault(); if (roomParam) startJoin(); else startSolo(); }
       return;
     }
+    if (lobby) { if (ok && mode === "host" && e.target.tagName !== "INPUT") { e.preventDefault(); hostStartGame(); } return; }
     if (e.target.tagName === "INPUT") return;
     if (e.key === "Escape") { setPause($("pause").hidden); e.preventDefault(); return; }
     if (spectating && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { cycleSpec(e.key === "ArrowRight" ? 1 : -1); e.preventDefault(); return; }

@@ -4,10 +4,12 @@ const RND = (() => {
   const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
   const mini = document.getElementById("mini"), mctx = mini.getContext("2d");
   let W = 0, H = 0, DPR = 1;
+  const coarse = matchMedia("(pointer: coarse)").matches;
+  const Q = { maxDpr: coarse ? 1.5 : 2, gap: coarse ? 0.6 : 0.45, ema: 16, low: 0, lastT: 0 };   // gap = 구슬 간격(반지름 배수)
   const cam = { x: 0, y: 0, ppu: 20, follow: null, whole: false, zoom: 1 };   // ppu = 화면 픽셀 / 게임 1칸, zoom = 헬퍼 "넓게 보기" 배율
 
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    DPR = Math.min(window.devicePixelRatio || 1, Q.maxDpr);
     W = cv.clientWidth; H = cv.clientHeight;
     cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
   }
@@ -70,7 +72,7 @@ const RND = (() => {
     const chain = [[hx, hy], ...s.pts.map(p => [sx(p[0]), sy(p[1])])];
     const dots = [];
     for (let i = 0; i < chain.length - 1; i++) {
-      const [ax, ay] = chain[i], [bx, by] = chain[i + 1], d = Math.hypot(bx - ax, by - ay), m = Math.max(1, Math.ceil(d / (r * 0.45)));
+      const [ax, ay] = chain[i], [bx, by] = chain[i + 1], d = Math.hypot(bx - ax, by - ay), m = Math.max(1, Math.ceil(d / (r * Q.gap)));
       for (let j = 0; j < m; j++) dots.push([ax + (bx - ax) * j / m, ay + (by - ay) * j / m, i]);
     }
     if (chain.length) dots.push([...chain[chain.length - 1], chain.length - 1]);
@@ -102,8 +104,21 @@ const RND = (() => {
     ctx.globalAlpha = 1;
   }
 
+  // 2초 넘게 초당 40장 밑이면 한 단계 낮춤 (해상도 → 구슬 간격), 최대 4단계
+  function adapt() {
+    const now = performance.now(), dt = Q.lastT ? now - Q.lastT : 16; Q.lastT = now;
+    if (dt > 250) return;                                                // 탭 전환 등은 빼고
+    Q.ema += (dt - Q.ema) * 0.05;
+    Q.low = Q.ema > 25 ? Q.low + 1 : 0;
+    if (Q.low > 120) {
+      Q.low = 0;
+      if (Q.maxDpr > 1) { Q.maxDpr = Math.max(1, Q.maxDpr - 0.5); resize(); }
+      else if (Q.gap < 0.9) Q.gap += 0.15;
+    }
+  }
   function frame(snakes, food, meId, camId = meId, zoneR = C.R_ARENA, tick = 0) {
     if (!W) resize();
+    adapt();
     const me = snakes.find(s => s.id === meId), tgt = snakes.find(s => s.id === camId) || me;
     if (cam.whole || !tgt) { cam.x = 0; cam.y = 0; cam.ppu = Math.min(W, H) / (C.R_ARENA * 2 + 4); }
     else {
@@ -169,5 +184,5 @@ const RND = (() => {
   // 화면 좌표 ↔ 게임 좌표 (헬퍼·입력이 씀)
   const toWorld = (clientX, clientY) => { const r = cv.getBoundingClientRect(); const x = clientX - r.left, y = clientY - r.top; return [(x - W / 2) / cam.ppu + cam.x, -(y - H / 2) / cam.ppu + cam.y]; };
   const toScreen = p => [sx(p[0]), sy(p[1])];
-  return { frame, resize, cam, toWorld, toScreen, canvas: cv, get size() { return { W, H }; } };
+  return { frame, resize, cam, toWorld, toScreen, canvas: cv, get size() { return { W, H }; }, get quality() { return { dpr: DPR, gap: Q.gap, ms: Math.round(Q.ema) }; } };
 })();

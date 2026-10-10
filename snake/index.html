@@ -25,7 +25,9 @@ body{padding:0}
 #room .chip{font:600 12.5px/1 var(--mono);padding:6px 9px;border-radius:99px;background:rgba(20,28,26,.85);border:1px solid var(--line);color:var(--ai)}
 .topbtn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:5}
 .topbtn .btn{padding:6px 10px;font-size:12px;background:rgba(20,28,26,.85)}
-#boost{position:fixed;left:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 70px);width:76px;height:76px;border-radius:50%;border:2px solid rgba(255,214,102,.6);background:rgba(255,214,102,.15);color:var(--me);font:700 14px var(--sans);z-index:4;touch-action:none}
+#joy{position:fixed;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);pointer-events:none;z-index:3}
+#joy>i{position:absolute;left:36px;top:36px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.35)}
+#boost{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);width:84px;height:84px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-radius:50%;border:2px solid rgba(255,214,102,.6);background:rgba(255,214,102,.15);color:var(--me);font:700 14px var(--sans);z-index:4;touch-action:none}
 #boost.on{background:rgba(255,214,102,.45)}
 .card{position:fixed;inset:0;display:grid;place-items:center;z-index:10;background:rgba(6,9,8,.55);padding:16px;overflow:auto}
 .card>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;width:min(560px,100%);display:grid;gap:12px;max-height:calc(100dvh - 32px);overflow:auto}
@@ -54,6 +56,38 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 .acrow ul{margin:0;padding-left:16px;font:12px/1.5 var(--mono);color:#b9ad95}
 .acrow li.on{color:var(--danger)}
 .small{font-size:12px;color:var(--muted)}
+@media (pointer: coarse), (max-width: 640px){
+  #lb{min-width:128px;font-size:11px}#lb ol{font-size:10.5px;line-height:1.35}#lb b{font-size:12px}
+  #me{font-size:11.5px}#me b{font-size:14px}
+  #mini{width:84px;height:84px}
+  .topbtn .btn{padding:5px 8px;font-size:11px}
+}
+/* 초대 링크로 들어오면: 방장이 정하는 설정은 숨기고 이름·색·들어가기만 */
+.menu-card.invite .hostopt,.menu-card.invite .soloonly{display:none}
+.menu-card:not(.invite) .joinrow{display:none}
+#roomList{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+#roomList li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0d1312}
+#roomList .cd{font:700 17px/1 var(--mono);letter-spacing:.08em;color:var(--me)}
+#roomList .inf{flex:1;min-width:140px;display:grid;gap:2px}
+#roomList .inf b{font-size:14px}
+#roomList li.empty{opacity:.65;border-style:dashed}
+#roomList li.none{justify-content:center;color:var(--muted);border-style:dashed}
+#roomList .btn{padding:7px 12px}
+.btn.danger{border-color:var(--danger);color:var(--danger)}
+#inviteHead{margin:0;padding:10px 12px;border-radius:10px;background:rgba(94,196,182,.12);border:1px solid var(--ai);font-weight:600}
+input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)}
+/* 대기실 */
+.lobby-code{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.lobby-code b{font:700 30px/1 var(--mono);letter-spacing:.12em;color:var(--me)}
+#lbLink{font:12px/1.4 var(--mono);color:var(--muted);word-break:break-all;user-select:all}
+#lbPlayers{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+#lbPlayers li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#0d1312}
+#lbPlayers .dot{width:22px;height:22px;border-radius:50%;flex:none;box-shadow:inset -3px -4px 6px rgba(0,0,0,.35),inset 2px 2px 5px rgba(255,255,255,.35)}
+#lbPlayers .nm{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#lbPlayers .tg{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+#lbPlayers .tg.host{color:var(--me);border-color:var(--me)}
+#lbPlayers li.empty{border-style:dashed;color:var(--muted);justify-content:center;font-size:13px}
+#lbCfg{margin:0;padding:10px 12px;border-radius:10px;border:1px dashed var(--line);font-size:14px}
 </style>
 </head>
 <body>
@@ -66,7 +100,7 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 <div class="card" id="results" hidden><div style="text-align:center;width:min(420px,100%)">
   <h1 style="font-size:24px" id="resTitle">결과</h1>
   <ol id="resList" style="text-align:left;margin:0;padding-left:24px;display:grid;gap:4px;font-size:15px"></ol>
-  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="again">다시 하기 (Space · Enter)</button><button class="btn" type="button" id="resMenu">메뉴로</button></div>
+  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="again">다시 하기 (Space · Enter)</button><button class="btn" type="button" id="resLobby" hidden>대기실로</button><button class="btn" type="button" id="resMenu">메뉴로</button></div>
   <p class="small" id="resNote"></p>
 </div></div>
 <div class="hud" id="spec" hidden style="left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);text-align:center;font-size:14px;pointer-events:auto"></div>
@@ -76,6 +110,7 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <button class="btn" type="button" id="adminBtn2">관리자</button>
 </div>
 <button id="boost" type="button" hidden>부스트</button>
+<div id="joy" hidden aria-hidden="true"><i></i></div>
 <div class="card" id="dead" hidden><div style="text-align:center;width:min(360px,100%)">
   <h1 style="font-size:24px">죽었어요</h1>
   <p class="lede" id="deadMsg" style="margin:0 auto"></p>
@@ -85,24 +120,25 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 <div class="card" id="pause" hidden><div style="text-align:center;width:min(360px,100%)">
   <h1 style="font-size:22px" id="pauseTitle">잠깐 멈춤</h1>
   <p class="small" id="pauseNote"></p>
-  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="newGame">새 게임 (Space · Enter)</button><button class="btn" type="button" id="resume">계속 (ESC)</button><button class="btn" type="button" id="quit">메뉴로 나가기</button><button class="btn" type="button" id="pauseAdmin">관리자</button></div>
+  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="newGame">새 게임 (Space · Enter)</button><button class="btn" type="button" id="resume">계속 (ESC)</button><button class="btn" type="button" id="toLobby" hidden>모두 대기실로</button><button class="btn" type="button" id="quit">메뉴로 나가기</button><button class="btn" type="button" id="pauseAdmin">관리자</button></div>
 </div></div>
 <section id="admin" hidden aria-label="관리자 패널"></section>
 
 <div class="card" id="menu"><div class="menu-card">
   <p class="crumb"><a href="../">← 게임 목록</a></p>
   <h1>🐍 지렁이 대결</h1>
-  <p class="lede">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 손가락 쪽으로 돌고 왼쪽 아래 버튼이 부스트예요.</p>
-  <label class="field"><span>내 이름</span><input type="text" id="name" maxlength="12" placeholder="이름"></label>
+  <p id="inviteHead" hidden></p>
+  <p class="lede soloonly">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 손가락 쪽으로 돌고 왼쪽 아래 버튼이 부스트예요.</p>
+  <label class="field"><span>내 이름 <span class="small">(친구들에게 보여요)</span></span><input type="text" id="name" maxlength="12" placeholder="예: 베니" autocomplete="nickname"></label>
   <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
-  <div class="field"><span>속도</span>
+  <div class="field hostopt"><span>속도</span>
     <div class="seg" id="speedSel">
       <button class="btn" type="button" data-v="10">느리게</button>
       <button class="btn" type="button" data-v="14" aria-pressed="true">보통</button>
       <button class="btn" type="button" data-v="20">빠르게</button>
     </div>
   </div>
-  <div class="field"><span>게임 방식</span>
+  <div class="field hostopt"><span>게임 방식</span>
     <div class="seg" id="gameMode">
       <button class="btn" type="button" data-v="free" aria-pressed="true">자유 (끝없이)</button>
       <button class="btn" type="button" data-v="round">라운드 3분</button>
@@ -110,7 +146,7 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
     </div>
     <span class="small" id="modeHelp">언제든 들어오고 나가는 기본 방식이에요.</span>
   </div>
-  <div class="field"><span>AI 상대</span>
+  <div class="field hostopt"><span>AI 상대</span>
     <div class="seg" id="aiLevel">
       <button class="btn" type="button" data-v="raw">학습 전</button>
       <button class="btn" type="button" data-v="rule">규칙 봇</button>
@@ -133,13 +169,38 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
     </div>
     <span class="small">헬퍼 원리·북마크로 붙이는 실습은 <a href="helper.html">헬퍼 실습</a>에서.</span>
   </div>
-  <div class="go">
+  <div class="go soloonly">
     <button class="btn primary" type="button" id="solo">혼자 연습</button>
-    <button class="btn" type="button" id="hostBtn">친구랑: 방 만들기</button>
+    <button class="btn" type="button" id="hostBtn">친구랑 하기 (방 목록)</button>
   </div>
-  <div class="go"><input type="text" id="code" maxlength="4" placeholder="방 코드 4자리" style="flex:1 1 120px;text-transform:uppercase"><button class="btn" type="button" id="joinBtn">방 들어가기</button></div>
+  <div class="go joinrow"><input type="text" id="code" maxlength="4" placeholder="방 코드 4자리" style="flex:1 1 120px;text-transform:uppercase"><button class="btn" type="button" id="joinBtn">방 들어가기</button></div>
   <p class="small" id="msg"></p>
-  <p class="small"><button class="btn" type="button" id="adminBtn">관리자</button> 포털·베니브릿지와 같은 관리자 로그인</p>
+  <p class="small invite-only" hidden><a href="./" id="inviteOff">초대 말고 혼자 하기</a></p>
+  <p class="small soloonly"><button class="btn" type="button" id="adminBtn">관리자</button> 포털·베니브릿지와 같은 관리자 로그인</p>
+</div></div>
+
+<div class="card" id="rooms" hidden><div>
+  <h1 style="font-size:24px">친구랑 하기</h1>
+  <div class="go"><button class="btn primary" type="button" id="newRoom">새 방 만들기</button></div>
+  <div class="go"><input type="text" id="code2" maxlength="4" placeholder="방 코드 4자리" style="flex:1 1 120px;text-transform:uppercase"><button class="btn" type="button" id="joinBtn2">코드로 들어가기</button></div>
+  <div class="field"><span>열려 있는 방 <button class="btn" type="button" id="roomsRefresh" style="padding:3px 8px;font-size:11px">새로고침</button></span><ul id="roomList"><li class="none">불러오는 중…</li></ul></div>
+  <p class="small" id="roomsMsg">아무도 없거나 방장이 나간 방은 누구나 지울 수 있어요.</p>
+  <div class="go"><button class="btn" type="button" id="roomsBack">뒤로</button></div>
+</div></div>
+
+<div class="card" id="lobby" hidden><div>
+  <h1 style="font-size:24px">대기실</h1>
+  <div class="lobby-code"><span class="small">방 코드</span><b id="lbCode">----</b><button class="btn" type="button" id="lbCopy">초대 링크 복사</button></div>
+  <p id="lbLink"></p>
+  <div class="field"><span>참가자 <b id="lbCount"></b></span><ul id="lbPlayers"></ul></div>
+  <div class="field"><span>내 이름·색 <span class="small">(바꾸면 바로 모두에게 보여요)</span></span>
+    <input type="text" id="lbName" maxlength="12" placeholder="이름">
+    <div class="swatches" id="lbColors" role="radiogroup" aria-label="지렁이 색"></div>
+  </div>
+  <div id="lbOpts" style="display:grid;gap:12px"></div>
+  <p id="lbCfg" hidden></p>
+  <div class="go"><button class="btn primary" type="button" id="lbStart">게임 시작 (Enter)</button><button class="btn" type="button" id="lbLeave">나가기</button></div>
+  <p class="small" id="lbMsg"></p>
 </div></div>
 
 <div class="card" id="login" hidden><div>
@@ -149,10 +210,10 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <div class="go"><button class="btn" type="button" id="loginCancel">취소</button><button class="btn primary" type="button" id="loginGo">들어가기</button></div>
 </div></div>
 
-<script src="core.js?v=18"></script>
-<script src="render.js?v=18"></script>
-<script src="ac.js?v=18"></script>
-<script src="net.js?v=18"></script>
-<script src="main.js?v=18"></script>
+<script src="core.js?v=19"></script>
+<script src="render.js?v=19"></script>
+<script src="ac.js?v=19"></script>
+<script src="net.js?v=19"></script>
+<script src="main.js?v=19"></script>
 </body>
 </html>
