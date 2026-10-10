@@ -12,7 +12,7 @@
   const settings = { name: "", ai: { level: "hard", count: 5 }, helper: "none", hue: 48, gameMode: "free" };
   const hostPlayers = new Map();                                 // 방장: 들어온 친구들 (새 판 시작할 때 다시 넣기)
 
-  fetch("brains.json").then(r => r.json()).then(b => { BRAINS = b; });
+  fetch("brains.json?v=v2-2m").then(r => r.json()).then(b => { BRAINS = b; });
 
   // ── 메뉴 선택지
   try { settings.name = localStorage.getItem("snake-name") || ""; const h = localStorage.getItem("snake-hue"); if (h != null) settings.hue = Number(h); } catch (e) {}
