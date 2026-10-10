@@ -169,10 +169,14 @@ const SNK = (() => {
         if (!s.alive) continue;
         if (Math.hypot(s.head[0], s.head[1]) > this.R) { if (s.prot) { s.ang = Math.atan2(-s.head[1], -s.head[0]); continue; } dead.push([s, null]); continue; }
         if (s.prot) continue;
+        // 이번 틱에 머리가 지나간 '선분' 전체로 검사 (부스트 때 한 틱 1칸씩 가서 얇은 몸을 건너뛰던 문제) + 상대 머리도 몸으로
+        const a = s.prev ? s.prev.head : s.head, b = s.head, ex = b[0] - a[0], ey = b[1] - a[1], ll = ex * ex + ey * ey || 1e-9;
+        const segDist = p => { const u = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / ll)); return Math.hypot(p[0] - a[0] - u * ex, p[1] - a[1] - u * ey); };
         for (const t of snakes) {
           if (t === s || !t.alive || t.prot) continue;
-          const rad = radius(t.length);                                    // 머리 중심이 몸 안에 들어가야 죽음 = 보이는 그대로
-          if (t.pts.some(p => Math.abs(p[0] - s.head[0]) < rad && Math.hypot(p[0] - s.head[0], p[1] - s.head[1]) < rad)) { dead.push([s, t]); break; }
+          const rad = radius(t.length), lim = rad + 1.2;                   // 머리 중심이 몸 안에 들어가야 죽음 = 보이는 그대로
+          const hit = p => Math.abs(p[0] - b[0]) < lim && Math.abs(p[1] - b[1]) < lim && segDist(p) < rad;
+          if (hit(t.head) || t.pts.some(hit)) { dead.push([s, t]); break; }
         }
       }
       for (const [s, killer] of dead) {
