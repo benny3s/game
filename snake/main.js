@@ -2,14 +2,15 @@
 (() => {
   const { C } = SNK;
   const $ = id => document.getElementById(id);
-  const HZ = 20;
+  let HZ = 14;                                                   // 1초에 게임 계산 횟수 (메뉴 '속도': 10 · 14 · 20). 규칙·AI는 같고 빠르기만 다름
+  let tickMs = 1000 / 14;                                        // 참가자: 방장의 한 틱 길이
   let BRAINS = null, mode = "menu", sim = null, meId = "me", hostCtl = null, joinCtl = null, tickTimer = null, reportTimer = null;
   const input = { target: null, boost: false, turn: 0, respawn: 0, _own: false };
   let paused = false;
   const remote = { snakes: new Map(), food: [] };                 // 참가자 화면용
   let clientAC = null;
   const behaviors = new Map();                                   // 지렁이별 행동 감지 (혼자/방장이 계산)
-  const settings = { name: "", ai: { level: "hard", count: 5 }, helper: "none", hue: 48, gameMode: "free" };
+  const settings = { name: "", ai: { level: "hard", count: 5 }, helper: "none", hue: 48, gameMode: "free", hz: 14 };
   const hostPlayers = new Map();                                 // 방장: 들어온 친구들 (새 판 시작할 때 다시 넣기)
 
   fetch("brains.json?v=v2-4m").then(r => r.json()).then(b => { BRAINS = b; });
@@ -32,6 +33,7 @@
   seg("helperSel", v => settings.helper = v);
   const MODE_HELP = { free: "언제든 들어오고 나가는 기본 방식이에요.", round: "3분 동안 가장 길게 자란 지렁이가 1등. 죽어도 다시 시작할 수 있어요.",
     royale: "20초 뒤부터 경기장이 점점 줄어요(밖으로 나가면 탈락). 부활 없이 마지막까지 살아남으면 승리!" };
+  seg("speedSel", v => settings.hz = v, Number);
   seg("gameMode", v => { settings.gameMode = v; $("modeHelp").textContent = MODE_HELP[v]; });
   const roomParam = new URLSearchParams(location.search).get("room");
   if (roomParam) $("code").value = roomParam.toUpperCase();
@@ -59,7 +61,7 @@
   function startSolo() {
     if (!BRAINS) return msg("AI 불러오는 중… 잠시 뒤 다시");
     mode = "solo"; meId = "me";
-    sim = new SNK.Sim(BRAINS, settings.gameMode);
+    HZ = settings.hz; sim = new SNK.Sim(BRAINS, settings.gameMode); sim.hz = HZ;
     const me = sim.add("me", "human", myName(), settings.hue); me.helper = settings.helper !== "none";
     sim.inputs.me = input;
     addAIs(); enterGame(); $("myAc").hidden = false;
@@ -72,7 +74,7 @@
     try {
       await NET.init();
       mode = "host"; meId = NET.uid;
-      sim = new SNK.Sim(BRAINS, settings.gameMode); hostPlayers.clear();
+      HZ = settings.hz; sim = new SNK.Sim(BRAINS, settings.gameMode); sim.hz = HZ; hostPlayers.clear();
       const me = sim.add(meId, "human", myName(), settings.hue); me.helper = settings.helper !== "none";
       sim.inputs[meId] = input;
       addAIs();
@@ -160,7 +162,7 @@
     if (v.k <= stateK) return;                                              // 직접 연결은 순서가 바뀌어 올 수 있음 → 옛것 버림
     stateGap = Math.max(1, Math.min(4, v.k - stateK)); stateK = v.k;
     lastStateAt = performance.now();
-    if (v.g) remote.g = v.g;
+    if (v.g) { remote.g = v.g; if (v.g.hz) tickMs = 1000 / v.g.hz; }
     for (const e of v.s || []) {
       const s = ensure(e[0]);
       let wasAlive = s.alive; const prevK = s.k ?? -9;
@@ -184,7 +186,7 @@
   //   매번 방장의 최신 위치에서 다시 계산하므로 오차가 쌓이지 않음. 길이·생사·먹기는 방장 판정 그대로
   function predicted(s, now) {
     const lat = (joinCtl && joinCtl.p2p ? (joinCtl.rtt || 40) / 2 : 120) + (now - lastStateAt);
-    const n = Math.min(12, lat / 50), steps = Math.ceil(n), m = Math.floor(s.length) + 2;
+    const n = Math.min(12, lat / tickMs), steps = Math.ceil(n), m = Math.floor(s.length) + 2;
     const body = s.body.slice(0, m + 1);
     let ang = s.ang;
     for (let i = 0; i < steps; i++) {
@@ -206,7 +208,7 @@
   const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   function displayList(now) {
     const client = mode === "client";
-    const t = client ? Math.min(1, (now - lastStateAt) / (50 * stateGap)) : Math.min(1, (now - lastTickAt) / (1000 / HZ));
+    const t = client ? Math.min(1, (now - lastStateAt) / (tickMs * stateGap)) : Math.min(1, (now - lastTickAt) / (1000 / HZ));
     return list().map(s => {
       if (!s.alive || !s.body || !s.body.length) { smoothLen.delete(s.id); return s; }
       let head, body, ang = s.ang;
@@ -261,6 +263,7 @@
   }
   function hud() {
     modeHud();
+    $("me").style.top = ($("lb").offsetTop + $("lb").offsetHeight + 6) + "px";   // 내 정보는 순위표 바로 아래
     const all = list().filter(s => s.alive).sort((a, b) => b.length - a.length);
     $("lb").querySelector("ol").innerHTML = all.slice(0, 10).map(s => `<li class="${s.id === meId ? "me" : ""}">${(s.helper ? "🧪" : "") + esc(s.name)} <span style="float:right">${Math.floor(s.length)}</span></li>`).join("");
     const me = list().find(s => s.id === meId);
@@ -391,7 +394,13 @@
 
   // ── 헬퍼: 메뉴에서 고르면 바깥 스크립트를 붙임 (북마크로 붙이는 것과 같은 파일)
   function loadHelper(kind) {
-    window.__helperPreset = { radar: true, arrow: true, guard: kind === "guard", auto: kind === "auto", how: "var", human: false, declared: true };
+    const P = {                                                          // 메뉴 고르기 → 헬퍼 패널 기본값 (패널에서 하나씩 더 켜고 끌 수 있음)
+      see: { radar: true, path: true, food: true, arrow: true },
+      guard: { radar: true, path: true, guard: true },
+      auto: { radar: false, path: false, auto: true },
+      zoom: { radar: true, path: false, zoom: true },
+    }[kind] || {};
+    window.__helperPreset = { radar: false, path: false, food: false, arrow: false, zoom: false, guard: false, auto: false, ...P, how: "var", human: false, declared: true };
     if (window.__snakeHelper) { window.__snakeHelper.apply(window.__helperPreset); return; }
     const s = document.createElement("script"); s.src = "helper.js?" + Date.now(); document.body.appendChild(s);
   }
@@ -446,7 +455,7 @@
     setPause(false); $("results").hidden = true;
     if (mode === "solo") { backToMenu(); startSolo(); return; }
     if (mode !== "host") return;
-    const old = sim, next = new SNK.Sim(BRAINS, old.mode);
+    const old = sim, next = new SNK.Sim(BRAINS, old.mode); next.hz = HZ;
     next.inputs = old.inputs;
     const me = next.add(meId, "human", settings.name, settings.hue); me.helper = settings.helper !== "none";
     for (const [uid, p] of hostPlayers) { const s = next.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; }
@@ -474,7 +483,8 @@
   window.game = {
     get snakes() { return list(); }, get food() { return foods(); }, get me() { return list().find(s => s.id === meId); },
     input, consts: C,
-    view: { canvas: RND.canvas, get scale() { return RND.cam.ppu; }, toScreen: RND.toScreen, toWorld: RND.toWorld },
-    hz: HZ,
+    view: { canvas: RND.canvas, get scale() { return RND.cam.ppu; }, toScreen: RND.toScreen, toWorld: RND.toWorld, set zoom(z) { RND.cam.zoom = z; }, get zoom() { return RND.cam.zoom; } },
+    get zoneR() { return gs().R; },
+    get hz() { return HZ; },
   };
 })();

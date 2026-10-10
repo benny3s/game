@@ -109,7 +109,7 @@ const NET = (() => {
         return [x.id, r2(a[0]), r2(a[1]), r2(x.head[0]), r2(x.head[1]), r2(x.ang), Math.round(x.length * 10), x.alive ? 1 : 0, x.boosting ? 1 : 0, x.deaths, x.kills, x.prot ? 1 : 0]; });
       const fd = [...sim.foodChanged].map(i => { const f = sim.food[i]; return f ? [i, r2(f[0]), r2(f[1]), f[2], f[3], f[4] || 0] : [i, null]; });
       sim.foodChanged.clear();
-      const g = { m: sim.mode, R: r2(sim.R), tl: sim.timeLeft == null ? -1 : Math.ceil(sim.timeLeft), o: sim.over ? 1 : 0 };   // 게임 방식·경기장 크기·남은 시간·끝남
+      const g = { m: sim.mode, hz: sim.hz || 20, R: r2(sim.R), tl: sim.timeLeft == null ? -1 : Math.ceil(sim.timeLeft), o: sim.over ? 1 : 0 };   // 게임 방식·경기장 크기·남은 시간·끝남
       if (sim.over) g.res = sim.results;
       return { k: sim.tick, s, fd, g };
     }

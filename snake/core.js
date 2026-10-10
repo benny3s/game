@@ -112,7 +112,7 @@ const SNK = (() => {
     add(id, kind, name, hue) {
       const s = newSnake(id, kind, name, hue); s.respawnSeq = (this.inputs[id] || {}).respawn || 0;
       if (this.snakes.length) spawn(s, this.snakes, performance.now(), this.R);
-      if (this.mode === "royale" && this.tick > 20 * 20) { s.alive = false; s.out = true; s.pts = []; }   // 배틀로얄 중간 입장은 관전만
+      if (this.mode === "royale" && this.elapsed > 20) { s.alive = false; s.out = true; s.pts = []; }   // 배틀로얄 중간 입장은 관전만
       this.snakes.push(s); return s;
     }
     remove(id) { this.snakes = this.snakes.filter(s => s.id !== id); }
@@ -123,7 +123,7 @@ const SNK = (() => {
       if (i < 0) i = C.N_NORM + this.dropPtr;
       this.food[i] = [x, y, hue, val, this.tick + 2400 + Math.floor(Math.random() * 600)]; this.foodChanged.add(i); this.dropPtr = (i - C.N_NORM + 1) % C.N_DROP;   // 5번째 = 사라지는 틱 (2~2.5분 뒤, 마지막 5초는 화면에서 줄어들며 흐려짐)
     }
-    get elapsed() { return this.tick / 20; }
+    get elapsed() { return this.tick / (this.hz || 20); }
     get timeLeft() { return this.limit ? Math.max(0, this.limit - this.elapsed) : null; }
     finish() {
       this.over = true;
@@ -197,7 +197,7 @@ const SNK = (() => {
       for (const s of snakes) s.best = Math.max(s.best, s.length);
       if (this.tick % 10 === 0) for (let i = C.N_NORM; i < C.N_FOOD; i++) { const f = food[i]; if (f && f[4] && this.tick >= f[4]) { food[i] = null; this.foodChanged.add(i); } }
       // 줄어든 경기장 밖 먹이는 안쪽으로 옮김
-      if (this.mode === "royale" && this.tick % 20 === 0) for (let i = 0; i < C.N_NORM; i++) { const f = food[i]; if (f && Math.hypot(f[0], f[1]) > this.R - 1) { food[i] = newFood(this.R); this.foodChanged.add(i); } }
+      if (this.mode === "royale" && this.tick % 10 === 0) for (let i = 0; i < C.N_NORM; i++) { const f = food[i]; if (f && Math.hypot(f[0], f[1]) > this.R - 1) { food[i] = newFood(this.R); this.foodChanged.add(i); } }
       this.tick++;
       if (this.limit && this.elapsed >= this.limit) this.finish();
       if (this.mode === "royale" && this.elapsed > 3 && snakes.filter(s => s.alive).length <= 1) this.finish();

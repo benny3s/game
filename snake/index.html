@@ -19,7 +19,7 @@ body{padding:0}
 #lb ol{margin:0;padding-left:20px;font:500 12px/1.45 var(--mono)}
 #lb li.me{color:var(--me)}
 #mini{position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);width:120px;height:120px;pointer-events:none}
-#me{left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);font:500 13px/1.5 var(--mono)}
+#me{right:10px;top:150px;text-align:right;font:500 13px/1.5 var(--mono)}
 #me b{color:#fff;font-size:16px}
 #room{left:12px;top:calc(env(safe-area-inset-top,0px) + 8px);pointer-events:auto}
 #room .chip{font:600 12.5px/1 var(--mono);padding:6px 9px;border-radius:99px;background:rgba(20,28,26,.85);border:1px solid var(--line);color:var(--ai)}
@@ -95,6 +95,13 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <p class="lede">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 손가락 쪽으로 돌고 왼쪽 아래 버튼이 부스트예요.</p>
   <label class="field"><span>내 이름</span><input type="text" id="name" maxlength="12" placeholder="이름"></label>
   <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
+  <div class="field"><span>속도</span>
+    <div class="seg" id="speedSel">
+      <button class="btn" type="button" data-v="10">느리게</button>
+      <button class="btn" type="button" data-v="14" aria-pressed="true">보통</button>
+      <button class="btn" type="button" data-v="20">빠르게</button>
+    </div>
+  </div>
   <div class="field"><span>게임 방식</span>
     <div class="seg" id="gameMode">
       <button class="btn" type="button" data-v="free" aria-pressed="true">자유 (끝없이)</button>
@@ -119,9 +126,10 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <div class="field"><span>헬퍼 (켜면 이름 앞에 🧪가 보여요)</span>
     <div class="seg" id="helperSel">
       <button class="btn" type="button" data-v="none" aria-pressed="true">없음</button>
-      <button class="btn" type="button" data-v="see">레이더·AI 화살표</button>
-      <button class="btn" type="button" data-v="guard">위험할 때 대신 피하기</button>
-      <button class="btn" type="button" data-v="auto">자동 조종</button>
+      <button class="btn" type="button" data-v="see">보기 도우미 (레이더·예상 경로·먹이 안내)</button>
+      <button class="btn" type="button" data-v="guard">예측 회피 (부딪히기 직전만)</button>
+      <button class="btn" type="button" data-v="zoom">넓게 보기</button>
+      <button class="btn" type="button" data-v="auto">자동 조종 (AI)</button>
     </div>
     <span class="small">헬퍼 원리·북마크로 붙이는 실습은 <a href="helper.html">헬퍼 실습</a>에서.</span>
   </div>
@@ -141,10 +149,10 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
   <div class="go"><button class="btn" type="button" id="loginCancel">취소</button><button class="btn primary" type="button" id="loginGo">들어가기</button></div>
 </div></div>
 
-<script src="core.js?v=14"></script>
-<script src="render.js?v=14"></script>
-<script src="ac.js?v=14"></script>
-<script src="net.js?v=14"></script>
-<script src="main.js?v=14"></script>
+<script src="core.js?v=15"></script>
+<script src="render.js?v=15"></script>
+<script src="ac.js?v=15"></script>
+<script src="net.js?v=15"></script>
+<script src="main.js?v=15"></script>
 </body>
 </html>
