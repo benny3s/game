@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>게임 기록</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="common/ui.css">
+<style>
+/* 관리자 전용: 날짜 고르기 → 세션(방) 카드마다 참가자·판 결과·연결 품질·채팅. 위에서 CSV 내려받기 */
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.bar select,.bar button{font:inherit;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+.sess{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px}
+.sess h3{margin:0;font-size:16px}
+.sess h4{margin:4px 0 0;font-size:13px;color:var(--muted);letter-spacing:.04em}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{color:var(--muted);font-weight:600}
+td.n{text-align:right;font-family:var(--mono)}
+.bad{color:var(--danger)}.ok{color:var(--good)}
+.chat{font-size:13px;display:grid;gap:2px;max-height:180px;overflow-y:auto}
+.sum{display:flex;flex-wrap:wrap;gap:8px}
+.sum span{background:#0f1716;border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="crumb"><a href="./">← 게임 목록</a></p>
+  <h1>게임 기록</h1>
+  <p class="lede">관리자만 볼 수 있어요. 방(세션)마다 누가 언제 들어왔는지, 판 결과, 사람마다 연결 품질(직접 연결·핑·화면 간격·끊김), 채팅이 남습니다.</p>
+  <div class="bar">
+    <select id="game"><option value="snake">🐍 지렁이</option><option value="sc">⚔️ 스타 대결</option></select>
+    <select id="date"></select>
+    <button id="csv">CSV 내려받기</button>
+    <span class="help" id="msg">불러오는 중…</span>
+  </div>
+  <div class="sum" id="sum"></div>
+  <div id="list" style="display:grid;gap:12px"></div>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+const FB = { apiKey: "AIzaSyCSueePQfiHaRxUSZxoropiFjiq9arAaTs", authDomain: "benny-meeting.firebaseapp.com", projectId: "benny-meeting", appId: "1:925758544707:web:a0c55e596ae0b15e7fadf6",
+  databaseURL: "https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app" };
+const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FB);
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tm = t => t ? new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "-";
+const dur = (a, b) => a && b ? Math.round((b - a) / 1000) + "초" : "-";
+let data = {};
+
+app.auth().onAuthStateChanged(async u => {
+  if (!u || (await u.getIdTokenResult()).claims.admin !== 1) { $("msg").innerHTML = '관리자 로그인이 필요해요. <a href="https://benny3s.github.io/">포털</a>에서 Benny 를 3번 눌러 로그인한 뒤 다시 열어 주세요.'; return; }
+  loadGame();
+});
+$("game").onchange = loadGame;
+$("date").onchange = render;
+async function loadGame() {
+  $("msg").textContent = "불러오는 중…";
+  try { data = (await app.database().ref("logs/" + $("game").value).get()).val() || {}; }
+  catch (e) { $("msg").textContent = "읽기 실패: " + e.message; return; }
+  const dates = Object.keys(data).sort().reverse();
+  $("date").innerHTML = dates.map(d => `<option>${d}</option>`).join("") || "<option value=''>기록 없음</option>";
+  render();
+}
+function render() {
+  const d = $("date").value, day = data[d] || {};
+  const ss = Object.entries(day).sort((a, b) => (b[1].info?.created || 0) - (a[1].info?.created || 0));
+  let matches = 0, people = new Set(), relay = 0, nets = 0;
+  $("list").innerHTML = ss.map(([sid, s]) => {
+    const info = s.info || {}, ps = s.players || {}, ms = Object.values(s.matches || {}), net = s.net || {}, chat = Object.values(s.chat || {});
+    matches += ms.length; Object.values(ps).forEach(p => people.add(p.name)); Object.values(net).forEach(n => { nets++; if (n.conn === "Firebase") relay++; });
+    const pRows = Object.entries(ps).map(([uid, p]) => `<tr><td>${esc(p.name)}</td><td>${esc(p.role || "")}${p.team != null ? " · 팀" + (p.team + 1) : ""}</td><td>${tm(p.joined)}</td><td>${tm(p.left)}</td></tr>`).join("");
+    const mRows = ms.sort((a, b) => (a.start || 0) - (b.start || 0)).map((m, i) => {
+      const res = m.final || m.results || [];
+      const top = Array.isArray(res) ? res.slice().sort((a, b) => (b.len ?? 0) - (a.len ?? 0)).slice(0, 4).map(r => `${esc(r.n || r.name)} ${r.len ?? ""}${r.kills != null ? "·잡" + r.kills : ""}`).join(" / ") : "";
+      const sc = m.winner ? `${esc(m.winner)} 승 · 남은 유닛 ${m.left1 ?? "-"}:${m.left2 ?? "-"} · ${m.secs ?? "-"}초` : "";
+      return `<tr><td>${i + 1}</td><td>${tm(m.start)}</td><td>${dur(m.start, m.end || m.updated)}${m.aborted ? " (중단)" : ""}</td><td>${esc(m.mode || m.scn || "")}${m.ai ? " · AI " + esc(m.ai) : ""}</td><td>${esc(m.people || [m.team1, m.team2].filter(Boolean).join(" vs "))}</td><td>${sc || top}</td></tr>`;
+    }).join("");
+    const nRows = Object.entries(net).map(([uid, n]) => `<tr><td>${esc(n.name)}</td><td>${esc(n.role)}</td><td class="${n.conn === "Firebase" ? "bad" : "ok"}">${esc(n.conn || (n.role === "방장" ? `친구 ${n.friends ?? 0} (직접 ${n.direct ?? 0})` : "-"))}</td><td class="n">${n.ping ?? "-"}</td><td class="n">${n.pingMax ?? "-"}</td><td class="n">${n.gap ?? "-"}${n.jitter != null ? " ±" + n.jitter : ""}</td><td class="n">${n.react ?? "-"}</td><td class="n ${n.reconnects ? "bad" : ""}">${n.reconnects ?? 0}</td><td>${tm(n.updated)}</td></tr>`).join("");
+    const cRows = chat.sort((a, b) => (a.t || 0) - (b.t || 0)).map(c => `<div><span class="help">${tm(c.t)}</span> <b>${esc(c.n)}</b>: ${esc(c.m)}</div>`).join("");
+    return `<div class="sess"><h3>${esc(info.kind || "")} · 방 ${esc(info.room || "?")} · 방장 ${esc(info.hostName || "")} <span class="help">${tm(info.created)} ~ ${tm(info.closed || info.updated)}</span></h3>
+      ${pRows ? `<h4>참가자</h4><div class="tw"><table><tr><th>이름</th><th>역할</th><th>들어옴</th><th>나감</th></tr>${pRows}</table></div>` : ""}
+      ${mRows ? `<h4>판 (${ms.length})</h4><div class="tw"><table><tr><th>#</th><th>시작</th><th>길이</th><th>방식</th><th>사람</th><th>결과</th></tr>${mRows}</table></div>` : ""}
+      ${nRows ? `<h4>연결 품질</h4><div class="tw"><table><tr><th>이름</th><th>역할</th><th>연결</th><th>핑 평균</th><th>핑 최대</th><th>화면 간격 ms</th><th>명령→반응</th><th>끊김</th><th>마지막</th></tr>${nRows}</table></div>` : ""}
+      ${cRows ? `<h4>채팅 (${chat.length})</h4><div class="chat">${cRows}</div>` : ""}</div>`;
+  }).join("") || '<p class="help">이 날 기록이 없어요.</p>';
+  $("sum").innerHTML = `<span>세션 ${ss.length}</span><span>판 ${matches}</span><span>사람 ${people.size}명</span><span>Firebase 경유 ${relay}/${nets}</span>`;
+  $("msg").textContent = "";
+}
+// CSV: 판 결과 한 줄씩 + 연결 품질 한 줄씩
+$("csv").onclick = () => {
+  const d = $("date").value, day = data[d] || {}, rows = [["종류", "세션", "방", "시각", "이름/판", "역할/방식", "값1", "값2", "값3", "값4", "끊김"]];
+  for (const [sid, s] of Object.entries(day)) {
+    const room = s.info?.room || "";
+    for (const m of Object.values(s.matches || {})) for (const r of (m.final || m.results || [])) rows.push(["판", sid, room, tm(m.start), r.n || r.name || "", m.mode || m.scn || "", r.len ?? "", r.best ?? "", r.kills ?? "", r.deaths ?? "", ""]);
+    for (const m of Object.values(s.matches || {})) if (m.winner) rows.push(["판", sid, room, tm(m.start), `${m.team1 || ""} vs ${m.team2 || ""}`, m.scn || "", m.winner, m.left1 ?? "", m.left2 ?? "", m.secs ?? "", ""]);
+    for (const n of Object.values(s.net || {})) rows.push(["연결", sid, room, tm(n.updated), n.name || "", n.role || "", n.conn || "", n.ping ?? "", n.gap ?? "", n.react ?? "", n.reconnects ?? 0]);
+  }
+  const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `게임기록_${$("game").value}_${d}.csv`; a.click();
+};
+</script>
+</body>
+</html>

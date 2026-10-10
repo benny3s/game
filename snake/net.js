@@ -112,7 +112,7 @@ const NET = (() => {
     let code;
     for (let i = 0; i < 5; i++) { code = code4(); if (!(await db().ref(`snake/rooms/${code}/meta`).get()).exists()) break; }
     const room = db().ref(`snake/rooms/${code}`), S = subs();
-    let meta = { host: user.uid, created: Date.now(), ai: settings.ai, v: 2, phase: "lobby", cfg: settings.cfg || null };   // 처음엔 대기실
+    let meta = { host: user.uid, created: Date.now(), ai: settings.ai, v: 2, phase: "lobby", cfg: settings.cfg || null, log: settings.log || null };   // log = 기록 세션 (친구가 연결 품질을 씀)   // 처음엔 대기실
     let mine = { name: settings.name, hue: settings.hue, helper: !!settings.helper };
     await room.child("meta").set(meta);
     room.onDisconnect().remove();
@@ -294,5 +294,5 @@ const NET = (() => {
   function watchRooms(cb) { db().ref("snake/rooms").on("value", s => { const v = s.val() || {}; cb(Object.fromEntries(Object.entries(v).map(([k, r]) => [k, { meta: r.meta, players: r.players }]))); }); }
   function clearReports() { return db().ref("snake/ac").remove(); }
 
-  return { init, adminLogin, host, join, listRooms, deleteRoom, report, watchReports, watchRooms, clearReports, get uid() { return user && user.uid; }, get isAdmin() { return isAdmin; }, get ready() { return !!app; } };
+  return { db: () => app && app.database(), init, adminLogin, host, join, listRooms, deleteRoom, report, watchReports, watchRooms, clearReports, get uid() { return user && user.uid; }, get isAdmin() { return isAdmin; }, get ready() { return !!app; } };
 })();

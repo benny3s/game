@@ -101,6 +101,21 @@
           }
         }
       }
+    },
+    "logs": {
+      ".read": "auth != null && auth.token.admin === 1",
+      "$game": {
+        "$date": {
+          "$sid": {
+            ".write": "auth != null && (!data.exists() ? newData.child('info/host').val() === auth.uid : data.child('info/host').val() === auth.uid)",
+            "net": {
+              "$uid": {
+                ".write": "auth != null && auth.uid === $uid"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -27,16 +27,32 @@
   <p class="lede">직접 만들고, 직접 학습시킨 AI와 겨루는 게임 모음.</p>
   <div class="grid" id="grid"><p class="help">불러오는 중…</p></div>
 </div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
-fetch("games.json", { cache: "no-store" }).then(r => r.json()).then(list => {
+// 관리자(포털·베니브릿지와 같은 로그인)일 때만 보이는 게임도 있음 (admin: true)
+const FB = { apiKey: "AIzaSyCSueePQfiHaRxUSZxoropiFjiq9arAaTs", authDomain: "benny-meeting.firebaseapp.com", projectId: "benny-meeting", appId: "1:925758544707:web:a0c55e596ae0b15e7fadf6" };
+const adminP = new Promise(ok => {
+  try {
+    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FB);
+    const t = setTimeout(() => ok(false), 5000);
+    const off = app.auth().onAuthStateChanged(async u => { clearTimeout(t); off(); try { ok(!!u && (await u.getIdTokenResult()).claims.admin === 1); } catch (e) { ok(false); } });
+  } catch (e) { ok(false); }
+});
+Promise.all([fetch("games.json", { cache: "no-store" }).then(r => r.json()), adminP]).then(([list, isAdmin]) => {
   const g = document.getElementById("grid"); g.innerHTML = "";
-  list.filter(x => !x.hidden).forEach(x => {
+  list.filter(x => !x.hidden && (!x.admin || isAdmin)).forEach(x => {
     const a = document.createElement("a"); a.className = "card"; a.href = x.url;
     a.innerHTML = '<span class="e"></span><b></b><p></p><span class="tags"></span>';
     a.children[0].textContent = x.emoji || "🎮"; a.children[1].textContent = x.name; a.children[2].textContent = x.desc;
     (x.tags || []).forEach(t => { const i = document.createElement("i"); i.textContent = t; a.children[3].appendChild(i); });
     g.appendChild(a);
   });
+  if (isAdmin) {                                                       // 관리자: 게임 기록 보기
+    const a = document.createElement("a"); a.className = "card"; a.href = "logs.html";
+    a.innerHTML = '<span class="e">📊</span><b>게임 기록</b><p>방마다 참가자·판 결과·연결 품질(핑·끊김)·채팅. CSV 내려받기</p><span class="tags"><i>관리자 전용</i></span>';
+    g.appendChild(a);
+  }
 });
 </script>
 </body>

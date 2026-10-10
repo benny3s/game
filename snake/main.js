@@ -12,6 +12,10 @@
   const behaviors = new Map();                                   // 지렁이별 행동 감지 (혼자/방장이 계산)
   const settings = { name: "", ai: { level: "hard", count: 5 }, helper: "none", hue: 48, gameMode: "free", hz: 14 };
   const hostPlayers = new Map();                                 // 방장: 들어온 친구들 (새 판 시작할 때 다시 넣기)
+  const LOG = GLOG(() => NET.db(), "snake");                     // 관리자만 읽는 게임 기록
+  const pingS = Samples(), gapS = Samples(); let reconnects = 0;
+  const snapshot = () => sim ? sim.snakes.map(s => ({ n: s.name, k: s.kind, len: Math.floor(s.length), best: Math.floor(s.best || s.length), kills: s.kills, deaths: s.deaths, h: s.helper ? 1 : 0 })) : [];
+  const matchInfo = () => ({ mode: settings.gameMode, hz: settings.hz, ai: `${settings.ai.level}×${settings.ai.count}`, people: sim ? sim.snakes.filter(s => s.kind === "human").map(s => s.name).join(", ") : "" });
   let lobby = false, lobbyPlayers = {}, lastMeta = null, joining = false, roomCode = null, reportsFor = null;   // 대기실
 
   fetch("brains.json?v=v2a-2m").then(r => r.json()).then(b => { BRAINS = b; });
@@ -88,6 +92,7 @@
     addAIs(); enterGame(); $("myAc").hidden = false;
     clearInterval(tickTimer); tickTimer = setInterval(stepSim, 1000 / HZ);
     startReports("solo");
+    NET.init().then(() => { if (mode !== "solo") return; LOG.start({ room: "solo", hostName: settings.name, kind: "혼자" }, NET.uid); LOG.joined(NET.uid, { name: settings.name, role: "혼자" }); LOG.matchStart(matchInfo()); }).catch(() => {});
   }
   async function startHost() {
     if (!BRAINS) return msg("AI 불러오는 중… 잠시 뒤 다시");
@@ -96,15 +101,18 @@
     try {
       await NET.init();
       mode = "host"; meId = NET.uid; sim = null; hostPlayers.clear(); lobbyPlayers = {};
-      hostCtl = await NET.host({ name: settings.name, hue: settings.hue, helper: settings.helper !== "none", ai: settings.ai, cfg: cfg() }, null, {
-        join(uid, p) { hostPlayers.set(uid, p); if (sim && !sim.snakes.find(s => s.id === uid)) { const s = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; } },
+      const sid = LOG.start({ room: "?", hostName: settings.name, kind: "친구랑" }, NET.uid);
+      reconnects = 0;
+      hostCtl = await NET.host({ name: settings.name, hue: settings.hue, helper: settings.helper !== "none", ai: settings.ai, cfg: cfg(), log: sid }, null, {
+        join(uid, p) { LOG.joined(uid, { name: p.name || "", role: "친구" }); hostPlayers.set(uid, p); if (sim && !sim.snakes.find(s => s.id === uid)) { const s = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; } },
         update(uid, p) { hostPlayers.set(uid, p); const s = sim && sim.snakes.find(x => x.id === uid); if (s) { s.helper = !!p.helper; if (p.name) s.name = p.name; if (p.hue != null) s.hue = p.hue; } },
-        leave(uid) { hostPlayers.delete(uid); if (sim) sim.remove(uid); behaviors.delete(uid); },
+        leave(uid) { LOG.left(uid); hostPlayers.delete(uid); if (sim) sim.remove(uid); behaviors.delete(uid); },
         players(v) { lobbyPlayers = v; if (lobby) renderLobby(); },
         chat: onChat,
-        conn(c) { connBanner(c ? "" : "인터넷 연결이 끊겼어요 · 다시 연결하는 중…"); },
+        conn(c) { if (!c) reconnects++; connBanner(c ? "" : "인터넷 연결이 끊겼어요 · 다시 연결하는 중…"); },
       });
       roomCode = hostCtl.code; msg("");
+      LOG.info({ room: roomCode }); LOG.joined(meId, { name: settings.name, role: "방장" });
       showLobby("host");
     } catch (e) { msg("방을 못 만들었어요: " + (e.message || e)); mode = "menu"; }
   }
@@ -118,6 +126,7 @@
     for (const [uid, p] of hostPlayers) { const x = sim.add(uid, "human", p.name || "친구", p.hue ?? 200); x.helper = !!p.helper; }
     addAIs(); behaviors.clear(); respawnedAtDeaths = 0;
     hostCtl.setSim(sim); hostCtl.setPhase("play", cfg());
+    LOG.matchEnd({ results: [], aborted: true }); LOG.matchStart(matchInfo());
     enterGame(); showRoom(roomCode, true);
     clearInterval(tickTimer); tickTimer = setInterval(stepSim, 1000 / HZ);
     if (reportsFor !== roomCode) startReports(roomCode);
@@ -125,6 +134,7 @@
   // 방장: 모두 대기실로
   function hostToLobby() {
     if (mode !== "host" || !hostCtl) return;
+    if (LOG.inMatch) LOG.matchEnd({ results: snapshot(), final: sim && sim.results || null, aborted: !!sim && !sim.over && sim.mode !== "free" });
     clearInterval(tickTimer); sim = null; hostCtl.setSim(null); hostCtl.setPhase("lobby", cfg());
     showLobby("host");
   }
@@ -135,12 +145,12 @@
     msg("들어가는 중…");
     try {
       await NET.init();
-      joining = true; lastMeta = null;
+      joining = true; lastMeta = null; reconnects = 0;
       joinCtl = await NET.join(code, { name: settings.name, hue: settings.hue, helper: settings.helper !== "none" }, {
         state: onState, sync: onSync, meta: onMeta,
         players(v) { lobbyPlayers = v; if (lobby) renderLobby(); },
         chat: onChat,
-        conn(c, why) { connBanner(c ? "" : (why || "연결이 끊겼어요") + " · 다시 연결하는 중…"); },
+        conn(c, why) { if (!c) reconnects++; connBanner(c ? "" : (why || "연결이 끊겼어요") + " · 다시 연결하는 중…"); },
         closed() { connBanner(""); alert("방장이 나가서 방이 끝났어요"); backToMenu(); },
       });
       joining = false; mode = "client"; meId = NET.uid; roomCode = code; msg("");
@@ -148,7 +158,7 @@
     } catch (e) { joining = false; msg(e.message || String(e)); mode = "menu"; }
   }
   function onMeta(v) {
-    lastMeta = v;
+    lastMeta = v; if (v && v.log) LOG.attach(v.log);
     if (joining || mode !== "client") return;
     if (v.phase === "lobby" && !lobby) showLobby("guest");
     else if (v.phase !== "lobby" && lobby) clientPlay();
@@ -225,6 +235,7 @@
   let chatAt = 0;
   function onChat(m) {
     if (!m || !m.m) return;
+    if (mode === "host") LOG.chat(m);
     chatLog.push(m); if (chatLog.length > 60) chatLog.shift();
     renderChat();
     if (!lobby && mode !== "menu") {                                      // 게임 중엔 왼쪽 아래에 8초 보였다 사라짐
@@ -267,6 +278,8 @@
     el.querySelector("button").onclick = () => navigator.clipboard.writeText(link).then(() => el.querySelector("button").textContent = "복사됨", () => prompt("이 링크를 보내세요", link));
   }
   function backToMenu() {
+    if (LOG.inMatch && sim) LOG.matchEnd({ results: snapshot(), final: sim.results || null, aborted: !sim.over && sim.mode !== "free" });
+    LOG.close();
     clearInterval(tickTimer); clearInterval(reportTimer);
     if (hostCtl) { hostCtl.leave(); hostCtl = null; }
     if (joinCtl) { joinCtl.leave(); joinCtl = null; }
@@ -320,7 +333,7 @@
     if (v.k < stateK - 60) { stateK = -1; remote.snakes.clear(); }         // 방장이 새 판을 시작함 (틱 번호가 0부터)
     if (v.k <= stateK) return;                                              // 직접 연결은 순서가 바뀌어 올 수 있음 → 옛것 버림
     stateGap = Math.max(1, Math.min(4, v.k - stateK)); stateK = v.k;
-    lastStateAt = performance.now();
+    { const t = performance.now(); if (lastStateAt) gapS.push(t - lastStateAt); lastStateAt = t; }
     if (v.g) { remote.g = v.g; if (v.g.hz) tickMs = 1000 / v.g.hz; }
     for (const e of v.s || []) {
       const s = ensure(e[0]);
@@ -496,12 +509,18 @@
     if (e.key === " ") input.boost = false;
   });
 
+  setInterval(() => { if (mode === "client" && joinCtl && joinCtl.p2p && joinCtl.rtt) pingS.push(joinCtl.rtt); }, 1000);
   // ── 감지 기록: 5초마다 관리자 전용 위치에 (혼자: solo, 같이: 방 코드)
   function startReports(roomKey) {
     reportsFor = roomKey;
     clearInterval(reportTimer);
     reportTimer = setInterval(() => {
       if (!NET.ready || !NET.uid) return;
+      if ((mode === "host" || mode === "solo") && sim && LOG.inMatch) {
+        if (sim.over) LOG.matchEnd({ results: snapshot(), final: sim.results }); else LOG.matchUpdate({ results: snapshot() });
+      }
+      if (mode === "client" && joinCtl) LOG.net(NET.uid, { name: settings.name, role: "친구", conn: joinCtl.p2p ? "직접" : "Firebase", ping: pingS.avg, pingMax: pingS.max, gap: gapS.avg, jitter: gapS.jitter, reconnects });
+      if (mode === "host" && hostCtl) { const ps = hostCtl.peers(); LOG.net(NET.uid, { name: settings.name, role: "방장", friends: ps.length, direct: ps.filter(p => p[1]).length, reconnects }); }
       const c = clientAC.summary();
       NET.report(roomKey, NET.uid, "client", { name: settings.name, mode, helperDeclared: settings.helper, score: AC.total(c.sig), sig: c.sig.map(s => [s[0], s[1] ? 1 : 0, s[2]]) });
       if (mode !== "client") for (const s of sim.snakes) if (s.kind === "human") {
@@ -664,8 +683,10 @@
     next.inputs = old.inputs;
     const me = next.add(meId, "human", settings.name, settings.hue); me.helper = settings.helper !== "none";
     for (const [uid, p] of hostPlayers) { const s = next.add(uid, "human", p.name || "친구", p.hue ?? 200); s.helper = !!p.helper; }
+    if (LOG.inMatch) LOG.matchEnd({ results: snapshot(), final: sim.results || null });
     sim = next; addAIs(); behaviors.clear(); respawnedAtDeaths = 0; stopSpectate();
     hostCtl.setSim(next);
+    LOG.matchStart(matchInfo());
   }
   $("again").onclick = newGame;
   $("resLobby").onclick = () => { $("results").hidden = true; hostToLobby(); };

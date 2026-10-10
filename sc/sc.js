@@ -59,16 +59,47 @@
     $("enterBtn").textContent = "들어가기"; $("enterBtn").disabled = false;
   } else {
     $("entryNote").innerHTML = "초대 링크가 있어야 들어올 수 있어요. 방장이 PC에서 게임을 켜 둔 동안만 열립니다.";
+    checkAdmin().then(ok => { if (ok) showLaunch(); });
+  }
+  // ── 관리자(포털과 같은 로그인)면: 포털에서 바로 PC 엔진 켜기 → 방장 화면으로
+  function checkAdmin() {
+    return new Promise(ok => {
+      try {
+        const FBC = { apiKey: "AIzaSyCSueePQfiHaRxUSZxoropiFjiq9arAaTs", authDomain: "benny-meeting.firebaseapp.com", projectId: "benny-meeting", appId: "1:925758544707:web:a0c55e596ae0b15e7fadf6" };
+        const app = firebase.apps.find(a => a.name === "[DEFAULT]") || firebase.initializeApp(FBC);
+        const t = setTimeout(() => ok(false), 5000);
+        const off = app.auth().onAuthStateChanged(async u => { clearTimeout(t); off(); try { ok(!!u && (await u.getIdTokenResult()).claims.admin === 1); } catch (e) { ok(false); } });
+      } catch (e) { ok(false); }
+    });
+  }
+  function showLaunch() {
+    $("entryNote").textContent = "관리자로 로그인돼 있어요.";
+    ["name", "colors", "enterBtn"].forEach(id => $(id).closest(".row").style.display = "none");
+    $("launch").style.display = "grid";
+    let wanted = false, up = false;
+    const probe = () => fetch("http://127.0.0.1:8810/ping", { cache: "no-store" }).then(r => r.ok, () => false).then(ok => {
+      up = ok;
+      $("engineSt").textContent = ok ? "엔진 켜져 있음 ✓ — ② 방장 화면 열기" : "엔진 꺼져 있음 — ① 을 누르세요 (처음 한 번은 브라우저가 '열기' 허락을 물어요)";
+      if (ok && wanted) location.href = "http://127.0.0.1:8810/";
+    });
+    probe(); setInterval(probe, 2000);
+    $("engineOn").onclick = () => { wanted = true; if (up) { location.href = "http://127.0.0.1:8810/"; return; } location.href = "benny-sc://start"; $("engineSt").textContent = "엔진 켜는 중… (검은 창이 뜨면 그대로 두세요)"; };
   }
 
   let ctl = null, isHost = false, meta = {}, players = {}, own = {}, chatLog = [], countdownT = null;
+  const LOG = GLOG(() => NET.db(), "sc");                         // 관리자만 읽는 게임 기록
+  let reconnects = 0;
   $("enterBtn").onclick = async () => {
     const n = $("name").value.trim();
     if (!n) { $("entryMsg").textContent = "이름을 넣어 주세요"; $("name").focus(); return; }
     try { localStorage.setItem("sc-name", n); } catch (e) {}
     $("enterBtn").disabled = true; $("entryMsg").textContent = "연결 중…";
     try {
-      if (HOST) { isHost = true; ctl = await NET.host({ name: n, hue: hueVal(myColor), scn: $("scn").value }, hostHooks); startEngineLink(); }
+      if (HOST) {
+        isHost = true; ctl = await NET.host({ name: n, hue: hueVal(myColor), scn: $("scn").value }, hostHooks); startEngineLink();
+        const sid = LOG.start({ room: ctl.code, hostName: n, kind: "친구랑" }, ctl.uid); ctl.setMeta({ log: sid });
+        addEventListener("beforeunload", () => LOG.close());
+      }
       else ctl = await NET.join(roomParam, { name: n, hue: hueVal(myColor), team: 1 }, clientHandlers);
       show("lobby"); renderLobby();
     } catch (e) { $("entryMsg").textContent = e.message || String(e); $("enterBtn").disabled = false; }
@@ -101,6 +132,7 @@
   $("leaveBtn").onclick = () => { if (ctl) ctl.leave(); location.href = location.pathname + (roomParam && !HOST ? "" : ""); };
   function onChat(m) {
     if (!m || !m.m) return;
+    if (isHost) LOG.chat(m);
     chatLog.push(m); if (chatLog.length > 80) chatLog.shift();
     const hue = players[m.u] ? players[m.u].hue : 50;
     const line = `<b style="color:${colorOf(hue, 65)}">${esc(m.n)}</b>: ${esc(m.m)}`;
@@ -115,7 +147,8 @@
   let prevPlayers = {};
   function onPlayers(v) {
     for (const uid of Object.keys(v)) if (!prevPlayers[uid] && Object.keys(prevPlayers).length) { sysMsg(`${v[uid].name} 님이 들어왔어요`); SND.join(); }
-    for (const uid of Object.keys(prevPlayers)) if (!v[uid]) { sysMsg(`${prevPlayers[uid].name} 님이 나갔어요`); SND.leave(); }
+    for (const uid of Object.keys(prevPlayers)) if (!v[uid]) { sysMsg(`${prevPlayers[uid].name} 님이 나갔어요`); SND.leave(); if (isHost) LOG.left(uid); }
+    if (isHost) for (const [uid, p] of Object.entries(v)) { const o = prevPlayers[uid]; if (!o) LOG.joined(uid, { name: p.name, team: p.team ?? 0, role: uid === ctl.uid ? "방장" : "친구" }); else if (o.team !== p.team || o.name !== p.name) LOG.player(uid, { name: p.name, team: p.team ?? 0 }); }
     prevPlayers = v; players = v; recolor(); renderLobby();
     if (isHost && phase === "play") assignOwners();
   }
@@ -138,7 +171,7 @@
   const hostHooks = {
     players: onPlayers, chat: onChat,
     join() {}, leave() {},
-    conn(c) { warn(c ? "" : "인터넷 연결이 끊겼어요 · 다시 연결하는 중…"); },
+    conn(c) { if (!c) reconnects++; warn(c ? "" : "인터넷 연결이 끊겼어요 · 다시 연결하는 중…"); },
     msg(uid, m) {
       if (!m) return;
       if (m.t === "c") { const mineIds = new Set(own[uid] || []); const ids = (m.ids || []).filter(i => mineIds.has(i)); if (ids.length) engineCmd({ ...m, ids }); }
@@ -169,16 +202,18 @@
     await fetch("/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scn: meta.scn || $("scn").value, ai }) });
     cur = prev = null; phase = "play";
     setTimeout(() => { assignOwners(); ctl.setMeta({ phase: "play" }); }, 400);
+    const names = t => teamHumans(t).map(u => players[u].name).join(", ") || "컴퓨터";
+    LOG.matchEnd({ aborted: true }); LOG.matchStart({ scn: meta.scn || $("scn").value, team1: names(0), team2: names(1) });
     enterGame();
   }
-  $("backLobby").onclick = () => { if (!isHost) return; phase = "lobby"; ctl.setMeta({ phase: "lobby" }); leaveGame(); };
+  $("backLobby").onclick = () => { if (!isHost) return; LOG.matchEnd({ aborted: !resultShown }); phase = "lobby"; ctl.setMeta({ phase: "lobby" }); leaveGame(); };
 
   // ── 친구: 방장 메시지
   const clientHandlers = {
     players: onPlayers, chat: onChat, closed() { alert("방장이 방을 닫았어요"); location.reload(); },
-    conn(c, why) { warn(c ? "" : (why || "연결 끊김") + " · 다시 연결하는 중…"); },
+    conn(c, why) { if (!c) reconnects++; warn(c ? "" : (why || "연결 끊김") + " · 다시 연결하는 중…"); },
     meta(v) {
-      const was = meta.phase; meta = v;
+      const was = meta.phase; meta = v; if (v.log) LOG.attach(v.log);
       if (v.phase === "play" && phase !== "play") { phase = "play"; cur = prev = null; enterGame(); }
       else if (v.phase === "lobby" && phase !== "lobby") { phase = "lobby"; leaveGame(); }
       else if (v.phase === "countdown" && was !== "countdown") { sysMsg("5초 뒤 시작합니다"); runCountdown(5000); }
@@ -191,6 +226,15 @@
     },
   };
   let ping = 0;
+  setInterval(() => {
+    if (!ctl) return;
+    const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+    const jit = a => { if (a.length < 2) return null; const m = a.reduce((x, y) => x + y, 0) / a.length; return Math.round(Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length)); };
+    if (isHost) {
+      const ps = ctl.peers(); LOG.net(ctl.uid, { name: players[ctl.uid] ? players[ctl.uid].name : "", role: "방장", friends: ps.length, direct: ps.filter(p => p[1]).length, reconnects, react: avg(reacts) });
+      if (phase === "play" && cur && LOG.inMatch) LOG.matchUpdate({ secs: Math.round(cur.f / 23.81), left1: cur.u.filter(u => u[1] === 0).length, left2: cur.u.filter(u => u[1] === 1).length });
+    } else LOG.net(ctl.uid, { name: players[ctl.uid] ? players[ctl.uid].name : "", role: "친구", conn: ctl.p2p ? "직접" : "Firebase", ping: Math.round(ping) || null, gap: avg(stGaps), jitter: jit(stGaps), react: avg(reacts), reconnects });
+  }, 10000);
   setInterval(() => { if (!isHost && ctl && phase === "play") ctl.ping({ t: "p", c: performance.now() }); }, 1000);
   let myUnits = new Set();
   function onOwn(o) { own = o; myUnits = new Set(o[ctl.uid] || []); for (const id of [...sel]) if (!myUnits.has(id)) sel.delete(id); }
@@ -220,7 +264,8 @@
     // 명령 → 반응: 명령 보낸 유닛의 명령 번호나 대상이 바뀐 첫 상태까지 걸린 시간
     if (pend) { const u = cur.byId.get(pend.id); if (u && (u[11] !== pend.order || u[12] !== pend.target)) { reacts.push(now - pend.at); if (reacts.length > 20) reacts.shift(); pend = null; } else if (now - pend.at > 2000) pend = null; }
     if (s.r && resultShown !== s.r) {
-      resultShown = s.r; const myTeam = players[ctl.uid] ? players[ctl.uid].team ?? 0 : 0;
+      resultShown = s.r;
+      if (isHost) LOG.matchEnd({ winner: s.r === "a" ? "팀1" : s.r === "b" ? "팀2" : "무승부", left1: s.u.filter(u => u[1] === 0).length, left2: s.u.filter(u => u[1] === 1).length, secs: Math.round(s.f / 23.81) }); const myTeam = players[ctl.uid] ? players[ctl.uid].team ?? 0 : 0;
       const win = (s.r === "a" && myTeam === 0) || (s.r === "b" && myTeam === 1);
       $("banner").textContent = s.r === "draw" ? "무승부" : win ? "승리!" : "패배"; (win ? SND.win : SND.lose)();
       $("endBox").style.display = "flex"; $("backLobby").style.display = isHost ? "" : "none";

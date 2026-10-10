@@ -16,8 +16,8 @@ const NET = (() => {
     if (app) return app;
     if (loading) return loading;
     loading = (async () => {
-      await load(SDK + "firebase-app-compat.js");
-      await Promise.all(["firebase-auth-compat.js", "firebase-database-compat.js"].map(f => load(SDK + f)));
+      if (!window.firebase) await load(SDK + "firebase-app-compat.js");                      // 이미 있으면 다시 안 불러옴 (다시 부르면 앱이 초기화됨)
+      await Promise.all([!firebase.auth && "firebase-auth-compat.js", !firebase.database && "firebase-database-compat.js"].filter(Boolean).map(f => load(SDK + f)));
       // 탭마다 따로 된 임시 계정 (같은 PC에서 방장·친구 시험, 같은 관리자 계정 겹침 방지)
       app = firebase.initializeApp(FB, "sc" + Math.random().toString(36).slice(2, 8));
       await app.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
@@ -169,5 +169,5 @@ const NET = (() => {
       leave() { left = true; clearTimeout(goneT); clearTimeout(reseatT); S.off(); if (peer) peer.close(); ["players", "rtc", "note"].forEach(k => room.child(`${k}/${user.uid}`).remove()); },
     };
   }
-  return { host, join, get uid() { return user && user.uid; } };
+  return { db: () => app && app.database(), host, join, get uid() { return user && user.uid; } };
 })();

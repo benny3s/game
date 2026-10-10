@@ -7,7 +7,8 @@ const AC = (() => {
   const known = new Set([...document.scripts].map(s => s.src || "inline"));
   const injectedNow = () => {
     const canv = document.querySelectorAll("canvas").length - 2;               // 게임 캔버스 + 미니맵 = 2
-    const scripts = [...document.scripts].filter(s => !known.has(s.src || "inline") && !(s.src || "").includes("gstatic.com/firebasejs")).length;
+    const SAFE = /\/(core|render|ac|net|main|glog)\.js(\?|$)/;
+    const scripts = [...document.scripts].filter(s => !known.has(s.src || "inline") && !(s.src || "").includes("gstatic.com/firebasejs") && !SAFE.test(s.src || "")).length;
     return { canv: Math.max(0, canv), scripts };
   };
 

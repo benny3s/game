@@ -71,6 +71,12 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
   <label class="row"><span style="width:60px">이름</span><input type="text" id="name" maxlength="12" placeholder="예: 베니" style="flex:1"></label>
   <div class="row"><span style="width:60px">색</span><div class="swatches" id="colors"></div></div>
   <div class="row"><button class="btn go" id="enterBtn" disabled>방 만들기</button><span class="small" id="entryMsg"></span></div>
+  <div id="launch" class="panel" style="display:none">
+    <h2>방장으로 시작 (관리자 · 이 PC)</h2>
+    <p class="small">엔진은 회원님 PC(WSL)에서만 돌아요. ① 엔진을 켜면 ② 방장 화면이 저절로 열려요.</p>
+    <div class="row"><button class="btn go" id="engineOn">① PC 엔진 켜기</button><a class="btn" id="hostOpen" href="http://127.0.0.1:8810/">② 방장 화면 열기</a></div>
+    <p class="small" id="engineSt">엔진 확인 중…</p>
+  </div>
 </div></section>
 
 <!-- 2. 대기실 -->
@@ -113,7 +119,10 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
   </div>
 </section>
 
-<script src="net.js?v=2"></script>
-<script src="sc.js?v=3"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="../common/glog.js?v=1"></script>
+<script src="net.js?v=4"></script>
+<script src="sc.js?v=5"></script>
 </body>
 </html>
