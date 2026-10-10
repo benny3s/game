@@ -31,9 +31,8 @@
   }));
   seg("aiLevel", v => settings.ai.level = v);
   seg("aiCount", v => settings.ai.count = v, Number);
-  seg("helperSel", v => { settings.helper = v; markHelper(); });
   seg("lbHelper", v => { settings.helper = v; markHelper(); const c = hostCtl || joinCtl; if (c) c.setMe({ helper: v !== "none" }); });
-  function markHelper() { ["helperSel", "lbHelper"].forEach(id => $(id).querySelectorAll("[data-v]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (settings.helper === "none" ? "none" : "on"))))); }
+  function markHelper() { ["lbHelper"].forEach(id => $(id) && $(id).querySelectorAll("[data-v]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === (settings.helper === "none" ? "none" : "on"))))); }
   const MODE_HELP = { free: "언제든 들어오고 나가는 기본 방식이에요.", round: "3분 동안 가장 길게 자란 지렁이가 1등. 죽어도 다시 시작할 수 있어요.",
     royale: "20초 뒤부터 경기장이 점점 줄어요(밖으로 나가면 탈락). 부활 없이 마지막까지 살아남으면 승리!" };
   seg("speedSel", v => settings.hz = v, Number);
@@ -200,6 +199,7 @@
     $("lbStart").textContent = kind === "solo" ? "시작 (Enter)" : "게임 시작 (Enter)";
     $("lbLeave").textContent = kind === "solo" ? "뒤로" : "나가기";
     $("lbStart").hidden = kind === "guest";
+    markHelper();
     if (kind !== "solo") {
       const link = location.origin + location.pathname + "?room=" + roomCode;
       $("lbCode").textContent = roomCode; $("lbLink").textContent = link;

@@ -74,6 +74,9 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 #roomList li.none{justify-content:center;color:var(--muted);border-style:dashed}
 #roomList .btn{padding:7px 12px}
 .btn.danger{border-color:var(--danger);color:var(--danger)}
+.bigchoice .btn{display:grid;gap:4px;text-align:left;padding:16px 18px;flex:1 1 220px}
+.bigchoice .btn b{font-size:18px}
+.bigchoice .btn span{font-size:12.5px;font-weight:400;opacity:.8}
 /* 대기실 종류: host 방장 · guest 참가자 · solo 혼자 연습 */
 #lobbyBox[data-kind=solo] .lb-room,#lobbyBox[data-kind=solo] .lb-hostnote{display:none!important}
 #lobbyBox[data-kind=guest] .lb-host{display:none!important}
@@ -149,16 +152,9 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
   <p class="lede soloonly">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 누른 자리에서 끄는 방향으로 돌고 오른쪽 아래 버튼이 부스트예요.</p>
   <label class="field"><span>내 이름 <span class="small">(친구들에게 보여요)</span></span><input type="text" id="name" maxlength="12" placeholder="예: 베니" autocomplete="nickname"></label>
   <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
-  <div class="field"><span>헬퍼 (켜면 이름 앞에 🧪가 보여요)</span>
-    <div class="seg" id="helperSel">
-      <button class="btn" type="button" data-v="none" aria-pressed="true">끄기</button>
-      <button class="btn" type="button" data-v="on">켜기</button>
-    </div>
-    <span class="small">켜면 게임 안 헬퍼 패널에서 레이더·예상 경로·예측 회피·자동 조종 등을 골라요. 원리는 <a href="helper.html">헬퍼 실습</a>.</span>
-  </div>
-  <div class="go soloonly">
-    <button class="btn primary" type="button" id="solo">혼자 연습</button>
-    <button class="btn" type="button" id="hostBtn">친구랑 하기 (방 목록)</button>
+  <div class="go soloonly bigchoice">
+    <button class="btn primary" type="button" id="solo"><b>혼자 하기</b><span>AI와 연습 · 게임 방식·헬퍼는 다음 화면에서</span></button>
+    <button class="btn" type="button" id="hostBtn"><b>친구랑 하기</b><span>방 목록에서 들어가거나 새 방 만들기</span></button>
   </div>
   <div class="go joinrow"><input type="text" id="code" maxlength="4" placeholder="방 코드 4자리" style="flex:1 1 120px;text-transform:uppercase"><button class="btn" type="button" id="joinBtn">방 들어가기</button></div>
   <p class="small" id="msg"></p>
@@ -184,10 +180,9 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
     <div class="chatbox"><ul id="lbChat" aria-live="polite"></ul>
     <form class="chatform" id="lbChatForm"><input type="text" id="lbChatIn" maxlength="120" placeholder="메시지 (Enter로 보내기)" autocomplete="off"><button class="btn" type="submit">보내기</button></form></div>
   </div>
-  <div class="field lb-room"><span>내 이름·색·헬퍼 <span class="small">(바꾸면 바로 모두에게 보여요)</span></span>
+  <div class="field lb-room"><span>내 이름·색 <span class="small">(바꾸면 바로 모두에게 보여요)</span></span>
     <input type="text" id="lbName" maxlength="12" placeholder="이름">
     <div class="swatches" id="lbColors" role="radiogroup" aria-label="지렁이 색"></div>
-    <div class="seg" id="lbHelper"><span class="small">헬퍼</span><button class="btn" type="button" data-v="none">끄기</button><button class="btn" type="button" data-v="on">켜기</button></div>
   </div>
   <p class="small lb-hostnote">방 설정은 방장만 바꿀 수 있어요.</p>
   <div id="lbOpts" class="lb-host" style="display:grid;gap:12px">
@@ -221,6 +216,9 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
   </div>
   </div>
   <p id="lbCfg" class="lb-guest"></p>
+  <div class="field"><span>헬퍼 <span class="small">(켜면 이름 앞에 🧪 · 게임 안 패널에서 레이더·예상 경로·예측 회피·자동 조종을 골라요 · <a href="helper.html">헬퍼 실습</a>)</span></span>
+    <div class="seg" id="lbHelper"><button class="btn" type="button" data-v="none">끄기</button><button class="btn" type="button" data-v="on">켜기</button></div>
+  </div>
   <div class="go"><button class="btn primary" type="button" id="lbStart">게임 시작 (Enter)</button><button class="btn" type="button" id="lbLeave">나가기</button></div>
   <p class="small" id="lbMsg"></p>
 </div></div>
@@ -232,10 +230,10 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
   <div class="go"><button class="btn" type="button" id="loginCancel">취소</button><button class="btn primary" type="button" id="loginGo">들어가기</button></div>
 </div></div>
 
-<script src="core.js?v=22"></script>
-<script src="render.js?v=22"></script>
-<script src="ac.js?v=22"></script>
-<script src="net.js?v=22"></script>
-<script src="main.js?v=22"></script>
+<script src="core.js?v=23"></script>
+<script src="render.js?v=23"></script>
+<script src="ac.js?v=23"></script>
+<script src="net.js?v=23"></script>
+<script src="main.js?v=23"></script>
 </body>
 </html>
