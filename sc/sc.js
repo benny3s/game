@@ -1,0 +1,445 @@
+/* 스타 대결 — 화면·조작·대기실·소리
+   방장(localhost 페이지): 엔진 서버(/events 상태, /cmd 명령)와 친구들 사이를 이어 주고, 누가 어떤 유닛을 맡는지 정함
+   친구(github.io 페이지): 방장이 보낸 상태를 그리고, 자기 유닛 명령만 보냄
+   유닛 튜플: [id, 편(0 팀1·1 팀2), 종류, x, y, 체력, 보호막, 최대 체력, 최대 보호막, 방향, 공격 대기, 명령, 대상] */
+(() => {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  // localhost 로 열면 브라우저가 IPv6(::1)부터 시도했다 실패해서 명령마다 0.3초 늦음 → 127.0.0.1 로 다시 열기
+  if (location.hostname === "localhost" && location.port === "8810") { location.replace(location.href.replace("//localhost", "//127.0.0.1")); return; }
+  const HOST = ["localhost", "127.0.0.1"].includes(location.hostname) && location.port === "8810" && !new URLSearchParams(location.search).has("friend");   // 엔진 서버가 연 페이지만 방장
+  const roomParam = (new URLSearchParams(location.search).get("room") || "").toUpperCase().slice(0, 4);
+  const SCN = {
+    corsair: { a: "저그 뮤탈리스크 12", b: "프로토스 커세어 7", note: "커세어는 사거리가 길고 여러 기를 한 번에 맞힘. 뮤탈은 뭉쳐서 한 대씩 집중 공격." },
+    scourge: { a: "저그 뮤탈리스크 12", b: "저그 스커지 8", note: "스커지는 부딪혀 터지는 자폭 유닛. 뮤탈은 흩어지며 미리 쏴서 떨어뜨리기." },
+    mirror: { a: "저그 뮤탈리스크 12", b: "저그 뮤탈리스크 12", note: "같은 유닛끼리. 컨트롤 싸움." },
+  };
+  const TNAME = { 43: "뮤탈리스크", 60: "커세어", 47: "스커지" };
+  const COLORS = [[0, "빨강"], [215, "파랑"], [175, "청록"], [280, "보라"], [28, "주황"], [20, "갈색", 35], [0, "하양", 0], [55, "노랑"]];
+  const colorOf = (h, l) => h === "w" ? "#e8e8e8" : `hsl(${h},75%,${l || 55}%)`;
+  const S0 = { name: "", hue: 215 };
+  try { S0.name = localStorage.getItem("sc-name") || localStorage.getItem("snake-name") || ""; const h = localStorage.getItem("sc-hue"); if (h) S0.hue = +h; } catch (e) {}
+
+  // ── 소리: 직접 만든 합성음 (원래 게임 소리 파일은 친구에게 보낼 수 없어서 느낌만 비슷하게)
+  let AC = null;
+  const audio = () => { if (!AC) try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} if (AC && AC.state === "suspended") AC.resume(); return AC; };
+  addEventListener("pointerdown", audio, { once: true }); addEventListener("keydown", audio, { once: true });
+  function tone(f, d, type = "square", v = 0.06, at = 0, slide = 0) {
+    const a = audio(); if (!a) return;
+    const o = a.createOscillator(), g = a.createGain(), t = a.currentTime + at;
+    o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(f * slide, t + d);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g).connect(a.destination); o.start(t); o.stop(t + d + 0.02);
+  }
+  const SND = {
+    join: () => { tone(660, 0.12, "triangle", 0.08); tone(990, 0.16, "triangle", 0.08, 0.1); },
+    leave: () => { tone(800, 0.12, "triangle", 0.07); tone(500, 0.18, "triangle", 0.07, 0.1); },
+    chat: () => tone(1250, 0.07, "square", 0.04),
+    tick: () => tone(880, 0.09, "square", 0.05),
+    go: () => { tone(523, 0.25, "sawtooth", 0.05); tone(659, 0.25, "sawtooth", 0.05, 0.05); tone(784, 0.4, "sawtooth", 0.05, 0.1); },
+    sel: () => tone(1500, 0.03, "square", 0.025),
+    cmd: () => tone(700, 0.04, "triangle", 0.04),
+    win: () => [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.3, "triangle", 0.07, i * 0.14)),
+    lose: () => [440, 370, 311, 262].forEach((f, i) => tone(f, 0.35, "triangle", 0.07, i * 0.18)),
+  };
+
+  // ── 들어가기 화면
+  $("name").value = S0.name;
+  $("colors").innerHTML = COLORS.map(([h, n, l], i) => `<button class="sw" type="button" data-i="${i}" title="${n}" aria-label="${n}" style="background:${n === "하양" ? "#e8e8e8" : colorOf(h, l)}"></button>`).join("");
+  const hueVal = i => COLORS[i][1] === "하양" ? "w" : COLORS[i][0];
+  let myColor = Math.max(0, COLORS.findIndex(c => c[0] === S0.hue));
+  const markColors = () => $("colors").querySelectorAll(".sw").forEach(b => b.setAttribute("aria-checked", String(+b.dataset.i === myColor)));
+  $("colors").addEventListener("click", e => { const b = e.target.closest(".sw"); if (!b) return; myColor = +b.dataset.i; markColors(); try { localStorage.setItem("sc-hue", COLORS[myColor][0]); } catch (er) {} });
+  markColors();
+  if (HOST) {
+    $("entryNote").textContent = "이 PC(방장)에서 엔진이 돌아요. 방을 만들고 친구에게 초대 링크를 보내세요. 이 화면은 이 PC에서만 열립니다.";
+    $("enterBtn").textContent = "방 만들기"; $("enterBtn").disabled = false;
+  } else if (roomParam) {
+    $("entryNote").textContent = `방 ${roomParam}에 초대받았어요. 이름과 색을 고르고 들어가세요.`;
+    $("enterBtn").textContent = "들어가기"; $("enterBtn").disabled = false;
+  } else {
+    $("entryNote").innerHTML = "초대 링크가 있어야 들어올 수 있어요. 방장이 PC에서 게임을 켜 둔 동안만 열립니다.";
+  }
+
+  let ctl = null, isHost = false, meta = {}, players = {}, own = {}, chatLog = [], countdownT = null;
+  $("enterBtn").onclick = async () => {
+    const n = $("name").value.trim();
+    if (!n) { $("entryMsg").textContent = "이름을 넣어 주세요"; $("name").focus(); return; }
+    try { localStorage.setItem("sc-name", n); } catch (e) {}
+    $("enterBtn").disabled = true; $("entryMsg").textContent = "연결 중…";
+    try {
+      if (HOST) { isHost = true; ctl = await NET.host({ name: n, hue: hueVal(myColor), scn: $("scn").value }, hostHooks); startEngineLink(); }
+      else ctl = await NET.join(roomParam, { name: n, hue: hueVal(myColor), team: 1 }, clientHandlers);
+      show("lobby"); renderLobby();
+    } catch (e) { $("entryMsg").textContent = e.message || String(e); $("enterBtn").disabled = false; }
+  };
+  function show(id) { for (const s of ["entry", "lobby"]) $(s).style.display = s === id ? "grid" : "none"; $("game").style.display = id === "game" ? "block" : "none"; if (id === "game") resize(); }
+
+  // ── 대기실
+  function renderLobby() {
+    const code = ctl.code, hostId = isHost ? ctl.uid : meta.host;
+    $("roomTitle").textContent = `대기실 · ${code}`;
+    $("roomInfo").textContent = isHost ? "이 PC가 방장 (엔진)" : "방장이 시작하기를 기다리는 중";
+    const sc = SCN[meta.scn || $("scn").value] || SCN.corsair;
+    $("t0name").textContent = `(${sc.a})`; $("t1name").textContent = `(${sc.b})`;
+    for (const t of [0, 1]) {
+      const ps = Object.entries(players).filter(([, p]) => (p.team ?? 0) === t);
+      $("team" + t).innerHTML = ps.length ? ps.map(([uid, p]) => `<div class="slot"><span class="c" style="background:${colorOf(colorMap[uid] ?? p.hue)}"></span><span>${esc(p.name)}${uid === ctl.uid ? " <span class='small'>(나)</span>" : ""}</span><span class="tag">${uid === hostId ? "방장" : ""}</span></div>`).join("")
+        : `<div class="slot cpu"><span class="c" style="background:#555"></span><span>컴퓨터</span><span class="tag">AI</span></div>`;
+    }
+    $("scn").value = meta.scn || $("scn").value; $("scn").disabled = !isHost;
+    $("scnInfo").textContent = sc.note;
+    const link = "https://benny3s.github.io/game/sc/?room=" + code;
+    $("linkTxt").textContent = link; $("inviteRow").style.display = isHost ? "flex" : "none"; $("linkTxt").style.display = isHost ? "block" : "none";
+    $("startBtn").style.display = isHost ? "" : "none";
+    $("lobbyMsg").textContent = isHost ? `사람 ${Object.keys(players).length}명` : "";
+  }
+  $("copyLink").onclick = () => { const t = $("linkTxt").textContent; navigator.clipboard.writeText(t).then(() => { $("copyLink").textContent = "복사됨 ✓"; setTimeout(() => $("copyLink").textContent = "초대 링크 복사", 1500); }, () => {}); };
+  $("toT0").onclick = () => ctl && ctl.setMe({ team: 0 });
+  $("toT1").onclick = () => ctl && ctl.setMe({ team: 1 });
+  $("scn").onchange = () => { if (isHost) ctl.setMeta({ scn: $("scn").value }); };
+  $("leaveBtn").onclick = () => { if (ctl) ctl.leave(); location.href = location.pathname + (roomParam && !HOST ? "" : ""); };
+  function onChat(m) {
+    if (!m || !m.m) return;
+    chatLog.push(m); if (chatLog.length > 80) chatLog.shift();
+    const hue = players[m.u] ? players[m.u].hue : 50;
+    const line = `<b style="color:${colorOf(hue, 65)}">${esc(m.n)}</b>: ${esc(m.m)}`;
+    const li = document.createElement("li"); li.innerHTML = line; $("lchat").appendChild(li); $("lchat").scrollTop = 1e9;
+    if ($("game").style.display === "block") { const d = document.createElement("div"); d.innerHTML = line; $("msgs").appendChild(d); setTimeout(() => d.style.opacity = 0, 8000); setTimeout(() => d.remove(), 8700); }
+    if (m.u !== (ctl && ctl.uid)) SND.chat();
+  }
+  const sysMsg = t => { const li = document.createElement("li"); li.className = "sys"; li.textContent = t; $("lchat").appendChild(li); $("lchat").scrollTop = 1e9; };
+  let chatAt = 0;
+  const sendChat = input => { const t = input.value.trim(); if (!t || !ctl || performance.now() - chatAt < 600) return; chatAt = performance.now(); input.value = ""; ctl.chat(t).catch(() => {}); };
+  $("lchatForm").addEventListener("submit", e => { e.preventDefault(); sendChat($("lchatIn")); });
+  let prevPlayers = {};
+  function onPlayers(v) {
+    for (const uid of Object.keys(v)) if (!prevPlayers[uid] && Object.keys(prevPlayers).length) { sysMsg(`${v[uid].name} 님이 들어왔어요`); SND.join(); }
+    for (const uid of Object.keys(prevPlayers)) if (!v[uid]) { sysMsg(`${prevPlayers[uid].name} 님이 나갔어요`); SND.leave(); }
+    prevPlayers = v; players = v; recolor(); renderLobby();
+    if (isHost && phase === "play") assignOwners();
+  }
+  // 카운트다운 (스타처럼 5초, 초마다 삑)
+  function runCountdown(ms, done) {
+    clearInterval(countdownT);
+    const end = performance.now() + ms; let last = -1;
+    const stepCd = () => { const left = Math.ceil((end - performance.now()) / 1000); if (left !== last) { last = left; if (left > 0) { $("cd").textContent = left; SND.tick(); } } if (left <= 0) { clearInterval(countdownT); $("cd").textContent = ""; done && done(); } };
+    stepCd(); countdownT = setInterval(stepCd, 100);
+  }
+  $("startBtn").onclick = () => {
+    if (!isHost) return;
+    $("startBtn").disabled = true;
+    ctl.setMeta({ phase: "countdown" }); ctl.sureAll({ t: "cd", ms: 5000 }); sysMsg("5초 뒤 시작합니다");
+    runCountdown(5000, hostStartGame);
+  };
+
+  // ── 방장: 엔진 연결 + 친구 명령 검사
+  let phase = "lobby", es = null;
+  const hostHooks = {
+    players: onPlayers, chat: onChat,
+    join() {}, leave() {},
+    conn(c) { warn(c ? "" : "인터넷 연결이 끊겼어요 · 다시 연결하는 중…"); },
+    msg(uid, m) {
+      if (!m) return;
+      if (m.t === "c") { const mineIds = new Set(own[uid] || []); const ids = (m.ids || []).filter(i => mineIds.has(i)); if (ids.length) engineCmd({ ...m, ids }); }
+      else if (m.t === "p") ctl.sure(uid, { t: "q", c: m.c });
+    },
+  };
+  function engineCmd(m) { fetch("/cmd", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: m.ids, kind: m.kind, x: m.x | 0, y: m.y | 0, target: m.target ?? -1, q: !!m.q }) }).catch(() => {}); }
+  function startEngineLink() {
+    es = new EventSource("/events");
+    es.onmessage = e => { if (phase !== "play") return; ctl.state('{"t":"s","d":' + e.data + "}"); onState(JSON.parse(e.data)); };
+    es.onerror = () => warn("엔진 서버 연결이 끊겼어요 (WSL에서 server.py 확인)");
+  }
+  function teamHumans(t) { return Object.entries(players).filter(([, p]) => (p.team ?? 0) === t).map(([uid]) => uid).sort(); }
+  function assignOwners() {
+    if (!cur) return;
+    const next = {};
+    for (const t of [0, 1]) {
+      const hs = teamHumans(t), us = cur.u.filter(u => u[1] === t).map(u => u[0]).sort((a, b) => a - b);
+      hs.forEach(h => next[h] = []);
+      us.forEach((id, i) => { if (hs.length) next[hs[i % hs.length]].push(id); });
+    }
+    const ai = [teamHumans(0).length === 0, teamHumans(1).length === 0];
+    if (JSON.stringify(ai) !== JSON.stringify(cur.ai)) fetch("/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ai }) });
+    own = next; ctl.sureAll({ t: "o", own }); onOwn(own);
+  }
+  async function hostStartGame() {
+    const ai = [teamHumans(0).length === 0, teamHumans(1).length === 0];
+    await fetch("/reset", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scn: meta.scn || $("scn").value, ai }) });
+    cur = prev = null; phase = "play";
+    setTimeout(() => { assignOwners(); ctl.setMeta({ phase: "play" }); }, 400);
+    enterGame();
+  }
+  $("backLobby").onclick = () => { if (!isHost) return; phase = "lobby"; ctl.setMeta({ phase: "lobby" }); leaveGame(); };
+
+  // ── 친구: 방장 메시지
+  const clientHandlers = {
+    players: onPlayers, chat: onChat, closed() { alert("방장이 방을 닫았어요"); location.reload(); },
+    conn(c, why) { warn(c ? "" : (why || "연결 끊김") + " · 다시 연결하는 중…"); },
+    meta(v) {
+      const was = meta.phase; meta = v;
+      if (v.phase === "play" && phase !== "play") { phase = "play"; cur = prev = null; enterGame(); }
+      else if (v.phase === "lobby" && phase !== "lobby") { phase = "lobby"; leaveGame(); }
+      else if (v.phase === "countdown" && was !== "countdown") { sysMsg("5초 뒤 시작합니다"); runCountdown(5000); }
+      renderLobby();
+    },
+    msg(m) {
+      if (m.t === "s") onState(m.d);
+      else if (m.t === "o") onOwn(m.own);
+      else if (m.t === "q") ping = ping ? ping * 0.7 + (performance.now() - m.c) * 0.3 : performance.now() - m.c;
+    },
+  };
+  let ping = 0;
+  setInterval(() => { if (!isHost && ctl && phase === "play") ctl.ping({ t: "p", c: performance.now() }); }, 1000);
+  let myUnits = new Set();
+  function onOwn(o) { own = o; myUnits = new Set(o[ctl.uid] || []); for (const id of [...sel]) if (!myUnits.has(id)) sel.delete(id); }
+
+  // ── 게임 화면
+  const cv = $("cv"), ctx = cv.getContext("2d"), mainCtx = ctx, mini = $("mini"), mctx = mini.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+  function resize() { DPR = Math.min(devicePixelRatio || 1, 2); W = cv.clientWidth; H = cv.clientHeight; cv.width = W * DPR; cv.height = H * DPR; }
+  addEventListener("resize", resize);
+  const cam = { x: 2048, y: 2048, z: 1 };
+  const ARENA = 900;                                                    // 미니맵에 보이는 범위 (중앙 ± 900)
+  let cur = null, prev = null, curAt = 0, gap = 84, sel = new Set(), mode = null, drag = null, flashes = [], marks = [], groups = {}, lastGroupKey = { k: null, at: 0 };
+  let stGaps = [], reacts = [], pend = null, resultShown = null;
+  const S = (x, y) => [(x - cam.x) * cam.z + W / 2, (y - cam.y) * cam.z + H / 2];
+  const Wd = (sx, sy) => [(sx - W / 2) / cam.z + cam.x, (sy - H / 2) / cam.z + cam.y];
+  function enterGame() { show("game"); sel.clear(); resultShown = null; $("banner").textContent = ""; $("endBox").style.display = "none"; buildCard(); SND.go(); }
+  function leaveGame() { show("lobby"); $("startBtn").disabled = false; renderLobby(); }
+  function onState(s) {
+    const now = performance.now();
+    if (!cur) { cam.x = s.c[0] - (isTeam1() ? 0 : 0); cam.y = s.c[1]; }
+    if (cur) {
+      const g = now - curAt; stGaps.push(g); if (stGaps.length > 60) stGaps.shift(); gap = Math.max(40, Math.min(220, g));
+      for (const u of s.u) { const o = cur.byId.get(u[0]); if (o && u[10] > o[10] + 3) flashes.push({ a: u[0], t: u[12], at: now }); }
+    }
+    s.byId = new Map(s.u.map(u => [u[0], u])); prev = cur; cur = s; curAt = now;
+    for (const id of [...sel]) if (!cur.byId.has(id)) sel.delete(id);
+    // 명령 → 반응: 명령 보낸 유닛의 명령 번호나 대상이 바뀐 첫 상태까지 걸린 시간
+    if (pend) { const u = cur.byId.get(pend.id); if (u && (u[11] !== pend.order || u[12] !== pend.target)) { reacts.push(now - pend.at); if (reacts.length > 20) reacts.shift(); pend = null; } else if (now - pend.at > 2000) pend = null; }
+    if (s.r && resultShown !== s.r) {
+      resultShown = s.r; const myTeam = players[ctl.uid] ? players[ctl.uid].team ?? 0 : 0;
+      const win = (s.r === "a" && myTeam === 0) || (s.r === "b" && myTeam === 1);
+      $("banner").textContent = s.r === "draw" ? "무승부" : win ? "승리!" : "패배"; (win ? SND.win : SND.lose)();
+      $("endBox").style.display = "flex"; $("backLobby").style.display = isHost ? "" : "none";
+    }
+  }
+  const isTeam1 = () => players[ctl && ctl.uid] && players[ctl.uid].team === 1;
+  function sendCmd(kind, x = 0, y = 0, target = -1, q = false) {
+    const ids = [...sel].filter(i => myUnits.has(i)); if (!ids.length) return;
+    const u = cur && cur.byId.get(ids[0]); if (u) pend = { id: ids[0], order: u[11], target: u[12], at: performance.now() };
+    const m = { t: "c", ids, kind, x: Math.round(x), y: Math.round(y), target, q };
+    if (isHost) engineCmd(m); else ctl.send(m);
+    SND.cmd();
+  }
+  // 명령 버튼 (스타 콘솔 오른쪽 3×3)
+  const CARD = [["move", "<u>M</u>이동", "m"], ["stop", "<u>S</u>정지", "s"], ["amove", "<u>A</u>공격", "a"], ["patrol", "<u>P</u>순찰", "p"], ["hold", "<u>H</u>그 자리", "h"]];
+  function buildCard() { $("card").innerHTML = CARD.map(([k, l]) => `<button type="button" data-k="${k}">${l}</button>`).join(""); }
+  $("card").addEventListener("click", e => { const b = e.target.closest("button"); if (b) pressCmd(b.dataset.k); });
+  function pressCmd(k) {
+    if (!sel.size) return;
+    if (k === "stop" || k === "hold") { sendCmd(k); return; }
+    mode = k; cv.style.cursor = "cell"; markCard();
+  }
+  const markCard = () => $("card").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.k === mode));
+  // 마우스
+  const unitAt = (wx, wy, pred) => { if (!cur) return null; let best = null, bd = 1e9; for (const u of cur.u) { if (pred && !pred(u)) continue; const d = Math.hypot(u[3] - wx, u[4] - wy); if (d < 22 / Math.min(1, cam.z) && d < bd) { bd = d; best = u; } } return best; };
+  const myTeam = () => (players[ctl.uid] ? players[ctl.uid].team ?? 0 : 0);
+  cv.addEventListener("contextmenu", e => e.preventDefault());
+  let lastClick = { at: 0, id: null };
+  cv.addEventListener("mousedown", e => {
+    const [wx, wy] = Wd(e.offsetX, e.offsetY);
+    if (e.button === 2) {                                              // 오른쪽 = 스마트 명령: 적이면 공격, 아니면 이동
+      if (mode) { mode = null; cv.style.cursor = "crosshair"; markCard(); return; }
+      const t = unitAt(wx, wy, u => u[1] !== myTeam());
+      if (t) sendCmd("attack", 0, 0, t[0], e.shiftKey); else sendCmd("move", wx, wy, -1, e.shiftKey);
+      marks.push({ x: wx, y: wy, at: performance.now(), c: t ? "#ff6b6b" : "#7bd88f" });
+      return;
+    }
+    if (e.button !== 0) return;
+    if (mode) {                                                        // 버튼·단축키로 고른 명령을 왼쪽 클릭으로 실행
+      const t = unitAt(wx, wy, u => u[1] !== myTeam());
+      if (mode === "amove" && t) sendCmd("attack", 0, 0, t[0], e.shiftKey); else sendCmd(mode, wx, wy, -1, e.shiftKey);
+      marks.push({ x: wx, y: wy, at: performance.now(), c: mode === "amove" ? "#f4c95d" : "#7bd88f" });
+      if (!e.shiftKey) { mode = null; cv.style.cursor = "crosshair"; markCard(); }
+      return;
+    }
+    drag = { x0: e.offsetX, y0: e.offsetY, x1: e.offsetX, y1: e.offsetY, shift: e.shiftKey, ctrl: e.ctrlKey };
+  });
+  cv.addEventListener("mousemove", e => { if (drag) { drag.x1 = e.offsetX; drag.y1 = e.offsetY; } mouse = [e.offsetX, e.offsetY]; });
+  let mouse = null;
+  cv.addEventListener("mouseleave", () => { mouse = null; });
+  addEventListener("mouseup", () => {
+    if (!drag || !cur) { drag = null; return; }
+    const [ax, ay] = Wd(Math.min(drag.x0, drag.x1), Math.min(drag.y0, drag.y1)), [bx, by] = Wd(Math.max(drag.x0, drag.x1), Math.max(drag.y0, drag.y1));
+    const click = Math.abs(drag.x1 - drag.x0) < 5 && Math.abs(drag.y1 - drag.y0) < 5;
+    if (!drag.shift) sel.clear();
+    if (click) {
+      const u = unitAt(ax, ay);
+      if (u) {
+        const now = performance.now(), dbl = lastClick.id === u[0] && now - lastClick.at < 350;
+        lastClick = { at: now, id: u[0] };
+        if ((dbl || drag.ctrl) && myUnits.has(u[0])) {                   // 더블클릭·Ctrl+클릭 = 화면 안 같은 종류 전부
+          const [vx0, vy0] = Wd(0, 0), [vx1, vy1] = Wd(W, H);
+          for (const v of cur.u) if (myUnits.has(v[0]) && v[2] === u[2] && v[3] > vx0 && v[3] < vx1 && v[4] > vy0 && v[4] < vy1) sel.add(v[0]);
+        } else if (drag.shift && sel.has(u[0])) sel.delete(u[0]);
+        else sel.add(u[0]);                                              // 적·편 유닛도 하나는 골라서 정보 보기
+      }
+    } else {
+      for (const u of cur.u) if (myUnits.has(u[0]) && u[3] >= ax && u[3] <= bx && u[4] >= ay && u[4] <= by) { if (sel.size >= 12) break; sel.add(u[0]); }   // 스타처럼 한 번에 12기
+    }
+    if (sel.size) SND.sel();
+    drag = null;
+  });
+  cv.addEventListener("wheel", e => { e.preventDefault(); cam.z = Math.max(0.5, Math.min(2, cam.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); }, { passive: false });
+  // 미니맵: 누르면 화면 이동, 오른쪽은 이동 명령
+  const miniW = (e) => { const r = mini.getBoundingClientRect(), k = (e.clientX - r.left) / r.width, j = (e.clientY - r.top) / r.height; const c = cur ? cur.c : [2048, 2048]; return [c[0] - ARENA + k * 2 * ARENA, c[1] - ARENA + j * 2 * ARENA]; };
+  let miniDrag = false;
+  mini.addEventListener("contextmenu", e => e.preventDefault());
+  mini.addEventListener("mousedown", e => { const [x, y] = miniW(e); if (e.button === 2) sendCmd("move", x, y, -1, e.shiftKey); else { miniDrag = true; cam.x = x; cam.y = y; } });
+  addEventListener("mousemove", e => { if (miniDrag) { const [x, y] = miniW(e); cam.x = x; cam.y = y; } });
+  addEventListener("mouseup", () => { miniDrag = false; });
+  // 키보드 (스타 단축키)
+  const keys = new Set();
+  addEventListener("keydown", e => {
+    if ($("game").style.display !== "block") return;
+    if (e.target.tagName === "INPUT") { if (e.key === "Escape") { $("gchat").style.display = "none"; e.target.blur(); } return; }
+    keys.add(e.key);
+    const k = e.key.toLowerCase();
+    if (e.key === "Enter") { $("gchat").style.display = "block"; $("gchatIn").focus(); e.preventDefault(); return; }
+    if (e.key === "F10") { e.preventDefault(); if (confirmLeave()) return; }
+    if (e.key === "Escape") { mode = null; cv.style.cursor = "crosshair"; markCard(); return; }
+    if (/^[1-9]$/.test(e.key)) {
+      if (e.ctrlKey) { groups[e.key] = [...sel]; e.preventDefault(); return; }                                // Ctrl+숫자 = 부대 지정
+      if (e.shiftKey && groups[e.key]) { groups[e.key].forEach(i => sel.add(i)); return; }
+      if (groups[e.key]) {
+        sel = new Set(groups[e.key].filter(i => cur && cur.byId.has(i)));
+        const now = performance.now();
+        if (lastGroupKey.k === e.key && now - lastGroupKey.at < 400) centerOnSel();                             // 두 번 = 그 부대로 화면
+        lastGroupKey = { k: e.key, at: now }; SND.sel();
+      }
+      return;
+    }
+    if (["m", "s", "a", "p", "h"].includes(k) && !e.ctrlKey) { pressCmd({ m: "move", s: "stop", a: "amove", p: "patrol", h: "hold" }[k]); e.preventDefault(); }
+    if (e.key === " ") { centerOnSel(); e.preventDefault(); }
+  });
+  addEventListener("keyup", e => keys.delete(e.key));
+  function centerOnSel() { const us = [...sel].map(i => cur && cur.byId.get(i)).filter(Boolean); const src = us.length ? us : (cur ? cur.u.filter(u => myUnits.has(u[0])) : []); if (src.length) { cam.x = src.reduce((s, u) => s + u[3], 0) / src.length; cam.y = src.reduce((s, u) => s + u[4], 0) / src.length; } }
+  $("gchat").addEventListener("submit", e => { e.preventDefault(); sendChat($("gchatIn")); $("gchat").style.display = "none"; $("gchatIn").blur(); });
+  function confirmLeave() { if (isHost) { phase = "lobby"; ctl.setMeta({ phase: "lobby" }); leaveGame(); } else { ctl.leave(); location.reload(); } return true; }
+  $("menuBtn").onclick = () => { if (isHost) { phase = "lobby"; ctl.setMeta({ phase: "lobby" }); leaveGame(); } else confirmLeave(); };
+  $("quitBtn").onclick = () => { ctl.leave(); location.href = location.pathname; };
+  function warn(t) { $("warn").style.display = t ? "block" : "none"; $("warn").textContent = t; }
+
+  // ── 그리기: 직접 그린 모양 (뮤탈 = 박쥐 날개, 커세어 = 원반 + 날개, 스커지 = 작은 화살촉), 색 = 맡은 사람 색
+  let colorMap = {}, aiColor = [0, 215];
+  function recolor() {
+    const used = new Set(), m = {};
+    const ps = Object.entries(players).sort((a, b) => ((a[1].team ?? 0) - (b[1].team ?? 0)) || (a[0] < b[0] ? -1 : 1));
+    const free = () => COLORS.map((c, i) => hueVal(i)).find(h => !used.has(String(h)));
+    for (const [uid, p] of ps) { let h = p.hue; if (h == null || used.has(String(h))) h = free(); used.add(String(h)); m[uid] = h; }
+    aiColor = [0, 1].map(t => { const pref = t ? 215 : 0; const h = used.has(String(pref)) ? free() : pref; used.add(String(h)); return h; });
+    colorMap = m;
+  }
+  function ownerHue(u) { for (const [uid, ids] of Object.entries(own)) if (ids.includes(u[0])) return colorMap[uid] ?? (players[uid] ? players[uid].hue : null); return aiColor[u[1]]; }
+  const ctxRef = { ctx: null };
+  function shape(kind, col) {
+    const ctx = ctxRef.ctx || mainCtx;
+    ctx.fillStyle = col; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 1.4; ctx.beginPath();
+    if (kind === 60) { ctx.ellipse(0, 0, 12, 8, 0, 0, 7); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(15, 0); ctx.lineTo(-7, -16); ctx.lineTo(-2, 0); ctx.lineTo(-7, 16); ctx.closePath(); ctx.globalAlpha = .85; }
+    else if (kind === 47) { ctx.moveTo(10, 0); ctx.lineTo(-7, -9); ctx.lineTo(-3, 0); ctx.lineTo(-7, 9); ctx.closePath(); }
+    else { ctx.moveTo(15, 0); ctx.quadraticCurveTo(0, -22, -14, -17); ctx.lineTo(-5, -3); ctx.lineTo(-15, 0); ctx.lineTo(-5, 3); ctx.lineTo(-14, 17); ctx.quadraticCurveTo(0, 22, 15, 0); }
+    ctx.fill(); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.beginPath(); ctx.arc(6, 0, 2.2, 0, 7); ctx.fill();          // 눈·조종석
+  }
+  // 우주 바닥 별 (한 번 만들어 두고 반복)
+  const stars = Array.from({ length: 260 }, () => [Math.random() * 4096, Math.random() * 4096, Math.random() * 1.4 + .3, Math.random()]);
+  function draw() {
+    requestAnimationFrame(draw);
+    if ($("game").style.display !== "block" || !W) return;
+    const now = performance.now();
+    // 화면 이동: 방향키 · 화면 가장자리 (스타처럼)
+    const sp = 14 / cam.z;
+    if (keys.has("ArrowLeft") || (mouse && mouse[0] < 6)) cam.x -= sp; if (keys.has("ArrowRight") || (mouse && mouse[0] > W - 6)) cam.x += sp;
+    if (keys.has("ArrowUp") || (mouse && mouse[1] < 6)) cam.y -= sp; if (keys.has("ArrowDown") || (mouse && mouse[1] > H - 6)) cam.y += sp;
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.fillStyle = "#04060a"; ctx.fillRect(0, 0, W, H);
+    for (const [x, y, r, p] of stars) { const sx = ((x - cam.x * (0.3 + p * 0.3)) % 4096 + 4096) % 4096 * (W / 4096) * 2.2 % W, sy = ((y - cam.y * (0.3 + p * 0.3)) % 4096 + 4096) % 4096 * (H / 4096) * 2.2 % H; ctx.fillStyle = `rgba(200,220,255,${0.25 + p * 0.5})`; ctx.fillRect(sx, sy, r, r); }
+    // 전장 바닥판 (우주 플랫폼 느낌의 큰 격자)
+    if (cur) {
+      const [x0, y0] = S(cur.c[0] - ARENA, cur.c[1] - ARENA), sz = 2 * ARENA * cam.z;
+      ctx.fillStyle = "rgba(40,55,70,.18)"; ctx.fillRect(x0, y0, sz, sz);
+      ctx.strokeStyle = "rgba(110,140,170,.12)"; ctx.lineWidth = 1; ctx.beginPath();
+      for (let i = 0; i <= 2 * ARENA; i += 128) { const [a] = S(cur.c[0] - ARENA + i, 0), [, b] = S(0, cur.c[1] - ARENA + i); ctx.moveTo(a, y0); ctx.lineTo(a, y0 + sz); ctx.moveTo(x0, b); ctx.lineTo(x0 + sz, b); }
+      ctx.stroke(); ctx.strokeStyle = "rgba(216,178,90,.35)"; ctx.strokeRect(x0, y0, sz, sz);
+    }
+    if (!cur) { ctx.fillStyle = "#8796a5"; ctx.font = "16px system-ui"; ctx.textAlign = "center"; ctx.fillText("엔진에서 첫 화면을 받는 중…", W / 2, H / 2); return; }
+    const t = Math.min(1.25, (now - curAt) / gap), pos = new Map();
+    for (const u of cur.u) { const o = prev && prev.byId.get(u[0]); pos.set(u[0], o ? [o[3] + (u[3] - o[3]) * t, o[4] + (u[4] - o[4]) * t] : [u[3], u[4]]); }
+    marks = marks.filter(m => now - m.at < 500);
+    for (const m of marks) { const [x, y] = S(m.x, m.y), k = (now - m.at) / 500; ctx.strokeStyle = m.c; ctx.globalAlpha = 1 - k; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(x, y, 14 * (1 - k * .6), 7 * (1 - k * .6), 0, 0, 7); ctx.stroke(); ctx.globalAlpha = 1; }
+    // 선택 원 (내 것 초록, 같은 편 노랑, 적 빨강) — 스타처럼 유닛 아래 납작한 원
+    for (const id of sel) { const u = cur.byId.get(id), p = pos.get(id); if (!u || !p) continue; const [x, y] = S(...p); ctx.strokeStyle = myUnits.has(id) ? "#3cff6a" : u[1] === myTeam() ? "#f4e05d" : "#ff4b4b"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.ellipse(x, y + 10 * cam.z, 17 * cam.z, 8 * cam.z, 0, 0, 7); ctx.stroke(); }
+    flashes = flashes.filter(f => now - f.at < 160);
+    for (const f of flashes) { const a = pos.get(f.a), b = pos.get(f.t); if (!a || !b) continue; const [x1, y1] = S(...a), [x2, y2] = S(...b); const g = ctx.createLinearGradient(x1, y1, x2, y2); g.addColorStop(0, "rgba(160,255,140,0)"); g.addColorStop(1, "rgba(200,255,170,.95)"); ctx.strokeStyle = g; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.fillStyle = "rgba(230,255,200,.9)"; ctx.beginPath(); ctx.arc(x2, y2, 4, 0, 7); ctx.fill(); }
+    // 그림자 → 유닛 (공중 유닛이라 그림자가 아래로 떨어져 보이게)
+    for (const u of cur.u) { const [x, y] = S(...pos.get(u[0])); ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(x + 6 * cam.z, y + 22 * cam.z, 11 * cam.z, 5 * cam.z, 0, 0, 7); ctx.fill(); }
+    for (const u of cur.u) {
+      const [x, y] = S(...pos.get(u[0])), hue = ownerHue(u);
+      ctx.save(); ctx.translate(x, y); ctx.scale(cam.z, cam.z); ctx.rotate(u[9]); shape(u[2], hue == null ? "#999" : colorOf(hue)); ctx.restore();
+      if (sel.has(u[0]) || mouse && Math.hypot(mouse[0] - x, mouse[1] - y) < 20) {          // 체력 칸 (스타처럼 칸으로 나뉜 막대)
+        const hp = u[5] / Math.max(1, u[7]), sh = u[8] ? u[6] / u[8] : 0, bw = 30 * cam.z, cells = 8, y0 = y + 20 * cam.z;
+        for (let i = 0; i < cells; i++) { const on = (i + 1) / cells <= hp + 1e-6 || (i / cells < hp); ctx.fillStyle = on ? (hp > .66 ? "#2fd34f" : hp > .33 ? "#e6d23a" : "#e2412f") : "#202a20"; ctx.fillRect(x - bw / 2 + i * bw / cells, y0, bw / cells - 1, 3); }
+        if (u[8]) { ctx.fillStyle = "#3a8cff"; ctx.fillRect(x - bw / 2, y0 - 4, bw * sh, 2); }
+      }
+    }
+    if (drag) { ctx.strokeStyle = "#3cff6a"; ctx.lineWidth = 1; ctx.strokeRect(drag.x0, drag.y0, drag.x1 - drag.x0, drag.y1 - drag.y0); }
+    drawMini(pos); drawSel(); drawTop();
+  }
+  function drawMini(pos) {
+    const m = mini.width, c = cur.c, k = m / (2 * ARENA);
+    mctx.fillStyle = "#03060a"; mctx.fillRect(0, 0, m, m);
+    mctx.strokeStyle = "rgba(110,140,170,.25)"; mctx.strokeRect(1, 1, m - 2, m - 2);
+    for (const u of cur.u) { const [x, y] = pos.get(u[0]), h = ownerHue(u); mctx.fillStyle = h == null ? "#999" : colorOf(h, 60); mctx.fillRect((x - c[0] + ARENA) * k - 3, (y - c[1] + ARENA) * k - 3, 6, 6); }
+    const [vx0, vy0] = Wd(0, 0), [vx1, vy1] = Wd(W, H);
+    mctx.strokeStyle = "#fff"; mctx.lineWidth = 2; mctx.strokeRect((vx0 - c[0] + ARENA) * k, (vy0 - c[1] + ARENA) * k, (vx1 - vx0) * k, (vy1 - vy0) * k);
+  }
+  let selKey = "";
+  function drawSel() {
+    const us = [...sel].map(i => cur.byId.get(i)).filter(Boolean);
+    const key = us.map(u => u[0] + ":" + u[5] + ":" + u[6]).join(",");
+    if (key === selKey) return; selKey = key;
+    const hpCol = u => { const r = (u[5] + u[6]) / Math.max(1, u[7] + u[8]); return r > .66 ? "#2fd34f" : r > .33 ? "#e6d23a" : "#e2412f"; };
+    const icon = (u, s) => { const c = document.createElement("canvas"); c.width = c.height = s * 2; const g = c.getContext("2d"); g.scale(2, 2); g.translate(s / 2, s / 2); g.rotate(-Math.PI / 2); g.scale(s / 40, s / 40); const old = ctx; return [c, g]; };
+    if (!us.length) { $("selp").innerHTML = `<span class="small">유닛을 고르세요 · 드래그로 여러 기 · 더블클릭 = 같은 종류 · Ctrl+숫자 = 부대</span>`; return; }
+    if (us.length === 1) {
+      const u = us[0], name = TNAME[u[2]] || "유닛", own = myUnits.has(u[0]) ? "내 유닛" : u[1] === myTeam() ? "같은 편" : "적";
+      $("selp").innerHTML = `<div class="big"><canvas class="w" id="bigIcon" width="128" height="128" style="width:64px;height:64px;background:#0a120c;border-color:${hpCol(u)}"></canvas><div><b>${name}</b> <span class="small">${own}</span><br><span style="color:${hpCol(u)}">${u[5]} / ${u[7]}</span>${u[8] ? ` · <span style="color:#3a8cff">보호막 ${u[6]} / ${u[8]}</span>` : ""}</div></div>`;
+      paintIcon($("bigIcon"), u, hpCol(u));
+      return;
+    }
+    $("selp").innerHTML = `<div class="grid">${us.slice(0, 12).map(u => `<canvas class="w" width="80" height="80" data-id="${u[0]}" title="${TNAME[u[2]] || ""} ${u[5]}/${u[7]}" style="background:#0a120c;border-color:${hpCol(u)}"></canvas>`).join("")}</div>`;
+    $("selp").querySelectorAll("canvas[data-id]").forEach(c => paintIcon(c, cur.byId.get(+c.dataset.id), hpCol(cur.byId.get(+c.dataset.id))));
+  }
+  // 선택 칸 그림: 스타의 와이어프레임처럼 유닛 모양을 체력 색으로
+  function paintIcon(c, u, col) {
+    if (!c || !u) return;
+    const g = c.getContext("2d"), z = c.width / 40, old = ctxRef.ctx;
+    g.clearRect(0, 0, c.width, c.height); g.save(); g.translate(c.width / 2, c.height / 2); g.scale(z * .9, z * .9); g.rotate(-Math.PI / 2);
+    ctxRef.ctx = g; shape(u[2], col); ctxRef.ctx = old; g.restore();
+  }
+  $("selp").addEventListener("click", e => { const w = e.target.closest("[data-id]"); if (w) { sel = new Set([+w.dataset.id]); selKey = ""; } });
+  let topAt = 0;
+  function drawTop() {
+    const now = performance.now(); if (now - topAt < 250) return; topAt = now;
+    const avg = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+    const g = avg(stGaps), jit = stGaps.length ? Math.sqrt(avg(stGaps.map(x => (x - g) ** 2))) : 0;
+    const a = cur.u.filter(u => u[1] === 0), b = cur.u.filter(u => u[1] === 1);
+    const net = isHost ? `방장 · 친구 ${ctl.peers().length}명 (직접 ${ctl.peers().filter(p => p[1]).length})` : `${ctl.p2p ? "직접 연결" : "Firebase 경유"} · 핑 ${Math.round(ping)}ms`;
+    $("top").innerHTML = `${Math.floor(cur.f / 23.81 / 60)}:${String(Math.floor(cur.f / 23.81) % 60).padStart(2, "0")} · 팀1 ${a.length} vs 팀2 ${b.length}<br>${net}<br>화면 받는 간격 ${Math.round(g)}±${Math.round(jit)}ms · 명령→반응 ${reacts.length ? Math.round(avg(reacts)) + "ms" : "-"}`;
+  }
+  requestAnimationFrame(draw);
+  window.__sc = { get cur() { return cur; }, get phase() { return phase; }, get own() { return own; }, get sel() { return sel; }, sendCmd, get stats() { return { stGaps, reacts, ping }; } };   // 시험·점검용
+})();

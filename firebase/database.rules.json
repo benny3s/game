@@ -58,6 +58,49 @@
           ".validate": "!newData.exists() || (newData.child('h').isString() && newData.child('h').val().length <= 12)"
         }
       }
+    },
+    "sc": {
+      "rooms": {
+        ".read": "auth != null",
+        "$code": {
+          ".validate": "$code.length === 4",
+          ".write": "auth != null && !newData.exists() && (root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
+          "meta": {
+            ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
+            ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
+          },
+          "state": {
+            ".write": "auth != null && root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid"
+          },
+          "players": {
+            "$uid": {
+              ".write": "auth != null && (auth.uid === $uid || root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid)",
+              ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 12)"
+            }
+          },
+          "rtc": {
+            "$uid": {
+              ".write": "auth != null && (auth.uid === $uid || root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid)"
+            }
+          },
+          "note": {
+            "$uid": {
+              ".write": "auth != null && (auth.uid === $uid || root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid)"
+            }
+          },
+          "cmds": {
+            "$id": {
+              ".write": "auth != null && ((!data.exists() && newData.child('u').val() === auth.uid && root.child('sc/rooms/' + $code + '/players/' + auth.uid).exists()) || (root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid && !newData.exists()))"
+            }
+          },
+          "chat": {
+            "$id": {
+              ".write": "auth != null && !data.exists() && newData.child('u').val() === auth.uid && root.child('sc/rooms/' + $code + '/players/' + auth.uid).exists()",
+              ".validate": "newData.child('m').isString() && newData.child('m').val().length <= 120 && newData.child('m').val().length > 0 && newData.child('n').isString() && newData.child('n').val().length <= 12"
+            }
+          }
+        }
+      }
     }
   }
 }
