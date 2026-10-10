@@ -216,8 +216,11 @@
       else if (s.prev) { head = mix(s.prev.head, s.head, t); body = [head, ...s.prev.pts.map((p, i) => s.body[i + 1] ? mix(p, s.body[i + 1], t) : p)]; }   // 꼬리 끝 마디까지 섞어서
       else { head = s.head; body = s.body.slice(0, Math.floor(s.length) + 2); }
       // 길이도 부드럽게: 보이는 길이가 실제 길이를 천천히 따라가고, 마지막 마디는 비율만큼
-      const dl = (smoothLen.get(s.id) ?? s.length), L = dl + (s.length - dl) * 0.12;
-      smoothLen.set(s.id, L);
+      // 다시 태어났으면(죽은 횟수가 바뀜, 또는 길이가 한 번에 크게 줄어듦) 예전 길이를 버림 — 탭을 다른 데 보고 있던 사이 죽고 살아나면
+      // 예전 길이(예: 287)만큼 태어날 때의 일자 몸을 그려서 몸이 맵 밖에서 들어오는 것처럼 보였음
+      const prevL = smoothLen.get(s.id), fresh = !prevL || prevL.d !== s.deaths || prevL.L - s.length > 20;
+      const dl = fresh ? s.length : prevL.L, L = dl + (s.length - dl) * 0.12;
+      smoothLen.set(s.id, { L, d: s.deaths });
       const n = Math.min(Math.floor(L), body.length - 1), frac = L - Math.floor(L);
       const pts = body.slice(1, 1 + n);
       if (frac > 0.02 && body[n + 1]) pts.push(mix(body[n], body[n + 1], frac));
