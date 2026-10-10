@@ -39,6 +39,12 @@ const NET = (() => {
     isAdmin = true;
     return true;
   }
+  // 같은 계정(예: 관리자로 PC·휴대폰 둘 다 로그인)으로 같은 방에 또 들어오면 한 사람으로 겹치므로, 이 탭만 따로 임시 계정을 씀
+  async function separateIdentity() {
+    const a = firebase.initializeApp(FB, "tab" + Math.random().toString(36).slice(2, 8));
+    await a.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
+    user = (await a.auth().signInAnonymously()).user; app = a; isAdmin = false;
+  }
   const db = () => app.database();
   const code4 = () => Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
   const r2 = v => Math.round(v * 100) / 100;
@@ -125,7 +131,7 @@ const NET = (() => {
     });
     const peers = new Map();                                                // uid → WebRTC 연결
     const onPeerMsg = uid => m => {
-      if (m.t === "i") { const v = unpackInput({ ...m, t: m.tg });   // 종류 표시(t)와 조준(tg)을 나눔 — 전엔 조준 값이 t를 덮어써서 직접 연결 친구의 입력이 무시됐음
+      if (m.t === "i" || (m.t !== "p" && "rs" in m && "b" in m)) { const tg = m.t === "i" ? m.tg : m.t; const v = unpackInput({ ...m, t: Array.isArray(tg) ? tg : null });   // 예전 페이지(종류 표시 없음)도 받음   // 종류 표시(t)와 조준(tg)을 나눔 — 전엔 조준 값이 t를 덮어써서 직접 연결 친구의 입력이 무시됐음
       if (sim) sim.inputs[uid] = v; hooks.input && hooks.input(uid, v); }
       else if (m.t === "p") { const p = peers.get(uid); if (p && p.open()) p.dc.send(JSON.stringify({ t: "q", c: m.c })); }
     };
@@ -190,9 +196,12 @@ const NET = (() => {
   // ── 친구 (참가자)
   async function join(code, settings, handlers) {
     await init();
-    const room = db().ref(`snake/rooms/${code}`), S = subs();
+    let room = db().ref(`snake/rooms/${code}`);
+    const S = subs();
     const meta = (await room.child("meta").get()).val();
     if (!meta) throw new Error("그런 방이 없어요 (코드를 확인하거나 방장이 나갔을 수 있어요)");
+    const seated = (await room.child(`players/${user.uid}`).get()).exists();
+    if (meta.host === user.uid || seated) { await separateIdentity(); room = db().ref(`snake/rooms/${code}`); }
     const onMsg = m => { if (m.t === "s") handlers.state(m); else if (m.t === "y") handlers.sync(m); else if (m.t === "q") rtt = rtt ? rtt * 0.8 + (performance.now() - m.c) * 0.2 : performance.now() - m.c; };
     let rtt = 0, peer = null, left = false;
     let mine = { name: settings.name, hue: settings.hue, helper: !!settings.helper };
