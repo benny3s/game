@@ -13,7 +13,7 @@
   const BASE = (document.currentScript && document.currentScript.src) || location.href;
   const TAU = Math.PI * 2, { R_ARENA, N_SECT, VIEW, L_MIN } = G.consts;
   let brain = null;
-  fetch(new URL("brains.json?v=v2-2m", BASE)).then(r => r.json()).then(b => { brain = b.trained; });
+  fetch(new URL("brains.json?v=v2-4m", BASE)).then(r => r.json()).then(b => { brain = b.trained; });
 
   // ── 패널
   const panel = document.createElement("div");
