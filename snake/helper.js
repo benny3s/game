@@ -3,50 +3,63 @@
      ① 읽기: 페이지 변수 window.game 에서 지렁이·먹이·내 위치를 읽고, B 방식 관찰값을 스스로 계산
      ② 판단: 학습된 AI 신경망(brains.json)이 갈 방향을 고름
      ③ 조작: 마우스 이벤트를 만들어 넣거나(이벤트 방식), 게임의 입력 변수를 직접 바꿈(변수 방식 = 옛 slither 봇들)
+   메뉴의 '헬퍼'로 고르면 같은 파일이 붙고(이름 앞 🧪), 북마크로 몰래 붙이면 감지기가 잡는지 실습할 수 있음.
    이 게임(우리 사이트) 전용. 다른 사람들과 하는 실제 게임에서는 쓰지 않는다. */
 (() => {
-  if (window.__snakeHelper) { window.__snakeHelper.panel.hidden = false; return; }
+  const preset = window.__helperPreset || {};
+  if (window.__snakeHelper) { window.__snakeHelper.apply(preset); return; }
   const G = window.game;
   if (!G) { alert("지렁이 대결 페이지에서 실행하세요"); return; }
   const BASE = (document.currentScript && document.currentScript.src) || location.href;
-  const TAU = Math.PI * 2, { R_ARENA, N_SECT, VIEW, TURN, L_MIN } = G.consts;
+  const TAU = Math.PI * 2, { R_ARENA, N_SECT, VIEW, L_MIN } = G.consts;
   let brain = null;
   fetch(new URL("brains.json", BASE)).then(r => r.json()).then(b => { brain = b.trained; });
 
   // ── 패널
   const panel = document.createElement("div");
-  panel.style.cssText = "position:fixed;right:12px;top:12px;z-index:99;background:#1b1426;color:#eee;border:1px solid #6b4fa0;border-radius:10px;padding:10px 12px;font:13px/1.6 'Malgun Gothic',sans-serif;width:250px;box-shadow:0 8px 30px rgba(0,0,0,.5)";
-  panel.innerHTML = `<b style="color:#c9a6ff">🧪 헬퍼 (실습)</b>
-    <label style="display:block"><input type="checkbox" data-k="radar" checked> 레이더 (가까운 위험 표시)</label>
-    <label style="display:block"><input type="checkbox" data-k="arrow" checked> AI 추천 방향 화살표</label>
-    <label style="display:block"><input type="checkbox" data-k="guard"> 위험할 때만 대신 피하기</label>
+  panel.style.cssText = "position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 210px);z-index:9;background:rgba(27,20,38,.92);color:#eee;border:1px solid #6b4fa0;border-radius:10px;padding:8px 10px;font:12.5px/1.55 'Malgun Gothic',sans-serif;width:220px";
+  panel.innerHTML = `<b style="color:#c9a6ff">🧪 헬퍼</b> <button data-fold style="float:right;font:inherit;background:none;border:0;color:#c9a6ff;cursor:pointer">접기</button>
+    <div data-body>
+    <label style="display:block"><input type="checkbox" data-k="radar"> 레이더</label>
+    <label style="display:block"><input type="checkbox" data-k="arrow"> AI 추천 방향</label>
+    <label style="display:block"><input type="checkbox" data-k="guard"> 위험할 때 대신 피하기</label>
     <label style="display:block"><input type="checkbox" data-k="auto"> 자동 조종</label>
-    <div style="margin-top:4px;color:#bbb">조작 방식</div>
-    <label style="display:block"><input type="radio" name="hm" value="event" checked> 마우스 이벤트 넣기</label>
+    <div style="color:#bbb">조작 방식 (공부용)</div>
+    <label style="display:block"><input type="radio" name="hm" value="event"> 마우스 이벤트 넣기</label>
     <label style="display:block"><input type="radio" name="hm" value="var"> 게임 변수 직접 바꾸기</label>
-    <label style="display:block"><input type="checkbox" data-k="human"> 사람처럼 위장 (반응 0.2~0.35초 늦게, 간격 들쭉날쭉)</label>
-    <div data-out style="color:#c9a6ff;margin-top:4px">대기 중</div>
-    <button data-off style="margin-top:6px;font:inherit;padding:4px 10px;border-radius:6px;border:1px solid #6b4fa0;background:#2a1f3d;color:#eee;cursor:pointer">헬퍼 끄기</button>`;
+    <label style="display:block"><input type="checkbox" data-k="human"> 사람처럼 위장</label>
+    <div data-out style="color:#c9a6ff">대기 중</div>
+    <button data-off style="font:inherit;padding:3px 9px;border-radius:6px;border:1px solid #6b4fa0;background:#2a1f3d;color:#eee;cursor:pointer">헬퍼 끄기</button></div>`;
   document.body.appendChild(panel);
   const opt = { radar: true, arrow: true, guard: false, auto: false, human: false, how: "event" };
+  function apply(p) {
+    Object.assign(opt, p || {});
+    panel.querySelectorAll("[data-k]").forEach(c => { c.checked = !!opt[c.dataset.k]; });
+    panel.querySelectorAll("[name=hm]").forEach(r => { r.checked = r.value === opt.how; });
+    panel.hidden = false;
+  }
+  apply(preset);
   panel.querySelectorAll("[data-k]").forEach(c => c.addEventListener("change", () => { opt[c.dataset.k] = c.checked; }));
   panel.querySelectorAll("[name=hm]").forEach(r => r.addEventListener("change", () => { opt.how = r.value; }));
+  panel.querySelector("[data-fold]").onclick = e => { const b = panel.querySelector("[data-body]"); b.hidden = !b.hidden; e.target.textContent = b.hidden ? "펴기" : "접기"; };
+  if (innerWidth < 600) panel.querySelector("[data-fold]").click();          // 휴대폰은 접힌 채로 시작
   const out = panel.querySelector("[data-out]");
 
-  // ── 오버레이: 게임 캔버스 바로 위에 투명 캔버스를 하나 더 (감지기는 이것도 잡음)
+  // ── 오버레이: 게임 캔버스 위에 투명 캔버스를 하나 더 (감지기는 이것도 잡음)
   const cv = G.view.canvas;
   const ov = document.createElement("canvas");
-  ov.width = ov.height = G.view.size;
-  ov.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;border-radius:12px";
-  cv.parentElement.appendChild(ov);
+  ov.style.cssText = "position:fixed;inset:0;width:100vw;height:100dvh;pointer-events:none;z-index:2";
+  document.body.appendChild(ov);
   const ox = ov.getContext("2d");
+  function fit() { const d = Math.min(devicePixelRatio || 1, 2); ov.width = Math.round(cv.clientWidth * d); ov.height = Math.round(cv.clientHeight * d); ox.setTransform(d, 0, 0, d, 0, 0); }
+  fit(); addEventListener("resize", fit);
 
   // ── ① 읽기: B 방식 관찰값 (게임 코드와 독립적으로 다시 계산)
   function observe(me) {
     const o = new Float32Array(N_SECT * 4 + 2);
     const minF = Array(N_SECT).fill(VIEW), cnt = Array(N_SECT).fill(0), minB = Array(N_SECT).fill(VIEW);
     const sect = (dx, dy) => { let a = (Math.atan2(dy, dx) - me.ang) % TAU; if (a < 0) a += TAU; return Math.floor(a / TAU * N_SECT) % N_SECT; };
-    for (const f of G.food) { const dx = f[0] - me.head[0], dy = f[1] - me.head[1], d = Math.hypot(dx, dy); if (d < VIEW) { const k = sect(dx, dy); minF[k] = Math.min(minF[k], d); cnt[k]++; } }
+    for (const f of G.food) { if (!f) continue; const dx = f[0] - me.head[0], dy = f[1] - me.head[1], d = Math.hypot(dx, dy); if (d < VIEW) { const k = sect(dx, dy); minF[k] = Math.min(minF[k], d); cnt[k]++; } }
     for (const t of G.snakes) {
       if (t === me || !t.alive) continue;
       const rad = 0.5 + 0.01 * t.length;
@@ -71,20 +84,19 @@
   const frontDanger = o => Math.max(...[15, 0, 1].map(k => Math.max(o[k * 4 + 2], o[k * 4 + 3])));
 
   // ── ③ 조작
-  function aimPoint(me, action) { const dir = me.ang + (action % 3 - 1) * 0.6; return [me.head[0] + 8 * Math.cos(dir), me.head[1] + 8 * Math.sin(dir)]; }
+  const aimPoint = (me, action) => { const dir = me.ang + (action % 3 - 1) * 0.6; return [me.head[0] + 8 * Math.cos(dir), me.head[1] + 8 * Math.sin(dir)]; };
   let boosting = false;
   function steer(world, boost) {
     if (opt.how === "var") { G.input.target = world; G.input.turn = 0; G.input.boost = boost; return; }
-    const [sx, sy] = G.view.toScreen(world), r = cv.getBoundingClientRect();
-    const cx = r.left + sx / G.view.size * r.width, cy = r.top + sy / G.view.size * r.height;
-    const ev = t => new PointerEvent(t, { clientX: cx, clientY: cy, bubbles: true, pointerId: 1, pointerType: "mouse" });
+    const [x, y] = G.view.toScreen(world), r = cv.getBoundingClientRect();
+    const ev = t => new PointerEvent(t, { clientX: r.left + x, clientY: r.top + y, bubbles: true, pointerId: 7, pointerType: "mouse" });
     cv.dispatchEvent(ev("pointermove"));
     if (boost && !boosting) cv.dispatchEvent(ev("pointerdown"));
     if (!boost && boosting) cv.dispatchEvent(ev("pointerup"));
     boosting = boost;
   }
 
-  let last = { action: 1, danger: 0 }, dangerSince = 0, alive = true, timer = null;
+  let last = { action: 1, danger: 0 }, dangerSince = 0, alive = true, timer = null, wasTaking = false;
   function loop() {
     if (!alive) return;
     const me = G.me;
@@ -93,20 +105,24 @@
       last = { action: a, danger: d };
       if (d > 0.55 && !dangerSince) dangerSince = now;
       if (d < 0.35) dangerSince = 0;
-      const delay = opt.human ? 200 + Math.random() * 150 : 0;       // 위장: 위험을 '알아차리는' 데 사람만큼 걸린 척
+      const delay = opt.human ? 200 + Math.random() * 150 : 0;            // 위장: 위험을 '알아차리는' 데 사람만큼 걸린 척
       const take = opt.auto || (opt.guard && dangerSince && now - dangerSince >= delay);
       if (take) {
         let p = aimPoint(me, a);
         if (opt.human) p = [p[0] + (Math.random() - .5) * 2, p[1] + (Math.random() - .5) * 2];
         steer(p, a >= 3);
         out.textContent = opt.auto ? "자동 조종 중" : "위험! 대신 피하는 중";
-      } else out.textContent = d > 0.55 ? "위험 (알아차리는 중)" : "보는 중";
+      } else {
+        if (wasTaking && boosting) steer(me.head, false);
+        out.textContent = d > 0.55 ? "위험!" : "보는 중";
+      }
+      wasTaking = take;
     }
-    timer = setTimeout(loop, opt.human ? 30 + Math.random() * 90 : 50);   // 위장: 간격도 들쭉날쭉
+    timer = setTimeout(loop, opt.human ? 30 + Math.random() * 90 : 50);
   }
   loop();
 
-  function drawOverlay() {
+  function draw() {
     if (!alive) return;
     ox.clearRect(0, 0, ov.width, ov.height);
     const me = G.me, S = G.view.scale;
@@ -115,14 +131,12 @@
       if (opt.radar) {
         for (const t of G.snakes) {
           if (t === me || !t.alive) continue;
+          if (Math.hypot(t.head[0] - me.head[0], t.head[1] - me.head[1]) > 16) continue;
           const [tx, ty] = G.view.toScreen(t.head);
-          if (Math.hypot(t.head[0] - me.head[0], t.head[1] - me.head[1]) < 14) {
-            ox.strokeStyle = "rgba(255,90,120,.8)"; ox.lineWidth = 2; ox.beginPath(); ox.arc(tx, ty, 3.5 * S, 0, TAU); ox.stroke();
-            const nx = tx + Math.cos(t.ang) * 4 * S, ny = ty - Math.sin(t.ang) * 4 * S;   // 상대 머리가 향하는 쪽
-            ox.beginPath(); ox.moveTo(tx, ty); ox.lineTo(nx, ny); ox.stroke();
-          }
+          ox.strokeStyle = "rgba(255,90,120,.85)"; ox.lineWidth = 2; ox.beginPath(); ox.arc(tx, ty, 3 * S, 0, TAU); ox.stroke();
+          ox.beginPath(); ox.moveTo(tx, ty); ox.lineTo(tx + Math.cos(t.ang) * 4 * S, ty - Math.sin(t.ang) * 4 * S); ox.stroke();
         }
-        ox.strokeStyle = last.danger > 0.55 ? "rgba(255,90,120,.9)" : "rgba(201,166,255,.35)"; ox.lineWidth = 2;
+        ox.strokeStyle = last.danger > 0.55 ? "rgba(255,90,120,.9)" : "rgba(201,166,255,.4)"; ox.lineWidth = 3;
         ox.beginPath(); ox.arc(hx, hy, VIEW * S * 0.45, -me.ang - 0.6, -me.ang + 0.6); ox.stroke();
       }
       if (opt.arrow) {
@@ -131,14 +145,16 @@
         ox.fillStyle = "#c9a6ff"; ox.beginPath(); ox.arc(p[0], p[1], 5, 0, TAU); ox.fill();
       }
     }
-    requestAnimationFrame(drawOverlay);
+    requestAnimationFrame(draw);
   }
-  drawOverlay();
+  draw();
 
-  panel.querySelector("[data-off]").addEventListener("click", () => {
+  function off() {
     alive = false; clearTimeout(timer); ov.remove(); panel.remove();
-    if (boosting) steer(G.me.head, false);
+    if (boosting && G.me) steer(G.me.head, false);
+    G.input.boost = false;
     delete window.__snakeHelper;
-  });
-  window.__snakeHelper = { panel };
+  }
+  panel.querySelector("[data-off]").addEventListener("click", off);
+  window.__snakeHelper = { panel, apply, off };
 })();
