@@ -256,7 +256,7 @@
         $("resTitle").textContent = win ? (win.id === meId ? "🏆 우승!" : `🏆 ${win.name} 우승`) : "결과";
         $("resList").innerHTML = g.res.slice(0, 10).map(r => `<li style="${r.id === meId ? "color:var(--me);font-weight:700" : ""}">${esc(r.name)} <span class="small">길이 ${r.len} · 잡음 ${r.kills}${g.mode === "royale" ? (r.alive ? " · 생존" : " · 탈락") : ""}</span></li>`).join("");
         $("again").hidden = mode === "client";
-        $("resNote").textContent = mode === "client" ? "방장이 다시 시작하면 바로 이어져요." : g.mode === "round" ? "순위 = 라운드 동안 가장 길었던 길이" : "순위 = 살아남은 순서";
+        $("resNote").textContent = mode === "client" ? "방장이 다시 시작하면 바로 이어져요." : g.mode === "round" ? "순위 = 라운드가 끝날 때 길이 (순위표와 같음)" : "순위 = 살아남은 순서";
         $("results").hidden = false;
       }
     } else $("results").hidden = true;

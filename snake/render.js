@@ -107,7 +107,7 @@ const RND = (() => {
     const me = snakes.find(s => s.id === meId), tgt = snakes.find(s => s.id === camId) || me;
     if (cam.whole || !tgt) { cam.x = 0; cam.y = 0; cam.ppu = Math.min(W, H) / (C.R_ARENA * 2 + 4); }
     else {
-      const viewR = Math.min(30, 17 + tgt.length * 0.06) * cam.zoom;     // 길어질수록 조금씩 멀리 보기 (헬퍼 넓게 보기면 더)
+      const viewR = Math.min(60, 17 + 1.5 * (Math.sqrt(Math.max(10, tgt.length)) - Math.sqrt(10))) * cam.zoom;   // 길어질수록 멀리 보기 (10: 17, 100: 27, 318: 39, 1000: 59). 헬퍼 넓게 보기면 더
       const ppu = Math.sqrt(W * H) / (2 * viewR);                        // 세로 휴대폰에서도 너무 확대되지 않게 면적 기준
       cam.ppu += (ppu - cam.ppu) * 0.1;                                  // 확대 비율은 천천히
       if (tgt.alive) {                                                   // 머리는 이미 보간돼 부드러우니 거의 그대로 따라감 (관전 대상 바꿀 땐 미끄러지듯)

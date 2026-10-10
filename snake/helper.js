@@ -15,7 +15,7 @@
   const TAU = Math.PI * 2, K = G.consts, { N_SECT, VIEW, L_MIN } = K;
   let brain = null;
   fetch(new URL("brains.json?v=v2-4m", BASE)).then(r => r.json()).then(b => { brain = b.trained; });
-  const radius = L => 0.5 + 0.01 * L;
+  const radius = (window.SNK && SNK.radius) || (L => L <= 50 ? 0.5 + 0.01 * L : 1 + 0.6 * (Math.sqrt(L / 50) - 1));   // 게임과 같은 굵기
   const turnRate = L => { const x = Math.min(1, Math.max(0, (L - 10) / 250)); return K.TURN * (0.35 + 0.65 * (1 - x) ** 2); };
 
   // ── 패널

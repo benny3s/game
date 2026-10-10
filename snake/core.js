@@ -2,10 +2,10 @@
    ai-practice/rl-14-slither/slither_env2.py 와 같은 숫자라서 거기서 학습한 AI가 그대로 통한다.
    v2: 따라가는 몸(원을 돌면 점점 조여듦) · 길수록 느린 회전 · 부스트하면 먹이를 흘림 · 죽으면 몸 전체가 큰 먹이 · 넓은 맵 */
 const SNK = (() => {
-  const C = { R_ARENA: 60, N_NORM: 400, N_DROP: 1400, N_SECT: 16, VIEW: 15, SPEED: 0.5, BOOST: 1.0, TURN: 0.25, SEG: 1.0, NMAX: 320, L0: 10, L_MIN: 6 };
+  const C = { R_ARENA: 60, N_NORM: 400, N_DROP: 1400, N_SECT: 16, VIEW: 15, SPEED: 0.5, BOOST: 1.0, TURN: 0.25, SEG: 1.0, NMAX: 1000, L0: 10, L_MIN: 6 };
   C.N_FOOD = C.N_NORM + C.N_DROP;
   const TAU = Math.PI * 2;
-  const radius = L => 0.5 + 0.01 * L;
+  const radius = L => L <= 50 ? 0.5 + 0.01 * L : 1 + 0.6 * (Math.sqrt(L / 50) - 1);   // 50까지는 학습 때와 같고, 그 뒤로는 천천히 굵어짐 (318: 1.9, 1000: 3.0)
   const turnRate = L => { const x = Math.min(1, Math.max(0, (L - 10) / 250)); return C.TURN * (0.35 + 0.65 * (1 - x) ** 2); };
   const randPoint = rmax => { const r = rmax * Math.sqrt(Math.random()), t = Math.random() * TAU; return [r * Math.cos(t), r * Math.sin(t)]; };
   const FOOD_HUES = [0, 30, 55, 120, 175, 200, 260, 300, 330];
@@ -29,7 +29,7 @@ const SNK = (() => {
 
   function newSnake(id, kind, name, hue) {
     const s = { id, kind, name, hue, body: [], head: [0, 0], ang: 0, length: C.L0, alive: true, dropAcc: 0,
-      respawnAt: 0, best: C.L0, deaths: 0, eaten: 0, kills: 0, pts: [], boosting: false, helper: false, prev: null };
+      respawnAt: 0, best: C.L0, bestAt: 0, deaths: 0, eaten: 0, kills: 0, pts: [], boosting: false, helper: false, prev: null };
     spawn(s); return s;
   }
   function safePoint(others, R = C.R_ARENA) {
@@ -102,7 +102,7 @@ const SNK = (() => {
   };
 
   class Sim {
-    // mode: free(끝없이) / round(3분, 최고 길이 순위) / royale(배틀로얄: 경기장이 줄고 부활 없음, 마지막 생존자 승리)
+    // mode: free(끝없이) / round(3분, 끝날 때 길이 순위) / royale(배틀로얄: 경기장이 줄고 부활 없음, 마지막 생존자 승리)
     constructor(brains, mode = "free") {
       this.brains = brains; this.snakes = []; this.mode = mode; this.R = C.R_ARENA; this.over = false; this.results = null;
       this.limit = mode === "free" ? 0 : 180;                              // 초
@@ -127,8 +127,9 @@ const SNK = (() => {
     get timeLeft() { return this.limit ? Math.max(0, this.limit - this.elapsed) : null; }
     finish() {
       this.over = true;
-      const score = s => this.mode === "royale" ? (s.alive ? 1e6 + s.length : (s.outAt || 0)) : s.best;
-      this.results = [...this.snakes].sort((a, b) => score(b) - score(a)).map(s => ({ id: s.id, name: s.name, hue: s.hue, len: Math.floor(this.mode === "round" ? s.best : s.length), kills: s.kills, alive: s.alive }));
+      // 라운드: 끝날 때 길이(그때 죽어 있으면 0) = 순위표와 같음, 같으면 먼저 그 길이에 닿은 쪽 · 배틀로얄: 살아남은 순서
+      const score = s => this.mode === "royale" ? (s.alive ? 1e6 + s.length : (s.outAt || 0)) : (s.alive ? s.length : 0);
+      this.results = [...this.snakes].sort((a, b) => score(b) - score(a) || (a.bestAt || 0) - (b.bestAt || 0)).map(s => ({ id: s.id, name: s.name, hue: s.hue, len: Math.floor(s.alive ? s.length : 0), kills: s.kills, alive: s.alive }));
     }
     step(now, hooks = {}) {
       const { snakes, food } = this;
@@ -187,14 +188,15 @@ const SNK = (() => {
       }
       for (const [s, killer] of dead) {
         const val = 0.5 + 0.001 * s.length;                                // 몸 마디마다 큰 먹이 (클수록 조금 더 크고 값이 높음, 몸 길이의 55~80%만 돌려줌)
-        for (const p of s.pts) this.drop(p[0] + (Math.random() - .5) * .7, p[1] + (Math.random() - .5) * .7, s.hue, val);
+        const k = Math.ceil(s.pts.length / 400);                          // 아주 길면 마디 k개마다 한 알(값 k배) → 먹이 칸이 넘치지 않게
+        for (let i = 0; i < s.pts.length; i += k) { const p = s.pts[i]; this.drop(p[0] + (Math.random() - .5) * .7, p[1] + (Math.random() - .5) * .7, s.hue, val * k); }
         s.alive = false; s.deaths++; s.respawnAt = now + 1500; s.pts = [];
         if (this.mode === "royale") { s.out = true; s.outAt = this.elapsed; }
         if (killer) killer.kills++;
         this.events.push(["death", s.id, killer ? killer.id : null, Math.floor(s.length)]);
         if (hooks.death) hooks.death(s);
       }
-      for (const s of snakes) s.best = Math.max(s.best, s.length);
+      for (const s of snakes) if (s.length > s.best) { s.best = s.length; s.bestAt = this.tick; }
       if (this.tick % 10 === 0) for (let i = C.N_NORM; i < C.N_FOOD; i++) { const f = food[i]; if (f && f[4] && this.tick >= f[4]) { food[i] = null; this.foodChanged.add(i); } }
       // 줄어든 경기장 밖 먹이는 안쪽으로 옮김
       if (this.mode === "royale" && this.tick % 10 === 0) for (let i = 0; i < C.N_NORM; i++) { const f = food[i]; if (f && Math.hypot(f[0], f[1]) > this.R - 1) { food[i] = newFood(this.R); this.foodChanged.add(i); } }
