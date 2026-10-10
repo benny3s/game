@@ -177,7 +177,7 @@
       s.head = s.body[0] || [e[3], e[4]]; s.pts = s.alive ? cutPts(s) : [];
       if (s.id === meId) s.best = Math.max(s.best || 0, s.length);
     }
-    for (const f of v.fd || []) remote.food[f[0]] = f[1] == null ? null : [f[1], f[2], f[3], f[4]];
+    for (const f of v.fd || []) remote.food[f[0]] = f[1] == null ? null : [f[1], f[2], f[3], f[4], f[5]];
   }
 
   // ── 내 지렁이 예측 (참가자): 방장이 보낸 최신 위치에서, 그 뒤 지난 시간만큼 내 입력으로 미리 움직여 그림
@@ -225,7 +225,7 @@
   let hudAt = 0;
   function loop(t) {
     if (mode !== "menu") {
-      RND.frame(displayList(t), foods(), meId, spectating && specId ? specId : meId, gs().R);
+      RND.frame(displayList(t), foods(), meId, spectating && specId ? specId : meId, gs().R, mode === "client" ? stateK : (sim ? sim.tick : 0));
     } else RND.frame([], sim ? sim.food : demoFood, null);
     requestAnimationFrame(loop);
   }

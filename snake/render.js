@@ -102,7 +102,7 @@ const RND = (() => {
     ctx.globalAlpha = 1;
   }
 
-  function frame(snakes, food, meId, camId = meId, zoneR = C.R_ARENA) {
+  function frame(snakes, food, meId, camId = meId, zoneR = C.R_ARENA, tick = 0) {
     if (!W) resize();
     const me = snakes.find(s => s.id === meId), tgt = snakes.find(s => s.id === camId) || me;
     if (cam.whole || !tgt) { cam.x = 0; cam.y = 0; cam.ppu = Math.min(W, H) / (C.R_ARENA * 2 + 4); }
@@ -139,7 +139,8 @@ const RND = (() => {
     for (let i = 0; i < food.length; i++) {
       const f = food[i]; if (!f) continue;
       const x = sx(f[0]), y = sy(f[1]), val = f[3] ?? 1, big = i >= C.N_NORM && val > 0.6;
-      const size = fs * (big ? 1.3 + val * 1.4 : val < 0.6 ? 0.8 : 1);
+      const left = f[4] ? (f[4] - tick) / 100 : 1;                         // 사라지기 5초(100틱) 전부터 줄어들며 흐려짐
+      const size = fs * (big ? 1.3 + val * 1.4 : val < 0.6 ? 0.8 : 1) * Math.max(0.15, Math.min(1, left));
       if (x < -size || y < -size || x > W + size || y > H + size) continue;
       const k = size * (0.85 + 0.15 * Math.sin(t + i));
       ctx.drawImage(foodSprite(f[2] ?? 50), x - k / 2, y - k / 2, k, k);

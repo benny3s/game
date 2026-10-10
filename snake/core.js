@@ -2,7 +2,7 @@
    ai-practice/rl-14-slither/slither_env2.py 와 같은 숫자라서 거기서 학습한 AI가 그대로 통한다.
    v2: 따라가는 몸(원을 돌면 점점 조여듦) · 길수록 느린 회전 · 부스트하면 먹이를 흘림 · 죽으면 몸 전체가 큰 먹이 · 넓은 맵 */
 const SNK = (() => {
-  const C = { R_ARENA: 60, N_NORM: 400, N_DROP: 400, N_SECT: 16, VIEW: 15, SPEED: 0.5, BOOST: 1.0, TURN: 0.25, SEG: 1.0, NMAX: 320, L0: 10, L_MIN: 6 };
+  const C = { R_ARENA: 60, N_NORM: 400, N_DROP: 1400, N_SECT: 16, VIEW: 15, SPEED: 0.5, BOOST: 1.0, TURN: 0.25, SEG: 1.0, NMAX: 320, L0: 10, L_MIN: 6 };
   C.N_FOOD = C.N_NORM + C.N_DROP;
   const TAU = Math.PI * 2;
   const radius = L => 0.5 + 0.01 * L;
@@ -116,7 +116,13 @@ const SNK = (() => {
       this.snakes.push(s); return s;
     }
     remove(id) { this.snakes = this.snakes.filter(s => s.id !== id); }
-    drop(x, y, hue, val) { const i = C.N_NORM + this.dropPtr; this.food[i] = [x, y, hue, val]; this.foodChanged.add(i); this.dropPtr = (this.dropPtr + 1) % C.N_DROP; }
+    // 흘린 먹이 칸(1,400개): 빈 칸부터 채우고, 꽉 찼을 때만 가장 오래된 칸을 덮어씀 (예전 400칸은 금방 차서 시체 먹이가 갑자기 사라졌음)
+    drop(x, y, hue, val) {
+      let i = -1;
+      for (let k = 0; k < C.N_DROP; k++) { const j = C.N_NORM + (this.dropPtr + k) % C.N_DROP; if (!this.food[j]) { i = j; break; } }
+      if (i < 0) i = C.N_NORM + this.dropPtr;
+      this.food[i] = [x, y, hue, val, this.tick + 2400 + Math.floor(Math.random() * 600)]; this.foodChanged.add(i); this.dropPtr = (i - C.N_NORM + 1) % C.N_DROP;   // 5번째 = 사라지는 틱 (2~2.5분 뒤, 마지막 5초는 화면에서 줄어들며 흐려짐)
+    }
     get elapsed() { return this.tick / 20; }
     get timeLeft() { return this.limit ? Math.max(0, this.limit - this.elapsed) : null; }
     finish() {
@@ -189,6 +195,7 @@ const SNK = (() => {
         if (hooks.death) hooks.death(s);
       }
       for (const s of snakes) s.best = Math.max(s.best, s.length);
+      if (this.tick % 10 === 0) for (let i = C.N_NORM; i < C.N_FOOD; i++) { const f = food[i]; if (f && f[4] && this.tick >= f[4]) { food[i] = null; this.foodChanged.add(i); } }
       // 줄어든 경기장 밖 먹이는 안쪽으로 옮김
       if (this.mode === "royale" && this.tick % 20 === 0) for (let i = 0; i < C.N_NORM; i++) { const f = food[i]; if (f && Math.hypot(f[0], f[1]) > this.R - 1) { food[i] = newFood(this.R); this.foodChanged.add(i); } }
       this.tick++;
