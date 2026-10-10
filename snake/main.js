@@ -131,20 +131,23 @@
     if (hostCtl) hostCtl.tick();
   }
 
-  // ── 참가자: 방장이 보낸 상태로 화면 만들기
-  function ensure(id) { let s = remote.snakes.get(id); if (!s) { s = { id, kind: "?", name: "", hue: 200, helper: false, trail: [], head: [0, 0], ang: 0, length: 10, alive: true, boosting: false, deaths: 0, kills: 0, pts: [] }; remote.snakes.set(id, s); } return s; }
-  function rebuildPts(s) { const n = Math.min(Math.floor(s.length), C.T_TRAIL / C.SPACING), pts = []; for (let i = 0; i < n; i++) { const p = s.trail[C.SPACING * (i + 1)]; if (!p) break; pts.push(p); } s.pts = pts; }
+  // ── 참가자: 방장이 보낸 상태로 화면 만들기 (v2: 몸은 방장과 같은 '따라가는 몸' 계산을 머리 위치로 따라 함)
+  function ensure(id) { let s = remote.snakes.get(id); if (!s) { s = { id, kind: "?", name: "", hue: 200, helper: false, body: [], head: [0, 0], ang: 0, length: 10, alive: true, boosting: false, deaths: 0, kills: 0, pts: [], prev: null }; remote.snakes.set(id, s); } return s; }
+  const cutPts = s => s.body.slice(1, 1 + Math.floor(s.length));
   function onSync(v) {
-    if (v.f) remote.food = v.f;
+    if (v.f) remote.food = v.f.map(f => f && f.length ? f : null);
     for (const [id, inf] of Object.entries(v.info || {})) { const s = ensure(id); [s.kind, s.name, s.hue, s.helper] = [inf[0], inf[1], inf[2], !!inf[3]]; }
-    for (const [id, flat] of Object.entries(v.b || {})) {          // 4틱 간격 몸 마디 → 1틱 간격 자취로 채우기
-      const s = ensure(id); const pts = []; for (let i = 0; i + 1 < (flat || []).length; i += 2) pts.push([flat[i], flat[i + 1]]);
-      // 이미 자취가 충분하고 몸 끝이 거의 맞으면 그대로 둠 (1.5초마다 몸이 툭 바뀌어 보이는 것 방지)
-      const need = Math.floor(s.length) * C.SPACING + 2, tail = pts[pts.length - 1], mine = s.trail[Math.min(s.trail.length - 1, 2 + 4 * (pts.length - 1))];
-      if (s.trail.length >= need && tail && mine && Math.hypot(tail[0] - mine[0], tail[1] - mine[1]) < 1.5) continue;
-      const tr = [s.head]; const marks = [[0, s.head], ...pts.map((p, j) => [2 + 4 * j, p])];
-      for (let m = 1; m < marks.length; m++) { const [t0, a] = marks[m - 1], [t1, b] = marks[m]; for (let t = t0 + 1; t <= t1; t++) { const u = (t - t0) / (t1 - t0); tr[t] = [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u]; } }
-      s.trail = tr; rebuildPts(s);
+    for (const [id, flat] of Object.entries(v.b || {})) {                 // 두 마디에 하나씩 온 몸 → 사이를 채워 맞춤
+      const s = ensure(id); if (!s.alive) continue;
+      const half = []; for (let i = 0; i + 1 < (flat || []).length; i += 2) half.push([flat[i], flat[i + 1]]);
+      if (!half.length) continue;
+      const full = [s.head];
+      for (let j = 0; j < half.length; j++) { const a = j ? half[j - 1] : s.head, b = half[j]; if (j) full.push([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]); full.push(b); }
+      const tail = full[full.length - 1], mine = s.body[full.length - 1];
+      if (mine && Math.hypot(tail[0] - mine[0], tail[1] - mine[1]) < 1.2) continue;   // 거의 맞으면 그대로 (툭 바뀌어 보이지 않게)
+      const last = full[full.length - 1], prev = full[full.length - 2] || s.head, dx = last[0] - prev[0], dy = last[1] - prev[1], d = Math.hypot(dx, dy) || 1;
+      while (full.length < C.NMAX) { const t = full[full.length - 1]; full.push([t[0] + dx / d * C.SEG, t[1] + dy / d * C.SEG]); }
+      s.body = full; s.pts = cutPts(s);
     }
     for (const id of [...remote.snakes.keys()]) if (v.info && !v.info[id]) remote.snakes.delete(id);
   }
@@ -156,64 +159,60 @@
     for (const e of v.s || []) {
       const s = ensure(e[0]);
       const wasAlive = s.alive, prevK = s.k ?? -9;
+      s.prev = wasAlive && s.body.length ? { head: s.head, pts: s.pts } : null;
       s.ang = e[5]; s.length = e[6] / 10; s.alive = !!e[7]; s.boosting = !!e[8]; s.deaths = e[9]; s.kills = e[10]; s.prot = !!e[11];
-      if (s.alive && (!wasAlive || !s.trail.length)) {                        // 새로 태어남: 머리 뒤로 곧게 뻗은 몸부터
-        s.trail = Array.from({ length: Math.floor(s.length) * C.SPACING + 4 }, (_, i) => [e[3] - Math.cos(s.ang) * C.SPEED * i, e[4] - Math.sin(s.ang) * C.SPEED * i]);
-      } else if (v.k === prevK + 1) s.trail.unshift([e[3], e[4]]);           // 매 틱 (직접 연결)
-      else { s.trail.unshift([e[1], e[2]]); s.trail.unshift([e[3], e[4]]); }  // 두 틱마다 (Realtime DB) 또는 하나 빠짐
+      const sp = s.boosting ? C.BOOST : C.SPEED;
+      if (s.alive && (!wasAlive || !s.body.length)) { s.body = SNK.straightBody([e[3], e[4]], s.ang, C.NMAX); s.prev = null; }   // 새로 태어남
+      else if (s.alive) {
+        if (v.k !== prevK + 1) SNK.follow(s.body, [e[1], e[2]], sp, Math.floor(s.length) + 8);   // 두 틱마다 오면 중간 머리부터
+        SNK.follow(s.body, [e[3], e[4]], sp, Math.floor(s.length) + 8);
+      }
       s.k = v.k;
-      if (s.trail.length > C.T_TRAIL) s.trail.length = C.T_TRAIL;
-      s.head = s.trail[0]; rebuildPts(s);
+      s.head = s.body[0] || [e[3], e[4]]; s.pts = s.alive ? cutPts(s) : [];
       if (s.id === meId) s.best = Math.max(s.best || 0, s.length);
     }
-    for (const f of v.fd || []) remote.food[f[0]] = [f[1], f[2], f[3]];
+    for (const f of v.fd || []) remote.food[f[0]] = f[1] == null ? null : [f[1], f[2], f[3], f[4]];
   }
 
-  // ── 내 지렁이 예측 (참가자): 방장이 보낸 마지막 위치에서, 그 뒤 지난 시간만큼 내 입력으로 미리 움직여 그림
+  // ── 내 지렁이 예측 (참가자): 방장이 보낸 최신 위치에서, 그 뒤 지난 시간만큼 내 입력으로 미리 움직여 그림
   //   매번 방장의 최신 위치에서 다시 계산하므로 오차가 쌓이지 않음. 길이·생사·먹기는 방장 판정 그대로
-  function predictedTrail(s, now) {
-    const lat = (joinCtl && joinCtl.p2p ? (joinCtl.rtt || 40) / 2 : 120) + (now - lastStateAt);     // 방장 상태가 만들어진 뒤 지난 시간(ms)
-    const n = Math.min(12, lat / 50);
-    let ang = s.ang, x = s.trail[0][0], y = s.trail[0][1];
-    const pts = [];
-    const steps = Math.ceil(n);
+  function predicted(s, now) {
+    const lat = (joinCtl && joinCtl.p2p ? (joinCtl.rtt || 40) / 2 : 120) + (now - lastStateAt);
+    const n = Math.min(12, lat / 50), steps = Math.ceil(n), m = Math.floor(s.length) + 2;
+    const body = s.body.slice(0, m + 1);
+    let ang = s.ang;
     for (let i = 0; i < steps; i++) {
       let turn = input.turn || 0;
-      if (!turn && input.aim != null) { const d = ((input.aim - ang) % SNK.TAU + SNK.TAU * 1.5) % SNK.TAU - Math.PI; turn = Math.abs(d) < C.TURN / 2 ? 0 : d > 0 ? 1 : -1; }
-      ang += C.TURN * turn;
-      const v = input.boost && s.length > C.L_MIN + 1 ? C.BOOST : C.SPEED;
-      const f = i === steps - 1 ? n - (steps - 1) : 1;                       // 마지막 걸음은 남은 비율만큼
-      x += v * Math.cos(ang) * f; y += v * Math.sin(ang) * f;
-      pts.unshift([x, y]);
+      const tr = SNK.turnRate(s.length);
+      if (!turn && input.aim != null) { const d = ((input.aim - ang) % SNK.TAU + SNK.TAU * 1.5) % SNK.TAU - Math.PI; turn = Math.abs(d) < tr / 2 ? 0 : d > 0 ? 1 : -1; }
+      ang += tr * turn;
+      const v = (input.boost && s.length > C.L_MIN + 1 ? C.BOOST : C.SPEED) * (i === steps - 1 ? n - (steps - 1) : 1);
+      SNK.follow(body, [body[0][0] + v * Math.cos(ang), body[0][1] + v * Math.sin(ang)], v, m);
     }
-    return { trail: pts.concat(s.trail), ang };
+    return { head: body[0], body, ang };
   }
 
   // ── 화면 그리기 (초당 60번)
   const list = () => mode === "client" ? [...remote.snakes.values()] : (sim ? sim.snakes : []);
   const foods = () => mode === "client" ? remote.food : (sim ? sim.food : []);
-  // 보간: 게임 계산(초당 20번, 참가자는 받는 게 초당 10번) 사이를 자취 위에서 부드럽게 이어 그림
-  //   혼자·방장: 한 틱(0.05초) 뒤를 그림 / 참가자: 세 틱(0.15초) 뒤를 그려 통신 흔들림까지 흡수
+  // 보간: 직전 계산과 이번 계산 사이를 비율만큼 섞어 그림 (혼자·방장은 한 틱, 참가자는 받는 간격만큼 늦게 → 끊김 없음)
   const smoothLen = new Map();
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   function displayList(now) {
-    const T = C.T_TRAIL, SP = C.SPACING, client = mode === "client";
-    // 참가자: 직접 연결(매 틱 받음)이면 1.5틱, Realtime DB(두 틱마다)면 3틱 늦게 그려 흔들림 흡수
-    const buf = client ? (joinCtl && joinCtl.p2p ? 1.5 : 3) : 1;
-    const k = client ? Math.max(0, Math.min(buf, buf - (now - lastStateAt) / 50)) : Math.max(0, Math.min(1, 1 - (now - lastTickAt) / (1000 / HZ)));
-    const ringAt = (s, i) => s.trail[((s.ptr - i) % T + T) % T], arrAt = (tr, i) => tr[Math.min(i, tr.length - 1)];
+    const client = mode === "client";
+    const t = client ? Math.min(1, (now - lastStateAt) / (50 * stateGap)) : Math.min(1, (now - lastTickAt) / (1000 / HZ));
     return list().map(s => {
-      if (!s.alive || !s.trail || !s.trail.length) { smoothLen.delete(s.id); return s; }
-      let at = client ? (i => arrAt(s.trail, i)) : (i => ringAt(s, i)), kk = k;
-      if (client && s.id === meId && s.trail.length > 2) { const p = predictedTrail(s, now); at = i => arrAt(p.trail, i); kk = 0; }   // 내 지렁이는 예측해서 앞서 그림
-      const lerp = x => { const i = Math.floor(x), f = x - i, a = at(i), b = at(i + 1); if (!a) return null; if (!b || !f) return a; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f]; };
-      const head = lerp(kk) || s.head, back = lerp(kk + 1) || head;
-      // 길이도 부드럽게: 먹으면 꼬리가 한 마디씩 툭 늘던 것을, 보이는 길이가 실제 길이를 천천히 따라가게 + 마지막 마디는 비율만큼
+      if (!s.alive || !s.body || !s.body.length) { smoothLen.delete(s.id); return s; }
+      let head, body, ang = s.ang;
+      if (client && s.id === meId) { const p = predicted(s, now); head = p.head; body = p.body; ang = p.ang; }   // 내 지렁이: 예측해서 앞서
+      else if (s.prev) { head = mix(s.prev.head, s.head, t); body = [head, ...s.pts.map((p, i) => s.prev.pts[i] ? mix(s.prev.pts[i], p, t) : p)]; if (s.body[s.pts.length + 1]) body.push(s.body[s.pts.length + 1]); }
+      else { head = s.head; body = s.body.slice(0, Math.floor(s.length) + 2); }
+      // 길이도 부드럽게: 보이는 길이가 실제 길이를 천천히 따라가고, 마지막 마디는 비율만큼
       const dl = (smoothLen.get(s.id) ?? s.length), L = dl + (s.length - dl) * 0.12;
       smoothLen.set(s.id, L);
-      const n = Math.min(Math.floor(L), T / SP), frac = L - Math.floor(L), pts = [];
-      for (let i = 0; i < n; i++) { const p = lerp(kk + SP * (i + 1)); if (!p) break; pts.push(p); }
-      if (frac > 0.02 && pts.length === n) { const p = lerp(kk + SP * (n + frac)); if (p) pts.push(p); }
-      const ang = Math.hypot(head[0] - back[0], head[1] - back[1]) > 1e-6 ? Math.atan2(head[1] - back[1], head[0] - back[0]) : s.ang;
+      const n = Math.min(Math.floor(L), body.length - 1), frac = L - Math.floor(L);
+      const pts = body.slice(1, 1 + n);
+      if (frac > 0.02 && body[n + 1]) pts.push(mix(body[n], body[n + 1], frac));
       return { id: s.id, name: s.name, hue: s.hue, helper: s.helper, boosting: s.boosting, alive: true, length: s.length, ang, head, pts, prot: s.prot };
     });
   }
@@ -224,7 +223,7 @@
     } else RND.frame([], sim ? sim.food : demoFood, null);
     requestAnimationFrame(loop);
   }
-  const demoFood = Array.from({ length: 120 }, () => { const r = 38 * Math.sqrt(Math.random()), a = Math.random() * 6.283; return [r * Math.cos(a), r * Math.sin(a), SNK.FOOD_HUES[Math.floor(Math.random() * 9)]]; });
+  const demoFood = Array.from({ length: 300 }, () => { const r = (C.R_ARENA - 2) * Math.sqrt(Math.random()), a = Math.random() * 6.283; return [r * Math.cos(a), r * Math.sin(a), SNK.FOOD_HUES[Math.floor(Math.random() * 9)], 1]; });
   requestAnimationFrame(loop);
   setInterval(() => { if (mode !== "menu") hud(); }, 250);
   function hud() {

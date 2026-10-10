@@ -107,13 +107,13 @@ const NET = (() => {
     function stateMsg() {
       const s = sim.snakes.map(x => { const a = prevHead.get(x.id) || x.head;
         return [x.id, r2(a[0]), r2(a[1]), r2(x.head[0]), r2(x.head[1]), r2(x.ang), Math.round(x.length * 10), x.alive ? 1 : 0, x.boosting ? 1 : 0, x.deaths, x.kills, x.prot ? 1 : 0]; });
-      const fd = [...sim.foodChanged].map(i => [i, r2(sim.food[i][0]), r2(sim.food[i][1]), sim.food[i][2]]);
+      const fd = [...sim.foodChanged].map(i => { const f = sim.food[i]; return f ? [i, r2(f[0]), r2(f[1]), f[2], f[3]] : [i, null]; });
       sim.foodChanged.clear();
       return { k: sim.tick, s, fd };
     }
     function syncMsg() {
       return { k: sim.tick, b: Object.fromEntries(sim.snakes.map(x => [x.id, x.pts.filter((_, i) => i % 2 === 0).flatMap(p => [r2(p[0]), r2(p[1])])])),
-        f: sim.food.map(f => [r2(f[0]), r2(f[1]), f[2]]), info: Object.fromEntries(sim.snakes.map(x => [x.id, [x.kind, x.name, x.hue, x.helper ? 1 : 0]])) };
+        f: sim.food.map(f => f ? [r2(f[0]), r2(f[1]), f[2], f[3]] : 0), info: Object.fromEntries(sim.snakes.map(x => [x.id, [x.kind, x.name, x.hue, x.helper ? 1 : 0]])) };
     }
     return {
       code,

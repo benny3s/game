@@ -128,11 +128,14 @@ const RND = (() => {
     ctx.strokeStyle = "rgba(255,60,80,.55)"; ctx.lineWidth = Math.max(3, cam.ppu * 0.5);
     ctx.beginPath(); ctx.arc(sx(0), sy(0), C.R_ARENA * cam.ppu, 0, TAU); ctx.stroke();
     // 먹이 (반짝임)
+    // 크기는 값에 따라: 보통 +1 작게, 죽은 지렁이가 남긴 큰 먹이는 크고 밝게 (실제 게임처럼 몸 자리에 촘촘히)
     const t = performance.now() / 300, fs = Math.max(10, cam.ppu * 1.5);
     for (let i = 0; i < food.length; i++) {
-      const f = food[i], x = sx(f[0]), y = sy(f[1]);
-      if (x < -fs || y < -fs || x > W + fs || y > H + fs) continue;
-      const k = fs * (0.85 + 0.15 * Math.sin(t + i));
+      const f = food[i]; if (!f) continue;
+      const x = sx(f[0]), y = sy(f[1]), val = f[3] ?? 1, big = i >= C.N_NORM && val > 0.6;
+      const size = fs * (big ? 1.3 + val * 1.4 : val < 0.6 ? 0.8 : 1);
+      if (x < -size || y < -size || x > W + size || y > H + size) continue;
+      const k = size * (0.85 + 0.15 * Math.sin(t + i));
       ctx.drawImage(foodSprite(f[2] ?? 50), x - k / 2, y - k / 2, k, k);
     }
     // 지렁이 (내 것은 맨 위)
