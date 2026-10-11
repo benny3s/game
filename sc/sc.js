@@ -264,7 +264,7 @@
     realOn = on && isHost;
     $("game").classList.toggle("classic", realOn); resize(); cam.z = realOn ? classicScale() : 1; layoutConsole();
     const img = $("real"); img.style.display = realOn ? "block" : "none";
-    if (realOn) { img.src = "/video?" + Date.now(); camSent = ""; sendCam(true); } else img.removeAttribute("src");
+    if (realOn) { img.src = "/video?" + Date.now(); camSent = ""; sendCam(true); curCursor = ""; setCursor("arrow"); } else { img.removeAttribute("src"); cv.style.cursor = "crosshair"; }
   }
   // ── 원작 콘솔: 엔진 서버가 블리자드 데이터에서 꺼낸 저그 콘솔 그림 (친구 페이지엔 없음)
   let consoleImg = null;
@@ -300,6 +300,30 @@
     const b = await sfxBuf(set[Math.floor(Math.random() * set.length)]); const a = audio(); if (!b || !a) return;
     const src = a.createBufferSource(), g = a.createGain(); g.gain.value = vol; src.buffer = b; src.connect(g).connect(a.destination); src.start();
   }
+  const imgCache = {};
+  const grpImg = (f, frame, pal) => { const k = f + frame + pal; if (!imgCache[k]) { const im = new Image(); im.src = `/grp?f=${encodeURIComponent(f)}&frame=${frame}&pal=${pal}`; imgCache[k] = im; } return imgCache[k]; };
+  function tinted(c, im, col) {                                          // 와이어프레임을 체력 색으로 (원작처럼)
+    const g = c.getContext("2d"); g.clearRect(0, 0, c.width, c.height);
+    if (!im.complete || !im.naturalWidth) { im.onload = () => tinted(c, im, col); return; }
+    g.globalCompositeOperation = "source-over"; g.drawImage(im, 0, 0, c.width, c.height);
+    g.globalCompositeOperation = "source-in"; g.fillStyle = col; g.fillRect(0, 0, c.width, c.height); g.globalCompositeOperation = "source-over";
+  }
+  const cursors = {}; let curCursor = "";
+  async function loadCursor(name) {
+    const sc = Math.round(cam.z) || 1, k = name + sc;
+    if (cursors[k] !== undefined) return cursors[k];
+    cursors[k] = null;
+    try {
+      const r = await fetch(`/cursor?f=${name}&s=${sc}`); const [hx, hy] = (r.headers.get("X-Hot") || "0,0").split(",");
+      const url = await new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(fr.result); r.blob().then(b => fr.readAsDataURL(b)); });
+      cursors[k] = `url(${url}) ${hx} ${hy}, auto`;
+    } catch (e) { cursors[k] = ""; }
+    return cursors[k];
+  }
+  async function setCursor(name) { if (!realOn) return; if (curCursor === name && cv.style.cursor.startsWith("url")) return; curCursor = name; const c = await loadCursor(name); if (curCursor === name && c) cv.style.cursor = c; }
+  // 원작 소리 그대로 쓰는 버튼 소리
+  async function buttonSound() { if (!HOST) return; const b = await sfxBuf("Misc\\Button"); const a = audio(); if (!b || !a) return; const s0 = a.createBufferSource(); s0.buffer = b; const g = a.createGain(); g.gain.value = 0.5; s0.connect(g).connect(a.destination); s0.start(); }
+  document.addEventListener("click", e => { if (e.target.closest(".btn, #card button")) buttonSound(); }, true);
   const onScreen = (x, y) => { const [sx, sy] = S(x, y); return sx > -40 && sy > -40 && sx < W + 40 && sy < H + 40; };
   function enterGame() { show("game"); if (isHost) setReal(realOn || HOST); sel.clear(); resultShown = null; $("banner").textContent = ""; $("endBox").style.display = "none"; buildCard(); SND.go(); }
   function leaveGame() { if (isHost) $("real").removeAttribute("src"); show("lobby"); $("startBtn").disabled = false; renderLobby(); }
@@ -334,14 +358,26 @@
   }
   // 명령 버튼 (스타 콘솔 오른쪽 3×3)
   const CARD = [["move", "<u>M</u>이동", "m"], ["stop", "<u>S</u>정지", "s"], ["amove", "<u>A</u>공격", "a"], ["patrol", "<u>P</u>순찰", "p"], ["hold", "<u>H</u>그 자리", "h"]];
-  function buildCard() { $("card").innerHTML = CARD.map(([k, l]) => `<button type="button" data-k="${k}">${l}</button>`).join(""); }
+  const ICON = { move: 228, stop: 229, patrol: 254, hold: 255 }, WEAPON_ICON = { 43: 345, 60: 332, 47: 350 };
+  const TIP = { move: "이동 (M)", stop: "정지 (S)", amove: "공격 (A)", patrol: "순찰 (P)", hold: "그 자리 (H)" };
+  let cardType = -1;
+  function buildCard() {
+    if (realOn) {
+      const first = [...sel].map(i => cur && cur.byId.get(i)).find(u => u && myUnits.has(u[0]));
+      cardType = first ? first[2] : -1;
+      if (!first) { $("card").innerHTML = ""; return; }                    // 원작처럼 내 유닛을 골라야 버튼이 나옴
+      $("card").innerHTML = CARD.map(([k]) => `<button type="button" data-k="${k}" title="${TIP[k]}"><img alt="${TIP[k]}" src="/grp?f=${encodeURIComponent("unit\\cmdbtns\\cmdicons.grp")}&frame=${k === "amove" ? WEAPON_ICON[first[2]] || 230 : ICON[k]}&pal=yellow"></button>`).join("");
+      markCard(); return;
+    }
+    $("card").innerHTML = CARD.map(([k, l]) => `<button type="button" data-k="${k}">${l}</button>`).join("");
+  }
   $("card").addEventListener("click", e => { const b = e.target.closest("button"); if (b) pressCmd(b.dataset.k); });
   function pressCmd(k) {
     if (!sel.size) return;
     if (k === "stop" || k === "hold") { sendCmd(k); return; }
     mode = k; cv.style.cursor = "cell"; markCard();
   }
-  const markCard = () => $("card").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.k === mode));
+  const markCard = () => { $("card").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.k === mode)); if (realOn) setCursor(mode ? "targg" : "arrow"); };
   // 마우스
   const unitAt = (wx, wy, pred) => { if (!cur) return null; let best = null, bd = 1e9; for (const u of cur.u) { if (pred && !pred(u)) continue; const d = Math.hypot(u[3] - wx, u[4] - wy); if (d < 22 / Math.min(1, cam.z) && d < bd) { bd = d; best = u; } } return best; };
   const myTeam = () => (players[ctl.uid] ? players[ctl.uid].team ?? 0 : 0);
@@ -366,7 +402,10 @@
     }
     drag = { x0: e.offsetX, y0: e.offsetY, x1: e.offsetX, y1: e.offsetY, shift: e.shiftKey, ctrl: e.ctrlKey };
   });
-  cv.addEventListener("mousemove", e => { if (drag) { drag.x1 = e.offsetX; drag.y1 = e.offsetY; } mouse = [e.offsetX, e.offsetY]; });
+  cv.addEventListener("mousemove", e => {
+    if (drag) { drag.x1 = e.offsetX; drag.y1 = e.offsetY; } mouse = [e.offsetX, e.offsetY];
+    if (realOn) { if (mode) setCursor("targg"); else { const [wx, wy] = Wd(e.offsetX, e.offsetY), u = unitAt(wx, wy); setCursor(!u ? "arrow" : u[1] === myTeam() ? "magg" : "magr"); } }
+  });
   let mouse = null;
   cv.addEventListener("mouseleave", () => { mouse = null; });
   addEventListener("mouseup", () => {
@@ -498,9 +537,11 @@
     if (drag) { ctx.strokeStyle = "#3cff6a"; ctx.lineWidth = 1; ctx.strokeRect(drag.x0, drag.y0, drag.x1 - drag.x0, drag.y1 - drag.y0); }
     drawMini(pos); drawSel(); drawTop();
   }
+  let miniImg = null;
   function drawMini(pos) {
     const m = mini.width, c = cur.c, k = m / (2 * ARENA);
     mctx.fillStyle = "#03060a"; mctx.fillRect(0, 0, m, m);
+    if (realOn) { if (!miniImg) { miniImg = new Image(); miniImg.src = "/minimap"; } if (miniImg.complete && miniImg.naturalWidth) mctx.drawImage(miniImg, 0, 0, m, m); }   // 원작처럼 지형이 보이는 미니맵
     mctx.strokeStyle = "rgba(110,140,170,.25)"; mctx.strokeRect(1, 1, m - 2, m - 2);
     for (const u of cur.u) { const [x, y] = pos.get(u[0]), h = ownerHue(u); mctx.fillStyle = h == null ? "#999" : colorOf(h, 60); mctx.fillRect((x - c[0] + ARENA) * k - 3, (y - c[1] + ARENA) * k - 3, 6, 6); }
     const [vx0, vy0] = Wd(0, 0), [vx1, vy1] = Wd(W, H);
@@ -513,6 +554,7 @@
     if (key === selKey) return; selKey = key;
     const hpCol = u => { const r = (u[5] + u[6]) / Math.max(1, u[7] + u[8]); return r > .66 ? "#2fd34f" : r > .33 ? "#e6d23a" : "#e2412f"; };
     const icon = (u, s) => { const c = document.createElement("canvas"); c.width = c.height = s * 2; const g = c.getContext("2d"); g.scale(2, 2); g.translate(s / 2, s / 2); g.rotate(-Math.PI / 2); g.scale(s / 40, s / 40); const old = ctx; return [c, g]; };
+    if (realOn) { drawSelClassic(us, hpCol); return; }
     if (!us.length) { $("selp").innerHTML = `<span class="small">유닛을 고르세요 · 드래그로 여러 기 · 더블클릭 = 같은 종류 · Ctrl+숫자 = 부대</span>`; return; }
     if (us.length === 1) {
       const u = us[0], name = TNAME[u[2]] || "유닛", own = myUnits.has(u[0]) ? "내 유닛" : u[1] === myTeam() ? "같은 편" : "적";
@@ -530,6 +572,23 @@
     g.clearRect(0, 0, c.width, c.height); g.save(); g.translate(c.width / 2, c.height / 2); g.scale(z * .9, z * .9); g.rotate(-Math.PI / 2);
     ctxRef.ctx = g; shape(u[2], col); ctxRef.ctx = old; g.restore();
   }
+  let porType = -1;
+  function drawSelClassic(us, hpCol) {
+    const firstMine = us.find(u => myUnits.has(u[0]));
+    if ((firstMine ? firstMine[2] : -1) !== cardType) buildCard();
+    const pt = us.length ? us[0][2] : -1, pv = $("portrait");
+    if (pt !== porType) { porType = pt; if (pt >= 0) { pv.src = "/portrait?u=" + pt; pv.removeAttribute("data-off"); pv.play().catch(() => {}); } else { pv.setAttribute("data-off", ""); pv.removeAttribute("src"); } }
+    if (!us.length) { $("selp").innerHTML = ""; return; }
+    const WF = "unit\\wirefram\\wirefram.grp", GW = "unit\\wirefram\\grpwire.grp";
+    if (us.length === 1) {
+      const u = us[0];
+      $("selp").innerHTML = `<div class="ow"><canvas width="64" height="64"></canvas><div><b>${TNAME[u[2]] || "유닛"}</b><br><span style="color:${hpCol(u)}">${u[5]}/${u[7]}</span>${u[8] ? `<br><span style="color:#5aa0ff">${u[6]}/${u[8]}</span>` : ""}</div></div>`;
+      tinted($("selp").querySelector("canvas"), grpImg(WF, u[2], "white"), hpCol(u));
+      return;
+    }
+    $("selp").innerHTML = `<div class="og">${us.slice(0, 12).map(u => `<canvas width="32" height="32" data-id="${u[0]}" title="${TNAME[u[2]] || ""} ${u[5]}/${u[7]}"></canvas>`).join("")}</div>`;
+    $("selp").querySelectorAll("canvas[data-id]").forEach(c => { const u = cur.byId.get(+c.dataset.id); tinted(c, grpImg(GW, u[2], "white"), hpCol(u)); });
+  }
   $("selp").addEventListener("click", e => { const w = e.target.closest("[data-id]"); if (w) { sel = new Set([+w.dataset.id]); selKey = ""; } });
   let topAt = 0;
   function drawTop() {
@@ -541,5 +600,5 @@
     $("top").innerHTML = `${Math.floor(cur.f / 23.81 / 60)}:${String(Math.floor(cur.f / 23.81) % 60).padStart(2, "0")} · 팀1 ${a.length} vs 팀2 ${b.length}<br>${net}<br>화면 받는 간격 ${Math.round(g)}±${Math.round(jit)}ms · 명령→반응 ${reacts.length ? Math.round(avg(reacts)) + "ms" : "-"}`;
   }
   requestAnimationFrame(draw);
-  window.__sc = { get cur() { return cur; }, get phase() { return phase; }, get own() { return own; }, get sel() { return sel; }, sendCmd, get stats() { return { stGaps, reacts, ping }; } };   // 시험·점검용
+  window.__sc = { frame: () => draw(), drawSel: () => { selKey = ""; drawSel(); }, get cur() { return cur; }, get phase() { return phase; }, get own() { return own; }, get sel() { return sel; }, sendCmd, get stats() { return { stGaps, reacts, ping }; } };   // 시험·점검용
 })();

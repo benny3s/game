@@ -61,13 +61,21 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
 #warn{left:50%;top:10px;transform:translateX(-50%);background:rgba(150,30,40,.9);padding:6px 14px;border-radius:99px;font-weight:600;display:none}
 #menuBtn{position:absolute;left:10px;top:8px}
 /* 원작 화면 (이 PC 방장 · 진짜 그래픽): 640×480 기준을 s배로 키움. 콘솔 그림의 빈 곳으로 전장이 보임 */
-#game.classic #cv,#game.classic #real{height:100%}
-#game.classic #real{image-rendering:pixelated;object-fit:fill}
+#game.classic #cv,#game.classic #real{height:100% !important}
+#game.classic #real{image-rendering:pixelated;object-fit:fill !important;width:100% !important}
 #game.classic #console{left:var(--cx);right:auto;width:calc(640px * var(--s));height:calc(var(--ch) * var(--s));background:var(--cimg) left bottom/100% 100% no-repeat;border:0;padding:0;display:block;pointer-events:none;image-rendering:pixelated}
 #game.classic #mini{position:absolute;left:calc(6px * var(--s));top:calc((348px - var(--ct)) * var(--s));width:calc(128px * var(--s));height:calc(128px * var(--s));border:0;pointer-events:auto}
 #game.classic #selp{position:absolute;left:calc(160px * var(--s));top:calc((392px - var(--ct)) * var(--s));width:calc(250px * var(--s));height:calc(80px * var(--s));background:transparent;border:0;pointer-events:auto;transform-origin:left top}
 #game.classic #card{position:absolute;left:calc(505px * var(--s));top:calc((358px - var(--ct)) * var(--s));grid-template-columns:repeat(3,calc(40px * var(--s)));grid-auto-rows:calc(36px * var(--s));gap:calc(5px * var(--s));pointer-events:auto}
 #game.classic #card button{font-size:calc(9px * var(--s));background:rgba(0,0,0,.35);border-color:rgba(120,140,90,.6)}
+#game.classic #portrait{display:block !important;position:absolute;left:calc(415px * var(--s));top:calc((414px - var(--ct)) * var(--s));width:calc(60px * var(--s));height:calc(56px * var(--s));image-rendering:pixelated;object-fit:fill;pointer-events:none}
+#game.classic #portrait[data-off]{visibility:hidden}
+#game.classic #selp .ow{display:flex;gap:calc(8px * var(--s));align-items:flex-start;font:calc(8px * var(--s))/1.35 system-ui,sans-serif;color:#e8e8e8}
+#game.classic #selp .ow canvas{width:calc(64px * var(--s));height:calc(64px * var(--s));image-rendering:pixelated}
+#game.classic #selp .og{display:grid;grid-template-columns:repeat(6,calc(33px * var(--s)));gap:calc(2px * var(--s))}
+#game.classic #selp .og canvas{width:calc(33px * var(--s));height:calc(33px * var(--s));image-rendering:pixelated;cursor:inherit}
+#game.classic #card button{padding:0;display:grid;place-items:center}
+#game.classic #card button img{width:100%;height:100%;image-rendering:pixelated}
 #game.classic #msgs{bottom:calc(var(--ch) * var(--s) + 6px)}
 #game.classic #gchat{bottom:calc(var(--ch) * var(--s) + 4px)}
 </style>
@@ -126,6 +134,7 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
   <div id="console">
     <canvas id="mini" width="268" height="268"></canvas>
     <div id="selp"></div>
+    <video id="portrait" muted loop playsinline autoplay style="display:none"></video>
     <div id="card"></div>
   </div>
 </section>
@@ -134,6 +143,6 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="../common/glog.js?v=1"></script>
 <script src="net.js?v=4"></script>
-<script src="sc.js?v=8"></script>
+<script src="sc.js?v=13"></script>
 </body>
 </html>
