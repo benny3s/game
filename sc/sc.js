@@ -15,6 +15,10 @@
     mirror: { a: "저그 뮤탈리스크 12", b: "저그 뮤탈리스크 12", note: "같은 유닛끼리. 컨트롤 싸움." },
   };
   const TNAME = { 43: "뮤탈리스크", 60: "커세어", 47: "스커지" };
+  const MAPKO = { FightingSpirit: "파이팅 스피릿", Python: "파이썬", CircuitBreaker: "서킷브레이커", Destination: "데스티네이션", HeartbreakRidge: "하트브레이크 릿지",
+    Benzene: "벤젠", Andromeda: "안드로메다", TauCross: "타우크로스", NeoMoonGlaive: "네오 문글레이브", ElectricCircuit: "일렉트릭 서킷", EmpireoftheSun: "엠파이어 오브 더 선",
+    Icarus: "이카루스", Jade: "제이드", "LaMancha1.1": "라만차", Roadrunner: "로드러너", testmap1: "시험 맵" };
+  const mapName = f => { if (!f) return "-"; const m = f.replace(/\.sc[mx]$/i, ""), n = (m.match(/^\((\d)\)/) || [])[1], k = m.replace(/^\(\d\)/, ""); return (MAPKO[k] || k) + (n ? ` (${n}인용)` : ""); };
   const COLORS = [[0, "빨강"], [215, "파랑"], [175, "청록"], [280, "보라"], [28, "주황"], [20, "갈색", 35], [0, "하양", 0], [55, "노랑"]];
   const colorOf = (h, l) => h === "w" ? "#e8e8e8" : `hsl(${h},75%,${l || 55}%)`;
   const S0 = { name: "", hue: 215 };
@@ -101,7 +105,7 @@
         addEventListener("beforeunload", () => LOG.close());
       }
       else ctl = await NET.join(roomParam, { name: n, hue: hueVal(myColor), team: 1 }, clientHandlers);
-      show("lobby"); renderLobby();
+      show("lobby"); renderLobby(); loadMaps();
     } catch (e) { $("entryMsg").textContent = e.message || String(e); $("enterBtn").disabled = false; }
   };
   function show(id) { for (const s of ["entry", "lobby"]) $(s).style.display = s === id ? "grid" : "none"; $("game").style.display = id === "game" ? "block" : "none"; if (id === "game") resize(); }
@@ -119,6 +123,7 @@
         : `<div class="slot cpu"><span class="c" style="background:#555"></span><span>컴퓨터</span><span class="tag">AI</span></div>`;
     }
     $("scn").value = meta.scn || $("scn").value; $("scn").disabled = !isHost;
+    if (!isHost) { $("mapSel").style.display = "none"; $("mapInfo").textContent = "맵: " + mapName(meta.map); }
     $("scnInfo").textContent = sc.note;
     const link = "https://benny3s.github.io/game/sc/?room=" + code;
     $("linkTxt").textContent = link; $("inviteRow").style.display = isHost ? "flex" : "none"; $("linkTxt").style.display = isHost ? "block" : "none";
@@ -129,6 +134,24 @@
   $("toT0").onclick = () => ctl && ctl.setMe({ team: 0 });
   $("toT1").onclick = () => ctl && ctl.setMe({ team: 1 });
   $("scn").onchange = () => { if (isHost) ctl.setMeta({ scn: $("scn").value }); };
+  // ── 맵 (방장): SSCAIT 대회 맵 묶음 15개 + 시험 맵. 바꾸면 엔진이 그 맵으로 다시 켜짐 (몇 초)
+  async function loadMaps() {
+    if (!isHost) return;
+    try {
+      const r = await (await fetch("/maps", { cache: "no-store" })).json();
+      $("mapSel").innerHTML = r.list.map(f => `<option value="${esc(f)}"${f === r.cur ? " selected" : ""}>${esc(mapName(f))}</option>`).join("");
+      $("mapSel").disabled = false; $("mapInfo").textContent = "실제 대회 맵 (SSCAIT 묶음). 유닛은 맵 한가운데에서 싸워요.";
+      if (meta.map !== r.cur) { meta.map = r.cur; ctl.setMeta({ map: r.cur }); }
+    } catch (e) { $("mapInfo").textContent = "맵 목록을 못 불러왔어요"; }
+  }
+  $("mapSel").onchange = async () => {
+    const name = $("mapSel").value; $("mapSel").disabled = true; $("startBtn").disabled = true;
+    $("mapInfo").textContent = "맵 바꾸는 중… (엔진 다시 켜는 중)";
+    await fetch("/map", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) }).catch(() => {});
+    await new Promise(r => setTimeout(r, 1200));
+    for (let i = 0; i < 40; i++) { try { const r = await fetch("/maps", { cache: "no-store" }); if (r.ok && (await r.json()).cur === name) break; } catch (e) {} await new Promise(r => setTimeout(r, 500)); }
+    miniImg = null; $("startBtn").disabled = false; sysMsg(`맵을 ${mapName(name)}(으)로 바꿨어요`); await loadMaps();
+  };
   $("leaveBtn").onclick = () => { if (ctl) ctl.leave(); location.href = location.pathname + (roomParam && !HOST ? "" : ""); };
   function onChat(m) {
     if (!m || !m.m) return;
@@ -182,7 +205,8 @@
   function startEngineLink() {
     es = new EventSource("/events");
     es.onmessage = e => { if (phase !== "play") return; ctl.state('{"t":"s","d":' + e.data + "}"); onState(JSON.parse(e.data)); };
-    es.onerror = () => warn("엔진 서버 연결이 끊겼어요 (WSL에서 server.py 확인)");
+    es.onerror = () => warn("엔진 서버 연결이 끊겼어요 · 다시 붙는 중… (맵을 바꾸는 중이면 잠깐 기다리세요)");
+    es.onopen = () => warn("");                                          // 다시 붙으면 알림 지움 (맵 바꾸면 엔진이 다시 켜짐)
   }
   function teamHumans(t) { return Object.entries(players).filter(([, p]) => (p.team ?? 0) === t).map(([uid]) => uid).sort(); }
   function assignOwners() {
@@ -432,7 +456,7 @@
   });
   cv.addEventListener("wheel", e => { e.preventDefault(); if (realOn) return; cam.z = Math.max(0.5, Math.min(2, cam.z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))); }, { passive: false });
   // 미니맵: 누르면 화면 이동, 오른쪽은 이동 명령
-  const miniW = (e) => { const r = mini.getBoundingClientRect(), k = (e.clientX - r.left) / r.width, j = (e.clientY - r.top) / r.height; const c = cur ? cur.c : [2048, 2048]; return [c[0] - ARENA + k * 2 * ARENA, c[1] - ARENA + j * 2 * ARENA]; };
+  const miniW = (e) => { const r = mini.getBoundingClientRect(), k = (e.clientX - r.left) / r.width, j = (e.clientY - r.top) / r.height; if (realOn && cur && cur.mw) return [k * cur.mw[0], j * cur.mw[1]]; const c = cur ? cur.c : [2048, 2048]; return [c[0] - ARENA + k * 2 * ARENA, c[1] - ARENA + j * 2 * ARENA]; };
   let miniDrag = false;
   mini.addEventListener("contextmenu", e => e.preventDefault());
   mini.addEventListener("mousedown", e => { const [x, y] = miniW(e); if (e.button === 2) sendCmd("move", x, y, -1, e.shiftKey); else { miniDrag = true; cam.x = x; cam.y = y; } });
@@ -539,6 +563,7 @@
   }
   let miniImg = null;
   function drawMini(pos) {
+    if (realOn && cur.mw) return drawMiniWhole(pos);
     const m = mini.width, c = cur.c, k = m / (2 * ARENA);
     mctx.fillStyle = "#03060a"; mctx.fillRect(0, 0, m, m);
     if (realOn) { if (!miniImg) { miniImg = new Image(); miniImg.src = "/minimap"; } if (miniImg.complete && miniImg.naturalWidth) mctx.drawImage(miniImg, 0, 0, m, m); }   // 원작처럼 지형이 보이는 미니맵
@@ -546,6 +571,15 @@
     for (const u of cur.u) { const [x, y] = pos.get(u[0]), h = ownerHue(u); mctx.fillStyle = h == null ? "#999" : colorOf(h, 60); mctx.fillRect((x - c[0] + ARENA) * k - 3, (y - c[1] + ARENA) * k - 3, 6, 6); }
     const [vx0, vy0] = Wd(0, 0), [vx1, vy1] = Wd(W, H);
     mctx.strokeStyle = "#fff"; mctx.lineWidth = 2; mctx.strokeRect((vx0 - c[0] + ARENA) * k, (vy0 - c[1] + ARENA) * k, (vx1 - vx0) * k, (vy1 - vy0) * k);
+  }
+  function drawMiniWhole(pos) {
+    const m = mini.width, [MW, MH] = cur.mw, kx = m / MW, ky = m / MH;
+    mctx.fillStyle = "#000"; mctx.fillRect(0, 0, m, m);
+    if (!miniImg) { miniImg = new Image(); miniImg.src = "/minimap?" + Date.now(); }
+    if (miniImg.complete && miniImg.naturalWidth) mctx.drawImage(miniImg, 0, 0, m, m);
+    for (const u of cur.u) { const [x, y] = pos.get(u[0]), h = ownerHue(u); mctx.fillStyle = h == null ? "#999" : colorOf(h, 55); mctx.fillRect(x * kx - 2, y * ky - 2, 4, 4); }
+    const [vx0, vy0] = Wd(0, 0), [vx1, vy1] = Wd(W, H);
+    mctx.strokeStyle = "#fff"; mctx.lineWidth = 2; mctx.strokeRect(vx0 * kx, vy0 * ky, (vx1 - vx0) * kx, (vy1 - vy0) * ky);
   }
   let selKey = "";
   function drawSel() {
