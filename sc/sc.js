@@ -288,7 +288,7 @@
     realOn = on && isHost;
     $("game").classList.toggle("classic", realOn); resize(); cam.z = realOn ? classicScale() : 1; layoutConsole();
     const img = $("real"); img.style.display = realOn ? "block" : "none";
-    if (realOn) { img.src = "/video?" + Date.now(); camSent = ""; sendCam(true); curCursor = ""; setCursor("arrow"); } else { img.removeAttribute("src"); cv.style.cursor = "crosshair"; }
+    if (realOn) { img.src = "/video?" + Date.now(); camSent = ""; sendCam(true); curCursor = ""; setCursor("arrow"); img.onerror = () => { if (realOn) setTimeout(() => { img.src = "/video?" + Date.now(); camSent = ""; }, 1000); }; }   // 엔진이 다시 켜지면 화면도 다시 붙음 else { img.removeAttribute("src"); cv.style.cursor = "crosshair"; }
   }
   // ── 원작 콘솔: 엔진 서버가 블리자드 데이터에서 꺼낸 저그 콘솔 그림 (친구 페이지엔 없음)
   let consoleImg = null;
