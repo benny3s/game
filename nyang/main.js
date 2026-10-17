@@ -50,7 +50,7 @@
     let h = "";
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
       const g = G.reg[r][c], col = NY.COLORS[g % NY.COLORS.length][0];
-      h += `<button class="c" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"></button>`;
+      h += `<button class="c" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"><span class="x">✕</span><span class="cat">🐱</span></button>`;
     }
     return h;
   }  function drawBoard() {
@@ -67,7 +67,9 @@
     for (const el of $("board").children) {
       const k = +el.dataset.k;
       const cat = G.cats.has(k), bad = G.bad.has(k), x = G.xs.has(k);
-      el.innerHTML = cat ? '<span class="cat">🐱</span>' : (bad || x) ? '<span class="x">✕</span>' : "";
+      // 칸 안의 ✕·🐱는 미리 넣어 두고 보였다 숨겼다만 함 (✕를 끌어 칠할 때 다른 고양이가 다시 그려지며 깜빡이지 않게)
+      el.classList.toggle("has-cat", cat);
+      el.classList.toggle("has-x", !cat && (x || bad));
       el.classList.toggle("bad", bad);
       el.classList.toggle("look", look.has(k) && !tgt.has(k));
       el.classList.toggle("tgt", tgt.has(k));
