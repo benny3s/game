@@ -5,10 +5,10 @@
   const store = { get(k, d) { try { const v = localStorage.getItem("nyang." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
                   set(k, v) { try { localStorage.setItem("nyang." + k, JSON.stringify(v)); } catch (e) {} } };
   const TIERS = [
-    { id: "easy", name: "🐣 쉬움", desc: "5×5 · 6×6, 기본 추론만" },
-    { id: "normal", name: "🐱 보통", desc: "7×7 · 8×8, '한 줄에 갇힘'" },
-    { id: "hard", name: "🐯 어려움", desc: "9×9 · 10×10, '여러 묶음이 여러 줄에'" },
-    { id: "master", name: "👑 고수", desc: "10×10 · 11×11, 가정해 봐야 풀림" },
+    { id: "easy", em: "🐣", label: "쉬움", name: "🐣 쉬움", desc: "5×5 · 6×6" },
+    { id: "normal", em: "🐱", label: "보통", name: "🐱 보통", desc: "7×7 · 8×8" },
+    { id: "hard", em: "🐯", label: "어려움", name: "🐯 어려움", desc: "9×9 · 10×10" },
+    { id: "master", em: "👑", label: "고수", name: "👑 고수", desc: "10×10 · 11×11 · 한 번 가정해 봐야" },
   ];
   const HINTS = [["on", "마음껏"], ["penalty", "쓰면 +10초"], ["off", "금지"]];
   const PENALTY = 10;                                      // 힌트 한 번(단계 하나)마다 대결 기록에 더하는 초
@@ -22,7 +22,17 @@
   const logInit = () => { if (!glog && NET.db()) glog = GLOG(() => NET.db(), "nyang"); return glog; };
 
   // ── 화면 바꾸기
-  const show = id => { for (const s of ["home", "lobby", "play"]) $(s).hidden = s !== id; };
+  const show = id => { for (const s of ["home", "lobby", "play"]) $(s).hidden = s !== id; document.body.classList.toggle("playing", id === "play"); if (id === "play") requestAnimationFrame(fitBoard); };
+  // 판 크기 = 남은 공간(가로·세로 중 작은 쪽) — 휴대폰에서 위아래가 잘리지 않게
+  function fitBoard() {
+    const w = $("boardwrap"), b = $("board");
+    if (!w || $("play").hidden) return;
+    const s = Math.floor(Math.min(w.clientWidth, w.clientHeight, 600));
+    b.style.setProperty("--bs", s + "px");
+    if (G) b.style.setProperty("--gp", Math.max(2, Math.round(s / G.n * 0.07)) + "px");   // 칸 사이 간격도 판 크기에 맞게
+  }
+  addEventListener("resize", fitBoard);
+  if (window.visualViewport) visualViewport.addEventListener("resize", fitBoard);
 
   // ── 판 그리기 · 조작 ───────────────────────────────────────
   let G = null;                 // 지금 판 (NY.Game)
@@ -36,15 +46,15 @@
     let h = "";
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
       const g = G.reg[r][c], col = NY.COLORS[g % NY.COLORS.length][0];
-      const bt = r > 0 && G.reg[r - 1][c] !== g ? " bt" : "", bl = c > 0 && G.reg[r][c - 1] !== g ? " bl" : "";
-      h += `<button class="c${bt}${bl}" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"></button>`;
+      h += `<button class="c" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"></button>`;
     }
     return h;
-  }
-  function drawBoard() {
+  }  function drawBoard() {
     const b = $("board");
     b.className = "n" + G.n;
-    b.style.gridTemplateColumns = `repeat(${G.n},1fr)`;
+    b.style.setProperty("--n", G.n);
+    b.style.gridTemplateColumns = `repeat(${G.n},minmax(0,1fr))`;
+    b.style.gridTemplateRows = `repeat(${G.n},minmax(0,1fr))`;   // 칸이 늘 정사각형 (고양이가 든 줄만 커지지 않게)
     b.innerHTML = cellsHtml();
     paint();
   }
@@ -59,7 +69,10 @@
       el.classList.toggle("tgt", tgt.has(k));
     }
     $("fish").innerHTML = Array.from({ length: G.maxMistakes }, (_, i) => `<span class="${i < G.mistakes ? "gone" : ""}">🐟</span>`).join("");
-    $("stHints").textContent = G.hints ? `힌트 ${G.hints}` : "";
+    $("hintBadge").hidden = !G.hints; $("hintBadge").textContent = G.hints;
+    // 색 묶음마다 동그라미: 그 묶음에 고양이를 놓으면 채워짐
+    const doneReg = new Set([...G.cats].map(k => G.regionOf(k)));
+    $("catStrip").innerHTML = Array.from({ length: G.n }, (_, g) => `<i class="${doneReg.has(g) ? "on" : ""}" style="background:${NY.COLORS[g % NY.COLORS.length][0]}"><span>🐱</span></i>`).join("");
   }
   const stateKey = () => [...G.cats].join(",") + "|" + [...G.xs].sort().join(",") + "|" + [...G.bad].join(",");
 
@@ -99,7 +112,7 @@
   });
   window.addEventListener("pointerup", () => { drag = null; });
 
-  function setTapMode(m) { tapMode = m; store.set("tap", m); $("modeBtn").textContent = m === "x" ? "누르기: ✕ 표시" : "누르기: 🐱 놓기"; $("modeBtn").setAttribute("aria-pressed", m === "cat"); }
+  function setTapMode(m) { tapMode = m; store.set("tap", m); $("modeBtn").innerHTML = m === "x" ? '<span class="ic">✕</span><span>누르면 ✕</span>' : '<span class="ic">🐱</span><span>누르면 🐱</span>'; $("modeBtn").setAttribute("aria-pressed", m === "cat"); }
   $("modeBtn").onclick = () => setTapMode(tapMode === "x" ? "cat" : "x");
   function setAutoX(v) { autoX = v; store.set("autoX", v); $("autoX").setAttribute("aria-pressed", v); if (G) G.autoX = v; }
   $("autoX").onclick = () => setAutoX(!autoX);
@@ -155,64 +168,66 @@
     drawBoard(); show("play");
     $("stLabel").textContent = c.label;
     $("hintBtn").disabled = c.hintRule === "off";
+    $("restart").hidden = c.kind === "vs";
     $("opp").hidden = c.kind !== "vs";
     startTimer(c.startAt);
     progress();
   }
   function progress() { if (ctx && ctx.onProgress) ctx.onProgress(); }
 
-  // ══ 혼자 하기 ══════════════════════════════════════════════
-  let soloTier = store.get("tier", "easy");
-  const cleared = () => store.get("cleared", {});              // { tier: [단계 번호들] }
-  const bests = () => store.get("best", {});                   // { "tier:idx": 초 }
+  // ══ 혼자 하기: 난이도만 고르면 그 난이도 문제 중 랜덤 (안 푼 문제 먼저, 최근 10판은 피함) ══
+  const solved = () => store.get("solved", {});                // { tier: [푼 문제 번호들] }
+  const bests = () => store.get("bestT", {});                  // { tier: 가장 빠른 초 }
   function drawTiers() {
-    const cl = cleared();
+    const sv = solved(), bs = bests();
     $("tiers").innerHTML = TIERS.map(t => {
-      const tot = bank[t.id].length, done = (cl[t.id] || []).length;
-      return `<button class="tier" data-t="${t.id}" aria-pressed="${t.id === soloTier}"><b>${t.name}</b><span>${t.desc}</span><span>${done} / ${tot} 단계</span><div class="bar"><i style="width:${done / tot * 100}%"></i></div></button>`;
+      const tot = bank[t.id].length, done = (sv[t.id] || []).length;
+      return `<button class="tier t-${t.id}" data-t="${t.id}"><span class="em">${t.em}</span><b>${t.label}</b><span>${t.desc}</span><span>${done ? `푼 문제 ${done}/${tot}` : `${tot}문제`}${bs[t.id] ? ` · 최고 ${fmt(bs[t.id])}` : ""}</span></button>`;
     }).join("");
-    for (const b of $("tiers").children) b.onclick = () => { soloTier = b.dataset.t; store.set("tier", soloTier); drawTiers(); };
-    drawStages();
+    for (const b of $("tiers").children) b.onclick = () => playSolo(b.dataset.t);
   }
-  function drawStages() {
-    const list = bank[soloTier], cl = new Set(cleared()[soloTier] || []), bs = bests();
-    let next = 0; while (cl.has(next)) next++;
-    $("stageWrap").hidden = false;
-    $("stageInfo").textContent = `${TIERS.find(t => t.id === soloTier).name} — 깬 단계 ${cl.size}개. 다음 단계(노란색)나 깬 단계를 골라 다시 할 수 있어요.`;
-    $("stages").innerHTML = list.map((p, i) => {
-      const cls = cl.has(i) ? "done" : i === next ? "next" : "";
-      const b = bs[`${soloTier}:${i}`];
-      return `<button data-i="${i}" class="${cls}" ${!cl.has(i) && i > next ? "disabled" : ""} title="${p.n}×${p.n}${b ? " · 최고 " + fmt(b) : ""}">${i + 1}</button>`;
-    }).join("");
-    for (const b of $("stages").children) b.onclick = () => playSolo(+b.dataset.i);
+  function pickRandom(tier) {
+    const n = bank[tier].length, sv = new Set(solved()[tier] || []), recent = new Set(store.get("recent_" + tier, []));
+    let pool = [...Array(n).keys()].filter(i => !sv.has(i) && !recent.has(i));
+    if (!pool.length) pool = [...Array(n).keys()].filter(i => !recent.has(i));
+    if (!pool.length) pool = [...Array(n).keys()];
+    const i = pool[Math.floor(Math.random() * pool.length)];
+    store.set("recent_" + tier, [i, ...recent].slice(0, Math.min(10, n - 1)));
+    return i;
   }
-  async function playSolo(i) {
-    const p = bank[soloTier][i];
-    NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: store.get("name", "") }, NET.uid); if (lg) lg.matchStart({ mode: "solo", tier: soloTier, stage: i + 1, n: p.n }); }).catch(() => {});   // 기록은 뒤에서 (판은 바로 시작)
+  function playSolo(tier, idx) {
+    const i = idx ?? pickRandom(tier), p = bank[tier][i], T = TIERS.find(t => t.id === tier);
+    NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: store.get("name", "") }, NET.uid); if (lg) lg.matchStart({ mode: "solo", tier, puzzle: i, n: p.n }); }).catch(() => {});   // 기록은 뒤에서 (판은 바로 시작)
     startPuzzle(p, {
-      kind: "solo", tier: soloTier, idx: i, hintRule: "on", label: `${TIERS.find(t => t.id === soloTier).name} ${i + 1}단계 · ${p.n}×${p.n}`,
+      kind: "solo", tier, idx: i, hintRule: "on", label: `${T.em} ${T.label} · ${p.n}×${p.n}`,
       onEnd(won) {
         const secs = G.secs; ctx.finalSecs = secs;
         if (glog) glog.matchEnd({ won, secs: Math.round(secs * 10) / 10, mistakes: G.mistakes, hints: G.hints });
         if (won) {
-          const cl = cleared(); const s = new Set(cl[soloTier] || []); s.add(i); cl[soloTier] = [...s]; store.set("cleared", cl);
-          const bs = bests(), key = `${soloTier}:${i}`; const best = !bs[key] || secs < bs[key]; if (best) { bs[key] = secs; store.set("best", bs); }
-          const last = i + 1 >= bank[soloTier].length;
-          result("🎉 깼어요!", `<p>${fmt(secs)} · 실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록</b>" : ""}</p>`,
-            [last ? null : ["다음 단계", () => playSolo(i + 1), "primary"], ["다시 하기", () => playSolo(i)], ["단계 목록", goHome]]);
+          const sv = solved(); const s = new Set(sv[tier] || []); s.add(i); sv[tier] = [...s]; store.set("solved", sv);
+          const bs = bests(); const best = !G.hints && (!bs[tier] || secs < bs[tier]); if (best) { bs[tier] = secs; store.set("bestT", bs); }
+          result("🎉 다 찾았어요!", `<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>`,
+            [["한 판 더", () => playSolo(tier), "primary"], ["난이도 고르기", goHome]]);
         } else {
-          result("😿 물고기를 다 잃었어요", `<p>${fmt(secs)} 동안 고양이 ${G.cats.size}/${G.n}마리.</p><p class="small">힌트를 써 보거나 '자동 ✕'를 켜면 도움이 돼요.</p>`,
-            [["다시 하기", () => playSolo(i), "primary"], ["단계 목록", goHome]]);
+          result("😿 물고기를 다 잃었어요", `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리 찾았어요.</p><p class="small" style="margin:0">💡 힌트나 🪄 자동 ✕를 써 보세요.</p>`,
+            [["다시 도전", () => playSolo(tier, i), "primary"], ["다른 문제", () => playSolo(tier)], ["난이도 고르기", goHome]]);
         }
       },
     });
   }
+  // ← 단추: 실수로 나가지 않게 2초 안에 두 번
+  let backAt = 0;
   $("giveUp").onclick = () => {
     if (!G) return;
-    if (ctx.kind === "solo") { G.over = true; if (glog) glog.matchEnd({ won: false, gaveUp: true, secs: Math.round(G.secs) }); goHome(); }
-    else { G.over = true; G.gaveUp = true; ctx.finalSecs = (NET.now() - ctx.startAt) / 1000; progress(); paint(); toast("이번 판은 포기했어요"); }
+    if (!G.over && performance.now() - backAt > 2000) { backAt = performance.now(); toast(ctx.kind === "solo" ? "한 번 더 누르면 나가요" : "한 번 더 누르면 이번 판을 포기해요"); return; }
+    if (ctx.kind === "solo") { if (!G.over && glog) glog.matchEnd({ won: false, gaveUp: true, secs: Math.round(G.secs) }); G.over = true; goHome(); }
+    else if (!G.over) { G.over = true; G.gaveUp = true; ctx.finalSecs = (NET.now() - ctx.startAt) / 1000; progress(); paint(); toast("이번 판은 포기했어요"); }
   };
-  function result(title, body, btns) {
+  $("restart").onclick = () => {
+    if (!G || ctx.kind !== "solo") { toast("대결 중에는 처음부터 할 수 없어요"); return; }
+    if (!G.over && glog) glog.matchEnd({ won: false, restart: true, secs: Math.round(G.secs) });
+    playSolo(ctx.tier, ctx.idx);
+  };  function result(title, body, btns) {
     $("resTitle").textContent = title; $("resBody").innerHTML = body;
     $("resBtns").innerHTML = "";
     for (const b of btns.filter(Boolean)) { const el = document.createElement("button"); el.className = "btn " + (b[2] || ""); el.textContent = b[0]; el.onclick = () => { $("resBox").hidden = true; b[1](); }; $("resBtns").appendChild(el); }
@@ -378,11 +393,14 @@
   }
   function drawOpp() {
     if (!meta || meta.phase !== "play" || !G) return;
+    // 위쪽 얇은 줄: 사람마다 알약 하나 (나도 포함) — 진행 막대 · 남은 물고기 · 끝나면 기록
     $("opp").innerHTML = ranking().map(({ u, name, q }) => {
       const pct = q ? q.placed / q.n * 100 : 0;
-      const st = !q ? "준비" : q.done ? `✔ ${fmt(score(q))}` : q.failed ? (q.gaveUp ? "포기" : "실패") : `🐟${q.n ? 3 - q.mistakes : 3}${q.hints ? " 💡" + q.hints : ""}`;
-      return `<div class="p ${u === R.uid ? "me" : ""}"><b>${esc(name)}</b><div class="bar"><i style="width:${pct}%"></i></div><span class="st">${st}</span></div>`;
+      const st = !q ? "준비" : q.done ? `✔ ${fmt(score(q))}` : q.failed ? (q.gaveUp ? "포기" : "실패") : `🐟${3 - (q.mistakes || 0)}${q.hints ? " 💡" + q.hints : ""}`;
+      const cls = [u === R.uid ? "me" : "", q && q.done ? "done" : "", q && q.failed ? "fail" : ""].join(" ");
+      return `<div class="p ${cls}"><span class="av">${esc((name || "?").slice(0, 1))}</span><b>${esc(name)}</b><span class="pb"><i style="width:${pct}%"></i></span><span>${st}</span></div>`;
     }).join("");
+    requestAnimationFrame(fitBoard);
   }
   function checkRoundEnd() {
     if (!meta || meta.phase !== "play" || shownRound === meta.round) return;

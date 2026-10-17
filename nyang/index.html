@@ -3,175 +3,220 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ea">
 <title>냥도쿠</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500;700&display=swap">
-<link rel="stylesheet" href="../common/ui.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <style>
-/* 냥도쿠: 위 = 상태줄(단계·시간·물고기·힌트), 가운데 = 판, 아래 = 조작 단추. 시작 화면·대기실·결과는 카드 */
-:root{--cat:#ffd666;--x:#3b2f2a;--bad:#ff5a78;--look:#ffd666;--tgt:#5ec4b6}
-body{padding-block:10px 28px}
-.wrap{max-width:640px}
-header.top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
-header.top h1{font-size:22px}
-header.top .crumb{margin-left:auto}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:12px}
-.panel h2{margin:0;font-size:16px}
-.tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
-.tier{display:grid;gap:4px;text-align:left;padding:12px;border-radius:12px;border:1px solid var(--line);background:#0d1312;color:var(--ink);cursor:pointer;font:inherit}
-.tier b{font-size:16px}.tier span{font-size:12px;color:var(--muted)}
-.tier .bar{height:5px;border-radius:3px;background:#1f2a27;overflow:hidden}.tier .bar>i{display:block;height:100%;background:var(--good)}
-.tier[aria-pressed="true"]{border-color:var(--cat)}
-.stages{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px}
-.stages button{font:600 13px/1 var(--mono);padding:9px 0;border-radius:8px;border:1px solid var(--line);background:#0d1312;color:var(--muted);cursor:pointer}
-.stages button.done{color:var(--good);border-color:#2d5a3e}.stages button.next{color:var(--cat);border-color:var(--cat)}
-.stages button:disabled{opacity:.35;cursor:default}
+/* 냥도쿠: 크림색 바탕 · 둥근 글꼴 · 파스텔 판. 게임 중에는 화면 한 장(스크롤 없음)에 상태줄·판·단추가 다 들어가게 */
+:root{
+  --bg:#fff6ea; --card:#ffffff; --ink:#5b4636; --soft:#9a8270; --line:#f0dfcc;
+  --accent:#ff9a7a; --accent2:#7cc9b4; --gold:#f5b942; --bad:#f2647e; --good:#3fae7a;
+  --board:#8a6a55; --x:#8a6a55; --shadow:0 6px 18px rgba(140,98,70,.14);
+  --round:"Jua","Gowun Dodum",system-ui,sans-serif; --text:"Gowun Dodum","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--text)}
+body{padding:calc(env(safe-area-inset-top,0px) + 12px) 16px calc(env(safe-area-inset-bottom,0px) + 24px);-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+a{color:#d9785b}
+.wrap{max-width:560px;margin:0 auto;display:grid;gap:14px}
+h1,h2,h3,.round{font-family:var(--round);font-weight:400;margin:0}
+header.top{display:flex;align-items:center;gap:10px}
+header.top h1{font-size:30px;letter-spacing:.5px}
+header.top a{margin-left:auto;font-size:13px;text-decoration:none;background:var(--card);padding:6px 12px;border-radius:99px;box-shadow:var(--shadow);color:var(--soft)}
+.card{background:var(--card);border-radius:22px;padding:16px;box-shadow:var(--shadow);display:grid;gap:12px}
+.lede{margin:0;color:var(--soft);font-size:14px}
+.btn{font:16px/1 var(--round);padding:11px 16px;border-radius:99px;border:0;background:#fff1e3;color:var(--ink);cursor:pointer;box-shadow:0 2px 0 #ecd8c2;transition:transform .08s}
+.btn:active{transform:translateY(2px);box-shadow:none}
+.btn.primary{background:var(--accent);color:#fff;box-shadow:0 3px 0 #e07a5c}
+.btn.mint{background:var(--accent2);color:#fff;box-shadow:0 3px 0 #5aa892}
+.btn.ghost{background:transparent;box-shadow:none;color:var(--soft)}
+.btn[aria-pressed="true"]{background:var(--ink);color:#fff;box-shadow:0 2px 0 #3d2d22}
+.btn:disabled{opacity:.4}
+.tabs{display:flex;gap:6px;background:#fbe9d7;padding:5px;border-radius:99px}
+.tabs .btn{flex:1;padding:10px 6px;font-size:15px;box-shadow:none;background:transparent}
+.tabs .btn[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 2px 8px rgba(140,98,70,.15)}
+/* 난이도 고르기 */
+.tiers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tier{border:0;border-radius:20px;padding:16px 14px;text-align:left;cursor:pointer;display:grid;gap:4px;font:inherit;color:var(--ink);box-shadow:0 3px 0 rgba(0,0,0,.06)}
+.tier .em{font-size:34px;line-height:1}
+.tier b{font:22px/1.1 var(--round)}
+.tier span{font-size:12.5px;color:#7d6656}
+.tier:active{transform:translateY(2px)}
+.t-easy{background:#e3f4e6}.t-normal{background:#fff0c9}.t-hard{background:#ffe0d6}.t-master{background:#eadff8}
+.howto{margin:0;padding-left:18px;color:var(--soft);font-size:13.5px;display:grid;gap:2px}
+/* 친구랑 */
+input[type=text]{font:16px var(--text);background:#fffaf4;color:var(--ink);border:2px solid var(--line);border-radius:14px;padding:10px 12px;width:100%;outline:none}
+input[type=text]:focus{border-color:var(--accent)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.row .grow{flex:1 1 160px}
-input[type=text]{font:inherit;font-size:15px;background:#0d1312;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
-.btn.primary{background:var(--ai);border-color:var(--ai);color:#06110f}
-.btn.warn{border-color:var(--cat);color:var(--cat)}
-.btn.danger{border-color:var(--danger);color:var(--danger)}
-.seg{display:flex;flex-wrap:wrap;gap:6px}
-.list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-.list li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:#0d1312}
-.list .cd{font:700 16px/1 var(--mono);letter-spacing:.08em;color:var(--cat)}
+.row .grow{flex:1 1 150px}
+.list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.list li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:16px;background:#fffaf4;border:2px solid var(--line)}
+.list .cd{font:20px/1 var(--round);letter-spacing:.1em;color:var(--accent)}
 .list .inf{flex:1;min-width:120px}
 .list li.empty{opacity:.6;border-style:dashed}
-.list li.none{justify-content:center;color:var(--muted);border-style:dashed}
-.chat{display:grid;gap:6px}
-.chat .log{height:120px;overflow:auto;background:#0d1312;border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
-.chat .log div b{color:var(--ai)}
+.list li.none{justify-content:center;color:var(--soft);border-style:dashed}
+.small{font-size:12.5px;color:var(--soft)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg .btn{padding:9px 13px;font-size:14.5px}
+.chat .log{height:110px;overflow:auto;background:#fffaf4;border:2px solid var(--line);border-radius:14px;padding:6px 10px;font-size:14px}
+.chat .log b{color:#d9785b}
 
-/* 게임 화면 */
-.status{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font:500 14px/1.2 var(--mono)}
-.status .lbl{font-family:var(--sans);font-weight:700}
-.status .t{margin-left:auto;font-size:18px;color:#fff;font-variant-numeric:tabular-nums}
-.fish{letter-spacing:2px;font-size:18px}.fish .gone{filter:grayscale(1);opacity:.25}
-.opp{display:grid;gap:5px}
-.opp .p{display:grid;grid-template-columns:minmax(60px,110px) 1fr auto;gap:8px;align-items:center;font-size:12.5px}
-.opp .p b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.opp .p .bar{height:8px;border-radius:4px;background:#1f2a27;overflow:hidden}.opp .p .bar>i{display:block;height:100%;background:var(--ai);transition:width .25s}
-.opp .p.me .bar>i{background:var(--cat)}
-.opp .p .st{font:500 12px var(--mono);color:var(--muted);white-space:nowrap}
-.boardwrap{display:grid;place-items:center}
-#board{display:grid;width:min(100%,560px);aspect-ratio:1;max-width:100%;gap:0;border:3px solid #2a201b;border-radius:10px;overflow:hidden;background:#2a201b;touch-action:none;user-select:none;-webkit-user-select:none}
-#board .c{position:relative;display:grid;place-items:center;border:0 solid #2a201b;cursor:pointer;font-size:clamp(14px,6vw,34px);line-height:1;padding:0;color:var(--x)}
-#board .c.bt{border-top-width:2px}#board .c.bl{border-left-width:2px}
-#board .c::after{content:"";position:absolute;inset:0;border-right:1px solid rgba(42,32,27,.18);border-bottom:1px solid rgba(42,32,27,.18);pointer-events:none}
-#board .c .x{font-weight:700;font-size:.62em;opacity:.75}
-#board .c.bad .x{color:var(--bad);opacity:1}
-#board .c .cat{font-size:.86em;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))}
+/* ── 게임 화면: 화면 한 장 (혼자·대결 똑같음) ── */
+body.playing{overflow:hidden;height:100dvh;padding:0}
+body.playing .wrap{display:none}
+#play{position:fixed;inset:0;display:flex;flex-direction:column;gap:10px;padding:calc(env(safe-area-inset-top,0px) + 10px) 14px calc(env(safe-area-inset-bottom,0px) + 12px);max-width:620px;margin:0 auto}
+.bar{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px}
+.iconbtn{width:44px;height:44px;border-radius:50%;border:0;background:var(--card);box-shadow:var(--shadow);font:20px/1 var(--round);color:var(--ink);cursor:pointer;display:grid;place-items:center}
+.iconbtn:active{transform:scale(.94)}
+.bar .mid{display:grid;justify-items:center;line-height:1.15}
+.bar .lbl{font:19px var(--round)}
+.bar .t{font:15px var(--round);color:var(--soft);font-variant-numeric:tabular-nums}
+.pill{background:var(--card);border-radius:99px;padding:7px 11px;box-shadow:var(--shadow);white-space:nowrap;font-size:18px;letter-spacing:1px}
+.pill .gone{filter:grayscale(1);opacity:.22}
+.catstrip{display:flex;justify-content:center;flex-wrap:wrap;gap:5px;background:var(--card);border-radius:99px;padding:6px 10px;box-shadow:var(--shadow);align-self:center;max-width:100%}
+.catstrip i{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:16px;transition:transform .2s}
+.catstrip i span{opacity:.18;filter:grayscale(1)}
+.catstrip i.on span{opacity:1;filter:none}.catstrip i.on{transform:scale(1.08)}
+.opp{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.opp .p{display:flex;align-items:center;gap:6px;background:var(--card);border-radius:99px;padding:5px 10px 5px 5px;box-shadow:var(--shadow);font-size:13px}
+.opp .p .av{width:24px;height:24px;border-radius:50%;background:#ffe3d6;display:grid;place-items:center;font:13px var(--round)}
+.opp .p.me .av{background:var(--accent);color:#fff}
+.opp .p b{font:14px var(--round);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opp .p .pb{width:46px;height:7px;border-radius:4px;background:#f6e6d6;overflow:hidden}.opp .p .pb>i{display:block;height:100%;background:var(--accent2);border-radius:4px;transition:width .25s}
+.opp .p.done{background:#e3f4e6}.opp .p.fail{opacity:.55}
+.boardwrap{flex:1;min-height:0;display:grid;justify-items:center;align-items:start;position:relative}
+#board{display:grid;width:var(--bs,300px);height:var(--bs,300px);padding:var(--gp,6px);gap:var(--gp,6px);border-radius:22px;background:#fff;box-shadow:var(--shadow);touch-action:none;user-select:none;-webkit-user-select:none}
+#board .c{position:relative;display:grid;place-items:center;cursor:pointer;line-height:1;padding:0;border:0;color:var(--x);font-size:calc(var(--bs,300px) / var(--n,8) * .56);border-radius:calc(var(--bs,300px) / var(--n,8) * .2);box-shadow:inset 0 -3px 0 rgba(0,0,0,.07)}
+#board .c .x{font-family:var(--round);font-size:.62em;color:rgba(110,78,58,.55)}
+#board .c.bad::before{content:"";position:absolute;inset:0;border-radius:inherit;background:rgba(255,255,255,.45)}
+#board .c.bad .x{position:relative;color:var(--bad);font-size:.78em}
+#board .c .cat{font-size:.95em;animation:pop .22s ease-out}
+@keyframes pop{from{transform:scale(.3)}70%{transform:scale(1.12)}to{transform:scale(1)}}
 #board .c.look{animation:look 1s ease-in-out infinite}
-@keyframes look{50%{filter:brightness(1.25) saturate(1.3)}}
-#board .c.tgt::before{content:"";position:absolute;inset:3px;border:3px dashed var(--tgt);border-radius:6px;pointer-events:none}
+@keyframes look{50%{filter:brightness(1.12) saturate(1.4);transform:scale(1.05)}}
+#board .c.tgt{outline:3px solid #e0703f;outline-offset:-3px}
 #board .c.shake{animation:shake .35s}
-@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
-#board.n10 .c,#board.n11 .c{font-size:clamp(12px,5vw,28px)}
-.tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.tools .btn{padding:10px 12px;font-size:14px}
-.hintbox{border:1px solid #5b4a1f;background:#1c180d;border-radius:12px;padding:10px 12px;display:grid;gap:8px;font-size:14px}
-.hintbox p{margin:0}
-.small{font-size:12px;color:var(--muted)}
+@keyframes shake{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.dock{display:flex;justify-content:center;gap:12px;flex-wrap:nowrap}
+.dock button{display:grid;justify-items:center;gap:4px;border:0;background:none;padding:0;cursor:pointer;color:var(--ink);font:12px var(--text)}
+.dock button .ic{width:54px;height:54px;border-radius:50%;background:var(--card);box-shadow:var(--shadow);display:grid;place-items:center;font-size:24px;position:relative;transition:transform .08s}
+.dock button:active .ic{transform:scale(.93)}
+.dock button[aria-pressed="true"] .ic{background:var(--ink);color:#fff}
+.dock button:disabled{opacity:.35}
+.dock .badge{position:absolute;top:-3px;right:-3px;min-width:20px;height:20px;border-radius:10px;background:var(--bad);color:#fff;font:12px/20px var(--round);padding:0 5px}
+.hintbox{position:absolute;left:0;right:0;bottom:4px;margin:0 auto;width:min(100%,520px);background:#fffbe8;border-radius:20px;padding:12px 14px;display:grid;gap:10px;box-shadow:0 12px 34px rgba(140,98,70,.3);z-index:5}
+.hintbox p{margin:0;font-size:15px}
+.hintbox .row .btn{padding:9px 14px;font-size:15px}.overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(91,70,54,.35);padding:16px}
+.overlay>div{background:var(--card);border-radius:24px;padding:20px;width:min(420px,100%);display:grid;gap:12px;max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 20px 50px rgba(91,70,54,.3);text-align:center}
+.overlay h2{font-size:26px}
+.overlay .row{justify-content:center}
+#count{font:96px/1 var(--round);color:var(--accent);background:none;box-shadow:none;text-shadow:0 4px 0 #ffd9c9}
+table.rank{width:100%;border-collapse:collapse;font-size:14px;text-align:left}
+table.rank td,table.rank th{padding:6px;border-bottom:2px solid #f6eadf}
+table.rank th{font-weight:400;color:var(--soft);font-size:12.5px}
+table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:99px;z-index:30;font-size:14px;box-shadow:var(--shadow);max-width:calc(100vw - 32px)}
 /* AI 구경 */
-#wRuns{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
-.wrun{padding:10px;gap:8px}
-.wboard{display:grid;width:100%;aspect-ratio:1;border:3px solid #2a201b;border-radius:8px;overflow:hidden;background:#2a201b}
-.wboard .c{position:relative;display:grid;place-items:center;border:0 solid #2a201b;font-size:clamp(11px,3.4vw,22px);line-height:1;color:var(--x)}
-.wboard .c.bt{border-top-width:2px}.wboard .c.bl{border-left-width:2px}
-.wboard .c .x{font-weight:700;font-size:.62em;opacity:.7}
-.wboard .c.look{filter:brightness(1.18) saturate(1.3)}
-.wboard .c.tgt::before{content:"";position:absolute;inset:2px;border:2px dashed #1d6f66;border-radius:4px}
-.wsay{min-height:3.2em;font-size:13px;color:var(--ink);background:#0d1312;border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+#wRuns{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.wrun{background:#fffaf4;border-radius:18px;padding:10px;display:grid;gap:8px;border:2px solid var(--line)}
+.wrun b{font:17px var(--round)}
+.wboard{display:grid;width:100%;aspect-ratio:1;padding:4px;border-radius:14px;background:var(--board)}
+.wboard .c{position:relative;display:grid;place-items:center;font-size:clamp(11px,3.6vw,22px);line-height:1;color:var(--x)}
+.wboard .c.bt{box-shadow:inset 0 2px 0 var(--board)}.wboard .c.bl{box-shadow:inset 2px 0 0 var(--board)}.wboard .c.bt.bl{box-shadow:inset 2px 2px 0 var(--board)}
+.wboard .c .x{font-size:.55em;opacity:.5}
+.wboard .c.look{filter:brightness(1.12) saturate(1.3)}
+.wboard .c.tgt::before{content:"";position:absolute;inset:10%;border:2px dashed #e0703f;border-radius:30%}
+.wsay{min-height:3.3em;font-size:13.5px;background:var(--card);border-radius:12px;padding:7px 10px}
 .wctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.wctl input[type=range]{flex:1 1 140px;accent-color:var(--cat)}
-.overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(6,9,8,.6);padding:16px}
-.overlay>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;width:min(460px,100%);display:grid;gap:12px;max-height:calc(100dvh - 32px);overflow:auto}
-.overlay h2{margin:0;font-size:22px}
-#count{font:700 72px/1 var(--mono);color:var(--cat);text-align:center;background:none;border:0}
-table.rank{width:100%;border-collapse:collapse;font-size:13.5px}
-table.rank td,table.rank th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left}
-table.rank td.n{font-family:var(--mono);text-align:right}
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);transform:translateX(-50%);background:#22302c;border:1px solid var(--line);padding:9px 14px;border-radius:10px;z-index:30;font-size:13.5px}
+.wctl input[type=range]{flex:1 1 140px;accent-color:var(--accent)}
+select{font:15px var(--round);background:#fff1e3;color:var(--ink);border:0;border-radius:99px;padding:9px 12px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header class="top">
     <h1>🐱 냥도쿠</h1>
-    <p class="crumb"><a href="../">← 게임 목록</a></p>
+    <a href="../">게임 목록</a>
   </header>
 
   <!-- 시작 화면 -->
-  <section id="home" class="panel">
-    <p class="lede">색 묶음마다, 가로줄·세로줄마다 고양이 한 마리씩. 고양이끼리는 대각선으로도 붙으면 안 돼요. 한 번 누르면 ✕ 표시, 두 번 누르면 고양이. 정답이 아닌 칸에 놓으면 물고기를 하나 잃어요 (3번이면 실패).</p>
-    <div class="seg" role="tablist">
+  <section id="home" class="card">
+    <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자 하기</button>
       <button class="btn" id="tabVs" aria-pressed="false">친구랑 대결</button>
-      <button class="btn" id="tabWatch" aria-pressed="false">🤖 AI 구경</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
-    <div id="watchBox" hidden style="display:grid;gap:10px">
-      <p class="small">같은 판을 AI 들이 어떻게 푸는지 나란히 봐요. 학습시킨 AI(작은 신경망·언어모델)는 학습이 끝나면 여기에 추가돼요.</p>
-      <div class="wctl">
-        <select id="wTier"><option value="easy">🐣 쉬움</option><option value="normal">🐱 보통</option><option value="hard">🐯 어려움</option><option value="master">👑 고수</option></select>
-        <button class="btn" id="wNew">다른 판</button>
-        <button class="btn primary" id="wPlay">▶ 보기</button>
-        <span class="small" id="wInfo"></span>
-      </div>
-      <div class="wctl"><span class="small">속도</span><input id="wSpeed" type="range" min="1" max="60" value="4"><span class="small" id="wSpeedV">4걸음/초</span></div>
-      <div id="wRuns"></div>
-    </div>
-    <div id="soloBox" class="panel" style="padding:0;border:0;background:none">
+    <div id="soloBox" style="display:grid;gap:12px">
       <div class="tiers" id="tiers"></div>
-      <div id="stageWrap" hidden><p class="small" id="stageInfo"></p><div class="stages" id="stages"></div></div>
+      <ul class="howto">
+        <li>색 묶음마다, 가로줄·세로줄마다 고양이 한 마리씩</li>
+        <li>고양이끼리는 대각선으로도 붙으면 안 돼요</li>
+        <li>한 번 누르면 ✕ 표시, 두 번 빠르게 누르면 🐱</li>
+        <li>정답이 아닌 칸에 놓으면 🐟를 잃어요 (3번이면 실패)</li>
+      </ul>
     </div>
     <div id="vsBox" hidden style="display:grid;gap:10px">
       <div class="row"><input id="name" class="grow" type="text" maxlength="12" placeholder="내 이름 (12자까지)" autocomplete="nickname"><button class="btn primary" id="mkRoom">방 만들기</button></div>
       <div class="row"><input id="code" class="grow" type="text" maxlength="4" placeholder="방 코드 4자리" style="text-transform:uppercase"><button class="btn" id="joinCode">들어가기</button></div>
-      <div class="row" style="justify-content:space-between"><b>열린 방</b><button class="btn" id="refresh">새로고침</button></div>
+      <div class="row" style="justify-content:space-between"><h3>열린 방</h3><button class="btn ghost" id="refresh">↻ 새로고침</button></div>
       <ul class="list" id="rooms"><li class="none">불러오는 중…</li></ul>
+    </div>
+    <div id="watchBox" hidden style="display:grid;gap:10px">
+      <p class="lede">같은 판을 AI 들이 어떻게 푸는지 나란히 봐요. 학습시킨 AI는 학습이 끝나면 여기에 추가돼요.</p>
+      <div class="wctl">
+        <select id="wTier"><option value="easy">🐣 쉬움</option><option value="normal">🐱 보통</option><option value="hard">🐯 어려움</option><option value="master">👑 고수</option></select>
+        <button class="btn" id="wNew">다른 판</button>
+        <button class="btn primary" id="wPlay">▶ 보기</button>
+      </div>
+      <div class="wctl"><span class="small">속도</span><input id="wSpeed" type="range" min="1" max="60" value="4"><span class="small" id="wSpeedV">4걸음/초</span></div>
+      <p class="small" id="wInfo"></p>
+      <div id="wRuns"></div>
     </div>
   </section>
 
   <!-- 대기실 -->
-  <section id="lobby" class="panel" hidden>
-    <div class="row"><h2 style="flex:1">대기실 · 방 <span class="cd" id="lbCode" style="font-family:var(--mono);color:var(--cat)"></span></h2><button class="btn" id="copyLink">초대 링크 복사</button><button class="btn danger" id="leave1">나가기</button></div>
+  <section id="lobby" class="card" hidden>
+    <div class="row"><h2 style="flex:1">대기실 · <span style="color:var(--accent)" id="lbCode"></span></h2><button class="btn" id="copyLink">초대 링크</button><button class="btn ghost" id="leave1">나가기</button></div>
     <ul class="list" id="lbPlayers"></ul>
-    <div id="hostOpts" style="display:grid;gap:8px">
+    <div id="hostOpts" style="display:grid;gap:10px">
       <div><span class="small">난이도</span><div class="seg" id="cfgTier"></div></div>
       <div><span class="small">힌트</span><div class="seg" id="cfgHint"></div></div>
       <div><span class="small">판 수</span><div class="seg" id="cfgRounds"></div></div>
-      <button class="btn primary" id="startVs" style="padding:12px;font-size:15px">시작</button>
+      <button class="btn primary" id="startVs" style="padding:14px;font-size:18px">시작!</button>
     </div>
-    <p class="small" id="guestWait" hidden>방장이 시작하기를 기다리는 중… (설정: <span id="cfgView"></span>)</p>
-    <div class="chat"><div class="log" id="chatLog"></div><div class="row"><input id="chatIn" class="grow" type="text" maxlength="120" placeholder="채팅"><button class="btn" id="chatSend">보내기</button></div></div>
-  </section>
-
-  <!-- 게임 -->
-  <section id="play" hidden style="display:grid;gap:10px">
-    <div class="status"><span class="lbl" id="stLabel"></span><span class="fish" id="fish"></span><span class="small" id="stHints"></span><span class="t" id="timer">0:00</span></div>
-    <div class="opp" id="opp" hidden></div>
-    <div class="boardwrap"><div id="board"></div></div>
-    <div class="hintbox" id="hintBox" hidden><p id="hintText"></p><div class="row"><button class="btn warn" id="hintMore">이유 보기</button><button class="btn primary" id="hintApply" hidden>적용</button><button class="btn" id="hintClose">닫기</button></div></div>
-    <div class="tools">
-      <button class="btn" id="modeBtn" aria-pressed="false" title="누를 때 하는 일">누르기: ✕ 표시</button>
-      <button class="btn warn" id="hintBtn">💡 힌트</button>
-      <button class="btn" id="autoX" aria-pressed="false">자동 ✕</button>
-      <button class="btn" id="clearX">✕ 지우기</button>
-      <button class="btn" id="giveUp">그만하기</button>
-    </div>
-    <p class="small" id="playHelp">한 번 = ✕ 표시(다시 누르면 지움) · 두 번 빠르게 = 🐱 · ✕ 상태로 끌면 여러 칸에 ✕. '누르기' 단추로 한 번에 🐱 놓기로 바꿀 수 있어요.</p>
+    <p class="small" id="guestWait" hidden>방장이 시작하기를 기다리는 중… (<span id="cfgView"></span>)</p>
+    <div class="chat" style="display:grid;gap:6px"><div class="log" id="chatLog"></div><div class="row"><input id="chatIn" class="grow" type="text" maxlength="120" placeholder="채팅"><button class="btn" id="chatSend">보내기</button></div></div>
   </section>
 </div>
 
-<div class="overlay" id="countBox" hidden><div style="background:none;border:0"><div id="count">3</div></div></div>
+<!-- 게임 (화면 한 장 · 혼자·대결 똑같음) -->
+<section id="play" hidden>
+  <div class="bar"><button class="iconbtn" id="giveUp" aria-label="나가기">‹</button><div class="mid"><span class="lbl" id="stLabel"></span><span class="t" id="timer">0:00</span></div><span class="pill" id="fish"></span></div>
+  <div class="catstrip" id="catStrip"></div>
+  <div class="opp" id="opp" hidden></div>
+  <div class="boardwrap" id="boardwrap">
+    <div id="board"></div>
+    <div class="hintbox" id="hintBox" hidden><p id="hintText"></p><div class="row"><button class="btn" id="hintMore">이유 보기</button><button class="btn primary" id="hintApply" hidden>적용</button><button class="btn ghost" id="hintClose">닫기</button></div></div>
+  </div>
+  <div class="dock">
+    <button id="modeBtn" aria-pressed="false"><span class="ic">✕</span><span>누르면 ✕</span></button>
+    <button id="hintBtn"><span class="ic">💡<span class="badge" id="hintBadge" hidden></span></span><span>힌트</span></button>
+    <button id="autoX" aria-pressed="false"><span class="ic">🪄</span><span>자동 ✕</span></button>
+    <button id="clearX"><span class="ic">🧽</span><span>✕ 지우기</span></button>
+    <button id="restart"><span class="ic">↺</span><span>처음부터</span></button>
+  </div>
+</section>
+<div class="overlay" id="countBox" hidden><div style="background:none;box-shadow:none"><div id="count">3</div></div></div>
 <div class="overlay" id="resBox" hidden><div><h2 id="resTitle"></h2><div id="resBody"></div><div class="row" id="resBtns"></div></div></div>
 
 <script src="../common/glog.js?v=1"></script>
-<script src="core.js?v=1"></script>
-<script src="net.js?v=1"></script>
-<script src="main.js?v=1"></script>
-<script src="watch.js?v=1"></script>
+<script src="core.js?v=3"></script>
+<script src="net.js?v=3"></script>
+<script src="main.js?v=3"></script>
+<script src="watch.js?v=3"></script>
 </body>
 </html>
