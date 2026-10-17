@@ -121,12 +121,14 @@ table.rank th{font-weight:400;color:var(--soft);font-size:12.5px}
 table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:99px;z-index:30;font-size:14px;box-shadow:var(--shadow);max-width:calc(100vw - 32px)}
 /* AI 구경: 판은 고정 정사각형, 칸 안의 ✕·🐱는 미리 넣어 두고 보였다 숨겼다 (크기 안 바뀜, 부드럽게) */
-#wRuns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.wstage-wrap{display:grid;gap:10px;justify-items:center}
+.wtop{display:flex;gap:8px;justify-content:center}.wtop .pill{font:16px var(--round);letter-spacing:0}
+#wStage{width:min(100%,440px)}
 .wrun{background:#fffaf4;border-radius:18px;padding:10px;display:grid;gap:8px;align-content:start;border:2px solid var(--line);transition:border-color .3s}
 .wrun.finished{border-color:#b9e3c9}
 .whead{display:grid;gap:1px;min-height:38px}
 .whead b{font:16px var(--round)}
-.wboard{display:grid;width:100%;aspect-ratio:1;padding:3px;gap:2px;border-radius:12px;background:#fff;box-shadow:0 2px 8px rgba(140,98,70,.12);contain:layout}
+.wboard{display:grid;width:100%;aspect-ratio:1;padding:5px;gap:4px;border-radius:20px;background:#fff;box-shadow:var(--shadow);contain:layout}
 .wboard .c{position:relative;border-radius:22%;overflow:hidden;transition:filter .25s, transform .25s}
 .wboard .c>span{position:absolute;inset:0;display:grid;place-items:center;line-height:1;opacity:0;transform:scale(.4);transition:opacity .25s, transform .25s cubic-bezier(.3,1.6,.5,1)}
 .wboard{container-type:inline-size}
@@ -141,7 +143,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 .wstat i{font-style:normal;font-size:11.5px;color:var(--soft);white-space:nowrap}
 .wstat b{color:var(--ink);font-family:var(--round);font-weight:400;font-size:18px;line-height:1.1}
 .badn{color:var(--bad)!important}
-.wsay{height:4.6em;overflow:hidden;font-size:13px;line-height:1.5;background:var(--card);border-radius:12px;padding:6px 9px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.wsay{width:min(100%,440px);height:5.2em;overflow:hidden;font-size:14.5px;line-height:1.55;background:#fffbe8;border-radius:16px;padding:9px 12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;box-shadow:var(--shadow)}
 .wsum{margin:0;text-align:center;background:var(--card);border-radius:16px;padding:10px;box-shadow:var(--shadow);font-size:14.5px}
 .wctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .stepper{display:flex;align-items:center;gap:8px;font:16px var(--round);font-variant-numeric:tabular-nums}
@@ -179,15 +181,18 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
       <ul class="list" id="rooms"><li class="none">불러오는 중…</li></ul>
     </div>
     <div id="watchBox" hidden style="display:grid;gap:12px">
-      <p class="lede">같은 판을 AI 둘이 어떻게 푸는지 나란히 봐요. 학습시킨 AI는 학습이 끝나면 여기에 추가돼요.</p>
+      <p class="lede">🧠 AI가 사람처럼 하나씩 따져 가며 푸는 모습을 봐요. 한 수마다 왜 그렇게 했는지 알려 줘요.</p>
       <div class="wctl">
-        <select id="wTier"><option value="easy">🐣 쉬움</option><option value="normal">🐱 보통</option><option value="hard">🐯 어려움</option><option value="master">👑 고수</option></select>
-        <div class="stepper"><button class="iconbtn sm" id="wPrev" aria-label="이전 문제">‹</button><span id="wNo">1 / 60</span><button class="iconbtn sm" id="wNext" aria-label="다음 문제">›</button></div>
-        <span class="small" id="wInfo"></span>
+        <select id="wTier"><option value="easy">🐣 초급</option><option value="normal">🐱 중급</option><option value="hard">🐯 고급</option><option value="master">👑 고수</option></select>
+        <button class="btn" id="wNew">다음 판</button>
       </div>
-      <div class="wctl"><button class="btn primary" id="wPlay">▶ 보기</button><button class="btn" id="wStep">한 걸음</button><div class="seg" id="wSpeed"></div></div>
-      <div id="wRuns"></div>
-      <p class="wsum" id="wSum" hidden></p>
+      <div class="wstage-wrap">
+        <div class="wtop"><span class="pill" id="wCats">🐱 0</span><span class="pill" id="wSteps">0수</span></div>
+        <div id="wStage"></div>
+        <div class="wsay" id="wSay"></div>
+      </div>
+      <div class="wctl" style="justify-content:center"><button class="btn primary" id="wPlay">▶ 보기</button><button class="btn" id="wStep">한 수씩</button></div>
+      <div class="seg" id="wSpeed" style="justify-content:center"></div>
     </div>  </section>
 
   <!-- 대기실 -->
@@ -228,7 +233,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 <script src="../common/glog.js?v=1"></script>
 <script src="core.js?v=3"></script>
 <script src="net.js?v=3"></script>
-<script src="main.js?v=4"></script>
-<script src="watch.js?v=5"></script>
+<script src="main.js?v=5"></script>
+<script src="watch.js?v=6"></script>
 </body>
 </html>

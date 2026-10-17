@@ -4,13 +4,12 @@
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const store = { get(k, d) { try { const v = localStorage.getItem("nyang." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
                   set(k, v) { try { localStorage.setItem("nyang." + k, JSON.stringify(v)); } catch (e) {} } };
-  const TIERS = [
-    { id: "easy", em: "🐣", label: "쉬움", name: "🐣 쉬움", desc: "5×5 · 6×6" },
-    { id: "normal", em: "🐱", label: "보통", name: "🐱 보통", desc: "7×7 · 8×8" },
-    { id: "hard", em: "🐯", label: "어려움", name: "🐯 어려움", desc: "9×9 · 10×10" },
-    { id: "master", em: "👑", label: "고수", name: "👑 고수", desc: "10×10 · 11×11 · 한 번 가정해 봐야" },
-  ];
-  const HINTS = [["on", "마음껏"], ["penalty", "쓰면 +10초"], ["off", "금지"]];
+  const TIERS = [   // 화면에는 난이도 이름만 (문제 수·번호·판 크기는 안 보여 줌)
+    { id: "easy", em: "🐣", label: "초급", name: "🐣 초급", desc: "가볍게 한 판" },
+    { id: "normal", em: "🐱", label: "중급", name: "🐱 중급", desc: "조금 생각해 볼까" },
+    { id: "hard", em: "🐯", label: "고급", name: "🐯 고급", desc: "집중이 필요해요" },
+    { id: "master", em: "👑", label: "고수", name: "👑 고수", desc: "한 번 가정해 봐야 풀려요" },
+  ];  const HINTS = [["on", "마음껏"], ["penalty", "쓰면 +10초"], ["off", "금지"]];
   const PENALTY = 10;                                      // 힌트 한 번(단계 하나)마다 대결 기록에 더하는 초
   const fmt = s => { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? "0" : ""}${r.toFixed(1)}`; };
   const toast = (m, ms = 2200) => { const d = document.createElement("div"); d.className = "toast"; d.textContent = m; document.body.appendChild(d); setTimeout(() => d.remove(), ms); };
@@ -187,7 +186,7 @@
     const sv = solved(), bs = bests();
     $("tiers").innerHTML = TIERS.map(t => {
       const tot = bank[t.id].length, done = (sv[t.id] || []).length;
-      return `<button class="tier t-${t.id}" data-t="${t.id}"><span class="em">${t.em}</span><b>${t.label}</b><span>${t.desc}</span><span>${done ? `푼 문제 ${done}/${tot}` : `${tot}문제`}${bs[t.id] ? ` · 최고 ${fmt(bs[t.id])}` : ""}</span></button>`;
+      return `<button class="tier t-${t.id}" data-t="${t.id}"><span class="em">${t.em}</span><b>${t.label}</b><span>${t.desc}</span>${bs[t.id] ? `<span>최고 ${fmt(bs[t.id])}</span>` : ""}</button>`;
     }).join("");
     for (const b of $("tiers").children) b.onclick = () => playSolo(b.dataset.t);
   }
@@ -204,7 +203,7 @@
     const i = idx ?? pickRandom(tier), p = bank[tier][i], T = TIERS.find(t => t.id === tier);
     NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: store.get("name", "") }, NET.uid); if (lg) lg.matchStart({ mode: "solo", tier, puzzle: i, n: p.n }); }).catch(() => {});   // 기록은 뒤에서 (판은 바로 시작)
     startPuzzle(p, {
-      kind: "solo", tier, idx: i, hintRule: "on", label: `${T.em} ${T.label} · ${p.n}×${p.n}`,
+      kind: "solo", tier, idx: i, hintRule: "on", label: `${T.em} ${T.label}`,
       onEnd(won) {
         const secs = G.secs; ctx.finalSecs = secs;
         if (glog) glog.matchEnd({ won, secs: Math.round(secs * 10) / 10, mistakes: G.mistakes, hints: G.hints });
@@ -241,6 +240,7 @@
   function goHome() { G = null; clearInterval(timerT); $("resBox").hidden = true; show("home"); drawTiers(); }
 
   // ══ 친구 대결 ══════════════════════════════════════════════
+  let leaving = false;                                       // 방을 나간 뒤 늦게 도착한 알림 무시
   let R = null, isHost = false, meta = null, players = {}, prog = {}, myRound = 0, shownRound = 0;
   const myName = () => ($("name").value.trim() || "").slice(0, 12);
   $("name").value = store.get("name", "");
@@ -270,19 +270,20 @@
   $("tabWatch").onclick = () => tab("watch");
 
   const hooks = {
-    meta(m) { meta = m; onMeta(); },
+    meta(m) { if (leaving) return; meta = m; onMeta(); },
     players(v) {
       const before = new Set(Object.keys(players)); players = v; drawLobby(); drawOpp();
-      if (isHost && glog) { for (const [u, p] of Object.entries(v)) if (!before.has(u)) glog.joined(u, { name: p.name, role: u === R.uid ? "방장" : "참가" }); for (const u of before) if (!v[u]) glog.left(u); }
+      if (isHost && glog) { for (const [u, p] of Object.entries(v)) if (!before.has(u)) glog.joined(u, { name: p.name, role: u === NET.uid ? "방장" : "참가" }); for (const u of before) if (!v[u]) glog.left(u); }
       checkRoundEnd();
     },
-    prog(v) { prog = v; drawOpp(); checkRoundEnd(); },
+    prog(v) { if (leaving) return; prog = v; drawOpp(); checkRoundEnd(); },
     chat(m) { const d = document.createElement("div"); d.innerHTML = `<b>${esc(m.n)}</b> ${esc(m.m)}`; $("chatLog").appendChild(d); $("chatLog").scrollTop = 1e9; if (isHost && glog) glog.chat(m); },
     conn(ok, why) { if (!ok && why) toast(why, 3000); },
     closed() { toast("방이 닫혔어요", 3000); leaveRoom(); },
   };
   async function makeRoom() {
     if (!needName()) return;
+    leaving = false;
     try {
       await NET.init(); const lg = logInit();
       const cfg = store.get("cfg", { tier: "normal", hint: "penalty", rounds: 3 });
@@ -297,6 +298,7 @@
     if (!needName()) return;
     code = String(code || "").toUpperCase().trim();
     if (code.length !== 4) { toast("방 코드는 4자리예요"); return; }
+    leaving = false;
     if (R) { if (R.code === code && !isHost) { R.setMe({ name: myName() }); return; } R.leave(); R = null; }   // 이미 들어와 있으면 이름만 바꾸거나, 다른 방이면 먼저 나감
     try { isHost = false; R = await NET.join(code, { name: myName() }, hooks); enterLobby(); const lg = logInit(); if (lg && R.meta && R.meta.log) { lg.attach(R.meta.log); lg.net(R.uid, { name: myName(), role: "참가" }); } }
     catch (e) { toast(e.message, 4000); }
@@ -313,6 +315,7 @@
     try { await navigator.clipboard.writeText(url); toast("초대 링크를 복사했어요"); } catch (e) { prompt("이 주소를 친구에게 보내세요", url); }
   };
   function leaveRoom() {
+    leaving = true;
     if (R) { if (isHost && glog) glog.close(); R.leave(); }
     R = null; meta = null; players = {}; prog = {}; G = null; clearInterval(timerT);
     $("resBox").hidden = true; $("countBox").hidden = true;
@@ -365,7 +368,7 @@
       $("resBox").hidden = true;
       countdown(meta.startAt, () => {
         startPuzzle(p, {
-          kind: "vs", hintRule: meta.cfg.hint, startAt: meta.startAt, label: `${meta.round}/${meta.cfg.rounds}판 · ${p.n}×${p.n}`,
+          kind: "vs", hintRule: meta.cfg.hint, startAt: meta.startAt, label: `${(TIERS.find(t => t.id === meta.cfg.tier) || {}).name || ""} · ${meta.round}/${meta.cfg.rounds}판`,
           onProgress: sendProg, onEnd: won => { ctx.finalSecs = (NET.now() - meta.startAt) / 1000; sendProg(); toast(won ? "다 놓았어요! 다른 사람을 기다리는 중…" : "물고기를 다 잃었어요. 다른 사람을 기다리는 중…", 3000); },
         });
       });
@@ -397,7 +400,7 @@
       });
   }
   function drawOpp() {
-    if (!meta || meta.phase !== "play" || !G) return;
+    if (!R || !meta || meta.phase !== "play" || !G) return;               // 방을 나간 뒤 늦게 온 알림은 무시
     // 위쪽 얇은 줄: 사람마다 알약 하나 (나도 포함) — 진행 막대 · 남은 물고기 · 끝나면 기록
     $("opp").innerHTML = ranking().map(({ u, name, q }) => {
       const pct = q ? q.placed / q.n * 100 : 0;
@@ -407,7 +410,7 @@
     }).join("");
   }
   function checkRoundEnd() {
-    if (!meta || meta.phase !== "play" || shownRound === meta.round) return;
+    if (!R || !meta || meta.phase !== "play" || shownRound === meta.round) return;
     const rk = ranking();
     if (!rk.length || !rk.every(r => r.q && (r.q.done || r.q.failed))) return;
     shownRound = meta.round;
