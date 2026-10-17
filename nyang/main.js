@@ -22,12 +22,17 @@
   const logInit = () => { if (!glog && NET.db()) glog = GLOG(() => NET.db(), "nyang"); return glog; };
 
   // ── 화면 바꾸기
-  const show = id => { for (const s of ["home", "lobby", "play"]) $(s).hidden = s !== id; document.body.classList.toggle("playing", id === "play"); if (id === "play") requestAnimationFrame(fitBoard); };
+  const show = id => { for (const s of ["home", "lobby", "play"]) $(s).hidden = s !== id; document.body.classList.toggle("playing", id === "play"); if (id === "play") requestAnimationFrame(() => fitBoard(true)); };
   // 판 크기 = 남은 공간(가로·세로 중 작은 쪽) — 휴대폰에서 위아래가 잘리지 않게
-  function fitBoard() {
+  // 휴대폰 주소창이 나타났다 사라지며 높이가 조금씩 바뀔 때마다 판이 출렁이지 않게: 판이 바뀌었거나, 너비가 바뀌었거나, 높이가 크게(80px+) 바뀔 때만 다시 맞춤
+  let fitKey = "", fitW = 0, fitH = 0;
+  function fitBoard(force) {
     const w = $("boardwrap"), b = $("board");
     if (!w || $("play").hidden) return;
-    const s = Math.floor(Math.min(w.clientWidth, w.clientHeight, 600));
+    const cw = w.clientWidth, ch = w.clientHeight, key = G ? G.n + ":" + G.reg.join("|").length : "";
+    if (force !== true && key === fitKey && cw === fitW && Math.abs(ch - fitH) < 80) return;
+    fitKey = key; fitW = cw; fitH = ch;
+    const s = Math.floor(Math.min(cw, ch, 600));
     b.style.setProperty("--bs", s + "px");
     if (G) b.style.setProperty("--gp", Math.max(2, Math.round(s / G.n * 0.07)) + "px");   // 칸 사이 간격도 판 크기에 맞게
   }
@@ -165,7 +170,7 @@
   function startPuzzle(p, c) {
     ctx = c; closeHint();
     G = new NY.Game(p, { autoX });
-    drawBoard(); show("play");
+    drawBoard(); show("play"); fitKey = "";
     $("stLabel").textContent = c.label;
     $("hintBtn").disabled = c.hintRule === "off";
     $("restart").hidden = c.kind === "vs";
@@ -400,7 +405,6 @@
       const cls = [u === R.uid ? "me" : "", q && q.done ? "done" : "", q && q.failed ? "fail" : ""].join(" ");
       return `<div class="p ${cls}"><span class="av">${esc((name || "?").slice(0, 1))}</span><b>${esc(name)}</b><span class="pb"><i style="width:${pct}%"></i></span><span>${st}</span></div>`;
     }).join("");
-    requestAnimationFrame(fitBoard);
   }
   function checkRoundEnd() {
     if (!meta || meta.phase !== "play" || shownRound === meta.round) return;
