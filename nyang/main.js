@@ -83,7 +83,10 @@
   }
   const stateKey = () => [...G.cats].join(",") + "|" + [...G.xs].sort().join(",") + "|" + [...G.bad].join(",");
 
+  const S = name => window.NYSND && NYSND.play(name);
   function afterMove(res, k) {
+    if (res === "ok" || res === "miss" || res === "fail") S(res === "ok" ? "cat" : res);
+    else if (res === "win") S(ctx.kind === "vs" ? "start" : "win");          // 대결은 판 결과 때 팡파레 (끝낸 순간은 짧게)
     if (hint && stateKey() !== hintKey) closeHint();
     if (res === "miss" || res === "fail") { const el = $("board").children[k]; el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); if (navigator.vibrate) navigator.vibrate(60); }
     paint(); progress();
@@ -104,7 +107,7 @@
       afterMove(G.place(k), k); return;
     }
     const prevX = G.xs.has(k);
-    G.toggleX(k);
+    if (G.toggleX(k)) S(G.xs.has(k) ? "x" : "unx");
     lastTap = { k, t, prevX };
     drag = { on: G.xs.has(k), seen: new Set([k]) };
     afterMove("x", k);
@@ -114,12 +117,16 @@
     const el = cellAt(e.clientX, e.clientY); if (!el) return;
     const k = +el.dataset.k; if (drag.seen.has(k)) return;
     drag.seen.add(k); lastTap = { k: -1, t: 0 };
-    G.setX(k, drag.on); afterMove("x", k);
+    const was = G.xs.has(k); G.setX(k, drag.on); if (G.xs.has(k) !== was) S(drag.on ? "x" : "unx");
+    afterMove("x", k);
   });
   window.addEventListener("pointerup", () => { drag = null; });
 
   function setAutoX(v) { autoX = v; store.set("autoX", v); $("autoX").setAttribute("aria-pressed", v); if (G) G.autoX = v; }
   $("autoX").onclick = () => setAutoX(!autoX);
+  const drawSnd = () => { const on = !window.NYSND || NYSND.on; $("sndBtn").innerHTML = `<span class="ic">${on ? "🔊" : "🔇"}</span><span>소리 ${on ? "켬" : "끔"}</span>`; };
+  $("sndBtn").onclick = () => { if (window.NYSND) NYSND.set(!NYSND.on); drawSnd(); };
+  drawSnd();
   $("clearX").onclick = () => { if (!G || G.over) return; G.xs.clear(); closeHint(); paint(); };
 
   // ── 단계별 힌트: 1) 어디를 볼지 반짝 2) 이유 + 바꿀 칸 표시 3) 적용
@@ -131,7 +138,7 @@
     if (hint && stateKey() === hintKey) { if (hintStage === 1) $("hintMore").click(); return; }
     hint = NY.nextHint(G); hintKey = stateKey();
     if (!hint) { toast("지금은 줄 힌트가 없어요"); return; }
-    hintStage = 1; useHint();
+    hintStage = 1; useHint(); S("hint");
     $("hintText").textContent = hint.kind === "wrongX" ? "반짝이는 칸을 다시 보세요. 뭔가 이상해요." : hint.kind === "clean" ? "반짝이는 고양이 주변을 보세요. 정리할 칸이 남았어요." : "반짝이는 곳을 보세요. 여기서 알 수 있는 게 있어요.";
     $("hintMore").hidden = false; $("hintApply").hidden = true; $("hintBox").hidden = false;
     paint();
@@ -176,6 +183,7 @@
     $("opp").hidden = c.kind !== "vs";
     startTimer(c.startAt);
     progress();
+    if (c.kind === "solo") S("start");                                       // 대결은 카운트다운이 소리 냄
   }
   function progress() { if (ctx && ctx.onProgress) ctx.onProgress(); }
 
@@ -378,10 +386,12 @@
   }
   function countdown(at, go) {
     $("countBox").hidden = false;
+    let said = null;
     const tick = () => {
       const left = (at - NET.now()) / 1000;
-      if (left <= 0) { $("countBox").hidden = true; go(); return; }
-      $("count").textContent = Math.ceil(left); setTimeout(tick, 100);
+      if (left <= 0) { $("countBox").hidden = true; S("go"); go(); return; }
+      const c = Math.ceil(left); if (c !== said && c <= 3) { said = c; S("count"); }
+      $("count").textContent = c; setTimeout(tick, 100);
     };
     tick();
   }
@@ -432,6 +442,7 @@
       ? [last ? null : ["다음 판", () => startRound(true), "primary"], ["대기실로", () => R.setMeta({ phase: "lobby" })], ["방 나가기", askLeave, "ghost"]]
       : [["판 보기", () => toast("‹ 를 누르면 결과를 다시 볼 수 있어요"), "primary"], ["방 나가기", askLeave, "ghost"]]);
     roundRes();
+    S(winner && winner.u === R.uid ? "win" : "lose");
   }
   // 판이 끝난 뒤 '방 나가기'는 한 번 더 물어봄 (결과 화면에서 실수로 누르기 쉬워서)
   let roundRes = null;
