@@ -470,22 +470,21 @@
   const cv = RND.canvas, coarse = matchMedia("(pointer: coarse)").matches;
   // 마우스·손가락은 '화면 가운데(=내 머리)에서 본 방향'으로 조준 (slither 방식). 바닥의 한 점을 노리면 그 점 주위를 빙빙 돎
   const aimFrom = e => { const r = cv.getBoundingClientRect(); return Math.atan2(-(e.clientY - (r.top + r.height / 2)), e.clientX - (r.left + r.width / 2)); };
-  // 휴대폰: 손가락을 처음 댄 자리가 조이스틱 가운데 → 끄는 방향으로 머리가 돎 (어디를 눌러도 됨, 손가락이 지렁이를 가리지 않음)
+  // 휴대폰: 누른 곳 쪽으로 머리가 돎 (마우스와 같이 화면 가운데=내 머리에서 본 방향). 누른 채 움직이면 따라 돌고, 떼도 그 방향으로 계속 감
+  // 누른 자리에 작은 동그라미를 보여 줘서 어디를 가리키는지 알게
   let joy = null;
-  const joyEl = $("joy"), joyKnob = joyEl ? joyEl.firstElementChild : null;
-  const showJoy = (x, y, kx, ky) => { if (!joyEl) return; joyEl.hidden = false; joyEl.style.left = x + "px"; joyEl.style.top = y + "px"; joyKnob.style.transform = `translate(${kx}px, ${ky}px)`; };
+  const joyEl = $("joy");
+  const showJoy = (x, y) => { if (!joyEl) return; joyEl.hidden = false; joyEl.style.left = x + "px"; joyEl.style.top = y + "px"; };
   cv.addEventListener("pointermove", e => {
     clientAC && clientAC.onEvent("move", e);
     if (e.pointerType === "mouse") { input.aim = aimFrom(e); input.target = null; return; }
     if (!joy || e.pointerId !== joy.id) return;
-    const dx = e.clientX - joy.x, dy = e.clientY - joy.y, d = Math.hypot(dx, dy);
-    if (d > 6) { input.aim = Math.atan2(-dy, dx); input.target = null; }
-    const k = Math.min(1, 44 / (d || 1)); showJoy(joy.x, joy.y, dx * k, dy * k);
+    input.aim = aimFrom(e); input.target = null; showJoy(e.clientX, e.clientY);
   });
   cv.addEventListener("pointerdown", e => {
     clientAC && clientAC.onEvent("down", e); input.target = null;
     if (e.pointerType === "mouse") { input.aim = aimFrom(e); input.boost = true; }
-    else if (!joy) { joy = { id: e.pointerId, x: e.clientX, y: e.clientY }; showJoy(joy.x, joy.y, 0, 0); }
+    else if (!joy) { joy = { id: e.pointerId }; input.aim = aimFrom(e); showJoy(e.clientX, e.clientY); }
     try { cv.setPointerCapture(e.pointerId); } catch (_) {}
   });
   const joyEnd = e => { if (joy && e.pointerId === joy.id) { joy = null; if (joyEl) joyEl.hidden = true; } };   // 손을 떼도 그 방향으로 계속 감

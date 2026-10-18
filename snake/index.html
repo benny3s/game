@@ -25,8 +25,8 @@ body{padding:0}
 #room .chip{font:600 12.5px/1 var(--mono);padding:6px 9px;border-radius:99px;background:rgba(20,28,26,.85);border:1px solid var(--line);color:var(--ai)}
 .topbtn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:5}
 .topbtn .btn{padding:6px 10px;font-size:12px;background:rgba(20,28,26,.85)}
-#joy{position:fixed;width:112px;height:112px;margin:-56px 0 0 -56px;border-radius:50%;border:2px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06);pointer-events:none;z-index:3}
-#joy>i{position:absolute;left:36px;top:36px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.35)}
+#joy{position:fixed;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);pointer-events:none;z-index:3}
+#joy>i{position:absolute;left:16px;top:16px;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.6)}
 #boost{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);width:84px;height:84px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-radius:50%;border:2px solid rgba(255,214,102,.6);background:rgba(255,214,102,.15);color:var(--me);font:700 14px var(--sans);z-index:4;touch-action:none}
 #boost.on{background:rgba(255,214,102,.45)}
 .card{position:fixed;inset:0;display:grid;place-items:center;z-index:10;background:rgba(6,9,8,.55);padding:16px;overflow:auto}
@@ -149,7 +149,7 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
   <p class="crumb"><a href="../">← 게임 목록</a></p>
   <h1>🐍 지렁이 대결</h1>
   <p id="inviteHead" hidden></p>
-  <p class="lede soloonly">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 누른 자리에서 끄는 방향으로 돌고 오른쪽 아래 버튼이 부스트예요.</p>
+  <p class="lede soloonly">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 누른 곳 쪽으로 머리가 돌고 오른쪽 아래 버튼이 부스트예요.</p>
   <label class="field"><span>내 이름 <span class="small">(친구들에게 보여요)</span></span><input type="text" id="name" maxlength="12" placeholder="예: 베니" autocomplete="nickname"></label>
   <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
   <div class="go soloonly bigchoice">
@@ -235,6 +235,6 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
 <script src="render.js?v=24"></script>
 <script src="ac.js?v=24"></script>
 <script src="net.js?v=24"></script>
-<script src="main.js?v=24"></script>
+<script src="main.js?v=25"></script>
 </body>
 </html>

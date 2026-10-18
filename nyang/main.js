@@ -42,15 +42,16 @@
   let G = null;                 // 지금 판 (NY.Game)
   let ctx = null;               // { kind: "solo"|"vs", tier, idx, onEnd }
   let hint = null, hintStage = 0, hintKey = "";
-  let tapMode = store.get("tap", "x");                     // x = 한 번 ✕ / 두 번 🐱, cat = 한 번 🐱
   let autoX = store.get("autoX", false);
+  // ✕는 글자 대신 그림으로 (아이폰에서 ✕ 글자가 가늘고 작게 나와서) — 칸 크기에 맞춰 늘 같은 굵기
+  const XSVG = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.2 2.2L7.8 7.8M7.8 2.2L2.2 7.8"/></svg>';
 
   function cellsHtml() {
     const n = G.n;
     let h = "";
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
       const g = G.reg[r][c], col = NY.COLORS[g % NY.COLORS.length][0];
-      h += `<button class="c" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"><span class="x">✕</span><span class="cat">🐱</span></button>`;
+      h += `<button class="c" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"><span class="x">${XSVG}</span><span class="cat">🐱</span></button>`;
     }
     return h;
   }  function drawBoard() {
@@ -88,7 +89,7 @@
     paint(); progress();
     if (res === "win" || res === "fail") setTimeout(() => ctx.onEnd(res === "win"), 350);
   }
-  // 누르기: ✕ 모드면 한 번 = ✕ 켜고 끔, 0.32초 안에 같은 칸 두 번 = 🐱 (앱과 같게). 누른 채 끌면 같은 방향으로 ✕ 칠하기
+  // 누르기: 한 번 = ✕ 켜고 끔, 0.4초 안에 같은 칸 두 번 = 🐱 (앱과 같게). 누른 채 끌면 같은 방향으로 ✕ 칠하기
   let lastTap = { k: -1, t: 0 }, drag = null;
   const cellAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest("#board .c"); };
   $("board").addEventListener("pointerdown", e => {
@@ -96,8 +97,7 @@
     const el = cellAt(e.clientX, e.clientY); if (!el) return;
     e.preventDefault();
     const k = +el.dataset.k, t = performance.now();
-    if (tapMode === "cat") { afterMove(G.place(k), k); return; }
-    if (lastTap.k === k && t - lastTap.t < 320) {                            // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이
+    if (lastTap.k === k && t - lastTap.t < 400) {                            // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이
       const prevX = lastTap.prevX;
       lastTap = { k: -1, t: 0 }; drag = null;
       if (G.xs.has(k) !== prevX) G.toggleX(k);
@@ -118,8 +118,6 @@
   });
   window.addEventListener("pointerup", () => { drag = null; });
 
-  function setTapMode(m) { tapMode = m; store.set("tap", m); $("modeBtn").innerHTML = m === "x" ? '<span class="ic">✕</span><span>누르면 ✕</span>' : '<span class="ic">🐱</span><span>누르면 🐱</span>'; $("modeBtn").setAttribute("aria-pressed", m === "cat"); }
-  $("modeBtn").onclick = () => setTapMode(tapMode === "x" ? "cat" : "x");
   function setAutoX(v) { autoX = v; store.set("autoX", v); $("autoX").setAttribute("aria-pressed", v); if (G) G.autoX = v; }
   $("autoX").onclick = () => setAutoX(!autoX);
   $("clearX").onclick = () => { if (!G || G.over) return; G.xs.clear(); closeHint(); paint(); };
@@ -227,7 +225,8 @@
     if (!G) return;
     if (!G.over && performance.now() - backAt > 2000) { backAt = performance.now(); toast(ctx.kind === "solo" ? "한 번 더 누르면 나가요" : "한 번 더 누르면 이번 판을 포기해요"); return; }
     if (ctx.kind === "solo") { if (!G.over && glog) glog.matchEnd({ won: false, gaveUp: true, secs: Math.round(G.secs) }); G.over = true; goHome(); }
-    else if (!G.over) { G.over = true; G.gaveUp = true; ctx.finalSecs = (NET.now() - ctx.startAt) / 1000; progress(); paint(); toast("이번 판은 포기했어요"); }
+    else if (G.over) { if (roundRes && meta && shownRound === meta.round) roundRes(); else toast("다른 사람이 끝나기를 기다리는 중이에요"); }   // 끝난 판: 결과 다시 보기
+    else { G.over = true; G.gaveUp = true; ctx.finalSecs = (NET.now() - ctx.startAt) / 1000; progress(); paint(); toast("이번 판은 포기했어요"); }
   };
   $("restart").onclick = () => {
     if (!G || ctx.kind !== "solo") { toast("대결 중에는 처음부터 할 수 없어요"); return; }
@@ -428,14 +427,21 @@
       ${meta.cfg.hint === "penalty" ? `<p class="small">힌트 한 번마다 +${PENALTY}초</p>` : ""}`;
     const last = meta.round >= meta.cfg.rounds;
     const title = winner ? `${winner.u === R.uid ? "🏆 내가 이겼어요!" : `🏆 ${winner.name} 승리`}` : "모두 실패했어요";
-    result(last ? `${title} (마지막 판)` : title, body, isHost
-      ? [last ? null : ["다음 판", () => startRound(true), "primary"], ["대기실로", () => R.setMeta({ phase: "lobby" })], ["방 나가기", leaveRoom]]
-      : [["방 나가기", leaveRoom]]);
-    if (!isHost) $("resBody").insertAdjacentHTML("beforeend", '<p class="small">방장이 다음 판을 시작하면 바로 넘어가요.</p>');
+    const guestNote = isHost ? "" : '<p class="small">방장이 다음 판을 시작하면 바로 넘어가요.</p>';
+    roundRes = () => result(last ? `${title} (마지막 판)` : title, body + guestNote, isHost
+      ? [last ? null : ["다음 판", () => startRound(true), "primary"], ["대기실로", () => R.setMeta({ phase: "lobby" })], ["방 나가기", askLeave, "ghost"]]
+      : [["판 보기", () => toast("‹ 를 누르면 결과를 다시 볼 수 있어요"), "primary"], ["방 나가기", askLeave, "ghost"]]);
+    roundRes();
+  }
+  // 판이 끝난 뒤 '방 나가기'는 한 번 더 물어봄 (결과 화면에서 실수로 누르기 쉬워서)
+  let roundRes = null;
+  function askLeave() {
+    result("방을 나갈까요?", `<p style="margin:0">${isHost ? "방장이 나가면 방이 닫히고 친구들도 모두 나가게 돼요." : "나가면 다시 들어오려면 방 코드가 필요해요."}</p>`,
+      [["계속 있기", () => roundRes && roundRes(), "primary"], ["나가기", leaveRoom]]);
   }
 
   // ── 시작
-  setTapMode(tapMode); setAutoX(autoX);
+  setAutoX(autoX);
   bankP.then(() => {
     drawTiers();
     const q = new URLSearchParams(location.search).get("room");

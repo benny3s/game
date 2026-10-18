@@ -93,9 +93,11 @@ body.playing .wrap{display:none}
 #board .c{position:relative;display:grid;place-items:center;cursor:pointer;line-height:1;padding:0;border:0;color:var(--x);font-size:calc(var(--bs,300px) / var(--n,8) * .56);border-radius:calc(var(--bs,300px) / var(--n,8) * .2);box-shadow:inset 0 -3px 0 rgba(0,0,0,.07)}
 #board .c>span{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transform:scale(.35);transition:opacity .16s, transform .22s cubic-bezier(.3,1.6,.5,1)}
 #board .c.has-cat .cat,#board .c.has-x .x{opacity:1;transform:scale(1)}
-#board .c .x{font-family:var(--round);font-size:.62em;color:rgba(110,78,58,.55);transition-duration:.12s}
+#board .c .x{color:rgba(100,68,48,.7);transition-duration:.12s}
+#board .c .x svg{width:58%;height:58%;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
 #board .c.bad::before{content:"";position:absolute;inset:0;border-radius:inherit;background:rgba(255,255,255,.45)}
-#board .c.bad .x{color:var(--bad);font-size:.78em}
+#board .c.bad .x{color:var(--bad)}
+#board .c.bad .x svg{width:70%;height:70%;stroke-width:1.7}
 #board .c .cat{font-size:.95em}
 @keyframes pop{from{transform:scale(.3)}70%{transform:scale(1.12)}to{transform:scale(1)}}
 #board .c.look{animation:look 1s ease-in-out infinite}
@@ -222,7 +224,6 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
     <div class="hintbox" id="hintBox" hidden><p id="hintText"></p><div class="row"><button class="btn" id="hintMore">이유 보기</button><button class="btn primary" id="hintApply" hidden>적용</button><button class="btn ghost" id="hintClose">닫기</button></div></div>
   </div>
   <div class="dock">
-    <button id="modeBtn" aria-pressed="false"><span class="ic">✕</span><span>누르면 ✕</span></button>
     <button id="hintBtn"><span class="ic">💡<span class="badge" id="hintBadge" hidden></span></span><span>힌트</span></button>
     <button id="autoX" aria-pressed="false"><span class="ic">🪄</span><span>자동 ✕</span></button>
     <button id="clearX"><span class="ic">🧽</span><span>✕ 지우기</span></button>
@@ -235,7 +236,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 <script src="../common/glog.js?v=1"></script>
 <script src="core.js?v=3"></script>
 <script src="net.js?v=3"></script>
-<script src="main.js?v=6"></script>
+<script src="main.js?v=7"></script>
 <script src="watch.js?v=6"></script>
 </body>
 </html>
