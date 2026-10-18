@@ -112,6 +112,8 @@ body.playing .wrap{display:none}
 .dock button[aria-pressed="true"] .ic{background:var(--ink);color:#fff}
 .dock button:disabled{opacity:.35}
 .dock .badge{position:absolute;top:-3px;right:-3px;min-width:20px;height:20px;border-radius:10px;background:var(--bad);color:#fff;font:12px/20px var(--round);padding:0 5px}
+.peek{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:4;padding:13px 22px;font-size:17px;white-space:nowrap}
+.peek:active{transform:translateX(-50%) translateY(2px)}
 .hintbox{position:absolute;left:0;right:0;bottom:4px;margin:0 auto;width:min(100%,520px);background:#fffbe8;border-radius:20px;padding:12px 14px;display:grid;gap:10px;box-shadow:0 12px 34px rgba(140,98,70,.3);z-index:5}
 .hintbox p{margin:0;font-size:15px}
 .hintbox .row .btn{padding:9px 14px;font-size:15px}.overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(91,70,54,.35);padding:16px}
@@ -221,6 +223,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
   <div class="opp" id="opp" hidden></div>
   <div class="boardwrap" id="boardwrap">
     <div id="board"></div>
+    <button class="btn primary peek" id="resPeek" hidden>🏆 결과 다시 보기</button>
     <div class="hintbox" id="hintBox" hidden><p id="hintText"></p><div class="row"><button class="btn" id="hintMore">이유 보기</button><button class="btn primary" id="hintApply" hidden>적용</button><button class="btn ghost" id="hintClose">닫기</button></div></div>
   </div>
   <div class="dock">
@@ -238,7 +241,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 <script src="core.js?v=3"></script>
 <script src="net.js?v=3"></script>
 <script src="sound.js?v=1"></script>
-<script src="main.js?v=8"></script>
+<script src="main.js?v=9"></script>
 <script src="watch.js?v=6"></script>
 </body>
 </html>

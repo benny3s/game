@@ -174,7 +174,7 @@
 
   // ── 판 시작 (혼자·대결 공통)
   function startPuzzle(p, c) {
-    ctx = c; closeHint();
+    ctx = c; closeHint(); $("resPeek").hidden = true;
     G = new NY.Game(p, { autoX });
     drawBoard(); show("play"); fitKey = "";
     $("stLabel").textContent = c.label;
@@ -243,8 +243,12 @@
   };  function result(title, body, btns) {
     $("resTitle").textContent = title; $("resBody").innerHTML = body;
     $("resBtns").innerHTML = "";
-    for (const b of btns.filter(Boolean)) { const el = document.createElement("button"); el.className = "btn " + (b[2] || ""); el.textContent = b[0]; el.onclick = () => { $("resBox").hidden = true; b[1](); }; $("resBtns").appendChild(el); }
-    $("resBox").hidden = false;
+    for (const b of btns.filter(Boolean)) { const el = document.createElement("button"); el.className = "btn " + (b[2] || ""); el.textContent = b[0]; el.onclick = () => { $("resBox").hidden = true; b[1](); syncPeek(); }; $("resBtns").appendChild(el); }
+    $("resBox").hidden = false; syncPeek();
+  }
+  // 대결 결과창을 닫고 판을 보는 동안: 판 아래에 '결과 다시 보기' 단추 (다음 판이 시작되면 사라짐)
+  function syncPeek() {
+    $("resPeek").hidden = !($("resBox").hidden && ctx && ctx.kind === "vs" && G && G.over && meta && meta.phase === "play" && shownRound === meta.round && roundRes);
   }
   function goHome() { G = null; clearInterval(timerT); $("resBox").hidden = true; show("home"); drawTiers(); }
 
@@ -439,13 +443,14 @@
     const title = winner ? `${winner.u === R.uid ? "🏆 내가 이겼어요!" : `🏆 ${winner.name} 승리`}` : "모두 실패했어요";
     const guestNote = isHost ? "" : '<p class="small">방장이 다음 판을 시작하면 바로 넘어가요.</p>';
     roundRes = () => result(last ? `${title} (마지막 판)` : title, body + guestNote, isHost
-      ? [last ? null : ["다음 판", () => startRound(true), "primary"], ["대기실로", () => R.setMeta({ phase: "lobby" })], ["방 나가기", askLeave, "ghost"]]
-      : [["판 보기", () => toast("‹ 를 누르면 결과를 다시 볼 수 있어요"), "primary"], ["방 나가기", askLeave, "ghost"]]);
+      ? [last ? null : ["다음 판", () => startRound(true), "primary"], ["대기실로", () => R.setMeta({ phase: "lobby" })], ["판 보기", () => {}], ["방 나가기", askLeave, "ghost"]]
+      : [["판 보기", () => {}, "primary"], ["방 나가기", askLeave, "ghost"]]);
     roundRes();
     S(winner && winner.u === R.uid ? "win" : "lose");
   }
   // 판이 끝난 뒤 '방 나가기'는 한 번 더 물어봄 (결과 화면에서 실수로 누르기 쉬워서)
   let roundRes = null;
+  $("resPeek").onclick = () => roundRes && roundRes();
   function askLeave() {
     result("방을 나갈까요?", `<p style="margin:0">${isHost ? "방장이 나가면 방이 닫히고 친구들도 모두 나가게 돼요." : "나가면 다시 들어오려면 방 코드가 필요해요."}</p>`,
       [["계속 있기", () => roundRes && roundRes(), "primary"], ["나가기", leaveRoom]]);
