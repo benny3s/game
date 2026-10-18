@@ -94,10 +94,10 @@ body.playing .wrap{display:none}
 #board .c>span{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;opacity:0;transform:scale(.35);transition:opacity .16s, transform .22s cubic-bezier(.3,1.6,.5,1)}
 #board .c.has-cat .cat,#board .c.has-x .x{opacity:1;transform:scale(1)}
 #board .c .x{color:rgba(100,68,48,.7);transition-duration:.12s}
-#board .c .x svg{width:58%;height:58%;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round}
+#board .c .x svg{width:68%;height:68%;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
 #board .c.bad::before{content:"";position:absolute;inset:0;border-radius:inherit;background:rgba(255,255,255,.45)}
 #board .c.bad .x{color:var(--bad)}
-#board .c.bad .x svg{width:70%;height:70%;stroke-width:1.7}
+#board .c.bad .x svg{width:76%;height:76%;stroke-width:1.8}
 #board .c .cat{font-size:.95em}
 @keyframes pop{from{transform:scale(.3)}70%{transform:scale(1.12)}to{transform:scale(1)}}
 #board .c.look{animation:look 1s ease-in-out infinite}
