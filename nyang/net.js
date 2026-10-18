@@ -9,6 +9,7 @@ const NET = (() => {
     databaseURL: "https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app",
   };
   const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+  const MAXP = 8;                                                            // 한 방 최대 인원 (휴대폰 이름표 줄·결과표에 들어가는 만큼)
   let app = null, loading = null, user = null, offset = 0;
   const load = src => new Promise((ok, bad) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
 
@@ -108,7 +109,9 @@ const NET = (() => {
     await init();
     const meta = (await db().ref(`nyang/rooms/${code}/meta`).get()).val();
     if (!meta) throw new Error("그런 방이 없어요 (코드를 확인하거나 방장이 나갔을 수 있어요)");
-    if (meta.host === user.uid || (await db().ref(`nyang/rooms/${code}/players/${user.uid}`).get()).exists()) await separateIdentity();
+    const pl = (await db().ref(`nyang/rooms/${code}/players`).get()).val() || {};
+    if (Object.keys(pl).length >= MAXP && !pl[user.uid]) throw new Error(`방이 꽉 찼어요 (최대 ${MAXP}명)`);
+    if (meta.host === user.uid || pl[user.uid]) await separateIdentity();
     const r = roomApi(code, false, hooks);
     await r.start(me);
     return r;
@@ -125,5 +128,5 @@ const NET = (() => {
   }
   async function deleteRoom(code) { await init(); await db().ref(`nyang/rooms/${code}`).remove().catch(() => {}); return db().ref(`nyang/index/${code}`).remove(); }
 
-  return { init, host, join, listRooms, deleteRoom, db: () => app && app.database(), get uid() { return user && user.uid; }, now };
+  return { MAXP, init, host, join, listRooms, deleteRoom, db: () => app && app.database(), get uid() { return user && user.uid; }, now };
 })();

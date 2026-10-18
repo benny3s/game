@@ -127,7 +127,7 @@
   const drawSnd = () => { const on = !window.NYSND || NYSND.on; $("sndBtn").innerHTML = `<span class="ic">${on ? "🔊" : "🔇"}</span><span>소리 ${on ? "켬" : "끔"}</span>`; };
   $("sndBtn").onclick = () => { if (window.NYSND) NYSND.set(!NYSND.on); drawSnd(); };
   drawSnd();
-  $("clearX").onclick = () => { if (!G || G.over) return; G.xs.clear(); closeHint(); paint(); };
+  $("clearX").onclick = () => { if (!G || G.over) return; G.xs.clear(); closeHint(); paint(); progress(); };
 
   // ── 단계별 힌트: 1) 어디를 볼지 반짝 2) 이유 + 바꿀 칸 표시 3) 적용
   function closeHint() { hint = null; hintStage = 0; $("hintBox").hidden = true; if (G) paint(); }
@@ -175,6 +175,8 @@
   // ── 판 시작 (혼자·대결 공통)
   function startPuzzle(p, c) {
     ctx = c; closeHint(); $("resPeek").hidden = true;
+    for (const id of ["spyBox", "pcBox", "bubble"]) $(id).hidden = true;
+    $("chatBtn").hidden = c.kind !== "vs";
     G = new NY.Game(p, { autoX });
     drawBoard(); show("play"); fitKey = "";
     $("stLabel").textContent = c.label;
@@ -264,7 +266,7 @@
     $("rooms").innerHTML = '<li class="none">불러오는 중…</li>';
     try {
       const rows = await NET.listRooms();
-      $("rooms").innerHTML = rows.length ? rows.map(r => `<li class="${r.empty ? "empty" : ""}"><span class="cd">${esc(r.code)}</span><span class="inf"><b>${esc(r.h)}</b> <span class="small">${r.n}명 · ${esc((TIERS.find(t => t.id === r.tier) || {}).name || "")} · ${r.ph === "lobby" ? "대기 중" : "게임 중"}</span></span>${r.empty ? `<button class="btn danger" data-del="${esc(r.code)}">빈 방 지우기</button>` : `<button class="btn" data-join="${esc(r.code)}">들어가기</button>`}</li>`).join("") : '<li class="none">열린 방이 없어요. 방을 만들어 보세요.</li>';
+      $("rooms").innerHTML = rows.length ? rows.map(r => `<li class="${r.empty ? "empty" : ""}"><span class="cd">${esc(r.code)}</span><span class="inf"><b>${esc(r.h)}</b> <span class="small">${r.n}/${NET.MAXP}명 · ${esc((TIERS.find(t => t.id === r.tier) || {}).name || "")} · ${r.ph === "lobby" ? "대기 중" : "게임 중"}</span></span>${r.empty ? `<button class="btn danger" data-del="${esc(r.code)}">빈 방 지우기</button>` : `<button class="btn" data-join="${esc(r.code)}">들어가기</button>`}</li>`).join("") : '<li class="none">열린 방이 없어요. 방을 만들어 보세요.</li>';
       for (const b of $("rooms").querySelectorAll("[data-join]")) b.onclick = () => joinRoom(b.dataset.join);
       for (const b of $("rooms").querySelectorAll("[data-del]")) b.onclick = async () => { await NET.deleteRoom(b.dataset.del); drawRooms(); };
     } catch (e) { $("rooms").innerHTML = `<li class="none">방 목록을 못 불러왔어요 (${esc(e.message)})</li>`; }
@@ -289,8 +291,12 @@
       if (isHost && glog) { for (const [u, p] of Object.entries(v)) if (!before.has(u)) glog.joined(u, { name: p.name, role: u === NET.uid ? "방장" : "참가" }); for (const u of before) if (!v[u]) glog.left(u); }
       checkRoundEnd();
     },
-    prog(v) { if (leaving) return; prog = v; drawOpp(); checkRoundEnd(); },
-    chat(m) { const d = document.createElement("div"); d.innerHTML = `<b>${esc(m.n)}</b> ${esc(m.m)}`; $("chatLog").appendChild(d); $("chatLog").scrollTop = 1e9; if (isHost && glog) glog.chat(m); },
+    prog(v) { if (leaving) return; prog = v; drawOpp(); spyDraw(); checkRoundEnd(); },
+    chat(m) {
+      for (const id of ["chatLog", "pcLog"]) { const d = document.createElement("div"); d.innerHTML = `<b>${esc(m.n)}</b> ${esc(m.m)}`; $(id).appendChild(d); $(id).scrollTop = 1e9; }
+      if (isHost && glog) glog.chat(m);
+      if (!$("play").hidden && R && m.u !== R.uid && $("pcBox").hidden) bubble(m);      // 게임 중이면 말풍선
+    },
     conn(ok, why) { if (!ok && why) toast(why, 3000); },
     closed() { toast("방이 닫혔어요", 3000); leaveRoom(); },
   };
@@ -319,7 +325,7 @@
   $("mkRoom").onclick = makeRoom;
   $("joinCode").onclick = () => joinRoom($("code").value);
   function enterLobby() {
-    show("lobby"); $("lbCode").textContent = R.code; $("chatLog").innerHTML = "";
+    show("lobby"); $("lbCode").textContent = R.code; $("chatLog").innerHTML = ""; $("pcLog").innerHTML = "";
     history.replaceState(null, "", `?room=${R.code}${location.search.includes("guest") ? "&guest" : ""}`);
     drawLobby();
   }
@@ -332,6 +338,8 @@
     if (R) { if (isHost && glog) glog.close(); R.leave(); }
     R = null; meta = null; players = {}; prog = {}; G = null; clearInterval(timerT);
     $("resBox").hidden = true; $("countBox").hidden = true;
+    for (const id of ["spyBox", "pcBox", "bubble"]) $(id).hidden = true;
+    $("pcLog").innerHTML = "";
     history.replaceState(null, "", location.pathname + (location.search.includes("guest") ? "?guest" : ""));
     show("home"); $("tabVs").click();
   }
@@ -382,7 +390,7 @@
       countdown(meta.startAt, () => {
         startPuzzle(p, {
           kind: "vs", hintRule: meta.cfg.hint, startAt: meta.startAt, label: `${(TIERS.find(t => t.id === meta.cfg.tier) || {}).name || ""} · ${meta.round}/${meta.cfg.rounds}판`,
-          onProgress: sendProg, onEnd: won => { ctx.finalSecs = (NET.now() - meta.startAt) / 1000; sendProg(); toast(won ? "다 놓았어요! 다른 사람을 기다리는 중…" : "물고기를 다 잃었어요. 다른 사람을 기다리는 중…", 3000); },
+          onProgress: sendProg, onEnd: won => { ctx.finalSecs = (NET.now() - meta.startAt) / 1000; sendProg(); toast((won ? "다 놓았어요!" : "물고기를 다 잃었어요.") + " 위쪽 친구 이름을 누르면 친구 판을 볼 수 있어요", 4000); },
         });
       });
     }
@@ -403,7 +411,9 @@
     if (!R || !G || ctx.kind !== "vs") return;
     const done = G.won ? 1 : 0, failed = (!G.won && G.over) ? 1 : 0;
     const secs = G.over ? (ctx.finalSecs ?? (NET.now() - meta.startAt) / 1000) : null;
-    R.prog({ round: meta.round, placed: G.cats.size, n: G.n, mistakes: G.mistakes, hints: G.hints, done, failed, gaveUp: G.gaveUp ? 1 : 0, secs: secs == null ? null : Math.round(secs * 10) / 10 });
+    // b = 판 모양 한 줄 (관전용): 0 빈칸 · x ✕ · c 고양이 · b 틀린 칸
+    const b = Array.from({ length: G.n * G.n }, (_, k) => G.cats.has(k) ? "c" : G.bad.has(k) ? "b" : G.xs.has(k) ? "x" : "0").join("");
+    R.prog({ round: meta.round, placed: G.cats.size, n: G.n, mistakes: G.mistakes, hints: G.hints, done, failed, gaveUp: G.gaveUp ? 1 : 0, secs: secs == null ? null : Math.round(secs * 10) / 10, b });
   }
   const score = q => q.done ? (q.secs || 0) + (meta.cfg.hint === "penalty" ? (q.hints || 0) * PENALTY : 0) : null;
   function ranking() {
@@ -414,6 +424,56 @@
         return ((b.q && b.q.placed) || 0) - ((a.q && a.q.placed) || 0);
       });
   }
+  // ── 게임 중 채팅: 💬 단추 → 아래에서 올라오는 창 (빠른 응원 단추 + 입력), 받은 말은 말풍선으로 잠깐
+  const QUICK = ["🔥 힘내!", "😼 거의 다 왔어", "👏 잘했어", "😹 ㅋㅋㅋ", "😿 어려워…", "⏳ 기다릴게"];
+  $("pcQuick").innerHTML = QUICK.map(q => `<button class="btn">${q}</button>`).join("");
+  for (const b of $("pcQuick").children) b.onclick = () => { if (R) R.chat(b.textContent); $("pcBox").hidden = true; };
+  const pcSend = () => { const v = $("pcIn").value.trim(); if (v && R) { R.chat(v); $("pcIn").value = ""; $("pcBox").hidden = true; } };
+  $("pcSend").onclick = pcSend;
+  $("pcIn").onkeydown = e => { if (e.key === "Enter") pcSend(); };
+  $("chatBtn").onclick = () => { $("pcBox").hidden = !$("pcBox").hidden; $("chatBadge").hidden = true; $("pcLog").scrollTop = 1e9; };
+  $("pcClose").onclick = () => { $("pcBox").hidden = true; };
+  let bubT = null;
+  function bubble(m) {
+    $("bubble").innerHTML = `<b>${esc(m.n)}</b> ${esc(m.m)}`; $("bubble").hidden = false;
+    $("chatBadge").hidden = false; S("count");
+    clearTimeout(bubT); bubT = setTimeout(() => { $("bubble").hidden = true; }, 3500);
+  }
+
+  // ── 관전: 내 판이 끝나면 친구 이름표를 눌러 그 친구 판을 실시간으로 (판 모양은 prog.b)
+  let spyU = null, spyN = 0;
+  function spyOpen(u) { spyU = u; spyN = 0; $("spyBox").hidden = false; spyDraw(); }
+  function spyDraw() {
+    if (!spyU || !G || !meta) return;
+    const others = ranking().filter(r => r.u !== R.uid), q = prog[spyU];
+    const p = players[spyU];
+    if (!p) { $("spyBox").hidden = true; spyU = null; return; }
+    if (spyN !== G.n) {                                                   // 판(색 묶음)은 내 판과 같은 문제
+      spyN = G.n; let h = "";
+      for (let r = 0; r < G.n; r++) for (let c = 0; c < G.n; c++) h += `<div class="c" style="background:${NY.COLORS[G.reg[r][c] % NY.COLORS.length][0]}"><span class="x">${XSVG}</span><span class="cat">🐱</span></div>`;
+      $("spyBoard").innerHTML = h; $("spyBoard").style.cssText = `--n:${G.n};grid-template-columns:repeat(${G.n},minmax(0,1fr));grid-template-rows:repeat(${G.n},minmax(0,1fr))`;
+    }
+    const b = (q && q.round === meta.round && q.b) || "";
+    [...$("spyBoard").children].forEach((el, k) => {
+      const ch = b[k] || "0";
+      el.classList.toggle("has-cat", ch === "c"); el.classList.toggle("has-x", ch === "x" || ch === "b"); el.classList.toggle("bad", ch === "b");
+    });
+    const qq = q && q.round === meta.round ? q : null;
+    $("spyName").textContent = `👀 ${p.name}`;
+    $("spyStat").textContent = !qq ? "준비 중" : qq.done ? `✔ 다 찾음 · ${fmt(score(qq))}` : qq.failed ? (qq.gaveUp ? "포기" : "실패") : `🐱 ${qq.placed}/${qq.n} · 🐟 ${3 - (qq.mistakes || 0)}`;
+    $("spyPrev").hidden = $("spyNext").hidden = others.length < 2;
+  }
+  const spyStep = d => { const o = ranking().filter(r => r.u !== R.uid); if (!o.length) return; const i = o.findIndex(r => r.u === spyU); spyOpen(o[(i + d + o.length) % o.length].u); };
+  $("spyPrev").onclick = () => spyStep(-1);
+  $("spyNext").onclick = () => spyStep(1);
+  $("spyClose").onclick = () => { $("spyBox").hidden = true; spyU = null; };
+  $("opp").addEventListener("click", e => {
+    const el = e.target.closest(".p[data-u]"); if (!el || !G) return;
+    if (el.dataset.u === R.uid) return;
+    if (!G.over) { toast("내 판을 끝내면 친구 판을 볼 수 있어요"); return; }
+    spyOpen(el.dataset.u);
+  });
+
   function drawOpp() {
     if (!R || !meta || meta.phase !== "play" || !G) return;               // 방을 나간 뒤 늦게 온 알림은 무시
     // 위쪽 얇은 줄: 사람마다 알약 하나 (나도 포함) — 진행 막대 · 남은 물고기 · 끝나면 기록
@@ -421,7 +481,7 @@
       const pct = q ? q.placed / q.n * 100 : 0;
       const st = !q ? "준비" : q.done ? `✔ ${fmt(score(q))}` : q.failed ? (q.gaveUp ? "포기" : "실패") : `🐟${3 - (q.mistakes || 0)}${q.hints ? " 💡" + q.hints : ""}`;
       const cls = [u === R.uid ? "me" : "", q && q.done ? "done" : "", q && q.failed ? "fail" : ""].join(" ");
-      return `<div class="p ${cls}"><span class="av">${esc((name || "?").slice(0, 1))}</span><b>${esc(name)}</b><span class="pb"><i style="width:${pct}%"></i></span><span>${st}</span></div>`;
+      return `<div class="p ${cls}${G.over && u !== R.uid ? " can" : ""}" data-u="${esc(u)}"><span class="av">${esc((name || "?").slice(0, 1))}</span><b>${esc(name)}</b><span class="pb"><i style="width:${pct}%"></i></span><span>${st}</span></div>`;
     }).join("");
   }
   function checkRoundEnd() {
