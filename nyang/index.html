@@ -75,6 +75,7 @@ body.playing .wrap{display:none}
 .bar .mid{display:grid;justify-items:center;line-height:1.15}
 .bar .lbl{font:19px var(--round)}
 .bar .t{font:15px var(--round);color:var(--soft);font-variant-numeric:tabular-nums}
+.bar .t.hurry{color:var(--bad);animation:look 1s ease-in-out infinite}
 .pill{background:var(--card);border-radius:99px;padding:7px 11px;box-shadow:var(--shadow);white-space:nowrap;font-size:18px;letter-spacing:1px}
 .pill .gone{filter:grayscale(1);opacity:.22}
 .catstrip{display:flex;justify-content:center;flex-wrap:nowrap;gap:5px;background:var(--card);border-radius:99px;padding:6px 10px;box-shadow:var(--shadow);align-self:center;max-width:100%}
@@ -184,6 +185,8 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
     <div id="soloBox" style="display:grid;gap:12px">
+      <div class="seg" id="soloMode" style="justify-content:center"></div>
+      <p class="lede" id="soloDesc" hidden style="text-align:center"></p>
       <div class="tiers" id="tiers"></div>
       <ul class="howto">
         <li>색 묶음마다, 가로줄·세로줄마다 고양이 한 마리씩</li>
@@ -217,7 +220,10 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
   <section id="lobby" class="card" hidden>
     <div class="row"><h2 style="flex:1">대기실 · <span style="color:var(--accent)" id="lbCode"></span></h2><button class="btn" id="copyLink">초대 링크</button><button class="btn ghost" id="leave1">나가기</button></div>
     <ul class="list" id="lbPlayers"></ul>
+    <p class="lede" id="modeDesc" style="margin:0"></p>
     <div id="hostOpts" style="display:grid;gap:10px">
+      <div><span class="small">모드</span><div class="seg" id="cfgMode"></div></div>
+      <div id="cfgMinsW" hidden><span class="small">시간</span><div class="seg" id="cfgMins"></div></div>
       <div><span class="small">난이도</span><div class="seg" id="cfgTier"></div></div>
       <div><span class="small">힌트</span><div class="seg" id="cfgHint"></div></div>
       <div><span class="small">판 수</span><div class="seg" id="cfgRounds"></div></div>
@@ -257,7 +263,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 <script src="core.js?v=3"></script>
 <script src="net.js?v=4"></script>
 <script src="sound.js?v=1"></script>
-<script src="main.js?v=10"></script>
+<script src="main.js?v=11"></script>
 <script src="watch.js?v=6"></script>
 </body>
 </html>
