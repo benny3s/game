@@ -130,7 +130,9 @@
   $("clearX").onclick = () => { if (!G || G.over) return; G.xs.clear(); closeHint(); paint(); progress(); };
 
   // ── 단계별 힌트: 1) 어디를 볼지 반짝 2) 이유 + 바꿀 칸 표시 3) 적용
-  function closeHint() { hint = null; hintStage = 0; $("hintBox").hidden = true; if (G) paint(); }
+  // 힌트 창은 아래 단추 줄 자리에 뜸 → 열고 닫을 때·글이 길어질 때 판 크기를 다시 맞춤
+  function hintLayout(open) { $("hintBox").hidden = !open; $("dock").hidden = open; requestAnimationFrame(() => fitBoard(true)); }
+  function closeHint() { const was = !$("hintBox").hidden; hint = null; hintStage = 0; if (was) hintLayout(false); if (G) paint(); }
   function useHint() {
     G.hints++;
     if (ctx.ta && ctx.hintRule === "penalty") { ctx.ta.endAt -= PENALTY * 1000; toast(`⏱ 힌트 -${PENALTY}초`, 1200); }   // 타임어택: 힌트 한 단계마다 내 남은 시간 -10초
@@ -144,13 +146,13 @@
     if (!hint) { toast("지금은 줄 힌트가 없어요"); return; }
     hintStage = 1; useHint(); S("hint");
     $("hintText").textContent = hint.kind === "wrongX" ? "반짝이는 칸을 다시 보세요. 뭔가 이상해요." : hint.kind === "clean" ? "반짝이는 고양이 주변을 보세요. 정리할 칸이 남았어요." : "반짝이는 곳을 보세요. 여기서 알 수 있는 게 있어요.";
-    $("hintMore").hidden = false; $("hintApply").hidden = true; $("hintBox").hidden = false;
+    $("hintMore").hidden = false; $("hintApply").hidden = true; hintLayout(true);
     paint();
   };
   $("hintMore").onclick = () => {
     if (!hint) return;
     hintStage = 2; useHint();
-    $("hintText").textContent = hint.why;
+    $("hintText").textContent = hint.why; hintLayout(true);                 // 이유 글이 길면 판을 조금 더 줄임
     $("hintMore").hidden = true; $("hintApply").hidden = false;
     $("hintApply").textContent = hint.act === "cat" ? "🐱 놓기" : hint.act === "unx" ? "✕ 지우기" : `✕ ${hint.target.length}칸 표시`;
     paint();
@@ -226,6 +228,13 @@
       },
     });
   }
+  // 결과창 격려 한 줄: "🧩 24판째! 😺 길냥이까지 6판" (칭호가 바뀌면 축하)
+  function cheerLine() {
+    const m = myRec(); if (!m || !m.sv) return "";
+    const sv = m.sv, lv = level(sv), nx = LEVELS.find(l => l[0] > sv);
+    const up = lv[0] === sv && sv > 0;
+    return `<p class="cheer">${up ? `🎉 새 칭호! ${lv[1]} <b>${lv[2]}</b>` : `🧩 ${sv}판째!`}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : ""}</p>`;
+  }
   function playTA(tier) {
     NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, NET.uid); if (lg) lg.matchStart({ mode: "ta", tier, mins: TA_SOLO_MIN }); }).catch(() => {});
     TA = { kind: "solo", tier, endAt: Date.now() + TA_SOLO_MIN * 60000, clock: () => Date.now(), solved: 0, failed: 0, i: 0, hintRule: "penalty", over: false };
@@ -241,7 +250,7 @@
       if (best) { bs[ta.tier] = ta.solved; store.set("taBest", bs); }
       if (glog) glog.matchEnd({ mode: "ta", solved: ta.solved, failed: ta.failed });
       REC.ta(ta.tier, TA_SOLO_MIN, ta.solved); REC.solved(ta.solved);
-      result("⏱ 시간 끝!", `<p class="round" style="font-size:44px;margin:0;color:var(--accent)">${ta.solved}개</p><p class="small" style="margin:0">${TA_SOLO_MIN}분 동안 푼 문제${ta.failed ? ` · 실패 ${ta.failed}` : ""}${best && ta.solved ? " · <b style='color:var(--good)'>최고 기록!</b>" : bs[ta.tier] ? ` · 최고 ${bs[ta.tier]}개` : ""}</p>`,
+      result("⏱ 시간 끝!", `<p class="round" style="font-size:44px;margin:0;color:var(--accent)">${ta.solved}개</p><p class="small" style="margin:0">${TA_SOLO_MIN}분 동안 푼 문제${ta.failed ? ` · 실패 ${ta.failed}` : ""}${best && ta.solved ? " · <b style='color:var(--good)'>최고 기록!</b>" : bs[ta.tier] ? ` · 최고 ${bs[ta.tier]}개` : ""}</p>${cheerLine()}`,
         [["한 번 더", () => playTA(ta.tier), "primary"], ["난이도 고르기", goHome]]);
     } else { sendProg(); toast("⏱ 시간 끝! 다른 사람을 기다리는 중…", 3000); checkRoundEnd(); }
   }
@@ -251,7 +260,28 @@
   const solved = () => store.get("solved", {});                // { tier: [푼 문제 번호들] }
   const bests = () => store.get("bestT", {});                  // { tier: 가장 빠른 초 }
   let soloMode = store.get("soloMode", "one");                  // one = 한 판 · ta = 타임어택
+  // 혼자 화면 맨 위: 몇 판 깼는지 · 다음 칭호까지 · 친구 중 몇 등 · 자랑하기
+  async function drawSoloProg(force) {
+    const el = $("soloProg");
+    if (!myName()) { el.innerHTML = '<span class="small">이름을 정하면 몇 판 깼는지 쌓여요</span>'; return; }
+    try { await loadRec(force); } catch (e) { return; }
+    const sv = (myRec() || {}).sv || 0, lv = level(sv), nx = LEVELS.find(l => l[0] > sv);
+    const pct = nx ? Math.round((sv - lv[0]) / (nx[0] - lv[0]) * 100) : 100;
+    const rows = Object.entries(rkData.rec).filter(([pid, r]) => rkData.names[pid] && r.sv).map(([pid, r]) => ({ pid, n: rkData.names[pid], sv: r.sv })).sort((a, b) => b.sv - a.sv);
+    const i = rows.findIndex(r => r.pid === GME.me.pid), above = i > 0 ? rows[i - 1] : null;
+    const cheer = !sv ? "첫 판을 깨 보세요!" : i === 0 ? (rows.length > 1 ? `👑 친구 ${rows.length}명 중 1등!` : "👑 지금 1등!")
+      : above ? `${i + 1}등 · <b>${esc(above.n)}</b>까지 ${above.sv - sv + 1}판 더!` : "";
+    el.innerHTML = `<div class="pc-top"><span class="lv">${lv[1]}</span><div class="pc-mid"><b class="round">${sv}판 깼어요</b><span class="small">${lv[2]}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : " · 최고 칭호!"}</span></div><button class="btn mint" id="shareBtn">📤 자랑</button></div>
+      <div class="pc-bar"><i style="width:${pct}%"></i></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}`;
+    $("shareBtn").onclick = () => shareMe(sv, lv);
+  }
+  async function shareMe(sv, lv) {
+    const url = location.origin + location.pathname, text = `🐱 냥도쿠 ${sv}판 깼어요! (${lv[1]} ${lv[2]}) 나랑 같이 해요`;
+    try { if (navigator.share) { await navigator.share({ title: "냥도쿠", text, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    try { await navigator.clipboard.writeText(`${text} ${url}`); toast("자랑 글을 복사했어요. 카톡에 붙여 넣으세요"); } catch (e) { prompt("이 글을 친구에게 보내세요", `${text} ${url}`); }
+  }
   function drawTiers() {
+    drawSoloProg();
     const bs = bests(), tb = store.get("taBest", {}), ta = soloMode === "ta";
     segBtns($("soloMode"), [["one", "🧩 한 판"], ["ta", `⏱ 타임어택 ${TA_SOLO_MIN}분`]], soloMode, v => { soloMode = v; store.set("soloMode", v); drawTiers(); });
     $("soloDesc").textContent = ta ? `${TA_SOLO_MIN}분 동안 몇 개 풀 수 있을까요? 다 풀거나 🐟를 다 잃으면 바로 다음 문제. 힌트는 한 번에 -${PENALTY}초` : "";
@@ -283,7 +313,7 @@
           REC.solved(1); if (!G.hints) REC.best(tier, secs, G.n);
           const sv = solved(); const s = new Set(sv[tier] || []); s.add(i); sv[tier] = [...s]; store.set("solved", sv);
           const bs = bests(); const best = !G.hints && (!bs[tier] || secs < bs[tier]); if (best) { bs[tier] = secs; store.set("bestT", bs); }
-          result("🎉 다 찾았어요!", `<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>`,
+          result("🎉 다 찾았어요!", `<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>${cheerLine()}`,
             [["한 판 더", () => playSolo(tier), "primary"], ["난이도 고르기", goHome]]);
         } else {
           result("😿 물고기를 다 잃었어요", `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리 찾았어요.</p><p class="small" style="margin:0">💡 힌트나 🪄 자동 ✕를 써 보세요.</p>`,
@@ -327,7 +357,7 @@
   async function askName(change) {
     await NET.init();
     await (change ? GME.pick(NET.db(), { canClose: true, title: "누구로 할까요?" }) : GME.ensure(NET.db()));
-    drawMe();
+    drawMe(); drawSoloProg(true);
     if (R && myName()) R.setMe({ name: myName() });
     return myName();
   }
@@ -337,7 +367,7 @@
     $("rooms").innerHTML = '<li class="none">불러오는 중…</li>';
     try {
       const rows = await NET.listRooms();
-      $("rooms").innerHTML = rows.length ? rows.map(r => `<li class="${r.empty ? "empty" : ""}"><span class="cd">${esc(r.code)}</span><span class="inf"><b>${esc(r.h)}</b> <span class="small">${r.n}/${NET.MAXP}명 · ${esc((TIERS.find(t => t.id === r.tier) || {}).name || "")} · ${r.ph === "lobby" ? "대기 중" : "게임 중"}</span></span>${r.empty ? `<button class="btn danger" data-del="${esc(r.code)}">빈 방 지우기</button>` : `<button class="btn" data-join="${esc(r.code)}">들어가기</button>`}</li>`).join("") : '<li class="none">열린 방이 없어요. 방을 만들어 보세요.</li>';
+      $("rooms").innerHTML = rows.length ? rows.map(r => `<li class="${r.empty ? "empty" : ""}"><span class="cd">${esc(r.code)}</span><span class="inf"><b>${esc(r.h)}</b> <span class="small">${r.n}/${NET.MAXP}명 · ${(MODES.find(x => x[0] === (r.m || "race")) || [])[1] || ""} · ${esc((TIERS.find(t => t.id === r.tier) || {}).name || "")} · ${r.ph === "lobby" ? "대기 중" : "게임 중"}</span></span>${r.empty ? `<button class="btn danger" data-del="${esc(r.code)}">빈 방 지우기</button>` : `<button class="btn" data-join="${esc(r.code)}">들어가기</button>`}</li>`).join("") : '<li class="none">열린 방이 없어요. 방을 만들어 보세요.</li>';
       for (const b of $("rooms").querySelectorAll("[data-join]")) b.onclick = () => joinRoom(b.dataset.join);
       for (const b of $("rooms").querySelectorAll("[data-del]")) b.onclick = async () => { await NET.deleteRoom(b.dataset.del); drawRooms(); };
     } catch (e) { $("rooms").innerHTML = `<li class="none">방 목록을 못 불러왔어요 (${esc(e.message)})</li>`; }
@@ -588,7 +618,7 @@
   function bubble(m) {
     $("bubble").innerHTML = `<b>${esc(m.n)}</b> ${esc(m.m)}`; $("bubble").hidden = false;
     $("chatBadge").hidden = false; S("count");
-    clearTimeout(bubT); bubT = setTimeout(() => { $("bubble").hidden = true; }, 3500);
+    clearTimeout(bubT); bubT = setTimeout(() => { $("bubble").hidden = true; }, 5000);
   }
 
   // ── 관전: 내 판이 끝나면 친구 이름표를 눌러 그 친구 판을 실시간으로 (판 모양은 prog.b)
@@ -687,10 +717,11 @@
     const best = (coopInfo && coopInfo.best) || {}, by = {};
     let lastT = 0;
     for (const o of Object.values(best)) if (o.s === "c" || o.s === "b") { const b = by[o.u] || (by[o.u] = { c: 0, b: 0 }); b[o.s]++; lastT = Math.max(lastT, o.t); }
-    const secs = Math.max(0, ((lastT || NET.now()) - meta.startAt) / 1000);
+    const hintsAll = Object.values(prog).filter(q => q && q.round === meta.round).reduce((a, q) => a + (q.hints || 0), 0);
+    const secs = Math.max(0, ((lastT || NET.now()) - meta.startAt) / 1000) + (meta.cfg.hint === "penalty" ? hintsAll * PENALTY : 0);
     ctx.finalSecs = secs;
     const rows = Object.entries(players).map(([u, p]) => ({ u, name: p.name, c: (by[u] || {}).c || 0, b: (by[u] || {}).b || 0 })).sort((a, b) => b.c - a.c || a.b - b.b);
-    const body = `${G.won ? `<p class="round" style="font-size:30px;margin:0;color:var(--accent)">${fmt(secs)}</p>` : `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리까지 찾았어요</p>`}
+    const body = `${G.won ? `<p class="round" style="font-size:30px;margin:0;color:var(--accent)">${fmt(secs)}</p>${hintsAll && meta.cfg.hint === "penalty" ? `<p class="small" style="margin:0">힌트 ${hintsAll}번 · +${hintsAll * PENALTY}초 포함</p>` : ""}` : `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리까지 찾았어요</p>`}
       <table class="rank"><tr><th>이름</th><th>찾은 🐱</th><th>실수</th></tr>${rows.map(r => `<tr><td>${esc(r.name)}${r.u === R.uid ? " (나)" : ""}</td><td class="n">${r.c}</td><td class="n">${r.b}</td></tr>`).join("")}</table>`;
     if (isHost && glog) try { glog.matchEnd({ mode: "coop", won: G.won, secs: Math.round(secs * 10) / 10, results: rows.map(r => ({ n: r.name, cats: r.c, mistakes: r.b })) }); } catch (e) {}
     const key = `${R.code}:${meta.round}:${meta.startAt}`;
@@ -726,7 +757,7 @@
     best(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}tb/${tier}`, secs)); },
     ta(tier, mins, cnt) { if (!cnt) return; this.both((r, p) => maxTx(r, `${p}ta/${tier}_${mins}`, cnt)); },
     coop(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}co/${tier}`, secs)); },
-    solved(k) { this.both((r, p) => addTx(r, `${p}sv`, k)); },
+    solved(k) { if (!k) return; this.both((r, p) => addTx(r, `${p}sv`, k)); const m = myRec(); if (m) m.sv = (m.sv || 0) + k; },   // 화면엔 바로 반영
     match(pts, won) { this.both((r, p) => { addTx(r, `${p}pts`, pts); addTx(r, `${p}games`, 1); addTx(r, `${p}wins`, won ? 1 : 0); }); },
   };
   // 대결 한 판 끝: 내가 이긴 사람 수만큼 승점 (같은 판을 두 번 세지 않게)
@@ -747,21 +778,24 @@
   const RK = Object.assign({ kind: "sv", period: "week", tier: "easy", mins: 3 }, store.get("rk2", {}));
   const RK_KINDS = [["sv", "🧩", "많이 푼"], ["ta", "⏱", "타임어택"], ["tb", "🏁", "최고 시간"], ["pts", "⚔️", "승점"]];
   let rkData = null, rkAdmin = false;
+  async function loadRec(force) {
+    if (rkData && !force) return rkData;
+    await NET.init();
+    const [rec, people] = await Promise.all([NET.db().ref(`${GME.P}nyang/rec`).get(), GME.loadAll(NET.db())]);
+    return (rkData = { rec: rec.val() || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) });
+  }
+  const myRec = () => (rkData && GME.me && (rkData.rec[GME.me.pid] || (rkData.rec[GME.me.pid] = {}))) || null;
   const rkSet = p => { Object.assign(RK, p); store.set("rk2", RK); drawRank(false); };
   async function drawRank(reload = true) {
     $("rkKind").innerHTML = RK_KINDS.map(([v, ic, l]) => `<button data-v="${v}" aria-pressed="${RK.kind === v}"><i>${ic}</i>${l}</button>`).join("");
     for (const b of $("rkKind").children) b.onclick = () => rkSet({ kind: b.dataset.v });
     if (reload || !rkData) {
       $("rkList").innerHTML = '<li class="none">불러오는 중…</li>';
-      try {
-        await NET.init();
-        const [rec, people] = await Promise.all([NET.db().ref(`${GME.P}nyang/rec`).get(), GME.loadAll(NET.db())]);
-        rkData = { rec: rec.val() || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) };
-        rkAdmin = await NET.isAdmin();
-      } catch (e) { $("rkList").innerHTML = `<li class="none">못 불러왔어요 (${esc(e.message)})</li>`; return; }
+      try { await loadRec(true); rkAdmin = await NET.isAdmin(); }
+      catch (e) { $("rkList").innerHTML = `<li class="none">못 불러왔어요 (${esc(e.message)})</li>`; return; }
     }
     const wk = weekKey(), useTier = RK.kind === "ta" || RK.kind === "tb";
-    const pick = r0 => RK.period === "week" ? ((r0.w || {})[wk] || {}) : r0;
+    const pick = r0 => r0;                                                   // 누적만 (주간 기록 w/ 는 쌓아만 둠)
     // 타임어택 시간(2·3·5분): 이 난이도에 3분 말고 다른 시간 기록이 있을 때만 고르게
     const minsHave = new Set([3]);
     if (RK.kind === "ta") for (const r0 of Object.values(rkData.rec)) for (const k of Object.keys(pick(r0).ta || {})) { const [t, m] = k.split("_"); if (t === RK.tier) minsHave.add(+m); }
@@ -769,7 +803,6 @@
     const chips = (el, items, cur, key) => { $(el).innerHTML = items.map(([v, l]) => `<button data-v="${v}" aria-pressed="${String(v) === String(cur)}">${l}</button>`).join(""); for (const b of $(el).children) b.onclick = () => rkSet({ [key]: key === "mins" ? +b.dataset.v : b.dataset.v }); };
     chips("rkTier", useTier ? TIERS.map(t => [t.id, t.name]) : [], RK.tier, "tier");
     chips("rkMins", RK.kind === "ta" && minsHave.size > 1 ? [...minsHave].sort().map(m => [m, m + "분"]) : [], RK.mins, "mins");
-    chips("rkPeriod", [["week", "이번 주"], ["all", "전체"]], RK.period, "period");
     const rows = [];
     for (const [pid, r0] of Object.entries(rkData.rec)) {
       const name = rkData.names[pid]; if (!name) continue;
@@ -787,7 +820,7 @@
     const myPid = GME.me && GME.me.pid, top = rows.slice(0, 20), meI = rows.findIndex(r => r.pid === myPid);
     const li = (r, i) => `<li class="${r.pid === myPid ? "me" : ""}"><span class="rkn">${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span><span class="inf"><b>${esc(r.name)}</b> <span class="small">${RK.kind === "pts" ? r.gr + " " + esc(r.sub) : r.lv[1]}</span></span><b class="rkv">${fmtV(r.v)}</b>${rkAdmin ? `<button class="del" data-del="${esc(r.pid)}" title="기록 지우기 (관리자)">🗑</button>` : ""}</li>`;
     $("rkList").innerHTML = rows.length ? top.map(li).join("") + (meI >= 20 ? `<li class="none">…</li>${li(rows[meI], meI)}` : "")
-      : `<li class="none">${RK.period === "week" ? "이번 주엔 아직 기록이 없어요. 첫 기록을 남겨 보세요!" : "아직 기록이 없어요."}</li>`;
+      : '<li class="none">아직 기록이 없어요. 첫 기록을 남겨 보세요!</li>';
     $("rkNote").textContent = { sv: "다 푼 문제 수 · 혼자·대결·협동 모두", ta: "타임어택으로 푼 문제 수", tb: "힌트 없이 다 푼 가장 빠른 시간", pts: "대결에서 이긴 사람 수만큼 · 협동 성공 +1" }[RK.kind];
     for (const b of $("rkList").querySelectorAll("[data-del]")) b.onclick = async () => {
       const n = rkData.names[b.dataset.del]; if (!confirm(`${n} 의 냥도쿠 기록을 모두 지울까요?`)) return;
@@ -807,7 +840,7 @@
 
   // ── 시작
   setAutoX(autoX);
-  NET.init().then(() => GME.ensure(NET.db())).then(drawMe).catch(() => {});   // 처음 오면 이름부터
+  NET.init().then(() => GME.ensure(NET.db())).then(() => { drawMe(); drawSoloProg(true); }).catch(() => {});   // 처음 오면 이름부터
   bankP.then(() => {
     drawTiers();
     const q = new URLSearchParams(location.search).get("room");

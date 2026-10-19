@@ -47,7 +47,7 @@ const NET = (() => {
   function roomApi(code, isHost, hooks) {
     const room = db().ref(`nyang/rooms/${code}`), idx = db().ref(`nyang/index/${code}`), S = subs();
     let left = false, meta = null, mine = null, nPlayers = 0;
-    const writeIdx = () => isHost && meta && idx.set({ h: mine.name, n: nPlayers, ph: meta.phase, tier: meta.cfg.tier, t: TS() }).catch(() => {});
+    const writeIdx = () => isHost && meta && idx.set({ h: mine.name, n: nPlayers, ph: meta.phase, tier: meta.cfg.tier, m: meta.cfg.mode || "race", t: TS() }).catch(() => {});
     const seat = () => {
       if (left) return Promise.resolve();
       if (!isHost) { room.child(`players/${user.uid}`).onDisconnect().remove(); room.child(`prog/${user.uid}`).onDisconnect().remove(); }

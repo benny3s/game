@@ -64,6 +64,14 @@ header.top .mechip+a{margin-left:0}
 .rklist .rkv{font:18px var(--round);font-weight:400;color:var(--accent);white-space:nowrap}
 .rklist li.me{border-color:var(--accent);background:#fff1e3}
 .rklist .del{border:0;background:none;padding:2px;font-size:13px;opacity:.35;cursor:pointer}
+.progcard{background:#fff6ea;border-radius:18px;padding:12px;display:grid;gap:8px}
+.progcard:empty{display:none}
+.pc-top{display:flex;align-items:center;gap:10px}.pc-top .lv{font-size:36px;line-height:1}
+.pc-mid{display:grid;line-height:1.3}.pc-mid b{font-size:21px}
+.pc-top .btn{margin-left:auto;white-space:nowrap;padding:9px 13px;font-size:14.5px}
+.pc-bar{height:9px;border-radius:5px;background:#f3e2cf;overflow:hidden}.pc-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:5px;transition:width .4s}
+.pc-cheer{color:var(--ink)}
+.cheer{margin:0;background:#fff6ea;border-radius:12px;padding:8px 10px;font-size:14px}
 .howto{margin:0;padding-left:18px;color:var(--soft);font-size:13.5px;display:grid;gap:2px}
 /* 친구랑 */
 input[type=text]{font:16px var(--text);background:#fffaf4;color:var(--ink);border:2px solid var(--line);border-radius:14px;padding:10px 12px;width:100%;outline:none}
@@ -133,9 +141,9 @@ body.playing .wrap{display:none}
 .peek{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:4;padding:13px 22px;font-size:17px;white-space:nowrap}
 .peek:active{transform:translateX(-50%) translateY(2px)}
 .opp .p.can{cursor:pointer;outline:2px dashed var(--accent2);outline-offset:1px}
-.bubble{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);background:#fffbe8;color:var(--ink);padding:9px 15px;border-radius:18px;box-shadow:0 8px 24px rgba(140,98,70,.28);z-index:12;font-size:15px;max-width:calc(100vw - 32px);animation:bub .25s ease-out}
+.bubble{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 100px);transform:translateX(-50%);background:#fffbe8;color:var(--ink);padding:11px 16px;border-radius:18px;border:2px solid var(--accent);box-shadow:0 10px 28px rgba(140,98,70,.35);z-index:25;font-size:16.5px;width:max-content;max-width:calc(100vw - 32px);animation:bub .25s ease-out}
 .bubble b{color:#d9785b;margin-right:4px}
-@keyframes bub{from{opacity:0;transform:translate(-50%,-8px)}}
+@keyframes bub{from{opacity:0;transform:translate(-50%,10px) scale(.9)}}
 .pcbox{position:fixed;left:0;right:0;bottom:0;margin:0 auto;max-width:560px;background:var(--card);border-radius:22px 22px 0 0;padding:14px 14px calc(env(safe-area-inset-bottom,0px) + 14px);display:grid;gap:10px;z-index:15;box-shadow:0 -10px 30px rgba(140,98,70,.25)}
 .pcbox .log{height:120px;overflow:auto;background:#fffaf4;border:2px solid var(--line);border-radius:14px;padding:6px 10px;font-size:14px}
 .pcbox .log b{color:#d9785b}
@@ -144,9 +152,12 @@ body.playing .wrap{display:none}
 .spyb{width:min(100%,380px);margin:0 auto}
 .wboard .c .x svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
 .wboard .c.bad .x{color:var(--bad)}
-.hintbox{position:absolute;left:0;right:0;bottom:4px;margin:0 auto;width:min(100%,520px);background:#fffbe8;border-radius:20px;padding:12px 14px;display:grid;gap:10px;box-shadow:0 12px 34px rgba(140,98,70,.3);z-index:5}
-.hintbox p{margin:0;font-size:15px}
-.hintbox .row .btn{padding:9px 14px;font-size:15px}.overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(91,70,54,.35);padding:16px}
+/* 힌트: 아래 단추 줄 자리에 (판을 가리지 않게 — 열리면 판이 그만큼 작아짐) */
+.hintbox{width:min(100%,560px);margin:0 auto;background:#fffbe8;border-radius:18px;padding:10px 12px;display:grid;gap:8px;box-shadow:0 6px 18px rgba(140,98,70,.2);flex:none}
+.hintbox p{margin:0;font-size:14.5px;line-height:1.45}
+.hintbox .row{flex-wrap:nowrap;justify-content:flex-end}
+.hintbox .row .btn{padding:8px 13px;font-size:14.5px}
+#board{transition:width .2s,height .2s}.overlay{position:fixed;inset:0;display:grid;place-items:center;z-index:20;background:rgba(91,70,54,.35);padding:16px}
 .overlay>div{background:var(--card);border-radius:24px;padding:20px;width:min(420px,100%);display:grid;gap:12px;max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 20px 50px rgba(91,70,54,.3);text-align:center}
 .overlay h2{font-size:26px}
 .overlay .row{justify-content:center}
@@ -204,6 +215,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
     <div id="soloBox" style="display:grid;gap:12px">
+      <div class="progcard" id="soloProg"></div>
       <div class="seg" id="soloMode" style="justify-content:center"></div>
       <p class="lede" id="soloDesc" hidden style="text-align:center"></p>
       <div class="tiers" id="tiers"></div>
@@ -222,7 +234,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
     </div>
     <div id="rankBox" hidden style="display:grid;gap:10px">
       <div class="rktabs" id="rkKind"></div>
-      <div class="rkopts"><span class="chips" id="rkTier"></span><span class="chips" id="rkMins"></span><span class="chips per" id="rkPeriod"></span></div>
+      <div class="rkopts"><span class="chips" id="rkTier"></span><span class="chips" id="rkMins"></span></div>
       <ol class="list rklist" id="rkList"></ol>
       <p class="small" id="rkNote" style="margin:0;text-align:center"></p>
       <div class="meline" id="meCard"></div>
@@ -268,9 +280,9 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
   <div class="boardwrap" id="boardwrap">
     <div id="board"></div>
     <button class="btn primary peek" id="resPeek" hidden>🏆 결과 다시 보기</button>
-    <div class="hintbox" id="hintBox" hidden><p id="hintText"></p><div class="row"><button class="btn" id="hintMore">이유 보기</button><button class="btn primary" id="hintApply" hidden>적용</button><button class="btn ghost" id="hintClose">닫기</button></div></div>
   </div>
-  <div class="dock">
+  <div class="hintbox" id="hintBox" hidden><p id="hintText"></p><div class="row"><button class="btn" id="hintMore">이유 보기</button><button class="btn primary" id="hintApply" hidden>적용</button><button class="btn ghost" id="hintClose">닫기</button></div></div>
+  <div class="dock" id="dock">
     <button id="hintBtn"><span class="ic">💡<span class="badge" id="hintBadge" hidden></span></span><span>힌트</span></button>
     <button id="autoX" aria-pressed="false"><span class="ic">🪄</span><span>자동 ✕</span></button>
     <button id="clearX"><span class="ic">🧽</span><span>✕ 지우기</span></button>
@@ -287,10 +299,10 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 
 <script src="../common/glog.js?v=1"></script>
 <script src="core.js?v=3"></script>
-<script src="net.js?v=5"></script>
+<script src="net.js?v=6"></script>
 <script src="../common/me.js?v=1"></script>
 <script src="sound.js?v=1"></script>
-<script src="main.js?v=14"></script>
-<script src="watch.js?v=6"></script>
+<script src="main.js?v=15"></script>
+<script src="watch.js?v=7"></script>
 </body>
 </html>

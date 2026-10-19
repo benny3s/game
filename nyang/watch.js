@@ -27,7 +27,7 @@
     let h = "";
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
       const g = reg[r][c];
-      h += `<div class="c" data-k="${r * n + c}" style="background:${NY.COLORS[g % NY.COLORS.length][0]}"><span class="x">✕</span><span class="cat">🐱</span></div>`;
+      h += `<div class="c" data-k="${r * n + c}" style="background:${NY.COLORS[g % NY.COLORS.length][0]}"><span class="x"><svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.2 2.2L7.8 7.8M7.8 2.2L2.2 7.8"/></svg></span><span class="cat">🐱</span></div>`;
     }
     return `<div class="wboard" style="--n:${n};grid-template-columns:repeat(${n},minmax(0,1fr));grid-template-rows:repeat(${n},minmax(0,1fr))">${h}</div>`;
   }
