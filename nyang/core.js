@@ -15,6 +15,22 @@ const NY = (() => {
     return { n, reg, ans: [...p.a].map(ch => DIG.indexOf(ch)), tech: p.t || 0 };
   }
 
+  // 같은 문제도 달라 보이게: seed 로 돌리기·뒤집기(8가지) + 색 묶음 순서 섞기. 같은 seed 면 누구나 같은 판 (대결용)
+  function variant(p, seed) {
+    if (!seed) return p;
+    const n = p.n, d = decode(p);
+    let s = seed >>> 0 || 1; const rnd = () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
+    const t = Math.floor(rnd() * 8);
+    const map = (r, c) => { let a = r, b = c; if (t & 4) [a, b] = [b, a]; if (t & 1) a = n - 1 - a; if (t & 2) b = n - 1 - b; return [a, b]; };
+    const perm = [...Array(n).keys()];
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+    const reg = Array.from({ length: n }, () => Array(n)), ans = Array(n);
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { const [a, b] = map(r, c); reg[a][b] = perm[d.reg[r][c]]; }
+    for (let r = 0; r < n; r++) { const [a, b] = map(r, d.ans[r]); ans[a] = b; }
+    return { n, r: reg.flat().map(g => L[g]).join(""), a: ans.map(c => DIG[c]).join(""), t: p.t };
+  }
+  const rseed = () => 1 + Math.floor(Math.random() * 2147483646);
+
   // ── 판 상태 (한 사람의 한 판)
   class Game {
     constructor(p, opt = {}) {
@@ -160,6 +176,6 @@ const NY = (() => {
     return null;
   }
 
-  return { COLORS, decode, Game, nextHint, colorName };
+  return { COLORS, decode, variant, rseed, Game, nextHint, colorName };
 })();
 if (typeof module !== "undefined") module.exports = NY;

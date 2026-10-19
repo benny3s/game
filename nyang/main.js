@@ -14,7 +14,7 @@
   const fmt = s => { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? "0" : ""}${r.toFixed(1)}`; };
   const toast = (m, ms = 2200) => { const d = document.createElement("div"); d.className = "toast"; d.textContent = m; document.body.appendChild(d); setTimeout(() => d.remove(), ms); };
   let bank = null;
-  const bankP = fetch("puzzles.json?v=1").then(r => r.json()).then(b => (window.__nyBank = bank = b));
+  const bankP = fetch("puzzles.json?v=2").then(r => r.json()).then(b => (window.__nyBank = bank = b));
 
   // ── 기록 (관리자만 읽음)
   let glog = null;
@@ -214,7 +214,7 @@
     const idx = ta.kind === "vs" ? ta.seq[ta.i % ta.seq.length] : pickRandom(ta.tier);
     ta.pi = ta.i;                                                            // 관전하는 친구가 같은 문제를 그리도록
     const label = () => `⏱ ${T.label} · ${ta.solved}개`;
-    startPuzzle(list[idx], {
+    startPuzzle(NY.variant(list[idx], ta.kind === "vs" ? (ta.vs || 0) + ta.i + 1 : NY.rseed()), {   // 대결은 모두 같은 모양
       kind: ta.kind, tier: ta.tier, idx, ta, hintRule: ta.hintRule, label: label(),
       onProgress: ta.kind === "vs" ? sendProg : null,
       onEnd(won) {
@@ -298,14 +298,15 @@
     if (!pool.length) pool = [...Array(n).keys()].filter(i => !recent.has(i));
     if (!pool.length) pool = [...Array(n).keys()];
     const i = pool[Math.floor(Math.random() * pool.length)];
-    store.set("recent_" + tier, [i, ...recent].slice(0, Math.min(10, n - 1)));
+    store.set("recent_" + tier, [i, ...recent].slice(0, Math.min(60, n - 1)));   // 최근 60판은 다시 안 나옴
     return i;
   }
-  function playSolo(tier, idx) {
-    const i = idx ?? pickRandom(tier), p = bank[tier][i], T = TIERS.find(t => t.id === tier);
+  function playSolo(tier, idx, vs) {
+    vs = vs ?? NY.rseed();                                                   // 같은 문제도 돌리고 뒤집고 색을 바꿔서 (다시 도전은 같은 모양)
+    const i = idx ?? pickRandom(tier), p = NY.variant(bank[tier][i], vs), T = TIERS.find(t => t.id === tier);
     NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, NET.uid); if (lg) lg.matchStart({ mode: "solo", tier, puzzle: i, n: p.n }); }).catch(() => {});   // 기록은 뒤에서 (판은 바로 시작)
     startPuzzle(p, {
-      kind: "solo", tier, idx: i, hintRule: "on", label: `${T.em} ${T.label}`,
+      kind: "solo", tier, idx: i, vs, hintRule: "on", label: `${T.em} ${T.label}`,
       onEnd(won) {
         const secs = G.secs; ctx.finalSecs = secs;
         if (glog) glog.matchEnd({ won, secs: Math.round(secs * 10) / 10, mistakes: G.mistakes, hints: G.hints });
@@ -317,7 +318,7 @@
             [["한 판 더", () => playSolo(tier), "primary"], ["난이도 고르기", goHome]]);
         } else {
           result("😿 물고기를 다 잃었어요", `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리 찾았어요.</p><p class="small" style="margin:0">💡 힌트나 🪄 자동 ✕를 써 보세요.</p>`,
-            [["다시 도전", () => playSolo(tier, i), "primary"], ["다른 문제", () => playSolo(tier)], ["난이도 고르기", goHome]]);
+            [["다시 도전", () => playSolo(tier, i, vs), "primary"], ["다른 문제", () => playSolo(tier)], ["난이도 고르기", goHome]]);
         }
       },
     });
@@ -336,7 +337,7 @@
   $("restart").onclick = () => {
     if (!G || ctx.kind !== "solo") { toast("대결 중에는 처음부터 할 수 없어요"); return; }
     if (!G.over && glog) glog.matchEnd({ won: false, restart: true, secs: Math.round(G.secs) });
-    playSolo(ctx.tier, ctx.idx);
+    playSolo(ctx.tier, ctx.idx, ctx.vs);
   };  function result(title, body, btns) {
     $("resTitle").textContent = title; $("resBody").innerHTML = body;
     $("resBtns").innerHTML = "";
@@ -501,7 +502,7 @@
     }
     await R.clearProg();
     if (glog) glog.matchStart({ mode: "vs-" + mode, tier: meta.cfg.tier, round, n: list[pid].n, hint: meta.cfg.hint, people: Object.values(players).map(p => p.name).join(", ") });
-    await R.setMeta({ phase: "play", round, pid, startAt, used: [...used].slice(-40), scored: 0, ...extra, ...(next ? {} : { wins: {} }) });
+    await R.setMeta({ phase: "play", round, pid, vs: NY.rseed(), startAt, used: [...used].slice(-40), scored: 0, ...extra, ...(next ? {} : { wins: {} }) });
   }
   $("startVs").onclick = () => startRound(false);
 
@@ -510,12 +511,12 @@
     if (meta.phase === "lobby") { if (R) { G = null; TA = null; myRound = 0; clearInterval(timerT); $("resBox").hidden = true; $("countBox").hidden = true; show("lobby"); } drawLobby(); return; }
     if (meta.phase === "play" && meta.round !== myRound) {
       myRound = meta.round; shownRound = 0;
-      const p = bank[meta.cfg.tier][meta.pid];
+      const p = NY.variant(bank[meta.cfg.tier][meta.pid], meta.vs);
       $("resBox").hidden = true;
       const mode = MODE(), tierName = (TIERS.find(t => t.id === meta.cfg.tier) || {}).name || "";
       countdown(meta.startAt, () => {
         if (mode === "ta") {
-          TA = { kind: "vs", tier: meta.cfg.tier, seq: meta.seq, endAt: meta.endAt, clock: () => NET.now(), solved: 0, failed: 0, i: 0, hintRule: meta.cfg.hint, over: false };
+          TA = { kind: "vs", tier: meta.cfg.tier, seq: meta.seq, vs: meta.vs, endAt: meta.endAt, clock: () => NET.now(), solved: 0, failed: 0, i: 0, hintRule: meta.cfg.hint, over: false };
           nextTA();
           const r = meta.round; setTimeout(() => { if (meta && meta.round === r) checkRoundEnd(); }, Math.max(0, meta.endAt - NET.now()) + 5000);   // 연결이 끊긴 사람이 있어도 결과가 뜨게
           return;
@@ -631,7 +632,7 @@
     if (!p) { $("spyBox").hidden = true; spyU = null; return; }
     // 판(색 묶음): 빨리 풀기는 내 판과 같은 문제, 타임어택은 그 친구가 지금 푸는 문제 (같은 순서 seq[pi])
     let n = G.n, reg = G.reg, key = "me:" + G.n;
-    if (MODE() === "ta" && meta.seq && q && q.round === meta.round) { const pid = meta.seq[(q.pi || 0) % meta.seq.length]; ({ n, reg } = NY.decode(bank[meta.cfg.tier][pid])); key = "ta:" + pid; }
+    if (MODE() === "ta" && meta.seq && q && q.round === meta.round) { const pid = meta.seq[(q.pi || 0) % meta.seq.length]; ({ n, reg } = NY.decode(NY.variant(bank[meta.cfg.tier][pid], (meta.vs || 0) + (q.pi || 0) + 1))); key = "ta:" + pid; }
     if (spyKey !== key) {
       spyKey = key; let h = "";
       for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) h += `<div class="c" style="background:${NY.COLORS[reg[r][c] % NY.COLORS.length][0]}"><span class="x">${XSVG}</span><span class="cat">🐱</span></div>`;
