@@ -43,7 +43,11 @@
   const SOUNDS = {
     x(t) { tone(t, 1250, 0.05, { type: "triangle", vol: 0.12 }); },                         // ✕ 표시: 톡
     unx(t) { tone(t, 800, 0.05, { type: "triangle", vol: 0.09 }); },                        // ✕ 지움: 낮은 톡
-    cat(t) { mew(t, { base: 820, dur: 0.26, vol: 0.2 }); tone(t + 0.02, N.E6, 0.12, { vol: 0.05 }); },   // 고양이 찾음: 짧은 미야
+    cat(t, o) {                                                                              // 고양이 찾음: 짧은 미야 (콤보면 한 음씩 높게 + 반짝)
+      const up = Math.pow(1.06, Math.min(o.combo || 0, 9));
+      mew(t, { base: 820 * up, dur: 0.26, vol: 0.2 }); tone(t + 0.02, N.E6 * up, 0.12, { vol: 0.05 });
+      if ((o.combo || 0) >= 3) tone(t + 0.12, N.G5 * 2 * up, 0.14, { vol: 0.06 });
+    },
     miss(t) { mew(t, { base: 420, dur: 0.38, vol: 0.2, up: 1.1, end: 0.7 }); tone(t, 220, 0.18, { type: "square", vol: 0.04, f2: 160 }); },   // 틀림: 낮은 므르
     hint(t) { [N.A5, N.E6].forEach((f, i) => tone(t + i * 0.07, f, 0.18, { vol: 0.09 })); },   // 힌트: 반짝
     start(t) { [N.C5, N.E5, N.G5].forEach((f, i) => tone(t + i * 0.08, f, 0.16, { type: "triangle", vol: 0.13 })); mew(t + 0.26, { base: 900, dur: 0.24, vol: 0.16 }); },   // 시작: 도미솔 + 냥
@@ -58,19 +62,23 @@
       [N.G5, N.E5, N.C5].forEach((f, i) => tone(t + i * 0.14, f, 0.2, { type: "triangle", vol: 0.11 }));
       mew(t + 0.45, { base: 520, dur: 0.6, vol: 0.18, up: 1.15, end: 0.62 });
     },
+    star(t, o) { tone(t, [N.C6, N.E6, N.G5 * 2][Math.min(2, o.i || 0)], 0.22, { type: "triangle", vol: 0.12 }); },   // 별 하나씩
+    badge(t) { [N.G5, N.C6, N.E6, N.G5 * 2].forEach((f, i) => tone(t + i * 0.07, f, 0.2, { vol: 0.1 })); },             // 배지·새 고양이
+    alert(t) { tone(t, 1175, 0.09, { type: "square", vol: 0.05 }); tone(t + 0.13, 1175, 0.09, { type: "square", vol: 0.05 }); },   // 상대 3마리 남음
+    rival(t) { [N.G5, N.E5, N.C5].forEach((f, i) => tone(t + i * 0.09, f, 0.16, { type: "triangle", vol: 0.1 })); },    // 상대가 다 풀었음
     lose(t) { [N.E5, N.C5].forEach((f, i) => tone(t + i * 0.12, f, 0.2, { type: "triangle", vol: 0.11 })); },   // 대결 결과(내가 진 판)
   };
   let lastAt = {};
   window.NYSND = {
     get on() { return on; },
     set(v) { on = !!v; try { localStorage.setItem("nyang.sound", on ? "1" : "0"); } catch (e) {} if (on) this.play("cat"); },
-    play(name) {
+    play(name, opt) {
       if (!on || !SOUNDS[name]) return;
       const a = ctx(); if (!a) return;
       const now = a.currentTime;
       if ((name === "x" || name === "unx") && lastAt[name] != null && now - lastAt[name] < 0.035) return;   // ✕ 끌어 칠할 때 너무 겹치지 않게
       lastAt[name] = now;
-      try { SOUNDS[name](now + 0.01); } catch (e) {}
+      try { SOUNDS[name](now + 0.01, opt || {}); } catch (e) {}
     },
   };
 })();

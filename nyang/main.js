@@ -51,7 +51,7 @@
     let h = "";
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
       const g = G.reg[r][c], col = NY.COLORS[g % NY.COLORS.length][0];
-      h += `<button class="c" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"><span class="x">${XSVG}</span><span class="cat">🐱</span></button>`;
+      h += `<button class="c" data-k="${r * n + c}" style="background:${col}" aria-label="${r + 1}줄 ${c + 1}칸"><span class="x">${XSVG}</span><span class="cat">${skin()}</span></button>`;
     }
     return h;
   }  function drawBoard() {
@@ -79,18 +79,49 @@
     $("hintBadge").hidden = !G.hints; $("hintBadge").textContent = G.hints;
     // 색 묶음마다 동그라미: 그 묶음에 고양이를 놓으면 채워짐
     const doneReg = new Set([...G.cats].map(k => G.regionOf(k)));
-    $("catStrip").innerHTML = Array.from({ length: G.n }, (_, g) => `<i class="${doneReg.has(g) ? "on" : ""}" style="background:${NY.COLORS[g % NY.COLORS.length][0]}"><span>🐱</span></i>`).join("");
+    const left = G.n - G.cats.size;
+    const face = on => mood === "sad" ? "😿" : G.won ? "😻" : on ? (left <= 2 ? "😸" : "😺") : "🐱";
+    $("catStrip").innerHTML = Array.from({ length: G.n }, (_, g) => `<i class="${doneReg.has(g) ? "on" : ""}${mood === "sad" ? " sad" : ""}" style="background:${NY.COLORS[g % NY.COLORS.length][0]}"><span>${face(doneReg.has(g))}</span></i>`).join("");
   }
   const stateKey = () => [...G.cats].join(",") + "|" + [...G.xs].sort().join(",") + "|" + [...G.bad].join(",");
 
-  const S = name => window.NYSND && NYSND.play(name);
+  const S = (name, opt) => window.NYSND && NYSND.play(name, opt);
+  // 손맛: 실수 없이 8초 안에 연달아 찾으면 콤보(소리가 한 음씩 높아짐), 찾은 묶음이 반짝·고양이가 폴짝, 다 찾으면 고양이 춤 + 색종이
+  let combo = 0, lastOkAt = 0, mood = null, moodT = null;
+  function setMood(m, ms) { mood = m; clearTimeout(moodT); if (G) paint(); moodT = setTimeout(() => { mood = null; if (G) paint(); }, ms); }
+  function bump(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function flashRegion(k) {
+    const g = G.regionOf(k);
+    for (const el of $("board").children) if (G.regionOf(+el.dataset.k) === g) bump(el, "flash");
+    bump($("board").children[k], "hop");
+  }
+  function comboPop(text) { const d = $("comboPop"); d.textContent = text; d.hidden = false; bump(d, "go"); clearTimeout(d._t); d._t = setTimeout(() => { d.hidden = true; }, 1100); }
+  function celebrate() {
+    [...G.cats].forEach((k, i) => setTimeout(() => { const el = $("board").children[k]; if (el) bump(el, "hop"); }, 80 + i * 90));
+    const box = document.createElement("div"); box.className = "confetti-box";
+    const cols = ["#ff9a7a", "#7cc9b4", "#f5b942", "#c7b0ee", "#a7c7f2", "#f4a6a6"];
+    for (let i = 0; i < 40; i++) {
+      const c = document.createElement("i");
+      c.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-duration:${1.4 + Math.random() * 1.2}s;animation-delay:${Math.random() * .3}s;--dx:${(Math.random() - .5) * 160}px;--rot:${Math.random() * 720 - 360}deg`;
+      box.appendChild(c);
+    }
+    document.body.appendChild(box); setTimeout(() => box.remove(), 3000);
+  }
   function afterMove(res, k) {
-    if (res === "ok" || res === "miss" || res === "fail") S(res === "ok" ? "cat" : res);
+    if (res === "ok" || res === "win") {
+      const now = performance.now(); combo = now - lastOkAt < 8000 ? combo + 1 : 1; lastOkAt = now;
+      flashRegion(k);
+      if (combo >= 3 && res === "ok") comboPop(`🔥 ${combo}콤보!`);
+    }
+    if (res === "miss" || res === "fail") { combo = 0; setMood("sad", 1300); }
+    if (res === "ok") S("cat", { combo });
+    else if (res === "miss" || res === "fail") S(res);
     else if (res === "win") S(ctx.kind === "vs" || ctx.ta ? "start" : "win");   // 대결·타임어택은 끝낸 순간은 짧게 (팡파레는 결과 때)
     if (hint && stateKey() !== hintKey) closeHint();
     if (res === "miss" || res === "fail") { const el = $("board").children[k]; el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); if (navigator.vibrate) navigator.vibrate(60); }
     paint(); progress();
-    if (res === "win" || res === "fail") setTimeout(() => ctx.onEnd(res === "win"), 350);
+    if (res === "win") { celebrate(); setTimeout(() => ctx.onEnd(true), ctx.ta ? 450 : 1150); }   // 춤·색종이를 잠깐 보고 결과창
+    if (res === "fail") setTimeout(() => ctx.onEnd(false), 350);
   }
   // 누르기: 한 번 = ✕ 켜고 끔, 0.4초 안에 같은 칸 두 번 = 🐱 (앱과 같게). 누른 채 끌면 같은 방향으로 ✕ 칠하기
   let lastTap = { k: -1, t: 0 }, drag = null;
@@ -191,7 +222,7 @@
     ctx = c; closeHint(); $("resPeek").hidden = true;
     for (const id of ["spyBox", "pcBox", "bubble"]) $(id).hidden = true;
     $("chatBtn").hidden = c.kind !== "vs";
-    TA = c.ta || null;
+    TA = c.ta || null; combo = 0; lastOkAt = 0; mood = null;
     G = new NY.Game(p, { autoX });
     if (c.coop) { G.maxMistakes = COOP_FISH; myOps = {}; coopLast = ""; coopInfo = null; }
     drawBoard(); show("play"); fitKey = "";
@@ -249,17 +280,95 @@
       const bs = store.get("taBest", {}), best = ta.solved > (bs[ta.tier] || 0);
       if (best) { bs[ta.tier] = ta.solved; store.set("taBest", bs); }
       if (glog) glog.matchEnd({ mode: "ta", solved: ta.solved, failed: ta.failed });
-      REC.ta(ta.tier, TA_SOLO_MIN, ta.solved); REC.solved(ta.solved);
+      REC.ta(ta.tier, TA_SOLO_MIN, ta.solved); REC.solved(ta.solved); setTimeout(checkBadges, 1200);
       result("⏱ 시간 끝!", `<p class="round" style="font-size:44px;margin:0;color:var(--accent)">${ta.solved}개</p><p class="small" style="margin:0">${TA_SOLO_MIN}분 동안 푼 문제${ta.failed ? ` · 실패 ${ta.failed}` : ""}${best && ta.solved ? " · <b style='color:var(--good)'>최고 기록!</b>" : bs[ta.tier] ? ` · 최고 ${bs[ta.tier]}개` : ""}</p>${cheerLine()}`,
         [["한 번 더", () => playTA(ta.tier), "primary"], ["난이도 고르기", goHome]]);
     } else { sendProg(); toast("⏱ 시간 끝! 다른 사람을 기다리는 중…", 3000); checkRoundEnd(); }
   }
   function progress() { if (ctx && ctx.onProgress) ctx.onProgress(); }
 
+  // ══ 별 3개: 실수 0 · 힌트 0 · 목표 시간 안 — 하나씩 빠질 때마다 별 하나 (다 풀면 최소 1개) ══
+  const parSecs = g => Math.round(g.n * g.n * (g.tech >= 3 ? 1.5 : 1.0));
+  const starsOf = (g, secs) => Math.max(1, 3 - (g.mistakes ? 1 : 0) - (g.hints ? 1 : 0) - (secs > parSecs(g) ? 1 : 0));
+  const starWhy = (g, secs) => [g.mistakes ? `실수 ${g.mistakes}번` : "실수 0 ✓", g.hints ? `힌트 ${g.hints}번` : "힌트 0 ✓", secs > parSecs(g) ? `목표 ${fmt(parSecs(g))} 넘음` : `목표 ${fmt(parSecs(g))} 안 ✓`].join(" · ");
+
+  // ══ 단계 지도: 1단계부터 차례로 (1~20 초급 · 21~50 중급 · 51~90 고급 · 91~ 고수). 단계마다 정해진 문제·모양이라 친구랑 같은 단계면 같은 판 ══
+  const stageTier = k => k <= 20 ? "easy" : k <= 50 ? "normal" : k <= 90 ? "hard" : "master";
+  const stageBase = { easy: 0, normal: 20, hard: 50, master: 90 };
+  function stageInfo(k) { const tier = stageTier(k), list = bank[tier], j = k - stageBase[tier] - 1; return { tier, idx: (j * 7919 + 101) % list.length, vs: k * 7919 + 13 }; }
+  const SKINS = [[0, "🐱"], [10, "🐈"], [20, "🐈‍⬛"], [35, "😺"], [50, "🐯"], [70, "🦁"], [90, "🐆"], [120, "😻"]];
+  const localStars = () => store.get("stageStars", {});
+  function stageStars() {                                                    // 폰에 저장 + 서버 기록 중 높은 쪽
+    const m = myRec(), loc = localStars(), out = { ...loc };
+    if (m && m.st) for (const [k0, v] of Object.entries(m.st)) { const k = String(k0).replace(/^s/, ""); if (v) out[k] = Math.max(out[k] || 0, v); }   // 서버 키는 s1, s2 … (숫자 키는 배열이 돼서)
+    return out;
+  }
+  const maxStage = () => Math.max(0, ...Object.keys(stageStars()).map(Number));
+  const skin = () => { const sk = store.get("skin", "🐱"), ok = SKINS.filter(x => x[0] <= maxStage()).map(x => x[1]); return ok.includes(sk) ? sk : "🐱"; };
+  function playStage(k) {
+    if (k > maxStage() + 1) { toast("앞 단계를 먼저 깨 주세요"); return; }
+    const s = stageInfo(k); playSolo(s.tier, s.idx, s.vs, k);
+  }
+  function drawStages() {
+    const st = stageStars(), top = maxStage(), cur = top + 1;
+    const from = Math.max(1, cur - 5), to = cur + 6;
+    let h = `<button class="btn primary stage-go" id="stageGo">▶ ${cur}단계 ${cur === 1 ? "시작" : "이어서 하기"}</button><div class="stage-path">`;
+    for (let k = to; k >= from; k--) {                                       // 위가 앞으로 갈 길 (아래에서 위로 올라감)
+      const s = st[k] || 0, lock = k > cur, side = ["l", "c", "r", "c"][k % 4];
+      const mark = k === stageBase[stageTier(k)] + 1 && k > 1 ? `<div class="stage-mark">${TIERS.find(t => t.id === stageTier(k)).name} 시작!</div>` : "";
+      const gift = SKINS.find(x => x[0] === k);
+      h += `<div class="stage-row ${side}"><button class="stage ${lock ? "lock" : ""} ${k === cur ? "cur" : ""} ${s ? "done" : ""}" data-k="${k}">${lock ? "🔒" : k}${gift ? `<i class="gift">${k <= top ? gift[1] : "🎁"}</i>` : ""}</button><span class="st">${s ? "⭐".repeat(s) + "☆".repeat(3 - s) : ""}</span></div>${mark}`;
+    }
+    h += `</div>`;
+    const ok = SKINS.filter(x => x[0] <= top), next = SKINS.find(x => x[0] > top);
+    h += `<div class="skins"><span class="small">내 고양이</span>${ok.map(x => `<button class="${skin() === x[1] ? "on" : ""}" data-sk="${x[1]}">${x[1]}</button>`).join("")}${next ? `<span class="small">🎁 ${next[0]}단계에 새 고양이</span>` : ""}</div>`;
+    const total = Object.values(st).reduce((a, b) => a + b, 0);
+    h += `<p class="small" style="margin:0;text-align:center">모은 별 ⭐ ${total}개 · 별 3개 = 실수 0 · 힌트 0 · 목표 시간 안</p>`;
+    $("stageBox").innerHTML = h;
+    $("stageGo").onclick = () => playStage(cur);
+    for (const b of $("stageBox").querySelectorAll(".stage")) b.onclick = () => playStage(+b.dataset.k);
+    for (const b of $("stageBox").querySelectorAll("[data-sk]")) b.onclick = () => { store.set("skin", b.dataset.sk); drawStages(); };
+  }
+
+  // ══ 도전 과제 배지 ══
+  const ACHS = [
+    ["first", "🐾", "첫 판", "아무 판이나 하나 깨기", s => s.sv >= 1],
+    ["sv10", "🧩", "10판", "10판 깨기", s => s.sv >= 10],
+    ["sv50", "🎖", "50판", "50판 깨기", s => s.sv >= 50],
+    ["sv100", "🏅", "100판", "100판 깨기", s => s.sv >= 100],
+    ["nh3", "🧠", "혼자 힘으로", "힌트 없이 중급 이상 3판", s => s.nhNormal >= 3],
+    ["perf", "✨", "완벽", "실수 없이 고급 이상 1판", s => s.perfHard >= 1],
+    ["star10", "⭐", "별 수집가", "별 3개 10번", s => s.star3 >= 10],
+    ["ta10", "⏱", "번개손", "타임어택 한 번에 10개", s => s.taMax >= 10],
+    ["vs1", "🏆", "첫 승", "대결에서 이기기", s => s.wins >= 1],
+    ["coop", "🤝", "단짝", "협동 성공", s => s.coopWin >= 1],
+    ["st10", "🗺", "모험 시작", "10단계 깨기", s => s.stage >= 10],
+    ["st30", "🧭", "탐험가", "30단계 깨기", s => s.stage >= 30],
+    ["st100", "👑", "냥도쿠 정복", "100단계 깨기", s => s.stage >= 100],
+  ];
+  function myStats() {
+    const m = myRec() || {}, c = m.cnt || {};
+    return { sv: m.sv || 0, wins: m.wins || 0, nhNormal: c.nhNormal || 0, perfHard: c.perfHard || 0, star3: c.star3 || 0, coopWin: c.coopWin || 0,
+      taMax: Math.max(0, ...Object.values(m.ta || {})), stage: maxStage() };
+  }
+  function checkBadges() {
+    const m = myRec(); if (!m) return;
+    const have = m.ach || {}, s = myStats(), got = ACHS.filter(a => !have[a[0]] && a[4](s));
+    if (!got.length) return;
+    m.ach = { ...have }; for (const a of got) { m.ach[a[0]] = Date.now(); REC.ach(a[0]); }
+    S("badge");
+    got.forEach((a, i) => setTimeout(() => toast(`🏅 배지: ${a[1]} ${a[2]}!`, 2600), i * 1400));
+    drawSoloProg();
+  }
+  function showBadges() {
+    const have = (myRec() || {}).ach || {};
+    result(`🏅 배지 ${Object.keys(have).length}/${ACHS.length}`, `<div class="badges">${ACHS.map(a => `<div class="${have[a[0]] ? "on" : ""}"><span>${have[a[0]] ? a[1] : "🔒"}</span><b>${a[2]}</b><i>${a[3]}</i></div>`).join("")}</div>`, [["닫기", () => {}, "primary"]]);
+  }
+
   // ══ 혼자 하기: 난이도만 고르면 그 난이도 문제 중 랜덤 (안 푼 문제 먼저, 최근 10판은 피함) ══
   const solved = () => store.get("solved", {});                // { tier: [푼 문제 번호들] }
   const bests = () => store.get("bestT", {});                  // { tier: 가장 빠른 초 }
-  let soloMode = store.get("soloMode", "one");                  // one = 한 판 · ta = 타임어택
+  let soloMode = store.get("soloMode2", "map");                 // map = 단계 지도 · one = 한 판 · ta = 타임어택
   // 혼자 화면 맨 위: 몇 판 깼는지 · 다음 칭호까지 · 친구 중 몇 등 · 자랑하기
   async function drawSoloProg(force) {
     const el = $("soloProg");
@@ -272,8 +381,11 @@
     const cheer = !sv ? "첫 판을 깨 보세요!" : i === 0 ? (rows.length > 1 ? `👑 친구 ${rows.length}명 중 1등!` : "👑 지금 1등!")
       : above ? `${i + 1}등 · <b>${esc(above.n)}</b>까지 ${above.sv - sv + 1}판 더!` : "";
     el.innerHTML = `<div class="pc-top"><span class="lv">${lv[1]}</span><div class="pc-mid"><b class="round">${sv}판 깼어요</b><span class="small">${lv[2]}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : " · 최고 칭호!"}</span></div><button class="btn mint" id="shareBtn">📤 자랑</button></div>
-      <div class="pc-bar"><i style="width:${pct}%"></i></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}`;
+      <div class="pc-bar"><i style="width:${pct}%"></i></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}
+      <button class="pc-badges" id="badgeBtn">🏅 배지 ${Object.keys((myRec() || {}).ach || {}).length}/${ACHS.length} <span>${ACHS.filter(a => ((myRec() || {}).ach || {})[a[0]]).map(a => a[1]).join("")}</span></button>`;
     $("shareBtn").onclick = () => shareMe(sv, lv);
+    $("badgeBtn").onclick = showBadges;
+    if (soloMode === "map" && !$("soloBox").hidden) drawStages();              // 서버 기록이 늦게 오면 지도도 다시
   }
   async function shareMe(sv, lv) {
     const url = location.origin + location.pathname, text = `🐱 냥도쿠 ${sv}판 깼어요! (${lv[1]} ${lv[2]}) 나랑 같이 해요`;
@@ -283,7 +395,9 @@
   function drawTiers() {
     drawSoloProg();
     const bs = bests(), tb = store.get("taBest", {}), ta = soloMode === "ta";
-    segBtns($("soloMode"), [["one", "🧩 한 판"], ["ta", `⏱ 타임어택 ${TA_SOLO_MIN}분`]], soloMode, v => { soloMode = v; store.set("soloMode", v); drawTiers(); });
+    segBtns($("soloMode"), [["map", "🗺 단계"], ["one", "🧩 한 판"], ["ta", `⏱ 타임어택`]], soloMode, v => { soloMode = v; store.set("soloMode2", v); drawTiers(); });
+    $("tiers").hidden = soloMode === "map"; $("stageBox").hidden = soloMode !== "map"; $("howto").hidden = soloMode === "map";
+    if (soloMode === "map") { $("soloDesc").hidden = true; drawStages(); return; }
     $("soloDesc").textContent = ta ? `${TA_SOLO_MIN}분 동안 몇 개 풀 수 있을까요? 다 풀거나 🐟를 다 잃으면 바로 다음 문제. 힌트는 한 번에 -${PENALTY}초` : "";
     $("soloDesc").hidden = !ta;
     $("tiers").innerHTML = TIERS.map(t => {
@@ -301,24 +415,37 @@
     store.set("recent_" + tier, [i, ...recent].slice(0, Math.min(60, n - 1)));   // 최근 60판은 다시 안 나옴
     return i;
   }
-  function playSolo(tier, idx, vs) {
+  function playSolo(tier, idx, vs, stage) {
     vs = vs ?? NY.rseed();                                                   // 같은 문제도 돌리고 뒤집고 색을 바꿔서 (다시 도전은 같은 모양)
     const i = idx ?? pickRandom(tier), p = NY.variant(bank[tier][i], vs), T = TIERS.find(t => t.id === tier);
     NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, NET.uid); if (lg) lg.matchStart({ mode: "solo", tier, puzzle: i, n: p.n }); }).catch(() => {});   // 기록은 뒤에서 (판은 바로 시작)
     startPuzzle(p, {
-      kind: "solo", tier, idx: i, vs, hintRule: "on", label: `${T.em} ${T.label}`,
+      kind: "solo", tier, idx: i, vs, stage, hintRule: "on", label: stage ? `🗺 ${stage}단계 · ${T.label}` : `${T.em} ${T.label}`,
       onEnd(won) {
         const secs = G.secs; ctx.finalSecs = secs;
         if (glog) glog.matchEnd({ won, secs: Math.round(secs * 10) / 10, mistakes: G.mistakes, hints: G.hints });
         if (won) {
           REC.solved(1); if (!G.hints) REC.best(tier, secs, G.n);
+          const st = starsOf(G, secs);
+          if (st === 3) REC.cnt("star3");
+          if (!G.hints && tier !== "easy") REC.cnt("nhNormal");
+          if (!G.mistakes && (tier === "hard" || tier === "master")) REC.cnt("perfHard");
           const sv = solved(); const s = new Set(sv[tier] || []); s.add(i); sv[tier] = [...s]; store.set("solved", sv);
           const bs = bests(); const best = !G.hints && (!bs[tier] || secs < bs[tier]); if (best) { bs[tier] = secs; store.set("bestT", bs); }
-          result("🎉 다 찾았어요!", `<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>${cheerLine()}`,
-            [["한 판 더", () => playSolo(tier), "primary"], ["난이도 고르기", goHome]]);
+          let extra = "", gift = "";
+          if (stage) { const before = maxStage(); REC.stage(stage, st); if (stage > before) { const sk = SKINS.find(x => x[0] === stage); if (sk) gift = `<p class="cheer">🎁 새 고양이 <b style="font-size:22px">${sk[1]}</b> 를 얻었어요! (단계 지도에서 바꿀 수 있어요)</p>`; } }
+          extra = `<div class="stars">${[0, 1, 2].map(j => `<span class="${j < st ? "on" : ""}" style="animation-delay:${.15 + j * .25}s">⭐</span>`).join("")}</div>
+            <p class="small" style="margin:0">${starWhy(G, secs)}</p>`;
+          [0, 1, 2].slice(0, st).forEach(j => setTimeout(() => S("star", { i: j }), 200 + j * 250));
+          result(stage ? `🎉 ${stage}단계 성공!` : "🎉 다 찾았어요!", `${extra}<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>${gift}${cheerLine()}`,
+            stage ? [["다음 단계 ▶", () => playStage(stage + 1), "primary"], ["다시 (⭐ 더 받기)", () => playStage(stage)], ["지도", goHome]]
+                  : [["한 판 더", () => playSolo(tier), "primary"], ["난이도 고르기", goHome]]);
+          if (gift) setTimeout(() => S("badge"), 900);
+          setTimeout(checkBadges, 1200);
         } else {
           result("😿 물고기를 다 잃었어요", `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리 찾았어요.</p><p class="small" style="margin:0">💡 힌트나 🪄 자동 ✕를 써 보세요.</p>`,
-            [["다시 도전", () => playSolo(tier, i, vs), "primary"], ["다른 문제", () => playSolo(tier)], ["난이도 고르기", goHome]]);
+            stage ? [["다시 도전", () => playStage(stage), "primary"], ["지도", goHome]]
+                  : [["다시 도전", () => playSolo(tier, i, vs), "primary"], ["다른 문제", () => playSolo(tier)], ["난이도 고르기", goHome]]);
         }
       },
     });
@@ -337,7 +464,7 @@
   $("restart").onclick = () => {
     if (!G || ctx.kind !== "solo") { toast("대결 중에는 처음부터 할 수 없어요"); return; }
     if (!G.over && glog) glog.matchEnd({ won: false, restart: true, secs: Math.round(G.secs) });
-    playSolo(ctx.tier, ctx.idx, ctx.vs);
+    playSolo(ctx.tier, ctx.idx, ctx.vs, ctx.stage);
   };  function result(title, body, btns) {
     $("resTitle").textContent = title; $("resBody").innerHTML = body;
     $("resBtns").innerHTML = "";
@@ -395,7 +522,7 @@
       if (isHost && glog) { for (const [u, p] of Object.entries(v)) if (!before.has(u)) glog.joined(u, { name: p.name, role: u === NET.uid ? "방장" : "참가" }); for (const u of before) if (!v[u]) glog.left(u); }
       checkRoundEnd();
     },
-    prog(v) { if (leaving) return; prog = v; coopMerge(); drawOpp(); spyDraw(); checkRoundEnd(); },
+    prog(v) { if (leaving) return; prog = v; coopMerge(); rivalAlerts(); drawOpp(); spyDraw(); checkRoundEnd(); },
     chat(m) {
       for (const id of ["chatLog", "pcLog"]) { const d = document.createElement("div"); d.innerHTML = `<b>${esc(m.n)}</b> ${esc(m.m)}`; $(id).appendChild(d); $(id).scrollTop = 1e9; }
       if (isHost && glog) glog.chat(m);
@@ -659,6 +786,23 @@
     spyOpen(el.dataset.u);
   });
 
+  // 빨리 풀기에서 상대 소식: 3마리 남으면 경고(테두리 깜빡 + 삑삑), 다 풀거나 실패하면 알림
+  let rivalSeen = {};
+  function rivalAlerts() {
+    if (!R || !meta || meta.phase !== "play" || MODE() !== "race" || !G || myRound !== meta.round) return;
+    const key = meta.round + ":" + meta.startAt; if (rivalSeen._k !== key) rivalSeen = { _k: key };
+    for (const [u, q] of Object.entries(prog)) {
+      if (u === R.uid || !q || q.round !== meta.round || !players[u]) continue;
+      const seen = rivalSeen[u] || (rivalSeen[u] = {}), name = players[u].name;
+      if (q.done && !seen.done) { seen.done = 1; S("rival"); toast(`🏁 ${name} 다 풀었어요! ${fmt(score(q))}`, 3000); pulse(u); }
+      else if (q.failed && !seen.done) { seen.done = 1; toast(q.gaveUp ? `🏳 ${name} 포기했어요` : `😿 ${name} 물고기를 다 잃었어요`, 2500); }
+      else if (!q.done && !q.failed && q.n >= 6 && q.n - q.placed <= 3 && q.n - q.placed > 0 && !seen.three && !G.over) {
+        seen.three = 1; S("alert"); toast(`⚠️ ${name} ${q.n - q.placed}마리 남았어요!`, 2500);
+        bump($("play"), "warn"); pulse(u);
+      }
+    }
+  }
+  function pulse(u) { setTimeout(() => { const el = $("opp").querySelector(`.p[data-u="${CSS.escape(u)}"]`); if (el) bump(el, "pulse"); }, 50); }
   function drawOpp() {
     if (!R || !meta || meta.phase !== "play" || !G) return;               // 방을 나간 뒤 늦게 온 알림은 무시
     // 위쪽 얇은 줄: 사람마다 알약 하나 (나도 포함) — 진행 막대 · 남은 물고기 · 끝나면 기록
@@ -726,7 +870,7 @@
       <table class="rank"><tr><th>이름</th><th>찾은 🐱</th><th>실수</th></tr>${rows.map(r => `<tr><td>${esc(r.name)}${r.u === R.uid ? " (나)" : ""}</td><td class="n">${r.c}</td><td class="n">${r.b}</td></tr>`).join("")}</table>`;
     if (isHost && glog) try { glog.matchEnd({ mode: "coop", won: G.won, secs: Math.round(secs * 10) / 10, results: rows.map(r => ({ n: r.name, cats: r.c, mistakes: r.b })) }); } catch (e) {}
     const key = `${R.code}:${meta.round}:${meta.startAt}`;
-    if (!counted.has(key)) { counted.add(key); REC.match(G.won ? 1 : 0, false); if (G.won) { REC.solved(1); REC.coop(meta.cfg.tier, secs, G.n); } }
+    if (!counted.has(key)) { counted.add(key); REC.match(G.won ? 1 : 0, false); if (G.won) { REC.solved(1); REC.cnt("coopWin"); REC.coop(meta.cfg.tier, secs, G.n); } setTimeout(checkBadges, 1500); }
     showRoundRes(G.won ? "🎉 같이 다 찾았어요!" : "😿 물고기를 다 썼어요", body);
     S(G.won ? "win" : "fail");
   }
@@ -756,10 +900,17 @@
   const REC = {
     both(f) { const r = recRef(); if (!r) return; const w = weekKey(); f(r, ""); f(r, `w/${w}/`); },
     best(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}tb/${tier}`, secs)); },
-    ta(tier, mins, cnt) { if (!cnt) return; this.both((r, p) => maxTx(r, `${p}ta/${tier}_${mins}`, cnt)); },
+    ta(tier, mins, cnt) { if (!cnt) return; this.both((r, p) => maxTx(r, `${p}ta/${tier}_${mins}`, cnt)); const m = myRec(); if (m) { m.ta = m.ta || {}; m.ta[`${tier}_${mins}`] = Math.max(m.ta[`${tier}_${mins}`] || 0, cnt); } },
     coop(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}co/${tier}`, secs)); },
     solved(k) { if (!k) return; this.both((r, p) => addTx(r, `${p}sv`, k)); const m = myRec(); if (m) m.sv = (m.sv || 0) + k; },   // 화면엔 바로 반영
-    match(pts, won) { this.both((r, p) => { addTx(r, `${p}pts`, pts); addTx(r, `${p}games`, 1); addTx(r, `${p}wins`, won ? 1 : 0); }); },
+    match(pts, won) { this.both((r, p) => { addTx(r, `${p}pts`, pts); addTx(r, `${p}games`, 1); addTx(r, `${p}wins`, won ? 1 : 0); }); const m = myRec(); if (m) { m.pts = (m.pts || 0) + pts; m.games = (m.games || 0) + 1; m.wins = (m.wins || 0) + (won ? 1 : 0); } },
+    stage(k, st) {
+      const loc = localStars(); if ((loc[k] || 0) < st) { loc[k] = st; store.set("stageStars", loc); }
+      const r = recRef(); if (r) maxTx(r, `st/s${k}`, st);
+      const m = myRec(); if (m) { m.st = m.st || {}; m.st["s" + k] = Math.max(m.st["s" + k] || 0, st); }
+    },
+    cnt(key) { const r = recRef(); if (r) addTx(r, `cnt/${key}`, 1); const m = myRec(); if (m) { m.cnt = m.cnt || {}; m.cnt[key] = (m.cnt[key] || 0) + 1; } },
+    ach(id) { const r = recRef(); if (r) r.child(`ach/${id}`).set(firebase.database.ServerValue.TIMESTAMP).catch(() => {}); },
   };
   // 대결 한 판 끝: 내가 이긴 사람 수만큼 승점 (같은 판을 두 번 세지 않게)
   const counted = new Set();
@@ -773,6 +924,7 @@
     REC.match(beat, beat > 0 && beat === rk.length - 1);
     if (mode === "ta") { REC.ta(tier, meta.cfg.mins || 3, q.solved || 0); REC.solved(q.solved || 0); }
     else if (q.done) { REC.solved(1); if (!q.hints) REC.best(tier, q.secs, q.n); }
+    setTimeout(checkBadges, 1500);
   }
 
   // 랭킹 화면: 위에 종류 4칸(많이 푼 먼저) · 한 줄 옵션(난이도·시간은 필요할 때만, 이번 주/전체) · 목록 · 맨 아래 내 정보 한 줄
