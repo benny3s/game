@@ -132,6 +132,12 @@
           }
         }
       },
+      "rec": {
+        ".read": "auth != null",
+        "$pid": {
+          ".write": "auth != null && ((newData.exists() && root.child('gp/players/' + $pid).exists()) || auth.token.admin === 1)"
+        }
+      },
       "index": {
         ".read": "auth != null",
         "$code": {
@@ -139,6 +145,26 @@
           ".validate": "!newData.exists() || (newData.child('h').isString() && newData.child('h').val().length <= 12)"
         }
       }
+    },
+    "gp": {
+      "players": {
+        ".read": "auth != null",
+        "$pid": {
+          ".write": "auth != null && ((newData.exists() && (!data.exists() || newData.child('n').val() === data.child('n').val())) || auth.token.admin === 1)",
+          ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length >= 1 && newData.child('n').val().length <= 12)"
+        }
+      },
+      "names": {
+        ".read": "auth != null",
+        "$key": {
+          ".write": "auth != null && (!data.exists() || auth.token.admin === 1)",
+          ".validate": "!newData.exists() || newData.isString()"
+        }
+      }
+    },
+    "test": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     },
     "logs": {
       ".read": "auth != null && auth.token.admin === 1",

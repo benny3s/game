@@ -227,7 +227,7 @@
     });
   }
   function playTA(tier) {
-    NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: store.get("name", "") }, NET.uid); if (lg) lg.matchStart({ mode: "ta", tier, mins: TA_SOLO_MIN }); }).catch(() => {});
+    NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, NET.uid); if (lg) lg.matchStart({ mode: "ta", tier, mins: TA_SOLO_MIN }); }).catch(() => {});
     TA = { kind: "solo", tier, endAt: Date.now() + TA_SOLO_MIN * 60000, clock: () => Date.now(), solved: 0, failed: 0, i: 0, hintRule: "penalty", over: false };
     S("start"); nextTA();
   }
@@ -240,6 +240,7 @@
       const bs = store.get("taBest", {}), best = ta.solved > (bs[ta.tier] || 0);
       if (best) { bs[ta.tier] = ta.solved; store.set("taBest", bs); }
       if (glog) glog.matchEnd({ mode: "ta", solved: ta.solved, failed: ta.failed });
+      REC.ta(ta.tier, TA_SOLO_MIN, ta.solved); REC.solved(ta.solved);
       result("⏱ 시간 끝!", `<p class="round" style="font-size:44px;margin:0;color:var(--accent)">${ta.solved}개</p><p class="small" style="margin:0">${TA_SOLO_MIN}분 동안 푼 문제${ta.failed ? ` · 실패 ${ta.failed}` : ""}${best && ta.solved ? " · <b style='color:var(--good)'>최고 기록!</b>" : bs[ta.tier] ? ` · 최고 ${bs[ta.tier]}개` : ""}</p>`,
         [["한 번 더", () => playTA(ta.tier), "primary"], ["난이도 고르기", goHome]]);
     } else { sendProg(); toast("⏱ 시간 끝! 다른 사람을 기다리는 중…", 3000); checkRoundEnd(); }
@@ -272,13 +273,14 @@
   }
   function playSolo(tier, idx) {
     const i = idx ?? pickRandom(tier), p = bank[tier][i], T = TIERS.find(t => t.id === tier);
-    NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: store.get("name", "") }, NET.uid); if (lg) lg.matchStart({ mode: "solo", tier, puzzle: i, n: p.n }); }).catch(() => {});   // 기록은 뒤에서 (판은 바로 시작)
+    NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, NET.uid); if (lg) lg.matchStart({ mode: "solo", tier, puzzle: i, n: p.n }); }).catch(() => {});   // 기록은 뒤에서 (판은 바로 시작)
     startPuzzle(p, {
       kind: "solo", tier, idx: i, hintRule: "on", label: `${T.em} ${T.label}`,
       onEnd(won) {
         const secs = G.secs; ctx.finalSecs = secs;
         if (glog) glog.matchEnd({ won, secs: Math.round(secs * 10) / 10, mistakes: G.mistakes, hints: G.hints });
         if (won) {
+          REC.solved(1); if (!G.hints) REC.best(tier, secs, G.n);
           const sv = solved(); const s = new Set(sv[tier] || []); s.add(i); sv[tier] = [...s]; store.set("solved", sv);
           const bs = bests(); const best = !G.hints && (!bs[tier] || secs < bs[tier]); if (best) { bs[tier] = secs; store.set("bestT", bs); }
           result("🎉 다 찾았어요!", `<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>`,
@@ -320,10 +322,16 @@
   // ══ 친구 대결 ══════════════════════════════════════════════
   let leaving = false;                                       // 방을 나간 뒤 늦게 도착한 알림 무시
   let R = null, isHost = false, meta = null, players = {}, prog = {}, myRound = 0, shownRound = 0;
-  const myName = () => ($("name").value.trim() || "").slice(0, 12);
-  $("name").value = store.get("name", "");
-  $("name").oninput = () => { store.set("name", $("name").value.trim()); if (R && myName()) R.setMe({ name: myName() }); };
-  const needName = () => { if (!myName()) { toast("이름을 먼저 적어 주세요"); $("name").focus(); return false; } return true; };
+  // 이름 = 게임 사이트 공통 이름 (common/me.js). 처음엔 이름 고르는 창
+  const myName = () => ((GME.me && GME.me.name) || "").slice(0, 12);
+  async function askName(change) {
+    await NET.init();
+    await (change ? GME.pick(NET.db(), { canClose: true, title: "누구로 할까요?" }) : GME.ensure(NET.db()));
+    drawMe();
+    if (R && myName()) R.setMe({ name: myName() });
+    return myName();
+  }
+  const needName = async () => !!(myName() || await askName());
 
   async function drawRooms() {
     $("rooms").innerHTML = '<li class="none">불러오는 중…</li>';
@@ -336,16 +344,18 @@
   }
   $("refresh").onclick = drawRooms;
   function tab(which) {                                     // 시작 화면 탭: solo · vs · watch
-    for (const [t, box] of [["Solo", "soloBox"], ["Vs", "vsBox"], ["Watch", "watchBox"]]) {
+    for (const [t, box] of [["Solo", "soloBox"], ["Vs", "vsBox"], ["Rank", "rankBox"], ["Watch", "watchBox"]]) {
       const on = t.toLowerCase() === which;
       $("tab" + t).setAttribute("aria-pressed", on); $(box).hidden = !on;
     }
     if (which === "vs") drawRooms();
+    if (which === "rank") drawRank();
     if (window.NYWATCH) { if (which === "watch") NYWATCH.open(); else NYWATCH.close(); }
   }
   $("tabSolo").onclick = () => tab("solo");
   $("tabVs").onclick = () => tab("vs");
   $("tabWatch").onclick = () => tab("watch");
+  $("tabRank").onclick = () => tab("rank");
 
   const hooks = {
     meta(m) { if (leaving) return; meta = m; onMeta(); },
@@ -364,7 +374,7 @@
     closed() { toast("방이 닫혔어요", 3000); leaveRoom(); },
   };
   async function makeRoom() {
-    if (!needName()) return;
+    if (!(await needName())) return;
     leaving = false;
     try {
       await NET.init(); const lg = logInit();
@@ -377,7 +387,7 @@
     } catch (e) { toast("방을 못 만들었어요: " + e.message, 4000); }
   }
   async function joinRoom(code) {
-    if (!needName()) return;
+    if (!(await needName())) return;
     code = String(code || "").toUpperCase().trim();
     if (code.length !== 4) { toast("방 코드는 4자리예요"); return; }
     leaving = false;
@@ -641,6 +651,7 @@
       if (!rk.length || !(late || rk.every(r => r.q && r.q.end))) return;
     } else if (!rk.length || !rk.every(r => r.q && (r.q.done || r.q.failed))) return;
     shownRound = meta.round;
+    try { recordRound(mode, rk); } catch (e) {}
     const winner = mode === "ta" ? (rk[0].q && rk[0].q.solved > 0 && !(rk[1] && rk[1].q && rk[1].q.solved === rk[0].q.solved && rk[1].q.placed === rk[0].q.placed) ? rk[0] : null) : rk[0].q.done ? rk[0] : null;
     if (isHost && winner && meta.scored !== meta.round) {
       const wins = { ...(meta.wins || {}) }; wins[winner.u] = (wins[winner.u] || 0) + 1;
@@ -682,6 +693,8 @@
     const body = `${G.won ? `<p class="round" style="font-size:30px;margin:0;color:var(--accent)">${fmt(secs)}</p>` : `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리까지 찾았어요</p>`}
       <table class="rank"><tr><th>이름</th><th>찾은 🐱</th><th>실수</th></tr>${rows.map(r => `<tr><td>${esc(r.name)}${r.u === R.uid ? " (나)" : ""}</td><td class="n">${r.c}</td><td class="n">${r.b}</td></tr>`).join("")}</table>`;
     if (isHost && glog) try { glog.matchEnd({ mode: "coop", won: G.won, secs: Math.round(secs * 10) / 10, results: rows.map(r => ({ n: r.name, cats: r.c, mistakes: r.b })) }); } catch (e) {}
+    const key = `${R.code}:${meta.round}:${meta.startAt}`;
+    if (!counted.has(key)) { counted.add(key); REC.match(G.won ? 1 : 0, false); if (G.won) { REC.solved(1); REC.coop(meta.cfg.tier, secs, G.n); } }
     showRoundRes(G.won ? "🎉 같이 다 찾았어요!" : "😿 물고기를 다 썼어요", body);
     S(G.won ? "win" : "fail");
   }
@@ -693,12 +706,114 @@
       [["계속 있기", () => roundRes && roundRes(), "primary"], ["나가기", leaveRoom]]);
   }
 
+  // ══ 기록 · 랭킹 ════════════════════════════════════════════
+  // nyang/rec/{pid}: tb/{난이도}=최고 시간(힌트 안 쓴 판) · ta/{난이도_분}=타임어택 최고 개수 · co/{난이도}=협동 최고 시간
+  //   sv=푼 문제 수 · pts=대결 승점(이긴 사람 수만큼, 협동 성공 +1) · games · wins · w/{그 주 월요일}/{같은 것} = 이번 주
+  // 말이 안 되게 빠른 기록(칸 수 × 0.8초 미만)은 안 남김. ?guest 시험은 test/ 아래로
+  const weekKey = (t = Date.now()) => { const d = new Date(t + 9 * 3600e3); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); };
+  const tooFast = (secs, n) => !(secs >= n * 0.8);
+  const LEVELS = [[0, "🐣", "아기 고양이"], [10, "🐱", "꼬마 고양이"], [30, "😺", "길냥이"], [60, "😼", "골목대장"], [120, "🐯", "동네 보스"], [250, "🦁", "고양이 왕"], [500, "👑", "전설의 냥"]];
+  const GRADES = [[0, "🐾"], [5, "🥉"], [15, "🥈"], [30, "🥇"], [60, "💎"], [100, "👑"]];
+  const level = sv => LEVELS.filter(l => (sv || 0) >= l[0]).pop();
+  const grade = pts => GRADES.filter(g => (pts || 0) >= g[0]).pop()[1];
+  const recRef = () => GME.me && NET.db() ? NET.db().ref(`${GME.P}nyang/rec/${GME.me.pid}`) : null;
+  const tx = (ref, path, f) => ref.child(path).transaction(f).catch(() => {});
+  const minTx = (ref, path, v) => tx(ref, path, cur => cur == null || v < cur ? Math.round(v * 10) / 10 : undefined);
+  const maxTx = (ref, path, v) => tx(ref, path, cur => cur == null || v > cur ? v : undefined);
+  const addTx = (ref, path, v) => v ? tx(ref, path, cur => (cur || 0) + v) : null;
+  const REC = {
+    both(f) { const r = recRef(); if (!r) return; const w = weekKey(); f(r, ""); f(r, `w/${w}/`); },
+    best(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}tb/${tier}`, secs)); },
+    ta(tier, mins, cnt) { if (!cnt) return; this.both((r, p) => maxTx(r, `${p}ta/${tier}_${mins}`, cnt)); },
+    coop(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}co/${tier}`, secs)); },
+    solved(k) { this.both((r, p) => addTx(r, `${p}sv`, k)); },
+    match(pts, won) { this.both((r, p) => { addTx(r, `${p}pts`, pts); addTx(r, `${p}games`, 1); addTx(r, `${p}wins`, won ? 1 : 0); }); },
+  };
+  // 대결 한 판 끝: 내가 이긴 사람 수만큼 승점 (같은 판을 두 번 세지 않게)
+  const counted = new Set();
+  function recordRound(mode, rk) {
+    const key = `${R.code}:${meta.round}:${meta.startAt}`; if (counted.has(key)) return; counted.add(key);
+    const tier = meta.cfg.tier, mine = rk.find(r => r.u === R.uid), q = mine && mine.q;
+    if (!q) return;
+    let beat = 0;
+    if (mode === "ta") beat = rk.filter(r => r.u !== R.uid && ((r.q && r.q.solved) || 0) < (q.solved || 0)).length;
+    else if (q.done) beat = rk.length - 1 - rk.indexOf(mine);
+    REC.match(beat, beat > 0 && beat === rk.length - 1);
+    if (mode === "ta") { REC.ta(tier, meta.cfg.mins || 3, q.solved || 0); REC.solved(q.solved || 0); }
+    else if (q.done) { REC.solved(1); if (!q.hints) REC.best(tier, q.secs, q.n); }
+  }
+
+  // 랭킹 화면: 종류(타임어택·최고 시간·승점·많이 푼) × 기간(이번 주·전체) × 난이도(·시간)
+  const RK = store.get("rk", { kind: "ta", period: "week", tier: "easy", mins: 3, sort: "pts" });
+  const RK_KINDS = [["ta", "⏱ 타임어택"], ["tb", "🏁 최고 시간"], ["pts", "⚔️ 승점"], ["sv", "🧩 많이 푼"]];
+  let rkData = null, rkAdmin = false;
+  async function drawRank(reload = true) {
+    drawMe();
+    segBtns($("rkKind"), RK_KINDS, RK.kind, v => { RK.kind = v; store.set("rk", RK); drawRank(false); });
+    segBtns($("rkPeriod"), [["week", "이번 주"], ["all", "전체"]], RK.period, v => { RK.period = v; store.set("rk", RK); drawRank(false); });
+    segBtns($("rkTier"), TIERS.map(t => [t.id, t.name]), RK.tier, v => { RK.tier = v; store.set("rk", RK); drawRank(false); });
+    segBtns($("rkMins"), [[2, "2분"], [3, "3분"], [5, "5분"]], RK.mins, v => { RK.mins = +v; store.set("rk", RK); drawRank(false); });
+    segBtns($("rkSort"), [["pts", "승점순"], ["wr", "승률순 (3판 이상)"]], RK.sort, v => { RK.sort = v; store.set("rk", RK); drawRank(false); });
+    $("rkTier").hidden = !(RK.kind === "ta" || RK.kind === "tb"); $("rkMins").hidden = RK.kind !== "ta"; $("rkSort").hidden = RK.kind !== "pts";
+    if (reload || !rkData) {
+      $("rkList").innerHTML = '<li class="none">불러오는 중…</li>';
+      try {
+        await NET.init();
+        const [rec, people] = await Promise.all([NET.db().ref(`${GME.P}nyang/rec`).get(), GME.loadAll(NET.db())]);
+        rkData = { rec: rec.val() || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) };
+        rkAdmin = await NET.isAdmin();
+      } catch (e) { $("rkList").innerHTML = `<li class="none">못 불러왔어요 (${esc(e.message)})</li>`; return; }
+      drawMe();
+    }
+    const wk = weekKey(), rows = [];
+    for (const [pid, r0] of Object.entries(rkData.rec)) {
+      const name = rkData.names[pid]; if (!name) continue;
+      const r = RK.period === "week" ? ((r0.w || {})[wk] || {}) : r0;
+      let v = null, sub = "";
+      if (RK.kind === "ta") v = (r.ta || {})[`${RK.tier}_${RK.mins}`];
+      else if (RK.kind === "tb") v = (r.tb || {})[RK.tier];
+      else if (RK.kind === "sv") v = r.sv;
+      else { v = r.pts || 0; const g = r.games || 0; if (!g) v = null; else { const wr = Math.round((r.wins || 0) / g * 100); sub = `${g}판 · ${r.wins || 0}승 · 승률 ${wr}%`; if (RK.sort === "wr") { if (g < 3) v = null; else { sub = `승점 ${r.pts || 0} · ` + sub; v = wr; } } } }
+      if (v == null || v === 0 && RK.kind !== "pts") continue;
+      rows.push({ pid, name, v, sub, lv: level(r0.sv), gr: grade(r0.pts) });
+    }
+    rows.sort((a, b) => RK.kind === "tb" ? a.v - b.v : b.v - a.v);
+    const fmtV = v => RK.kind === "tb" ? fmt(v) : RK.kind === "ta" ? `${v}개` : RK.kind === "sv" ? `${v}문제` : RK.sort === "wr" ? `${v}%` : `${v}점`;
+    const myPid = GME.me && GME.me.pid, top = rows.slice(0, 20), meI = rows.findIndex(r => r.pid === myPid);
+    const li = (r, i) => `<li class="${r.pid === myPid ? "me" : ""}"><span class="rkn">${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span><span class="inf"><b>${esc(r.name)}</b> <span class="small">${r.lv[1]}${RK.kind === "pts" ? " " + r.gr : ""}${r.sub ? " · " + esc(r.sub) : ""}</span></span><b class="rkv">${fmtV(r.v)}</b>${rkAdmin ? `<button class="btn ghost" data-del="${esc(r.pid)}" title="기록 지우기 (관리자)">🗑</button>` : ""}</li>`;
+    $("rkList").innerHTML = rows.length ? top.map(li).join("") + (meI >= 20 ? `<li class="none">…</li>${li(rows[meI], meI)}` : "")
+      : `<li class="none">${RK.period === "week" ? "이번 주엔 아직 기록이 없어요. 첫 기록을 남겨 보세요!" : "아직 기록이 없어요."}</li>`;
+    $("rkNote").textContent = RK.kind === "tb" ? "힌트를 안 쓰고 다 푼 판만 (혼자·빨리 풀기 대결)" : RK.kind === "ta" ? "혼자 타임어택은 3분 · 대결 타임어택은 고른 시간대로" : RK.kind === "pts" ? "대결 한 판마다 내가 이긴 사람 수만큼, 협동은 성공하면 +1" : "다 푼 문제 수 (혼자·대결·협동 모두)";
+    for (const b of $("rkList").querySelectorAll("[data-del]")) b.onclick = async () => {
+      const n = rkData.names[b.dataset.del]; if (!confirm(`${n} 의 냥도쿠 기록을 모두 지울까요?`)) return;
+      await NET.db().ref(`${GME.P}nyang/rec/${b.dataset.del}`).remove(); toast("지웠어요"); drawRank();
+    };
+  }
+  // 내 카드: 이름 · 레벨 · 승점 등급 (랭킹 탭 위) + 머리글 이름표
+  function drawMe() {
+    const n = myName();
+    $("meChip").textContent = n ? `👤 ${n}` : "👤 이름 정하기";
+    const r = rkData && GME.me ? rkData.rec[GME.me.pid] || {} : null;
+    if (!$("meCard")) return;
+    if (!n) { $("meCard").innerHTML = '<button class="btn primary" data-me>이름 정하기</button>'; }
+    else {
+      const lv = level(r && r.sv), nx = LEVELS.find(l => l[0] > ((r && r.sv) || 0));
+      $("meCard").innerHTML = `<div class="mehead"><span class="lv">${lv[1]}</span><div><b class="round">${esc(n)}</b><div class="small">${lv[2]}${r ? ` · 푼 문제 ${r.sv || 0}${nx ? ` (다음 칭호까지 ${nx[0] - (r.sv || 0)})` : ""}` : ""}</div></div><button class="btn ghost" data-me>바꾸기</button></div>
+        ${r ? `<div class="mestat"><span><i>대결 승점</i><b>${grade(r.pts)} ${r.pts || 0}</b></span><span><i>대결</i><b>${r.games || 0}판 ${r.wins || 0}승</b></span><span><i>최고 시간 (${(TIERS.find(t => t.id === RK.tier) || TIERS[0]).label})</i><b>${(r.tb || {})[RK.tier] ? fmt(r.tb[RK.tier]) : "-"}</b></span></div>` : ""}`;
+    }
+    const b = $("meCard").querySelector("[data-me]"); if (b) b.onclick = () => askName(true).then(() => drawRank()).catch(() => {});
+  }
+  $("meChip").onclick = () => askName(true).then(() => { if (!$("rankBox").hidden) drawRank(); }).catch(() => {});
+  $("rkRefresh").onclick = () => drawRank();
+
   // ── 시작
   setAutoX(autoX);
+  NET.init().then(() => GME.ensure(NET.db())).then(drawMe).catch(() => {});   // 처음 오면 이름부터
   bankP.then(() => {
     drawTiers();
     const q = new URLSearchParams(location.search).get("room");
-    if (q) { $("tabVs").click(); $("code").value = q.toUpperCase(); if (myName()) joinRoom(q); else { toast("이름을 적고 '들어가기'를 눌러 주세요", 4000); $("name").focus(); } }
+    if (q) { $("tabVs").click(); $("code").value = q.toUpperCase(); joinRoom(q); }
+    else askName().catch(() => {});
   }).catch(e => { $("tiers").textContent = "퍼즐을 못 불러왔어요: " + e.message; });
   window.__ny = { get G() { return G; }, get TA() { return TA; }, get meta() { return meta; }, get prog() { return prog; }, NY };   // 점검용
 })();

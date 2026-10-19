@@ -128,5 +128,6 @@ const NET = (() => {
   }
   async function deleteRoom(code) { await init(); await db().ref(`nyang/rooms/${code}`).remove().catch(() => {}); return db().ref(`nyang/index/${code}`).remove(); }
 
-  return { MAXP, init, host, join, listRooms, deleteRoom, db: () => app && app.database(), get uid() { return user && user.uid; }, now };
+  async function isAdmin() { try { return !!user && (await user.getIdTokenResult()).claims.admin === 1; } catch (e) { return false; } }
+  return { MAXP, isAdmin, init, host, join, listRooms, deleteRoom, db: () => app && app.database(), get uid() { return user && user.uid; }, now };
 })();
