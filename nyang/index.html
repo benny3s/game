@@ -49,14 +49,21 @@ header.top a{margin-left:auto;font-size:13px;text-decoration:none;background:var
 .t-easy{background:#e3f4e6}.t-normal{background:#fff0c9}.t-hard{background:#ffe0d6}.t-master{background:#eadff8}
 .mechip{margin-left:auto;font:15px var(--round);border:0;background:var(--card);color:var(--ink);padding:7px 12px;border-radius:99px;box-shadow:var(--shadow);cursor:pointer;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header.top .mechip+a{margin-left:0}
-.mecard{background:#fff6ea;border-radius:18px;padding:12px;display:grid;gap:10px}
-.mehead{display:flex;align-items:center;gap:10px}.mehead .lv{font-size:34px;line-height:1}.mehead b{font-size:20px}.mehead .btn{margin-left:auto;white-space:nowrap}
-.mestat{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.mestat span{display:grid;background:var(--card);border-radius:12px;padding:6px 8px}.mestat i{font-style:normal;font-size:11.5px;color:var(--soft)}.mestat b{font:17px var(--round)}
+.rktabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#fbe9d7;padding:4px;border-radius:16px}
+.rktabs button{border:0;background:transparent;border-radius:12px;padding:8px 2px;font:14px/1.2 var(--round);color:var(--soft);cursor:pointer;display:grid;justify-items:center;gap:2px}
+.rktabs button i{font-style:normal;font-size:18px}
+.rktabs button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 2px 8px rgba(140,98,70,.15)}
+.rkopts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.rkopts .chips{display:flex;gap:4px;flex-wrap:wrap}.rkopts .chips:empty{display:none}
+.rkopts .per{margin-left:auto}
+.rkopts button{border:0;background:transparent;color:var(--soft);font:13.5px var(--round);padding:5px 9px;border-radius:99px;cursor:pointer}
+.rkopts button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.meline{display:flex;align-items:center;gap:8px;background:#fff6ea;border-radius:14px;padding:9px 12px;font-size:13.5px;color:var(--soft)}
+.meline b{color:var(--ink);font:16px var(--round)}.meline .lv{font-size:22px;line-height:1}
 .rklist li{flex-wrap:nowrap}.rklist .rkn{width:28px;text-align:center;font:18px var(--round);color:var(--soft)}
 .rklist .rkv{font:18px var(--round);font-weight:400;color:var(--accent);white-space:nowrap}
 .rklist li.me{border-color:var(--accent);background:#fff1e3}
-.rklist .btn{padding:4px 6px}
+.rklist .del{border:0;background:none;padding:2px;font-size:13px;opacity:.35;cursor:pointer}
 .howto{margin:0;padding-left:18px;color:var(--soft);font-size:13.5px;display:grid;gap:2px}
 /* 친구랑 */
 input[type=text]{font:16px var(--text);background:#fffaf4;color:var(--ink);border:2px solid var(--line);border-radius:14px;padding:10px 12px;width:100%;outline:none}
@@ -214,14 +221,11 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
       <ul class="list" id="rooms"><li class="none">불러오는 중…</li></ul>
     </div>
     <div id="rankBox" hidden style="display:grid;gap:10px">
-      <div class="mecard" id="meCard"></div>
-      <div class="seg" id="rkKind"></div>
-      <div class="row" style="justify-content:space-between"><div class="seg" id="rkPeriod"></div><button class="btn ghost" id="rkRefresh">↻</button></div>
-      <div class="seg" id="rkTier"></div>
-      <div class="seg" id="rkMins"></div>
-      <div class="seg" id="rkSort"></div>
+      <div class="rktabs" id="rkKind"></div>
+      <div class="rkopts"><span class="chips" id="rkTier"></span><span class="chips" id="rkMins"></span><span class="chips per" id="rkPeriod"></span></div>
       <ol class="list rklist" id="rkList"></ol>
-      <p class="small" id="rkNote" style="margin:0"></p>
+      <p class="small" id="rkNote" style="margin:0;text-align:center"></p>
+      <div class="meline" id="meCard"></div>
     </div>
     <div id="watchBox" hidden style="display:grid;gap:12px">
       <p class="lede">🧠 AI가 사람처럼 하나씩 따져 가며 푸는 모습을 봐요. 한 수마다 왜 그렇게 했는지 알려 줘요.</p>
@@ -286,7 +290,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 <script src="net.js?v=5"></script>
 <script src="../common/me.js?v=1"></script>
 <script src="sound.js?v=1"></script>
-<script src="main.js?v=13"></script>
+<script src="main.js?v=14"></script>
 <script src="watch.js?v=6"></script>
 </body>
 </html>

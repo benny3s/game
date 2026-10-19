@@ -743,18 +743,14 @@
     else if (q.done) { REC.solved(1); if (!q.hints) REC.best(tier, q.secs, q.n); }
   }
 
-  // 랭킹 화면: 종류(타임어택·최고 시간·승점·많이 푼) × 기간(이번 주·전체) × 난이도(·시간)
-  const RK = store.get("rk", { kind: "ta", period: "week", tier: "easy", mins: 3, sort: "pts" });
-  const RK_KINDS = [["ta", "⏱ 타임어택"], ["tb", "🏁 최고 시간"], ["pts", "⚔️ 승점"], ["sv", "🧩 많이 푼"]];
+  // 랭킹 화면: 위에 종류 4칸(많이 푼 먼저) · 한 줄 옵션(난이도·시간은 필요할 때만, 이번 주/전체) · 목록 · 맨 아래 내 정보 한 줄
+  const RK = Object.assign({ kind: "sv", period: "week", tier: "easy", mins: 3 }, store.get("rk2", {}));
+  const RK_KINDS = [["sv", "🧩", "많이 푼"], ["ta", "⏱", "타임어택"], ["tb", "🏁", "최고 시간"], ["pts", "⚔️", "승점"]];
   let rkData = null, rkAdmin = false;
+  const rkSet = p => { Object.assign(RK, p); store.set("rk2", RK); drawRank(false); };
   async function drawRank(reload = true) {
-    drawMe();
-    segBtns($("rkKind"), RK_KINDS, RK.kind, v => { RK.kind = v; store.set("rk", RK); drawRank(false); });
-    segBtns($("rkPeriod"), [["week", "이번 주"], ["all", "전체"]], RK.period, v => { RK.period = v; store.set("rk", RK); drawRank(false); });
-    segBtns($("rkTier"), TIERS.map(t => [t.id, t.name]), RK.tier, v => { RK.tier = v; store.set("rk", RK); drawRank(false); });
-    segBtns($("rkMins"), [[2, "2분"], [3, "3분"], [5, "5분"]], RK.mins, v => { RK.mins = +v; store.set("rk", RK); drawRank(false); });
-    segBtns($("rkSort"), [["pts", "승점순"], ["wr", "승률순 (3판 이상)"]], RK.sort, v => { RK.sort = v; store.set("rk", RK); drawRank(false); });
-    $("rkTier").hidden = !(RK.kind === "ta" || RK.kind === "tb"); $("rkMins").hidden = RK.kind !== "ta"; $("rkSort").hidden = RK.kind !== "pts";
+    $("rkKind").innerHTML = RK_KINDS.map(([v, ic, l]) => `<button data-v="${v}" aria-pressed="${RK.kind === v}"><i>${ic}</i>${l}</button>`).join("");
+    for (const b of $("rkKind").children) b.onclick = () => rkSet({ kind: b.dataset.v });
     if (reload || !rkData) {
       $("rkList").innerHTML = '<li class="none">불러오는 중…</li>';
       try {
@@ -763,48 +759,51 @@
         rkData = { rec: rec.val() || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) };
         rkAdmin = await NET.isAdmin();
       } catch (e) { $("rkList").innerHTML = `<li class="none">못 불러왔어요 (${esc(e.message)})</li>`; return; }
-      drawMe();
     }
-    const wk = weekKey(), rows = [];
+    const wk = weekKey(), useTier = RK.kind === "ta" || RK.kind === "tb";
+    const pick = r0 => RK.period === "week" ? ((r0.w || {})[wk] || {}) : r0;
+    // 타임어택 시간(2·3·5분): 이 난이도에 3분 말고 다른 시간 기록이 있을 때만 고르게
+    const minsHave = new Set([3]);
+    if (RK.kind === "ta") for (const r0 of Object.values(rkData.rec)) for (const k of Object.keys(pick(r0).ta || {})) { const [t, m] = k.split("_"); if (t === RK.tier) minsHave.add(+m); }
+    if (!minsHave.has(RK.mins)) RK.mins = 3;
+    const chips = (el, items, cur, key) => { $(el).innerHTML = items.map(([v, l]) => `<button data-v="${v}" aria-pressed="${String(v) === String(cur)}">${l}</button>`).join(""); for (const b of $(el).children) b.onclick = () => rkSet({ [key]: key === "mins" ? +b.dataset.v : b.dataset.v }); };
+    chips("rkTier", useTier ? TIERS.map(t => [t.id, t.name]) : [], RK.tier, "tier");
+    chips("rkMins", RK.kind === "ta" && minsHave.size > 1 ? [...minsHave].sort().map(m => [m, m + "분"]) : [], RK.mins, "mins");
+    chips("rkPeriod", [["week", "이번 주"], ["all", "전체"]], RK.period, "period");
+    const rows = [];
     for (const [pid, r0] of Object.entries(rkData.rec)) {
       const name = rkData.names[pid]; if (!name) continue;
-      const r = RK.period === "week" ? ((r0.w || {})[wk] || {}) : r0;
+      const r = pick(r0);
       let v = null, sub = "";
       if (RK.kind === "ta") v = (r.ta || {})[`${RK.tier}_${RK.mins}`];
       else if (RK.kind === "tb") v = (r.tb || {})[RK.tier];
       else if (RK.kind === "sv") v = r.sv;
-      else { v = r.pts || 0; const g = r.games || 0; if (!g) v = null; else { const wr = Math.round((r.wins || 0) / g * 100); sub = `${g}판 · ${r.wins || 0}승 · 승률 ${wr}%`; if (RK.sort === "wr") { if (g < 3) v = null; else { sub = `승점 ${r.pts || 0} · ` + sub; v = wr; } } } }
-      if (v == null || v === 0 && RK.kind !== "pts") continue;
+      else if (r.games) { v = r.pts || 0; sub = `${r.games}판 ${r.wins || 0}승`; }
+      if (v == null || (v === 0 && RK.kind !== "pts")) continue;
       rows.push({ pid, name, v, sub, lv: level(r0.sv), gr: grade(r0.pts) });
     }
     rows.sort((a, b) => RK.kind === "tb" ? a.v - b.v : b.v - a.v);
-    const fmtV = v => RK.kind === "tb" ? fmt(v) : RK.kind === "ta" ? `${v}개` : RK.kind === "sv" ? `${v}문제` : RK.sort === "wr" ? `${v}%` : `${v}점`;
+    const fmtV = v => RK.kind === "tb" ? fmt(v) : RK.kind === "ta" ? `${v}개` : RK.kind === "sv" ? `${v}문제` : `${v}점`;
     const myPid = GME.me && GME.me.pid, top = rows.slice(0, 20), meI = rows.findIndex(r => r.pid === myPid);
-    const li = (r, i) => `<li class="${r.pid === myPid ? "me" : ""}"><span class="rkn">${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span><span class="inf"><b>${esc(r.name)}</b> <span class="small">${r.lv[1]}${RK.kind === "pts" ? " " + r.gr : ""}${r.sub ? " · " + esc(r.sub) : ""}</span></span><b class="rkv">${fmtV(r.v)}</b>${rkAdmin ? `<button class="btn ghost" data-del="${esc(r.pid)}" title="기록 지우기 (관리자)">🗑</button>` : ""}</li>`;
+    const li = (r, i) => `<li class="${r.pid === myPid ? "me" : ""}"><span class="rkn">${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span><span class="inf"><b>${esc(r.name)}</b> <span class="small">${RK.kind === "pts" ? r.gr + " " + esc(r.sub) : r.lv[1]}</span></span><b class="rkv">${fmtV(r.v)}</b>${rkAdmin ? `<button class="del" data-del="${esc(r.pid)}" title="기록 지우기 (관리자)">🗑</button>` : ""}</li>`;
     $("rkList").innerHTML = rows.length ? top.map(li).join("") + (meI >= 20 ? `<li class="none">…</li>${li(rows[meI], meI)}` : "")
       : `<li class="none">${RK.period === "week" ? "이번 주엔 아직 기록이 없어요. 첫 기록을 남겨 보세요!" : "아직 기록이 없어요."}</li>`;
-    $("rkNote").textContent = RK.kind === "tb" ? "힌트를 안 쓰고 다 푼 판만 (혼자·빨리 풀기 대결)" : RK.kind === "ta" ? "혼자 타임어택은 3분 · 대결 타임어택은 고른 시간대로" : RK.kind === "pts" ? "대결 한 판마다 내가 이긴 사람 수만큼, 협동은 성공하면 +1" : "다 푼 문제 수 (혼자·대결·협동 모두)";
+    $("rkNote").textContent = { sv: "다 푼 문제 수 · 혼자·대결·협동 모두", ta: "타임어택으로 푼 문제 수", tb: "힌트 없이 다 푼 가장 빠른 시간", pts: "대결에서 이긴 사람 수만큼 · 협동 성공 +1" }[RK.kind];
     for (const b of $("rkList").querySelectorAll("[data-del]")) b.onclick = async () => {
       const n = rkData.names[b.dataset.del]; if (!confirm(`${n} 의 냥도쿠 기록을 모두 지울까요?`)) return;
       await NET.db().ref(`${GME.P}nyang/rec/${b.dataset.del}`).remove(); toast("지웠어요"); drawRank();
     };
+    drawMe();
   }
-  // 내 카드: 이름 · 레벨 · 승점 등급 (랭킹 탭 위) + 머리글 이름표
+  // 내 정보 한 줄 (랭킹 맨 아래) + 머리글 이름표. 이름 바꾸기는 머리글 이름표로
   function drawMe() {
     const n = myName();
     $("meChip").textContent = n ? `👤 ${n}` : "👤 이름 정하기";
-    const r = rkData && GME.me ? rkData.rec[GME.me.pid] || {} : null;
-    if (!$("meCard")) return;
-    if (!n) { $("meCard").innerHTML = '<button class="btn primary" data-me>이름 정하기</button>'; }
-    else {
-      const lv = level(r && r.sv), nx = LEVELS.find(l => l[0] > ((r && r.sv) || 0));
-      $("meCard").innerHTML = `<div class="mehead"><span class="lv">${lv[1]}</span><div><b class="round">${esc(n)}</b><div class="small">${lv[2]}${r ? ` · 푼 문제 ${r.sv || 0}${nx ? ` (다음 칭호까지 ${nx[0] - (r.sv || 0)})` : ""}` : ""}</div></div><button class="btn ghost" data-me>바꾸기</button></div>
-        ${r ? `<div class="mestat"><span><i>대결 승점</i><b>${grade(r.pts)} ${r.pts || 0}</b></span><span><i>대결</i><b>${r.games || 0}판 ${r.wins || 0}승</b></span><span><i>최고 시간 (${(TIERS.find(t => t.id === RK.tier) || TIERS[0]).label})</i><b>${(r.tb || {})[RK.tier] ? fmt(r.tb[RK.tier]) : "-"}</b></span></div>` : ""}`;
-    }
-    const b = $("meCard").querySelector("[data-me]"); if (b) b.onclick = () => askName(true).then(() => drawRank()).catch(() => {});
+    if (!n) { $("meCard").innerHTML = '<span>이름을 정하면 랭킹에 올라가요</span>'; return; }
+    const r = (rkData && GME.me && rkData.rec[GME.me.pid]) || {}, lv = level(r.sv), nx = LEVELS.find(l => l[0] > (r.sv || 0));
+    $("meCard").innerHTML = `<span class="lv">${lv[1]}</span><span><b>${esc(n)}</b> · ${lv[2]}${nx ? ` <span class="small">(다음 칭호까지 ${nx[0] - (r.sv || 0)}문제)</span>` : ""}</span><span style="margin-left:auto;white-space:nowrap">${grade(r.pts)} ${r.pts || 0}점</span>`;
   }
   $("meChip").onclick = () => askName(true).then(() => { if (!$("rankBox").hidden) drawRank(); }).catch(() => {});
-  $("rkRefresh").onclick = () => drawRank();
 
   // ── 시작
   setAutoX(autoX);
