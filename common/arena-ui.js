@@ -1,0 +1,216 @@
+/* 게임 공통 '친구랑' 화면 — 방 만들기 · 코드나 초대 링크로 들어가기 · 열린 방 목록 · 대기실(참가자·설정·시작)
+   common/arena.js(연결) + common/me.js(사이트 공통 이름) 위에서 동작. 색·글꼴은 게임의 CSS 변수를 따름
+   (--card --ink --soft --accent --line --round --text, 없으면 기본값)
+   쓰는 법:
+     ArenaUI.open({
+       game: "volley", title: "냥냥 배구", max: 2, min: 2,
+       settings: { defaults: { pts: 11 }, label: cfg => cfg.pts + "점", render(el, cfg, canEdit, update) { … update({ pts: 15 }) … } },
+       onStart(ctx) {},  // 경기 시작: ctx = { net, role: "host"|"guest", code, cfg, players, uid }
+       onLobby(ctx) {},  // 방장이 모두를 대기실로 되돌림 (게임 화면 정리)
+       onLeave(why) {},  // 방을 나감 (메뉴로)
+     });
+     ArenaUI.toLobby()  — 방장: 판이 끝난 뒤 모두 대기실로 · ArenaUI.leave() · ArenaUI.net (지금 연결) */
+(() => {
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const css = `
+.arn-ov{position:fixed;inset:0;z-index:60;background:rgba(30,24,20,.5);display:grid;place-items:center;padding:calc(env(safe-area-inset-top,0px) + 12px) 14px calc(env(safe-area-inset-bottom,0px) + 12px);-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.arn-box{position:relative;background:var(--card,#fff);color:var(--ink,#3a2f28);border-radius:26px;padding:20px 18px 18px;width:min(440px,100%);max-height:100%;overflow:auto;display:grid;gap:14px;box-shadow:0 24px 60px rgba(0,0,0,.3);font:15px/1.5 var(--text,system-ui,"Malgun Gothic",sans-serif)}
+.arn-box h2{margin:0;font:24px/1.2 var(--round,inherit);font-weight:400;padding-right:40px}
+.arn-box p{margin:0}
+.arn-soft{color:var(--soft,#8b7b70);font-size:13.5px}
+.arn-x{position:absolute;top:12px;right:12px;width:38px;height:38px;border-radius:99px;border:0;background:rgba(0,0,0,.06);color:var(--ink,#3a2f28);font-size:18px;cursor:pointer}
+.arn-btn{font:17px/1 var(--round,inherit);border:0;border-radius:99px;padding:14px 18px;cursor:pointer;background:rgba(0,0,0,.06);color:var(--ink,#3a2f28);transition:transform .08s}
+.arn-btn:active{transform:translateY(2px)}
+.arn-btn:disabled{opacity:.45;cursor:default}
+.arn-btn.pri{background:var(--accent,#ff8a65);color:#fff;box-shadow:0 3px 0 rgba(0,0,0,.18)}
+.arn-row{display:flex;gap:8px;align-items:center}
+.arn-row>*{min-width:0}
+.arn-me{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.04);border-radius:16px;padding:9px 12px}
+.arn-me b{font:17px var(--round,inherit);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arn-me button{margin-left:auto;border:0;background:none;color:var(--soft,#8b7b70);font:13.5px var(--text,inherit);cursor:pointer;padding:4px 6px}
+.arn-code{flex:1;font:22px/1 var(--round,inherit);letter-spacing:6px;text-transform:uppercase;text-align:center;border:2px solid var(--line,rgba(0,0,0,.12));background:transparent;color:var(--ink,#3a2f28);border-radius:99px;padding:11px 10px;outline:none;width:100%}
+.arn-code:focus{border-color:var(--accent,#ff8a65)}
+.arn-list{display:grid;gap:8px}
+.arn-room{display:flex;align-items:center;gap:10px;border:2px solid var(--line,rgba(0,0,0,.1));border-radius:18px;padding:10px 12px}
+.arn-room .who{display:grid;line-height:1.3;min-width:0}
+.arn-room .who b{font:17px var(--round,inherit);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arn-room .who span{font-size:12.5px;color:var(--soft,#8b7b70)}
+.arn-room .arn-btn{margin-left:auto;padding:10px 14px;font-size:15px;white-space:nowrap}
+.arn-big{display:grid;justify-items:center;gap:2px;background:rgba(0,0,0,.04);border-radius:20px;padding:12px}
+.arn-big span{font-size:13px;color:var(--soft,#8b7b70)}
+.arn-big b{font:40px/1.05 var(--round,inherit);font-weight:400;letter-spacing:8px}
+.arn-pl{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:16px;background:rgba(0,0,0,.035)}
+.arn-pl b{font:17px var(--round,inherit);font-weight:400;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.arn-pl i{font-style:normal;font-size:12px;color:var(--soft,#8b7b70);white-space:nowrap}
+.arn-pl .dot{width:9px;height:9px;border-radius:50%;flex:none;background:#c9c0b8}
+.arn-pl .dot.ok{background:#3fae7a}.arn-pl .dot.slow{background:#f5b942}
+.arn-pl .kick{margin-left:auto;border:0;background:none;color:var(--soft,#8b7b70);cursor:pointer;font-size:13px;padding:4px}
+.arn-set:empty{display:none}
+.arn-set{display:grid;gap:8px}
+.arn-msg{min-height:1.3em;font-size:13.5px;color:var(--bad,#e5536b)}
+.arn-wait{text-align:center;color:var(--soft,#8b7b70);font-size:14px;padding:4px 0}
+.arn-wait::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:arn-dots 1.2s steps(4) infinite}
+@keyframes arn-dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}`;
+  let styled = false;
+  const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
+
+  let opt = null, net = null, ov = null, box = null, me = null, listT = null, offs = [], cfg = null, playing = false;
+  const clearList = () => { clearInterval(listT); listT = null; };
+  const show = () => { style(); if (!ov) { ov = document.createElement("div"); ov.className = "arn-ov"; ov.innerHTML = '<div class="arn-box"></div>'; document.body.appendChild(ov); box = ov.firstChild; } ov.hidden = false; };
+  const hide = () => { clearList(); if (ov) ov.hidden = true; };
+  const setUrlRoom = code => { try { const u = new URL(location.href); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} };
+
+  async function myName() {
+    if (window.GME && !Arena.mock) { me = await GME.ensure(Arena.db()); return me.name; }
+    let n = ""; try { n = localStorage.getItem("game.arena.name") || ""; } catch (e) {}
+    me = { name: n || "친구" + Math.floor(Math.random() * 90 + 10) }; return me.name;
+  }
+
+  // ── 첫 화면: 방 만들기 · 코드로 들어가기 · 열린 방
+  function home(msg = "") {
+    show(); clearList();
+    box.innerHTML = `<button class="arn-x" data-x aria-label="닫기">✕</button>
+      <h2>친구랑 ${esc(opt.title)}</h2>
+      <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
+      <button class="arn-btn pri" data-host>🏠 방 만들기</button>
+      <div class="arn-row"><input class="arn-code" maxlength="4" placeholder="코드" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
+      <div class="arn-msg">${esc(msg)}</div>
+      <p class="arn-soft">열린 방</p><div class="arn-list"><p class="arn-soft">찾는 중…</p></div>`;
+    const inp = box.querySelector(".arn-code");
+    inp.addEventListener("input", () => { inp.value = Arena.cleanCode(inp.value); });
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") box.querySelector("[data-join]").click(); });
+    const draw = async () => {
+      const el = box && box.querySelector(".arn-list"); if (!el) return;
+      let rows = [];
+      try { rows = await Arena.listRooms(opt.game); } catch (e) { el.innerHTML = `<p class="arn-soft">목록을 못 불러왔어요</p>`; return; }
+      if (!box || !box.contains(el)) return;
+      el.innerHTML = rows.length ? rows.map(r => {
+        const full = r.n >= r.max, busy = r.ph === "play";
+        const state = r.empty ? "빈 방" : busy ? "게임 중" : full ? "꽉 참" : "기다리는 중";
+        const btn = r.empty ? `<button class="arn-btn" data-del="${esc(r.code)}">지우기</button>` : `<button class="arn-btn" data-code="${esc(r.code)}" ${full || busy ? "disabled" : ""}>들어가기</button>`;
+        return `<div class="arn-room"><div class="who"><b>${esc(r.h || "?")}의 방</b><span>${esc(state)} · ${r.n}/${r.max}명${r.m ? " · " + esc(r.m) : ""}</span></div>${btn}</div>`;
+      }).join("") : `<p class="arn-soft">아직 열린 방이 없어요. 방을 만들고 친구에게 링크를 보내 보세요.</p>`;
+    };
+    draw(); listT = setInterval(draw, 4000);
+  }
+
+  // ── 대기실
+  function lobby() {
+    show(); clearList();
+    const isHost = net.isHost;
+    box.innerHTML = `<button class="arn-x" data-leave aria-label="나가기">✕</button>
+      <h2>${esc(opt.title)} 대기실</h2>
+      <div class="arn-big"><span>방 코드</span><b>${esc(net.code)}</b></div>
+      <button class="arn-btn" data-share>🔗 초대 링크 보내기</button>
+      <div class="arn-list" data-pl></div>
+      <div class="arn-set" data-set></div>
+      <div class="arn-msg" data-msg></div>
+      ${isHost ? `<button class="arn-btn pri" data-start disabled>시작하기</button>` : `<p class="arn-wait">방장이 시작하면 바로 시작돼요</p>`}
+      <button class="arn-btn" data-leave>나가기</button>`;
+    drawPlayers(); drawSettings();
+  }
+  function drawPlayers() {
+    if (!box || !net) return; const el = box.querySelector("[data-pl]"); if (!el) return;
+    const pl = net.players || {}, host = net.meta && net.meta.host, peers = net.isHost ? new Map(net.peers()) : null;
+    const ids = Object.keys(pl).sort((a, b) => (b === host) - (a === host) || (pl[a].t || 0) - (pl[b].t || 0));
+    el.innerHTML = ids.map(uid => {
+      const p = pl[uid] || {}, mine = uid === net.uid;
+      const dot = uid === host ? "" : peers ? `<span class="dot ${peers.get(uid) ? "ok" : "slow"}" title="${peers.get(uid) ? "직접 연결" : "서버 경유"}"></span>` : "";
+      return `<div class="arn-pl">${uid === host ? "👑" : "🙂"} <b>${esc(p.name || "?")}</b>${mine ? "<i>나</i>" : ""}${dot}${net.isHost && !mine ? `<button class="kick" data-kick="${esc(uid)}">내보내기</button>` : ""}</div>`;
+    }).join("");
+    const btn = box.querySelector("[data-start]");
+    if (btn) { const n = ids.length, min = opt.min || 2; btn.disabled = n < min; btn.textContent = n < min ? `친구를 기다리는 중 (${n}/${min}명)` : "시작하기"; }
+  }
+  function drawSettings() {
+    if (!box || !net || !opt.settings || !opt.settings.render) return; const el = box.querySelector("[data-set]"); if (!el) return;
+    const c = (net.meta && net.meta.cfg) || cfg || opt.settings.defaults || {};
+    el.innerHTML = "";
+    opt.settings.render(el, c, net.isHost, patch => { if (!net.isHost) return; cfg = { ...c, ...patch }; net.setPhase("lobby", cfg); drawSettings(); });
+  }
+  const ctx = () => ({ net, role: net.isHost ? "host" : "guest", code: net.code, cfg: (net.meta && net.meta.cfg) || cfg, players: net.players, uid: net.uid, name: me && me.name });
+
+  function wire() {
+    offs.forEach(f => f()); offs = [];
+    offs.push(net.on("players", () => { if (!playing) drawPlayers(); }));
+    if (net.isHost) offs.push(net.on("p2p", () => { if (!playing) drawPlayers(); }));
+    offs.push(net.on("meta", m => {
+      if (!m) return;
+      if (m.phase === "play" && !playing) { playing = true; hide(); opt.onStart && opt.onStart(ctx()); }
+      else if (m.phase === "lobby" && playing) { playing = false; opt.onLobby && opt.onLobby(ctx()); lobby(); }
+      else if (!playing) drawSettings();
+    }));
+    if (!net.isHost) {
+      offs.push(net.on("closed", () => end("방장이 방을 닫았어요")));
+      offs.push(net.on("kicked", () => end("방장이 방에서 내보냈어요")));
+      offs.push(net.on("conn", (c, why) => { const m = box && box.querySelector("[data-msg]"); if (m && !playing) m.textContent = c ? "" : why || ""; }));
+    }
+  }
+  function end(why) {
+    const was = net; net = null; playing = false; offs.forEach(f => f()); offs = [];
+    if (was) was.leave();
+    setUrlRoom(null);
+    hide();
+    opt.onLeave && opt.onLeave(why || "");
+    if (why) { home(why); }
+  }
+
+  async function doHost() {
+    const b = box.querySelector("[data-host]"); if (b) { b.disabled = true; b.textContent = "방 만드는 중…"; }
+    try {
+      cfg = { ...(opt.settings && opt.settings.defaults || {}), ...(cfg || {}) };
+      net = await Arena.host(opt.game, { name: me.name, cfg, max: opt.max || 2, label: opt.settings && opt.settings.label });
+      playing = false; wire(); setUrlRoom(net.code); lobby();
+    } catch (e) { home("방을 못 만들었어요: " + e.message); }
+  }
+  async function doJoin(code) {
+    code = Arena.cleanCode(code);
+    if (code.length !== 4) { const m = box.querySelector(".arn-msg"); if (m) m.textContent = "코드 4글자를 적어 주세요"; return; }
+    show(); box.innerHTML = `<h2>들어가는 중…</h2><p class="arn-wait">방 ${esc(code)}</p>`;
+    try {
+      net = await Arena.join(opt.game, code, { name: me.name });
+      playing = false; wire(); setUrlRoom(net.code);
+      if (net.meta && net.meta.phase === "play") { playing = true; hide(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
+      else lobby();
+    } catch (e) { setUrlRoom(null); home(e.message); }
+  }
+  async function share() {
+    const url = Arena.inviteUrl(net.code), m = box.querySelector("[data-msg]");
+    const text = `${opt.title} 같이 해요! 방 코드 ${net.code}`;
+    try { if (navigator.share) { await navigator.share({ title: opt.title, text, url }); return; } } catch (e) { if (e && e.name === "AbortError") return; }
+    try { await navigator.clipboard.writeText(url); if (m) { m.style.color = "var(--good,#3fae7a)"; m.textContent = "링크를 복사했어요. 친구에게 붙여 넣어 보내세요"; } }
+    catch (e) { if (m) { m.style.color = ""; m.textContent = url; } }
+  }
+
+  function onClick(e) {
+    const t = e.target.closest("button"); if (!t || !ov || !ov.contains(t)) return;
+    if (t.matches("[data-x]")) { hide(); opt.onLeave && opt.onLeave(""); }
+    else if (t.matches("[data-rename]")) { GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
+    else if (t.matches("[data-host]")) doHost();
+    else if (t.matches("[data-join]")) doJoin(box.querySelector(".arn-code").value);
+    else if (t.dataset.code) doJoin(t.dataset.code);
+    else if (t.dataset.del) { t.disabled = true; Arena.deleteRoom(opt.game, t.dataset.del).catch(() => {}).then(() => home()); }
+    else if (t.matches("[data-share]")) share();
+    else if (t.matches("[data-start]")) { if (net && net.isHost) { const c = (net.meta && net.meta.cfg) || cfg; net.setPhase("play", c); } }
+    else if (t.dataset.kick) { if (net && net.isHost) net.kick(t.dataset.kick); }
+    else if (t.matches("[data-leave]")) end("");
+  }
+
+  async function open(o) {
+    opt = o; style(); show();
+    box.innerHTML = `<h2>친구랑 ${esc(o.title)}</h2><p class="arn-wait">연결하는 중</p>`;
+    if (!ov.dataset.wired) { ov.addEventListener("click", onClick); ov.dataset.wired = "1"; }
+    try { await Arena.init(); await myName(); }
+    catch (e) { box.innerHTML = `<button class="arn-x" data-x>✕</button><h2>연결하지 못했어요</h2><p class="arn-soft">인터넷 연결을 확인하고 다시 해 주세요. (${esc(e.message)})</p>`; return; }
+    if (net) { playing ? hide() : lobby(); return; }
+    const code = Arena.roomFromUrl();
+    if (code) doJoin(code); else home();
+  }
+
+  window.ArenaUI = {
+    open,
+    toLobby() { if (net && net.isHost) { playing = false; net.setPhase("lobby"); opt.onLobby && opt.onLobby(ctx()); lobby(); } },
+    leave() { if (net) end(""); },
+    get net() { return net; }, get playing() { return playing; }, get me() { return me; },
+    hasInvite: () => !!Arena.roomFromUrl(),
+  };
+})();
