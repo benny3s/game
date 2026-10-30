@@ -27,9 +27,9 @@
 
   // ── 설정
   const TIERS = {
-    easy: { id: "easy", ...Z.TIERS.easy, desc: "처음 배우는 분께 · 실수도 해요" },
-    normal: { id: "normal", ...Z.TIERS.normal, desc: "규칙을 알면 · 제법 둬요" },
-    hard: { id: "hard", ...Z.TIERS.hard, desc: "진지하게 · 꽤 세요" },
+    easy:   { id: "easy",   em: "🌱", name: "입문 (15급)", cls: "t-easy",   desc: "처음 배우는 분께 · 흐름 위주" },
+    normal: { id: "normal", em: "⚫", name: "유단자 (3단)", cls: "t-normal", desc: "형세 판단과 전투가 탄탄해요" },
+    hard:   { id: "hard",   em: "👑", name: "명인 (9단)",   cls: "t-hard",   desc: "KataGo 신경망 수읽기" },
   };
   const cfg = Object.assign({ tab: "solo", size: 9, tier: "easy", color: "black", handi: "k6.5", atari: true, wsize: 9, wb: "hard", ww: "normal", speed: "normal" }, store("cfg", {}));
   if (!TIERS[cfg.tier]) cfg.tier = "easy";

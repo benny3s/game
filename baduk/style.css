@@ -1,6 +1,19 @@
 /* 바둑 — 전통 기원(棋院) 대국실 · 비자나무 바둑판 · 묵직한 흑백 바둑돌 테마 */
-:root{ --accent:#b45309; --accent-d:#92400e; --wood:#f0d39f; }
-body{word-break:keep-all;overflow-wrap:anywhere;background:radial-gradient(120% 90% at 50% 0%,#faf5e8 0%,#efe2c6 65%,#e2ceaa 100%)}
+:root{
+  --bg:#0c1410;
+  --bg-grad:radial-gradient(120% 90% at 50% 0%,#1a2921 0%,#0e1713 65%,#070c0a 100%);
+  --card:rgba(18,28,23,.94);
+  --card-border:rgba(212,175,55,.32);
+  --ink:#f1f5f9;
+  --soft:#94a3b8;
+  --line:rgba(212,175,55,.2);
+  --accent:#d97706;
+  --accent-d:#92400e;
+  --gold:#f59e0b;
+  --wood:#f0d39f;
+  --paper:rgba(12,20,16,.88);
+}
+body{word-break:keep-all;overflow-wrap:anywhere;background:radial-gradient(120% 90% at 50% 0%,#1a2921 0%,#0e1713 65%,#070c0a 100%)}
 body.playing{background:radial-gradient(110% 90% at 50% 35%,#1e2923 0%,#121a16 70%,#0b100d 100%)}
 body.playing .bar{background:rgba(20,32,26,.9);border:1.5px solid rgba(212,175,55,.35);border-radius:16px;padding:5px 10px}
 body.playing .bar .iconbtn{background:#24382e;border-color:rgba(212,175,55,.45);color:#fef3c7}

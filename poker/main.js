@@ -7,9 +7,9 @@
   const $ = (id) => document.getElementById(id);
   const cfg = { mode: '1p', tier: 'normal', coach: true };
   const TIER_META = {
-    easy:   { name: '순한 냥이', avatar: '🐣' },
-    normal: { name: '보통 냥이', avatar: '😼' },
-    hard:   { name: '프로 타짜', avatar: '🐯' },
+    easy:   { name: '캐주얼 루키', avatar: '🌱' },
+    normal: { name: '레귤러 프로', avatar: '♠️' },
+    hard:   { name: 'GTO 마스터', avatar: '👑' },
   };
   const ACT_LABELS = {
     [P.A_FOLD]:  '폴드',
@@ -80,7 +80,7 @@
       const oppUid = Object.keys(onlineMatch.players).find(u => onlineMatch.players[u].seat !== mySeat);
       const oppP = oppUid ? onlineMatch.players[oppUid] : null;
       $('oppName').innerHTML = `${oppP ? oppP.name : '친구'} <span class="dealer-chip" ${state.dealer === oppSeat ? '' : 'hidden'}>D</span>`;
-      $('oppAvatar').textContent = (oppP && oppP.avatar) || '🐱';
+      $('oppAvatar').textContent = (oppP && oppP.avatar) || '🃏';
     } else {
       const tm = TIER_META[cfg.tier] || TIER_META.normal;
       $('oppName').innerHTML = `${tm.name} <span class="dealer-chip" ${state.dealer === oppSeat ? '' : 'hidden'}>D</span>`;

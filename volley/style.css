@@ -1,6 +1,22 @@
-/* 냥냥 배구 — cozy.css 위에 이 게임만의 모양: 해변 노을빛 주황 · 모래사장 분위기 · 고양이 고르기 · 점수판 · 큰 엄지 단추 */
-:root{--accent:#ff8247;--accent-d:#dc5f26;--bg:#fff2dc;--card:#fffaf2;--paper:#fff6e8;--tint:#ffe5c2;--tint-d:#ecc494}
-body{background:radial-gradient(ellipse at 50% 0%,#fff8ec 0%,#ffe8c5 65%,#ffd8a8 100%);min-height:100dvh}
+/* 냥냥 배구 — 해변 황혼 아케이드 라운지 · 고양이 고르기 · 점수판 · 큰 엄지 단추 */
+:root{
+  --accent:#ff8247;
+  --accent-d:#dc5f26;
+  --bg:#0d1f36;
+  --card:rgba(16, 36, 62, 0.88);
+  --paper:rgba(255, 255, 255, 0.05);
+  --tint:rgba(255, 130, 71, 0.14);
+  --tint-d:rgba(255, 255, 255, 0.12);
+  --ink:#f8fafc;
+  --soft:#94a3b8;
+  --gold:#fbbf24;
+}
+body{
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 130, 71, 0.22) 0%, transparent 55%),
+    radial-gradient(ellipse at 50% 100%, #173459 0%, #091526 100%);
+  min-height:100dvh;
+}
 
 /* ── 메뉴 ── */
 .box{display:grid;gap:12px}
@@ -8,13 +24,14 @@ body{background:radial-gradient(ellipse at 50% 0%,#fff8ec 0%,#ffe8c5 65%,#ffd8a8
 .tier{touch-action:manipulation;align-content:start}
 .tier span+span{color:var(--soft)}
 .furs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
-.fur{border:0;background:var(--paper);border-radius:16px;padding:6px 2px 7px;display:grid;justify-items:center;gap:1px;cursor:pointer;font:14.5px var(--round);color:var(--ink);box-shadow:0 2px 0 var(--tint-d);transition:transform .08s;touch-action:manipulation}
+.fur{border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);border-radius:16px;padding:8px 2px 9px;display:grid;justify-items:center;gap:3px;cursor:pointer;font:700 14px var(--round);color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,0.2);transition:transform .1s,border-color .15s,background-color .15s;touch-action:manipulation}
 .fur canvas{width:54px;height:54px;display:block}
+.fur:hover{background:rgba(255,255,255,0.1)}
 .fur:active{transform:translateY(2px)}
-.fur[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:-3px;background:var(--tint)}
+.fur[aria-pressed="true"]{border:2px solid var(--accent);background:rgba(255,130,71,0.2);box-shadow:0 0 18px rgba(255,130,71,0.25)}
 .fur:disabled{opacity:.35;cursor:default}
-.keys{margin:0;text-align:center;line-height:1.9}
-kbd{display:inline-block;min-width:1.7em;padding:1px 6px;border-radius:7px;background:var(--tint);box-shadow:0 2px 0 var(--tint-d);font:13px/1.5 var(--round);color:var(--ink);text-align:center}
+.keys{margin:0;text-align:center;line-height:1.9;color:var(--soft)}
+kbd{display:inline-block;min-width:1.7em;padding:2px 7px;border-radius:7px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);font:700 12.5px/1.5 var(--round);color:#fff;text-align:center}
 /* 둘이서: 고양이 고르기 두 줄 → 조금 작게 (시작 단추가 첫 화면에 보이게) */
 .duo-pick .fur{padding:4px 2px 5px;font-size:13.5px}
 .duo-pick .fur canvas{width:40px;height:40px}

@@ -293,16 +293,17 @@
       path('M50 64 Q44 84 48 102 Q56 84 56 64 Z', '#facc15') +
       path('M58 60 Q76 72 82 92 Q66 80 56 66 Z', '#9333ea')) +
       gwangSeal(76, 30),
-    // 12월 비 광(비광): 우산 쓴 도령(냥이 도령)과 개구리 + 光 인장
+    // 12월 비 광(비광): 우산 쓴 선비(갓)와 버드나무·개구리 + 光 인장
     44: () => g(path('M22 52 Q50 20 78 52 Z', '#facc15', ' stroke="#78350f" stroke-width="1.6"') +
       path('M22 52 Q36 44 50 52 Q64 44 78 52', 'none', ' stroke="#dc2626" stroke-width="2"') +
       line('M50 30 L50 88', '#111827', 2.4) +
-      ell(44, 100, 15, 17, '#dc2626', 0, ' stroke="#450a0a" stroke-width="1.6"') +
-      circle(44, 76, 11.5, '#fffbeb', ' stroke="#111827" stroke-width="1.6"') +
-      path('M35 70 L34 60 L41 67 Z', '#fffbeb', ' stroke="#111827" stroke-width="1.4" stroke-linejoin="round"') +
-      path('M53 70 L54 60 L47 67 Z', '#fffbeb', ' stroke="#111827" stroke-width="1.4" stroke-linejoin="round"') +
-      ell(40, 76, 1.6, 2.2, INK) + ell(48, 76, 1.6, 2.2, INK) +
-      path('M43 80 L45 80 L44 82 Z', '#dc2626') +
+      ell(44, 102, 15, 17, '#dc2626', 0, ' stroke="#450a0a" stroke-width="1.6"') +
+      path('M32 92 L56 92 L52 116 L36 116 Z', '#1d4ed8', ' opacity=".85"') +
+      circle(44, 76, 10.5, '#fffbeb', ' stroke="#111827" stroke-width="1.6"') +
+      ell(44, 66, 16, 3.8, '#111827') +
+      path('M37 66 L39 57 L49 57 L51 66 Z', '#111827') +
+      ell(40.5, 76, 1.4, 1.8, INK) + ell(47.5, 76, 1.4, 1.8, INK) +
+      line('M41 81 Q44 83 47 81', '#111827', 1.3) +
       ell(76, 132, 9, 6.5, '#16a34a', 0, ' stroke="#052e16" stroke-width="1.2"') +
       circle(72, 126, 3.2, '#22c55e') + circle(80, 126, 3.2, '#22c55e') +
       circle(72, 126, 1.4, INK) + circle(80, 126, 1.4, INK)) +
@@ -360,18 +361,16 @@
     return s + corner(id, m, kind);
   }
 
-  // 뒷면: 정통 다홍/진홍색 화투 뒷면 + 금장 테두리 + 복냥이 문장
+  // 뒷면: 정통 다홍/진홍색 화투 뒷면 + 금장 테두리 + 전통 운학·금장 인장 문양
   function back() {
     let s = `<rect x="1" y="1" width="98" height="158" rx="9" fill="url(#hwback)" stroke="#450a0a" stroke-width="2.2"/>` +
-      `<rect x="8" y="8" width="84" height="144" rx="5" fill="none" stroke="#fde047" stroke-width="1.6" opacity=".65"/>` +
+      `<rect x="8" y="8" width="84" height="144" rx="5" fill="none" stroke="#fde047" stroke-width="1.6" opacity=".7"/>` +
       `<rect x="12" y="12" width="76" height="136" rx="3" fill="none" stroke="#fca5a5" stroke-width="0.9" stroke-dasharray="3 3" opacity=".5"/>`;
-    s += circle(50, 80, 24, '#7f1d1d', ' stroke="#fde047" stroke-width="1.8"') +
-      circle(50, 80, 19, '#fffbeb') +
-      path('M33 70 L32 52 L45 62 Z', '#fffbeb', ' stroke="#7f1d1d" stroke-width="1.2"') +
-      path('M67 70 L68 52 L55 62 Z', '#fffbeb', ' stroke="#7f1d1d" stroke-width="1.2"') +
-      ell(43, 80, 2.5, 3.2, '#1c1917') + ell(57, 80, 2.5, 3.2, '#1c1917') +
-      path('M48 85 L52 85 L50 88 Z', '#dc2626') +
-      line('M50 88 Q46 92 43 90 M50 88 Q54 92 57 90', '#1c1917', 1.4);
+    s += circle(50, 80, 23, '#7f1d1d', ' stroke="#fde047" stroke-width="2"') +
+      circle(50, 80, 17.5, 'none', ' stroke="#fde047" stroke-width="1" opacity=".75"') +
+      path('M50 61 L55 74 L69 74 L58 82 L62 95 L50 87 L38 95 L42 82 L31 74 L45 74 Z', 'none', ' stroke="#fde047" stroke-width="1.4" opacity=".45"') +
+      circle(50, 80, 11, '#991b1b', ' stroke="#fde047" stroke-width="1.5"') +
+      text(50, 80.5, '花', 14, '#fef08a', ' font-weight="900"');
     const coin = (x, y) => circle(x, y, 5, 'none', ' stroke="#fde047" stroke-width="1.2" opacity=".65"') + `<rect x="${x - 2}" y="${y - 2}" width="4" height="4" fill="none" stroke="#fde047" stroke-width="1" opacity=".65"/>`;
     return s + coin(22, 24) + coin(78, 24) + coin(22, 136) + coin(78, 136);
   }

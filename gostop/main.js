@@ -25,11 +25,11 @@
   let stats = C.store(KEY + 'stats', { played: 0, won: 0, best: 0 });
 
   const TIER = {
-    easy: Object.assign({}, C.TIERS.easy, { desc: '천천히 배워요', names: ['삐약이', '병아리'] }),
-    normal: Object.assign({}, C.TIERS.normal, { desc: '제법 잘해요', names: ['냥냥이', '나비'] }),
-    hard: Object.assign({}, C.TIERS.hard, { desc: '수를 깊이 읽어요', names: ['호랑이', '범냥이'] }),
+    easy:   { em: '🌱', name: '동네 하수', cls: 't-easy',   desc: '패를 솔직하게 내는 입문자', names: ['김씨', '박씨'] },
+    normal: { em: '🎴', name: '사랑방 고수', cls: 't-normal', desc: '피 계산과 견제가 탄탄한 실력자', names: ['이생원', '최주사'] },
+    hard:   { em: '👑', name: '전설의 타짜', cls: 't-hard',   desc: '숨은 패까지 읽는 일류 타짜', names: ['고광렬', '평경장'] },
   };
-  const SPEEDS = { slow: { label: '느긋하게', em: '🐢', mul: 1.45, think: 950 }, normal: { label: '보통', em: '🐇', mul: 1, think: 560 }, fast: { label: '빠르게', em: '⚡', mul: 0.55, think: 230 } };
+  const SPEEDS = { slow: { label: '느긋하게', em: '🐢', mul: 1.45, think: 950 }, normal: { label: '보통', em: '⚡', mul: 1, think: 560 }, fast: { label: '빠르게', em: '🚀', mul: 0.55, think: 230 } };
   const SPEED_ORDER = ['slow', 'normal', 'fast'];
 
   // ── 메뉴 ─────────────────────────────────────────────────
@@ -41,16 +41,16 @@
     const solo = opt.tab === 'solo';
     $('tabSolo').setAttribute('aria-pressed', String(solo)); $('tabWatch').setAttribute('aria-pressed', String(!solo));
     $('soloBox').hidden = !solo; $('watchBox').hidden = solo;
-    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>${fmtN(coins)} 냥코인</b><span class="small">${stats.played ? `${fmtN(stats.played)}판 중 ${fmtN(stats.won)}판 이김 · 최고 ${fmtN(stats.best)}점` : '이기면 점수만큼 냥코인이 쌓여요 (1점 = 10냥)'}</span></span>`;
-    segBtns($('modeSeg'), [[2, '맞고 · 둘이'], [3, '고스톱 · 셋이']], opt.mode, v => { opt.mode = +v; saveOpt('mode'); drawMenu(); });
+    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 자금 ${fmtN(coins)}냥</b><span class="small">${stats.played ? `통산 ${fmtN(stats.played)}판 중 ${fmtN(stats.won)}승 · 최고 기록 ${fmtN(stats.best)}점` : '승리 시 점수만큼 판돈이 쌓입니다 (1점 = 10냥)'}</span></span>`;
+    segBtns($('modeSeg'), [[2, '2인 맞고'], [3, '3인 고스톱']], opt.mode, v => { opt.mode = +v; saveOpt('mode'); drawMenu(); });
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })),
       id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
     segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], opt.bonus, v => { opt.bonus = +v; saveOpt('bonus'); drawMenu(); });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     if ($('coachSeg')) segBtns($('coachSeg'), [[1, '🧑‍🏫 실시간 코칭 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
-    $('startBtn').textContent = `${TIER[opt.tier].em} ${opt.mode === 2 ? '맞고' : '고스톱'} 시작하기`;
-    segBtns($('wModeSeg'), [[2, '둘이 (맞고)'], [3, '셋이 (고스톱)']], opt.wMode, v => { opt.wMode = +v; saveOpt('wMode'); drawMenu(); });
-    const seatName = ['아래 냥이', opt.wMode === 2 ? '위 냥이' : '오른쪽 냥이', '왼쪽 냥이'];
+    $('startBtn').textContent = `🎴 ${opt.mode === 2 ? '맞고' : '고스톱'} 대국 시작 (${TIER[opt.tier].name})`;
+    segBtns($('wModeSeg'), [[2, '2인 맞고'], [3, '3인 고스톱']], opt.wMode, v => { opt.wMode = +v; saveOpt('wMode'); drawMenu(); });
+    const seatName = ['아래 자리', opt.wMode === 2 ? '맞은편 자리' : '오른쪽 자리', '왼쪽 자리'];
     $('wSeats').innerHTML = Array.from({ length: opt.wMode }, (_, i) => `<div class="wseat"><b>${seatName[i]}</b><div class="seg" data-i="${i}"></div></div>`).join('');
     for (const el of $('wSeats').querySelectorAll('.seg')) {
       const i = +el.dataset.i;
@@ -232,7 +232,7 @@
     ses.seats = Array.from({ length: n }, (_, i) => {
       const pl = plist[i];
       if (pl) return { ctrl: i === myIdx ? 'me' : 'remote', tier: null, name: i === myIdx ? (pl.name || '나') : (pl.name || `친구${i + 1}`), em: i === myIdx ? '나' : AV[i % AV.length], uid: pl.uid };
-      return { ctrl: role === 'host' ? 'ai' : 'remote', tier: 'normal', name: '냥냥이(AI)', em: '🐱' };
+      return { ctrl: role === 'host' ? 'ai' : 'remote', tier: 'normal', name: '사랑방 고수(AI)', em: '🎴' };
     });
     const pushAct = (m) => {
       if (!m || m.t !== 'act') return;
@@ -1153,7 +1153,7 @@
         big = '+' + fmtN(r.points) + '점';
         const gain = r.points * 10;
         coins += gain; C.save(KEY + 'coins', coins);
-        coinLine = `<p class="rescoin">🪙 냥코인 +${fmtN(gain)}</p>`;
+        coinLine = `<p class="rescoin">🪙 판돈 획득 +${fmtN(gain)}냥</p>`;
         sfx('win');
         if (r.points >= 10) setTimeout(() => C.confetti(), 150); else setTimeout(() => C.confetti({ particleCount: 60, spread: 60 }), 150);
       } else {

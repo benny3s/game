@@ -10,9 +10,21 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=1">
 <style>
-/* 땅따먹기: 공통 포근한 모양(cozy.css) + 이 게임만의 것 (크레파스 산호색 · 스케치북 모눈종이 무대) */
-:root{ --accent:#ff7e55; --accent-d:#d95b35; --bg:#fdf3e6; }
-body{background:radial-gradient(circle at 50% 15%,#fffdf9 0%,#f7e8d4 100%);min-height:100dvh}
+/* 땅따먹기: 다크 아케이드 영토 전쟁 로비 + 스케치북 모눈종이 경기장 */
+:root{
+  --bg:#0f172a;
+  --bg-grad:radial-gradient(120% 90% at 50% 0%,#1e293b 0%,#0f172a 65%,#090d16 100%);
+  --card:rgba(22,32,50,.94);
+  --card-border:rgba(249,115,22,.35);
+  --ink:#f8fafc;
+  --soft:#94a3b8;
+  --line:rgba(255,255,255,.12);
+  --accent:#f97316;
+  --accent-d:#c2410c;
+  --gold:#fbbf24;
+  --paper:rgba(15,23,42,.88);
+}
+body{background:radial-gradient(circle at 50% 15%,#1e293b 0%,#0f172a 100%);min-height:100dvh}
 html:has(body.playing){overscroll-behavior:none}
 header.top h1{white-space:nowrap}
 
@@ -26,9 +38,10 @@ header.top h1{white-space:nowrap}
 .tier .em{font-size:30px}
 .tier b{font-size:20px}
 .animals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:6px}
-.animals button{border:0;background:var(--paper);border-radius:16px;padding:5px 2px 7px;display:grid;justify-items:center;gap:1px;cursor:pointer;font:13px var(--round);color:var(--ink);box-shadow:0 2px 0 var(--tint-d);transition:transform .08s;touch-action:manipulation}
+.animals button{border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);border-radius:16px;padding:7px 2px 8px;display:grid;justify-items:center;gap:2px;cursor:pointer;font:700 13.5px var(--round);color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,0.22);transition:transform .08s,background-color .15s,border-color .15s;touch-action:manipulation}
+.animals button:hover{background:rgba(255,255,255,0.1)}
 .animals button:active{transform:translateY(2px)}
-.animals button[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:-3px;background:#fff1e3}
+.animals button[aria-pressed="true"]{border:2px solid var(--accent);background:rgba(249,115,22,0.22);box-shadow:0 0 18px rgba(249,115,22,0.28)}
 .animals button[aria-pressed="true"] canvas{animation:hop .5s cubic-bezier(.3,1.6,.5,1)}
 .animals canvas{display:block;pointer-events:none}
 /* 시작 단추: 작은 휴대폰에서도 늘 보이게 화면 아래에 붙음 */

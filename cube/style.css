@@ -1,9 +1,19 @@
 /* 베니큐브 화면 — 클래식 보드게임 테이블 매트 + 원목 타일 받침대 + 상아빛 숫자 타일 테마 */
 :root{
-  --coral:#dc2626; --mint:#0d9488; --gold:#d97706; --lav:#7c3aed;
+  --bg:#071f1d;
+  --bg-grad:radial-gradient(120% 90% at 50% 0%,#11423e 0%,#082523 65%,#041413 100%);
+  --card:rgba(12,42,40,.94);
+  --card-border:rgba(45,212,191,.32);
+  --ink:#f0fdfa;
+  --soft:#99f6e4;
+  --line:rgba(45,212,191,.2);
+  --accent:#0d9488;
+  --accent-d:#0f766e;
+  --coral:#dc2626; --mint:#0d9488; --gold:#f59e0b; --lav:#7c3aed;
   --tileface:#fffdf7; --tileedge:#d4b996;
+  --paper:rgba(6,28,26,.88);
 }
-body{overscroll-behavior:none;background:radial-gradient(120% 90% at 50% 0%,#f4f9f8 0%,#e0eeec 65%,#cbe2df 100%)}
+body{overscroll-behavior:none;background:radial-gradient(120% 90% at 50% 0%,#11423e 0%,#082523 65%,#041413 100%)}
 body.playing{background:radial-gradient(110% 90% at 50% 35%,#134e4a 0%,#0f3936 65%,#092422 100%);color:#f0fdfa}
 body.playing .bar{background:rgba(13,48,45,.9);border:1.5px solid rgba(45,212,191,.35);border-radius:16px;padding:5px 10px}
 body.playing .bar .iconbtn{background:#115e59;border-color:rgba(45,212,191,.45);color:#f0fdfa}

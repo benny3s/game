@@ -21,9 +21,9 @@
   let stats = C.store(KEY + 'stats', { played: 0, won: 0, coins: 500 });
 
   const TIER = {
-    easy: { em: '🐣', name: '초보 삐약이', desc: '솔직하게 패대로만 쳐요', cls: 'easy', names: ['삐약이', '병아리'] },
-    normal: { em: '🐱', name: '중수 냥냥이', desc: '오픈패와 팟오즈를 계산해요', cls: 'normal', names: ['냥냥이', '나비'] },
-    hard: { em: '🐯', name: '타짜 호랑이', desc: '블러핑과 땡잡이 심리전을 걸어요', cls: 'hard', names: ['아귀냥', '고니냥'] },
+    easy:   { em: '🌱', name: '어설픈 하수', desc: '솔직하게 패대로만 베팅해요', cls: 't-easy',   names: ['박무옥', '김첨지'] },
+    normal: { em: '🎴', name: '노련한 꾼',   desc: '오픈패와 팟오즈를 계산해요', cls: 't-normal', names: ['짝귀', '독사'] },
+    hard:   { em: '👑', name: '전설의 타짜', desc: '블러핑과 땡잡이 수싸움을 걸어요', cls: 't-hard', names: ['아귀', '고니'] },
   };
 
   function segBtns(el, items, cur, onPick) {
@@ -245,7 +245,7 @@
     const seats = Array.from({ length: n }, (_, i) => {
       const pl = plist[i];
       if (pl) return { ctrl: i === myIdx ? 'me' : 'remote', name: pl.name || `친구${i + 1}`, em: i === myIdx ? '🎴' : '🌸', tier: null };
-      return { ctrl: role === 'host' ? 'ai' : 'remote', name: '아귀냥(AI)', em: '🐯', tier: 'normal' };
+      return { ctrl: role === 'host' ? 'ai' : 'remote', name: '짝귀(AI)', em: '🎴', tier: 'normal' };
     });
     const ses = SES = { alive: true, cfg: { watch: false, online: true, role, n, me: myIdx, seed: (cfg && cfg.seed) || 12345 }, S: s, seats, net, pending: null, turnLog: [], actQ: [], actWaiters: [] };
     const onMsg = m => {

@@ -1,16 +1,31 @@
 /* 정통 섯다 — 호롱불 흑단 목재 테이블 · 황금 엽전 · 실시간 승률/기댓값 코칭 계기판 */
 :root{
+  --bg:#160803;
+  --bg-grad:radial-gradient(120% 90% at 50% 0%,#361608 0%,#1c0b04 65%,#0d0502 100%);
+  --card:rgba(36,15,6,.94);
+  --card-border:rgba(251,191,36,.35);
+  --ink:#fef3c7;
+  --soft:#fcd34d;
+  --line:rgba(251,191,36,.22);
   --accent:#d97706;
   --accent-d:#92400e;
   --gold:#fbbf24;
   --wood:#2b1508;
   --wood-d:#170a03;
+  --paper:rgba(24,10,4,.88);
+  --tint:rgba(255,255,255,.08);
+  --tint2:rgba(16,6,2,.85);
 }
 
 body:not(.playing){
-  background:radial-gradient(120% 90% at 50% 0%,#fff8ec 0%,#f3dfbe 65%,#e4c79c 100%);
+  background:radial-gradient(120% 90% at 50% 0%,#3b1909 0%,#1d0c04 65%,#0e0502 100%);
 }
-.top h1{color:#7c2d12;text-shadow:0 1px 0 #fff}
+.top h1{color:#fde68a;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+#menuCard{
+  background:linear-gradient(165deg,rgba(45,19,8,.95) 0%,rgba(24,10,4,.96) 100%);
+  border:1.5px solid rgba(251,191,36,.42);
+  box-shadow:0 18px 44px rgba(0,0,0,.65);
+}
 .box{display:grid;gap:12px}
 .seg.center{justify-content:center}
 .coinline{

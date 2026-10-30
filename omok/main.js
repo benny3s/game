@@ -27,14 +27,19 @@
   };
   const BAN_MSG = { '33': '삼삼 금수예요 (열린 삼이 두 개)', '44': '사사 금수예요 (사가 두 개)', overline: '장목 금수예요 (여섯 알 이상)' };
   const COLOR_NAME = { 1: '흑', 2: '백' };
-  const tier = t => Cozy.TIERS[t];
+  const TIER_MAP = {
+    easy:   { em: '🌱', name: '수련생',   cls: 't-easy' },
+    normal: { em: '⚪', name: '유단자',   cls: 't-normal' },
+    hard:   { em: '👑', name: '렌주 명인', cls: 't-hard' },
+  };
+  const tier = t => TIER_MAP[t] || Cozy.TIERS[t];
   // AI 한마디 (난이도마다 말투)
   const SAY = {
-    four: { easy: '삐약! 사예요', normal: '냥! 사예요', hard: '어흥, 사다!' },
-    block: { easy: '삐약, 막았어요!', normal: '휴, 막았다냥', hard: '그 정도론 안 되지' },
-    sure: { easy: '삐약? 이길 것 같아요', normal: '이길 길이 보여요!', hard: '이제 끝이 보이네' },
-    win: { easy: '삐약삐약! 이겼다!', normal: '냥냥, 내가 이겼어요', hard: '어흥! 한 판 더?' },
-    lose: { easy: '삐약… 졌어요', normal: '냥… 대단해요!', hard: '크앙, 인정!' },
+    four:  { easy: '앗, 사(4)예요!', normal: '사(4)를 부릅니다!', hard: '외길 사(4) 공격입니다.' },
+    block: { easy: '휴, 급소를 막았어요!', normal: '날카로운 수를 막았습니다.', hard: '그 공격은 이미 읽었습니다.' },
+    sure:  { easy: '이길 길이 보여요!', normal: '승기가 잡혔습니다!', hard: '수읽기가 끝났습니다.' },
+    win:   { easy: '제가 이겼네요! 한 수 배웠어요.', normal: '좋은 대국이었습니다!', hard: '명승부였습니다. 한 판 더 하시죠!' },
+    lose:  { easy: '멋진 수네요, 졌어요!', normal: '대단한 수읽기입니다!', hard: '완벽한 공격이군요. 인정합니다!' },
   };
 
   // ── 저장된 고르기 · 설정 ──

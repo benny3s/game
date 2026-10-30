@@ -11,22 +11,22 @@
   const saveOpt = () => save("cube.opt", O);
 
   const TIER_ITEMS = [
-    { id: "easy", em: "🐣", name: "초급", desc: "가끔 실수해요", cls: "t-easy" },
-    { id: "normal", em: "🐱", name: "중급", desc: "묶음을 잘 맞춰요", cls: "t-normal" },
-    { id: "hard", em: "🐯", name: "고급", desc: "남의 타일까지 기억", cls: "t-hard" },
+    { id: "easy", em: "🌱", name: "입문자", desc: "가끔 실수해요", cls: "t-easy" },
+    { id: "normal", em: "🀄", name: "숙련자", desc: "묶음을 잘 맞춰요", cls: "t-normal" },
+    { id: "hard", em: "👑", name: "큐브 마스터", desc: "남의 타일까지 기억", cls: "t-hard" },
   ];
   const RULE_DESC = {
-    easy: "고양이 타일 두 장이 만능이에요. 처음엔 이 규칙이 쉬워요.",
-    classic: "표시 타일의 다음 숫자가 만능이에요 (13 다음은 1). 고양이는 그 만능 숫자 노릇만 해요.",
+    easy: "★ 조커 타일 두 장이 만능이에요. 처음엔 이 규칙이 쉬워요.",
+    classic: "표시 타일의 다음 숫자가 만능이에요 (13 다음은 1). ★ 타일은 그 만능 숫자 노릇만 해요.",
   };
   const HOWTO = [
     "받침대 14장을 모두 묶음으로 맞춘 뒤 한 장을 버리면 이겨요.",
     "묶음 = 같은 숫자 다른 색 3장 / 같은 색 이어진 숫자 3장",
     "차례마다 한 장 뽑고 한 장을 버려요. 앞사람이 버린 타일을 가져와도 돼요.",
     "끝낼 수 있으면 <b>베니!</b> 단추가 나타나요.",
-    "빛나는 테두리(✦) 타일은 아무 타일 대신 쓸 수 있는 만능이에요.",
+    "빛나는 테두리(✦) 조커 타일은 아무 타일 대신 쓸 수 있는 만능이에요.",
   ];
-  const BOT_NAMES = ["냥이", "몽이", "호야", "두부"];
+  const BOT_NAMES = ["민수", "서연", "도윤", "지우"];
   const COLOR_NAMES = ["빨강", "민트", "노랑", "보라"];
   // 묶음 색 띠: [띠 색, 타일 바탕]
   const GROUPS = [
@@ -65,8 +65,8 @@
     if (t.cat && st.rule === "classic" && st.wildFace != null) c = Math.floor(st.wildFace / 26);
     if (c >= 0) cls.push("t" + c);
     if (extra) cls.push(extra);
-    const face = t.cat ? "🐱" : String(t.v);
-    const label = t.cat ? "고양이" : (COLOR_NAMES[c] || "") + " " + t.v;
+    const face = t.cat ? "★" : String(t.v);
+    const label = t.cat ? "조커" : (COLOR_NAMES[c] || "") + " " + t.v;
     return `<div class="${cls.join(" ")}" data-id="${id}" aria-label="${label}"${style ? ` style="${style}"` : ""}>` +
       `<b>${face}</b>${t.cat ? "" : '<i class="dot"></i>'}<i class="gb"></i></div>`;
   }
@@ -119,11 +119,11 @@
     setTab(tab);
     seg($("aiCount"), [["1", "1명"], ["2", "2명"], ["3", "3명"]], O.ai, (v) => { O.ai = +v; saveOpt(); drawMenu(); });
     tierCards($("tiers"), TIER_ITEMS, (id) => { O.tier = id; saveOpt(); drawMenu(); }, { selected: O.tier });
-    seg($("rules"), [["easy", "😺 쉬움"], ["classic", "🀄 전통"]], O.rule, (v) => { O.rule = v; saveOpt(); drawMenu(); });
+    seg($("rules"), [["easy", "★ 쉬움 (조커)"], ["classic", "🀄 전통"]], O.rule, (v) => { O.rule = v; saveOpt(); drawMenu(); });
     $("ruleDesc").textContent = RULE_DESC[O.rule] || "";
 
     tierCards($("wTiers"), TIER_ITEMS, (id) => { O.wtier = id; saveOpt(); drawMenu(); }, { selected: O.wtier });
-    seg($("wRules"), [["easy", "😺 쉬움"], ["classic", "🀄 전통"]], O.wrule, (v) => { O.wrule = v; saveOpt(); drawMenu(); });
+    seg($("wRules"), [["easy", "★ 쉬움 (조커)"], ["classic", "🀄 전통"]], O.wrule, (v) => { O.wrule = v; saveOpt(); drawMenu(); });
     $("wRuleDesc").textContent = RULE_DESC[O.wrule] || "";
 
     $("tabSolo").onclick = () => { setTab("solo"); sfx.play("tap"); };
@@ -147,13 +147,13 @@
           <div class="field"><span class="small">AI 채우기</span><div class="seg" id="fBotSeg"></div></div>
         </div>`;
         const drawF = () => {
-          seg(hostEl.querySelector("#fRuleSeg"), [["easy", "😺 쉬움"], ["classic", "🀄 전통"]], state.rule, v => { state.rule = v; drawF(); });
+          seg(hostEl.querySelector("#fRuleSeg"), [["easy", "★ 쉬움 (조커)"], ["classic", "🀄 전통"]], state.rule, v => { state.rule = v; drawF(); });
           seg(hostEl.querySelector("#fBotSeg"), [[0, "사람만"], [1, "+AI 1명"], [2, "+AI 2명"]], state.bots, v => { state.bots = +v; drawF(); });
         };
         drawF();
         return () => ({ rule: state.rule, bots: state.bots, seed: (Date.now() ^ ((Math.random() * 2147483647) | 0)) | 0 });
       },
-      renderConfig: (c) => `${(c && c.rule) === "classic" ? "🀄 전통" : "😺 쉬움"} 규칙${c && c.bots ? ` · AI +${c.bots}` : ""}`,
+      renderConfig: (c) => `${(c && c.rule) === "classic" ? "🀄 전통" : "★ 쉬움 (조커)"} 규칙${c && c.bots ? ` · AI +${c.bots}` : ""}`,
       onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
     });
   }
@@ -174,7 +174,7 @@
       } else {
         levels.push(role === "host" ? "normal" : "remote");
         names.push(BOT_NAMES[i % BOT_NAMES.length] + "(AI)");
-        avs.push("🐱");
+        avs.push("🀄");
       }
     }
     const baseSeed = (c && c.seed) || 12345;

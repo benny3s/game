@@ -153,7 +153,7 @@
     el.innerHTML = items.map(x => `<button class="tier ${x.cls || "t-plain"}" data-id="${esc(x.id)}" ${selected === x.id ? 'aria-pressed="true"' : ""}><span class="em">${x.em || ""}</span><b>${esc(x.name)}</b>${x.desc ? `<span>${esc(x.desc)}</span>` : ""}</button>`).join("");
     el.onclick = e => { const b = e.target.closest(".tier"); if (!b) return; sfx.play("tap"); onPick(b.dataset.id); };
   }
-  const TIERS = { easy: { em: "🐣", name: "초급", cls: "t-easy" }, normal: { em: "🐱", name: "중급", cls: "t-normal" }, hard: { em: "🐯", name: "고급", cls: "t-hard" }, master: { em: "👑", name: "고수", cls: "t-master" } };
+  const TIERS = { easy: { em: "🌱", name: "입문 · 하수", cls: "t-easy" }, normal: { em: "⚔️", name: "중수 · 숙련", cls: "t-normal" }, hard: { em: "👑", name: "고수 · 명인", cls: "t-hard" }, master: { em: "🏆", name: "최고수", cls: "t-master" } };
 
   const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 

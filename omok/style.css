@@ -1,6 +1,21 @@
 /* 오목 — 전통 목재 대국실 · 비자나무 오목판 · 옻칠 흑돌과 조개 백돌 테마 */
-:root{ --accent:#d97706; --accent-d:#b45309; --wood:#efcf9a; --wood-d:#c99a5e; --stone:#2b2523; }
-body{background:radial-gradient(120% 90% at 50% 0%,#fdf8ee 0%,#f2e3c6 65%,#e5cfa6 100%)}
+:root{
+  --bg:#160e07;
+  --bg-grad:radial-gradient(120% 90% at 50% 0%,#2e1c0e 0%,#190f07 65%,#0d0703 100%);
+  --card:rgba(36,22,11,.94);
+  --card-border:rgba(217,119,6,.36);
+  --ink:#fef3c7;
+  --soft:#d6b88a;
+  --line:rgba(217,119,6,.22);
+  --accent:#d97706;
+  --accent-d:#b45309;
+  --gold:#f59e0b;
+  --wood:#efcf9a;
+  --wood-d:#c99a5e;
+  --stone:#2b2523;
+  --paper:rgba(24,14,7,.88);
+}
+body{background:radial-gradient(120% 90% at 50% 0%,#2e1c0e 0%,#190f07 65%,#0d0703 100%)}
 body.playing{background:radial-gradient(110% 90% at 50% 35%,#362214 0%,#23150b 70%,#170d06 100%)}
 body.playing .bar{background:rgba(46,28,15,.9);border:1.5px solid rgba(217,119,6,.4);border-radius:16px;padding:5px 10px;color:#fef3c7}
 body.playing .bar .iconbtn{background:#452712;border-color:rgba(217,119,6,.5);color:#fef3c7}
