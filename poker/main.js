@@ -1005,7 +1005,8 @@
             : '👏 에퀴티와 팟 오즈에 맞는 좋은 플레이였어요!'}</div>`;
       } else cBox.hidden = true;
 
-      const done = val => { $('endModal').hidden = true; ses.drawReady = null; resolve(val); };
+      let autoT = 0;
+      const done = val => { clearTimeout(autoT); $('endModal').hidden = true; ses.drawReady = null; resolve(val); };
       document.querySelectorAll('#endModal .rdy').forEach(e => e.remove());
       const key = readyKey(v);
       if (ses.mode === 'guest') {
@@ -1025,7 +1026,7 @@
         list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });
         const bs = setEndButtons(list);
         if (ses.mode === 'host') ses.drawReady = mountReady(ses, key, bs[0], bs[1], '다음 핸드 진행', false);
-        if (ses.mode === 'watch' || ses.spectating) setTimeout(() => { if (!$('endModal').hidden && ses.alive) done('next'); }, 4200);
+        if (ses.mode === 'watch' || ses.spectating) autoT = setTimeout(() => { if (!$('endModal').hidden && ses.alive) done('next'); }, 4200);
       }
       $('endModal').hidden = false;
     });

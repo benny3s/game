@@ -956,7 +956,12 @@
   function loop() {
     requestAnimationFrame(loop);
     if (!SES || !SES.s || $('play').hidden || !V.V.T) return;
-    try { draw(); } catch (e) { console.error(e); SES.anim = null; }
+    try { draw(); } catch (e) {
+      console.error(e);
+      const a = SES.anim; SES.anim = null; SES.sinking = [];   // 그림이 깨져도 샷 결과는 그대로 넘김 (AI 차례가 멈추지 않게)
+      if (a && a.done) { try { a.done(a); updateHud(); renderCoach(); } catch (e2) { console.error(e2); } }
+      if (window.Cozy && Cozy.sendReport) Cozy.sendReport('error', '(당구 그리기) ' + (e && e.message || e), { src: String((e && e.stack || '').split(/\n/)[1] || '').trim().slice(0, 200) });
+    }
   }
   function draw() {
     const ses = SES, s = ses.s, n = s.balls.length, R = V.V.T.R, ctx = V.ctx, now = performance.now();
@@ -974,7 +979,13 @@
         while (a.ei < a.events.length && (a.events[a.ei].f60 != null ? a.events[a.ei].f60 : a.events[a.ei].f) <= evf) {
           const e = a.events[a.ei++];
           if (e.k === 'b') sfx('clack', { v: e.v }); else if (e.k === 'c') sfx('cushion', { v: e.v });
-          else if (e.k === 'p') { sfx('pocket'); const pk = B.geom(s.table).pockets[e.b]; const li = Math.max(0, k - 1); ses.sinking.push({ i: e.a, x: F[li][2 * e.a], y: F[li][2 * e.a + 1], px: pk ? pk.x : 0, py: pk ? pk.y : 0, t0: now }); }
+          else if (e.k === 'p') {
+            sfx('pocket'); const pk = B.geom(s.table).pockets[e.b];
+            let li = Math.min(F.length - 1, Math.max(0, Math.floor((e.f60 != null ? e.f60 : e.f) * a.fps / 60) - 1));   // 빠지기 바로 전 프레임
+            while (li > 0 && isNaN(F[li][2 * e.a])) li--;
+            const x = F[li][2 * e.a], y = F[li][2 * e.a + 1];
+            if (isFinite(x) && isFinite(y)) ses.sinking.push({ i: e.a, x, y, px: pk ? pk.x : 0, py: pk ? pk.y : 0, t0: now });
+          }
         }
         if (t >= F.length - 1 + 2) { const d = a.done; ses.anim = null; d && d(a); updateHud(); renderCoach(); return; }
       }
