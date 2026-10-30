@@ -288,3 +288,6 @@ body.playing .wrap{display:none}
 .thinking::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:dots 1.2s steps(4) infinite}
 @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* 아이폰: 두 번 톡 · 입력칸 눌렀을 때 화면 확대 막기 (게임 공통) */
+html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
