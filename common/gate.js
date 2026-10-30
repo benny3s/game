@@ -291,7 +291,7 @@ const Gate = (() => {
 
   // ── 2) 베니비서 앱으로 허용 요청 보내기 (want: "always" 계속 | "today" 오늘만 — 정하는 건 베니 님)
   let reqWatch = null;
-  async function requestDeviceApproval(rawName, onStatus, want = "always") {
+  async function requestDeviceApproval(rawName, onStatus, want = "always", rawNote = "") {
     await ensureFirebase();
     const name = String(rawName || "").trim().slice(0, 12);
     if (!name) throw new Error("베니 님이 알아볼 수 있게 이름이나 별명을 적어 주세요.");
@@ -304,6 +304,7 @@ const Gate = (() => {
       ua: detectDeviceName(),
       game: detectGameId(),
       want: want === "today" ? "today" : "always",
+      note: String(rawNote || "").trim().slice(0, 60),
       status: "pending",
       t: TS(),
     };
@@ -555,8 +556,12 @@ const Gate = (() => {
       if (curTab === "req") {
         body.innerHTML = `
           <div class="bgate-field">
-            <label for="bgReqName">내 이름 / 별명 (베니 님 폰 알림에 보여요)</label>
+            <label for="bgReqName">이름 (베니 님 폰 알림에 보여요)</label>
             <input class="bgate-inp" id="bgReqName" maxlength="12" placeholder="예: 철수, 처남, 민수" value="${esc(state.name)}">
+          </div>
+          <div class="bgate-field">
+            <label for="bgReqNote">한마디 (선택)</label>
+            <input class="bgate-inp" id="bgReqNote" maxlength="60" placeholder="예: 금요일 고스톱 같이 쳐요">
           </div>
           <div class="bgate-field">
             <span class="lb">얼마나 쓸까요?</span>
@@ -590,7 +595,7 @@ const Gate = (() => {
                 reqBtn.disabled = false;
                 reqBtn.textContent = "다시 요청하기";
               }
-            }, want);
+            }, want, body.querySelector("#bgReqNote").value);
           } catch (e) {
             alert(e.message || "요청을 보내지 못했어요.");
             reqBtn.disabled = false;
