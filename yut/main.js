@@ -146,7 +146,7 @@
   let SES = null;
   let FAST = 0;                       // 시험용: 움직임 시간 줄이기
   function newSession(cfg) {
-    const ses = { cfg, alive: true, timers: new Set(), waiters: [], offs: [], S: null, teams: [], seq: 0, busy: false, awaiting: null, awaitRemote: null, sent: false, ui: { kind: null, piece: null, act: null }, queue: Promise.resolve(), games: 0 };
+    const ses = { cfg, alive: true, timers: new Set(), waiters: [], offs: [], S: null, teams: [], seq: 0, busy: false, awaiting: null, awaitRemote: null, sent: false, ui: { kind: null, piece: null, act: null }, queue: Promise.resolve(), games: 0, wins: [], rdy: new Set(), joinPick: {}, turnT: 0, turnKey: '', turnLeft: null, goneAsk: null, drawReady: null };
     ses.wait = ms => new Promise((res, rej) => {
       if (!ses.alive) return rej(new Cancel());
       const t = setTimeout(() => { ses.timers.delete(t); if (ses.alive) res(); else rej(new Cancel()); }, Math.max(0, ms));
@@ -161,6 +161,9 @@
       ses.alive = false;
       for (const t of ses.timers) clearTimeout(t);
       ses.timers.clear();
+      clearInterval(ses.turnT); ses.turnT = 0; clearInterval(ses.hiT);
+      if (ses.goneAsk) { try { ses.goneAsk.close(); } catch (e) {} ses.goneAsk = null; }
+      const sb = $('scoreBar'); if (sb) sb.hidden = true;
       for (const f of ses.offs.splice(0)) { try { f(); } catch (e) {} }
       if (ses.awaiting) { const r = ses.awaiting; ses.awaiting = null; r.reject(new Cancel()); }
       if (ses.awaitRemote) { const r = ses.awaitRemote; ses.awaitRemote = null; r.reject(new Cancel()); }
@@ -211,6 +214,9 @@
       for (;;) {
         const cfg = ses.cfg;
         const seed = ses.games === 0 ? cfg.seed : rand32();
+        if (cfg.mode === 'online' && ses.games > 0) rebuildTeams(ses);     // 구경하다 '낄래요' 한 사람은 팀에 들어가고, 빼기로 한 사람은 빠짐
+        ses.rdy = new Set(); ses.drawReady = null;
+        if (ses.wins.length !== ses.teams.length) ses.wins = ses.teams.map((_, t) => ses.wins[t] || 0);
         ses.S = Y.create({ teams: ses.teams.length, pieces: cfg.pieces, backdo: cfg.backdo, seed, first: ses.games % ses.teams.length, members: ses.teams.map(t => t.members.length) });
         ses.games++;
         ses.seq++;
@@ -264,6 +270,7 @@
     const prev = ses.S;
     const { state, events } = Y.step(prev, a);
     ses.S = state; ses.seq++;
+    if (state.phase === 'end' && prev.phase !== 'end') ses.wins[state.winner] = (ses.wins[state.winner] || 0) + 1;   // 판 이긴 횟수 (점수판)
     resetUi(ses);
     broadcast(ses, events, false);
     ses.busy = true; renderAll(ses);
@@ -348,7 +355,7 @@
 
   function renderAll(ses) {
     if (!ses || !ses.S || SES !== ses) return;
-    renderTokens(ses); renderTeams(ses); renderPool(ses); renderControls(ses); renderBar(ses); renderCoach(ses);
+    renderTokens(ses); renderTeams(ses); renderPool(ses); renderControls(ses); renderBar(ses); renderCoach(ses); renderScore(ses); syncTurnTimer(ses);
   }
   function renderTokens(ses) {
     const S = ses.S;
@@ -414,7 +421,14 @@
     const tb = $('throwBtn'), cf = $('confirm'), wm = $('waitMsg');
     const m = S.phase === 'end' ? null : member(ses, S.turn);
     tb.hidden = true; cf.hidden = true; wm.hidden = true;
-    if (S.phase === 'end') { wm.hidden = false; wm.textContent = `${ses.teams[S.winner].em} ${ses.teams[S.winner].name} 승리!`; return; }
+    if (S.phase === 'end') {
+      wm.hidden = false; wm.textContent = `${ses.teams[S.winner].em} ${ses.teams[S.winner].name} 승리!`;
+      if (ses.cfg.mode === 'online' && ses.cfg.role !== 'host') {          // 결과 창을 닫았어도 다시 열어 준비할 수 있게
+        const b = document.createElement('button'); b.className = 'btn'; b.style.marginLeft = '8px'; b.textContent = isSpect(ses) ? '✋ 낄래요 · 결과' : '✋ 준비 · 결과';
+        b.onclick = () => openGuestResult(ses); wm.appendChild(b);
+      }
+      return;
+    }
     if (mine && S.phase === 'throw') {
       tb.hidden = false; tb.disabled = false; tb.classList.add('pulse');
       tb.querySelector('.tw').textContent = S.pool.length || S.throwNo && S.extra > 0 && ses.lastBonus ? '한 번 더 던지기!' : '윷 던지기';
@@ -435,13 +449,17 @@
   }
   function renderBar(ses) {
     const S = ses.S;
+    $('sub').classList.remove('myturn'); $('stage').classList.remove('myturn');
     if (S.phase === 'end') { $('lbl').innerHTML = `👑 ${esc(ses.teams[S.winner].name)} 승리`; $('sub').textContent = `${S.turnNo + 1}번째 차례에서 끝`; return; }
     const tm = ses.teams[S.turn], m = member(ses, S.turn);
     const nm = tm.members.length > 1 || (m.kind === 'human' && m.name !== tm.name) ? ` · ${esc(m.name)}` : '';
     $('lbl').innerHTML = `<span class="dot" style="background:${tm.color}"></span>${esc(tm.name)}${nm}`;
-    const spect = ses.cfg.mode === 'online' && !ses.teams.some(t => t.members.some(x => x.uid === ses.cfg.net.uid));
-    $('sub').textContent = (spect ? '👀 구경 중 · ' : '') + (S.phase === 'throw' ? (S.pool.length ? '한 번 더 던져요' : '던질 차례') : `말을 골라요 · ${S.pool.map(k => NAMES[k]).join(' · ')}`);
+    const spect = isSpect(ses);
+    const mine = ses.cfg.mode !== 'local' && canAct(ses);                          // 내 차례: 금색으로 깜빡
+    $('sub').classList.toggle('myturn', mine); $('stage').classList.toggle('myturn', mine);
+    $('sub').textContent = (spect ? '👀 구경 중 · ' : '') + (S.phase === 'throw' ? (S.pool.length ? '한 번 더 던져요' : '던질 차례') : `말을 골라요 · ${S.pool.map(k => NAMES[k]).join(' · ')}`) + (mine && ses.turnLeft != null ? ` · ⏱${ses.turnLeft}` : '');
   }
+  const isSpect = ses => ses.cfg.mode === 'online' && !ses.teams.some(t => t.members.some(x => x.uid === ses.cfg.net.uid));
 
   // ── 고르기 (사람) ─────────────────────────────────────────
   function moveInfo(S, a) {
@@ -903,14 +921,56 @@
     if (iWon || ses.cfg.mode === 'local' || allAi) { sfx('win'); C.confetti(); } else sfx('lose');
     return new Promise((resolve, reject) => {
       const online = ses.cfg.mode === 'online';
+      // 친구랑 방장: 친구들이 '준비'하면 시작 (기다리기 싫으면 바로) — 혼자 먼저 넘어가지 않음
+      const buttons = online
+        ? [{ label: '대기실로', onClick: () => resolve(false) }, { label: '안 기다리고 시작', onClick: () => resolve(true) }, { label: '다음 판 시작 ▶', primary: true, onClick: () => resolve(true) }]
+        : [{ label: '메뉴로', onClick: () => resolve(false) }, { label: '한 판 더', primary: true, onClick: () => resolve(true) }];
       const close = C.modal({
-        title: '🎉 한 판 끝!', html: resultHtml(ses), cls: 'yres',
-        buttons: [{ label: online ? '대기실로' : '메뉴로', onClick: () => resolve(false) }, { label: '한 판 더', primary: true, onClick: () => resolve(true) }],
-        onClose: () => resolve(false),
+        title: '🎉 한 판 끝!', html: resultHtml(ses) + (online ? '<div class="rdy" id="yutRdy"></div>' : ''), cls: 'yres',
+        buttons,
+        onClose: () => { ses.drawReady = null; resolve(false); },
       });
+      if (online) {
+        const bs = [...document.querySelectorAll('.overlay.yres .row .btn')];
+        ses.drawReady = () => drawReady(ses, bs[2], bs[1]);
+        ses.drawReady();
+      }
       ses.offs.push(() => { try { close(); } catch (e) {} reject(new Cancel()); });
     });
   }
+  // 판 사이 준비 목록 (방장은 고르고, 친구는 보기만): 팀 사람마다 ✅/⏳/🔌 · 구경꾼 (방장이 체크하면 다음 판부터 같이)
+  function drawReady(ses, goBtn, forceBtn) {
+    const box = $('yutRdy');
+    if (SES !== ses || !box || !box.isConnected) return;
+    const net = ses.cfg.net, pl = net.players || {}, host = ses.cfg.role === 'host', me = net.uid;
+    const people = []; ses.teams.forEach((tm, t) => tm.members.forEach(m => { if (m.uid) people.push({ m, t, tm }); }));
+    const humansLeft = uid => people.filter(x => x.m.uid !== uid && !x.m.drop).length;
+    const chips = people.map(({ m, tm }) => {
+      const nm = esc(`${tm.em} ${m.name}`);
+      if (m.uid === me && host) return `<span class="ok">👑 ${nm}</span>`;
+      const gone = !pl[m.uid], ok = ses.rdy.has(m.uid) || m.sub;
+      const tools = host && gone && !m.sub ? ` <button type="button" data-ai="${esc(m.uid)}">🤖 AI</button>${humansLeft(m.uid) >= 2 ? ` <button type="button" data-drop="${esc(m.uid)}">👋 빼기</button>` : ''}` : '';
+      return `<span class="${ok ? 'ok' : gone ? 'gone' : ''}">${ok ? '✅' : gone ? '🔌' : '⏳'} ${nm}${tools}</span>`;
+    });
+    const ws = watchersOf(ses);
+    const wl = ws.map(u => host
+      ? `<label><input type="checkbox" data-join="${esc(u)}" ${ses.joinPick[u] ? 'checked' : ''}> ${esc((pl[u] && pl[u].name) || '친구')}${ses.rdy.has(u) ? ' ✋' : ''}</label>`
+      : `<span>${esc((pl[u] && pl[u].name) || '친구')}${ses.rdy.has(u) ? ' ✋' : ''}</span>`).join('');
+    box.innerHTML = `<div class="rdy-row">${chips.join('')}</div>${ws.length ? `<div class="rdy-w">👀 구경 ${ws.length}명${host ? ' · 체크하면 다음 판부터 같이' : ''}: ${wl}</div>` : ''}`;
+    if (host) {
+      const need = people.filter(x => x.m.uid !== me && !x.m.sub), k = need.filter(x => ses.rdy.has(x.m.uid)).length, all = k === need.length;
+      if (goBtn) { goBtn.disabled = !all; goBtn.textContent = all ? '다음 판 시작 ▶' : `다음 판 시작 (준비 ${k}/${need.length})`; }
+      if (forceBtn) forceBtn.hidden = all;
+      box.querySelectorAll('[data-join]').forEach(c => { c.onchange = () => { ses.joinPick[c.dataset.join] = c.checked; }; });
+      box.querySelectorAll('[data-ai]').forEach(b => { b.onclick = () => subAI(ses, b.dataset.ai, false); });
+      box.querySelectorAll('[data-drop]').forEach(b => { b.onclick = () => subAI(ses, b.dataset.drop, true); });
+    } else if (goBtn) {
+      const on = ses.rdy.has(me);
+      goBtn.disabled = on;
+      goBtn.textContent = on ? '✅ 준비 완료 · 방장을 기다려요' : isSpect(ses) ? '✋ 다음 판에 낄래요' : '✋ 준비';
+    }
+  }
+  const watchersOf = ses => Object.keys((ses.cfg.net && ses.cfg.net.players) || {}).filter(u => !ses.teams.some(t => t.members.some(m => m.uid === u)));
 
   // ── 친구랑 ───────────────────────────────────────────────
   const DEF = { teams: 2, pieces: 4, backdo: 1, coach: false, ai: 'normal', assign: {} };   // coach 는 ArenaUI 대기실의 'AI 선생님' 스위치가 정함
@@ -980,7 +1040,7 @@
       },
       onStart: ctx => startOnline(ctx),
       onLobby: () => { if (SES) SES.dispose(); SES = null; closeResult(); show('home'); drawMenu(); },
-      onLeave: () => goHome(),
+      onLeave: why => { if (SES && SES.cfg.mode === 'online') { goHome(); if (why) C.toast(why, 2600); } else goHome(); },
     };
   }
   function startOnline({ net, role, cfg, players }) {
@@ -989,50 +1049,78 @@
     const c = { ...DEF, ...(cfg || {}) };
     const ses = SES = newSession({ mode: 'online', role, net, pieces: +c.pieces || 4, backdo: !!+c.backdo, coach: c.coach === true || +c.coach === 1, speed: 'normal', seed: rand32() });
     show('play');
+    ses.offs.push(net.on('players', () => onPlayers(ses)));   // 구경 인원 · 준비 목록
     if (role === 'host') {
       ses.teams = teamsFromCfg(sortedPlayers(players), c);
+      ses.wins = ses.teams.map(() => 0);
       ses.offs.push(net.on('msg', (uid, m) => {
         if (!m || SES !== ses) return;
-        if (m.t === 'hi') sendState(ses, uid);
+        if (m.t === 'hi') { sendState(ses, uid); if (ses.S && ses.S.phase === 'end') net.send(uid, { t: 'rdyl', g: ses.games, uids: [...ses.rdy], pick: ses.joinPick }, true); }
+        else if (m.t === 'rdy') {                              // 판 사이 준비 (구경꾼이 누르면 '다음 판에 낄래요')
+          if (m.g !== ses.games || !ses.S || ses.S.phase !== 'end') return;
+          ses.rdy.add(uid);
+          if (!ses.teams.some(t => t.members.some(x => x.uid === uid))) ses.joinPick[uid] = true;
+          net.broadcast({ t: 'rdyl', g: ses.games, uids: [...ses.rdy], pick: ses.joinPick }, true);
+          if (ses.drawReady) ses.drawReady();
+        }
         else if (m.t === 'act') {
           // 방장이 아직 앞 움직임을 보여 주는 중이면 맡아 두었다가 기다리기 시작할 때 씀
           if (ses.awaitRemote && ses.awaitRemote.uid === uid && m.seq === ses.seq && Y.isLegal(ses.S, m.a)) { const r = ses.awaitRemote; ses.awaitRemote = null; r.resolve(m.a); }
           else if (m.seq === ses.seq) ses.early = { uid, a: m.a, seq: m.seq };
         }
       }));
+      // 친구가 나가면: 5초 안에 안 돌아오면 방장이 고름 (AI 가 대신 · 다음 판부터 빼기 · 처음부터 · 기다리기)
       ses.offs.push(net.on('leave', uid => {
         if (SES !== ses) return;
-        // 나간 사람 자리는 🐱 AI 가 이어받음
-        for (const tm of ses.teams) for (const m of tm.members) if (m.uid === uid) { m.kind = 'ai'; m.tier = 'normal'; m.name += ' (AI)'; }
-        C.toast('친구가 나가서 AI가 이어받아요');
-        if (ses.awaitRemote && ses.awaitRemote.uid === uid) { const r = ses.awaitRemote; ses.awaitRemote = null; r.resolve(ses.S.phase === 'throw' ? A_THROW : AI.choose(ses.S, 'normal', { seed: rand32() })); }
-        broadcast(ses, [], true);
-        renderAll(ses);
+        const ms = membersOf(ses, uid).filter(m => m.kind === 'human');
+        if (!ms.length) return;
+        C.toast(`${ms[0].name} 님 연결이 끊겼어요. 같은 링크로 다시 들어오면 이어서 해요`, 3200);
+        renderScore(ses); if (ses.drawReady) ses.drawReady();
+        setTimeout(() => { if (!ses.alive || SES !== ses || (net.players || {})[uid] || !membersOf(ses, uid).some(m => m.kind === 'human')) return; askGone(ses, uid); }, 5000);
+      }));
+      // 돌아오면 자리를 다시 줌
+      ses.offs.push(net.on('join', uid => {
+        if (SES !== ses) return;
+        if (ses.goneAsk && ses.goneAsk.uid === uid) { try { ses.goneAsk.close(); } catch (e) {} ses.goneAsk = null; }
+        restoreMember(ses, uid);
       }));
       runGame(ses);
     } else {
       $('lbl').textContent = '윷놀이'; $('sub').textContent = '방장이 판을 차리는 중…';
-      ses.offs.push(net.on('msg', m => { if (!m || SES !== ses) return; if (m.t === 'st') { ses.qn = (ses.qn || 0) + 1; ses.queue = ses.queue.then(() => guestApply(ses, m)).catch(e => { if (!(e instanceof Cancel)) console.error(e); }).finally(() => { ses.qn--; }); } }));
-      net.send({ t: 'hi' }, true);
+      ses.offs.push(net.on('msg', m => {
+        if (!m || SES !== ses) return;
+        if (m.t === 'st') { ses.qn = (ses.qn || 0) + 1; ses.queue = ses.queue.then(() => guestApply(ses, m)).catch(e => { if (!(e instanceof Cancel)) console.error(e); }).finally(() => { ses.qn--; }); }
+        else if (m.t === 'tm') { if (ses.S) { ses.teams = m.teams; if (m.w) ses.wins = m.w; renderTeams(ses); renderBar(ses); renderScore(ses); if (ses.drawReady) ses.drawReady(); } }   // 팀 사람이 바뀜 (AI 가 대신 · 돌아옴)
+        else if (m.t === 'rdyl') { if (m.g !== ses.games) return; ses.rdy = new Set(m.uids || []); ses.joinPick = m.pick || {}; if (ses.drawReady) ses.drawReady(); }
+      }));
+      // 방장에게 지금 판을 받음 (처음이든, 나갔다 다시 들어왔든 같은 길 — 아직 안 왔으면 다시 물음)
+      const hi = () => { if (SES === ses && !ses.S) net.send({ t: 'hi' }, true); };
+      hi(); ses.hiT = setInterval(hi, 1500);
     }
   }
   function broadcast(ses, events, fresh) {
     if (ses.cfg.mode !== 'online' || ses.cfg.role !== 'host') return;
-    ses.cfg.net.broadcast({ t: 'st', seq: ses.seq, S: Y.view(ses.S), ev: events, teams: ses.teams, fresh: !!fresh, g: ses.games }, true);
+    ses.cfg.net.broadcast({ t: 'st', seq: ses.seq, S: Y.view(ses.S), ev: events, teams: ses.teams, fresh: !!fresh, g: ses.games, w: ses.wins }, true);
   }
   function sendState(ses, uid) {
     if (!ses.S) return;
-    ses.cfg.net.send(uid, { t: 'st', seq: ses.seq, S: Y.view(ses.S), ev: [], teams: ses.teams, fresh: true, g: ses.games }, true);
+    ses.cfg.net.send(uid, { t: 'st', seq: ses.seq, S: Y.view(ses.S), ev: [], teams: ses.teams, fresh: true, g: ses.games, w: ses.wins }, true);
+  }
+  // 팀 사람 바뀜만 알림 (움직임·순번 없이)
+  function broadcastTeams(ses) {
+    if (ses.cfg.mode !== 'online' || ses.cfg.role !== 'host') return;
+    ses.cfg.net.broadcast({ t: 'tm', teams: ses.teams, w: ses.wins }, true);
   }
   async function guestApply(ses, m) {
     if (!ses.alive) return;
     if (ses.seq && m.seq <= ses.seq && !(m.fresh && m.g !== ses.games)) return;
+    clearInterval(ses.hiT);
     const prev = ses.S;
     const newGame = !prev || m.g !== ses.games;
-    ses.teams = m.teams; ses.games = m.g;
+    ses.teams = m.teams; ses.games = m.g; if (m.w) ses.wins = m.w;
     ses.S = m.S; ses.sent = false;
     resetUi(ses);
-    if (newGame) { closeResult(); buildBoard(ses); ses.seq = m.seq; renderAll(ses); await announceTurn(ses).catch(() => {}); renderAll(ses); return; }
+    if (newGame) { closeResult(); ses.rdy = new Set(); ses.joinPick = {}; ses.drawReady = null; buildBoard(ses); ses.seq = m.seq; renderAll(ses); await announceTurn(ses).catch(() => {}); renderAll(ses); if (ses.S.phase === 'end' && !document.querySelector('.overlay.yres')) guestResult(ses); return; }
     const jump = m.seq !== ses.seq + 1 || m.fresh || ses.qn > 2;   // 밀려 있으면 움직임 건너뛰고 따라잡기
     ses.seq = m.seq;
     if (!jump && m.ev && m.ev.length) {
@@ -1044,10 +1132,136 @@
     if (myTurn(ses)) autoSelect(ses);
     if (ses.S.phase === 'end' && !document.querySelector('.overlay.yres')) guestResult(ses);
   }
+  // 친구·구경꾼의 결과 창: 준비(구경꾼은 '다음 판에 낄래요')만 누르고 시작은 방장이
   function guestResult(ses) {
     const S = ses.S, w = ses.teams[S.winner];
     if (w.members.some(m => m.uid === ses.cfg.net.uid)) { sfx('win'); C.confetti(); } else sfx('lose');
-    C.modal({ title: '🎉 한 판 끝!', html: resultHtml(ses) + '<p class="small">방장이 다음 판을 고르는 중이에요</p>', cls: 'yres', buttons: [{ label: '나가기', onClick: () => { if (window.ArenaUI) ArenaUI.leave(); } }, { label: '판 보기', primary: true }], dismiss: true });
+    openGuestResult(ses);
+  }
+  function openGuestResult(ses) {
+    if (document.querySelector('.overlay.yres')) return;
+    const net = ses.cfg.net;
+    C.modal({
+      title: '🎉 한 판 끝!', html: resultHtml(ses) + '<div class="rdy" id="yutRdy"></div>', cls: 'yres', dismiss: true,
+      buttons: [
+        { label: '✋ 준비', primary: true, onClick: () => { if (!ses.rdy.has(net.uid)) { ses.rdy.add(net.uid); net.send({ t: 'rdy', g: ses.games }, true); if (ses.drawReady) ses.drawReady(); } return false; } },
+        { label: '판 보기', ghost: true, onClick: () => {} },
+        { label: '나가기', ghost: true, onClick: () => { if (window.ArenaUI) ArenaUI.leave(); } },
+      ],
+      onClose: () => { ses.drawReady = null; },
+    });
+    const bs = [...document.querySelectorAll('.overlay.yres .row .btn')];
+    ses.drawReady = () => drawReady(ses, bs[0], null);
+    ses.drawReady();
+  }
+
+  // 방 사람이 들고 나면: 점수판(구경 인원) · 준비 목록
+  function onPlayers(ses) {
+    if (SES !== ses || !ses.S) return;
+    renderScore(ses);
+    if (ses.drawReady) ses.drawReady();
+  }
+  const membersOf = (ses, uid) => ses.teams.flatMap(tm => tm.members.filter(m => m.uid === uid));
+
+  // 한 줄 점수판: 팀마다 이긴 판 수, 지금 차례 팀은 금색, 구경 인원 (친구랑만)
+  function renderScore(ses) {
+    let el = $('scoreBar');
+    if (!el) { el = document.createElement('div'); el.className = 'scorebar'; el.id = 'scoreBar'; el.hidden = true; const bar = document.querySelector('#play .bar'); bar.parentNode.insertBefore(el, bar.nextSibling); }
+    const was = el.hidden;
+    if (!ses || ses.cfg.mode !== 'online' || !ses.S) { el.hidden = true; if (!was) layout(); return; }
+    const S = ses.S, net = ses.cfg.net, pl = net.players || {}, turn = S.phase === 'end' ? -1 : S.turn;
+    el.hidden = false;
+    el.innerHTML = ses.teams.map((tm, t) => {
+      const gone = tm.members.some(m => m.kind === 'human' && m.uid && !pl[m.uid]);
+      return `<span class="sbi${t === turn ? ' on' : ''}${gone ? ' rest' : ''}"><b>${esc(tm.em + ' ' + tm.name)}</b> ${ses.wins[t] || 0}승${gone ? ' 🔌' : ''}</span>`;
+    }).join('') + (() => { const k = watchersOf(ses).length; return k ? `<span class="sbi">👀 구경 ${k}</span>` : ''; })();
+    if (was) layout();
+  }
+
+  // ⏱ 내 차례 30초 (친구랑): 지나면 꾀돌이 고양이 AI 가 대신 (던지기는 던지고, 말 고르기는 AI 가 고름). 10초 남으면 알림
+  let TURN_SEC = 30;
+  function clearTurnT(ses) { if (ses.turnT) { clearInterval(ses.turnT); ses.turnT = 0; } ses.turnKey = ''; ses.turnLeft = null; }
+  function syncTurnTimer(ses) {
+    if (ses.cfg.mode !== 'online' || !ses.alive) return;
+    if (!canAct(ses)) { if (ses.turnT) { clearTurnT(ses); renderBar(ses); } return; }
+    const key = ses.games + ':' + ses.seq;
+    if (ses.turnKey === key && ses.turnT) return;
+    clearTurnT(ses);
+    ses.turnKey = key;
+    const bell = ses.games + ':' + ses.S.turnNo;
+    if (ses.bell !== bell) { ses.bell = bell; sfx('turn'); buzz(40); }          // 내 차례가 왔어요
+    const end = Date.now() + TURN_SEC * 1000;
+    ses.turnLeft = TURN_SEC;
+    ses.turnT = setInterval(() => {
+      if (!ses.alive || SES !== ses || !canAct(ses) || ses.turnKey !== ses.games + ':' + ses.seq) { clearTurnT(ses); renderBar(ses); return; }
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      if (left !== ses.turnLeft) { ses.turnLeft = left; if (left === 10) { C.toast('⏱ 10초 남았어요', 1500); buzz(30); } renderBar(ses); }
+      if (left <= 0) {
+        clearTurnT(ses);
+        C.toast('⏱ 30초가 지나서 AI가 대신 했어요', 2000);
+        submit(ses, ses.S.phase === 'throw' ? A_THROW : AI.choose(ses.S, 'normal', { seed: rand32() }));
+      }
+    }, 250);
+    renderBar(ses);
+  }
+
+  // 방장: 나간 사람을 어떻게 할지 묻기
+  function askGone(ses, uid) {
+    if (!ses.alive || ses.goneAsk || ses.S.phase === 'end') return;
+    const ms = membersOf(ses, uid).filter(m => m.kind === 'human'); if (!ms.length) return;
+    const people = ses.teams.flatMap(tm => tm.members.filter(m => m.uid && !m.drop && m.uid !== uid));
+    const canDrop = people.length >= 2;
+    const close = C.modal({
+      title: `🔌 ${ms[0].name} 님이 나갔어요`,
+      html: '<p style="margin:0">어떻게 할까요? AI 는 🐱 꾀돌이 고양이가 대신 해요. 같은 링크로 다시 들어오면 그 자리로 돌아와요.</p>',
+      buttons: [{ label: '🤖 AI가 대신 해요', primary: true, onClick: () => subAI(ses, uid, false) }]
+        .concat(canDrop ? [{ label: '👋 다음 판부터 빼기', onClick: () => subAI(ses, uid, true) }] : [])
+        .concat([{ label: '🔄 처음부터 다시 (대기실로)', onClick: () => { if (window.ArenaUI && ArenaUI.net === ses.cfg.net) { try { ses.cfg.net.chat('🔄 방장이 처음부터 다시 하기로 했어요'); } catch (e) {} ArenaUI.toLobby(); } } }, { label: '⏳ 기다릴게요' }]),
+      onClose: () => { if (ses.goneAsk && ses.goneAsk.close === close) ses.goneAsk = null; },
+    });
+    ses.goneAsk = { uid, close };
+  }
+  // 그 사람 자리를 AI 가 대신 (drop 이면 다음 판부터 빠짐)
+  function subAI(ses, uid, drop) {
+    const all = membersOf(ses, uid); if (!all.length) return;
+    let name = '';
+    for (const m of all) {
+      if (m.kind === 'human') { m.kind = 'ai'; m.tier = 'normal'; m.base = m.name; m.name += ' (AI)'; m.sub = true; }
+      m.drop = !!drop; name = m.base || m.name;
+    }
+    try { ses.cfg.net.chat(drop ? `🤖 ${name} 님 자리는 이번 판만 AI 가 하고, 다음 판부터 빠져요` : `🤖 ${name} 님 자리는 AI 가 대신 해요 (돌아오면 다시 직접)`); } catch (e) {}
+    if (ses.awaitRemote && ses.awaitRemote.uid === uid) { const r = ses.awaitRemote; ses.awaitRemote = null; r.resolve(ses.S.phase === 'throw' ? A_THROW : AI.choose(ses.S, 'normal', { seed: rand32() })); }
+    broadcastTeams(ses);
+    renderTeams(ses); renderBar(ses); renderScore(ses); if (ses.drawReady) ses.drawReady();
+  }
+  function restoreMember(ses, uid) {
+    const ms = membersOf(ses, uid).filter(m => m.sub);
+    if (!ms.length) return;
+    for (const m of ms) { m.kind = 'human'; delete m.tier; m.name = m.base || m.name; delete m.base; m.sub = false; m.drop = false; }
+    C.toast(`${ms[0].name} 님이 돌아왔어요. 다시 직접 해요`, 2400);
+    try { ses.cfg.net.chat(`🙌 ${ms[0].name} 님이 돌아와서 직접 해요`); } catch (e) {}
+    broadcastTeams(ses);
+    renderTeams(ses); renderBar(ses); renderScore(ses); if (ses.drawReady) ses.drawReady();
+  }
+  // 방장: 다음 판 팀 짜기 — 빼기로 한 사람은 빠지고, 구경하다 '낄래요' 한 사람은 사람이 가장 적은 팀에 들어감
+  function rebuildTeams(ses) {
+    const net = ses.cfg.net, pl = net.players || {}, c = { ...DEF, ...((net.meta && net.meta.cfg) || {}) }, n = ses.teams.length;
+    const keep = ses.teams.map(tm => tm.members.filter(m => m.uid && !m.drop));           // AI 팀의 AI 는 새로 채움
+    const have = new Set(keep.flat().map(m => m.uid));
+    const dropped = ses.teams.flatMap(tm => tm.members.filter(m => m.uid && m.drop));
+    const fresh = Object.keys(pl).filter(u => !have.has(u) && !dropped.some(m => m.uid === u) && !(pl[u] && pl[u].watch) && ses.joinPick[u])
+      .sort((a, b) => ((pl[a] && pl[a].t) || 0) - ((pl[b] && pl[b].t) || 0));
+    for (const u of fresh) {
+      let b = 0; for (let i = 1; i < n; i++) if (keep[i].filter(m => m.kind === 'human').length < keep[b].filter(m => m.kind === 'human').length) b = i;
+      keep[b].push({ name: (pl[u] && pl[u].name) || '친구', kind: 'human', uid: u });
+      delete ses.joinPick[u];
+    }
+    ses.teams = ses.teams.map((tm, t) => ({ ...TEAMS[t], members: keep[t].length ? keep[t] : [{ name: TIER[c.ai].name, kind: 'ai', tier: c.ai }] }));
+    if (fresh.length || dropped.length) {
+      const msg = [fresh.length ? `${fresh.map(u => (pl[u] && pl[u].name) || '친구').join(', ')} 님 합류` : '', dropped.length ? `${dropped.map(m => m.base || m.name).join(', ')} 님 빠짐` : ''].filter(Boolean).join(' · ');
+      C.toast(msg, 2600);
+      try { net.chat(`📣 ${msg} → 이번 판부터`); } catch (e) {}
+    }
   }
 
   // 나가기 (두 번)
@@ -1089,6 +1303,8 @@
     fast(v = 1) { FAST = v; },
     seed(s) { startSeed = s >>> 0; },
     submit(a) { submit(SES, a); },
+    autoAct() { const s = SES; if (s && canAct(s)) submit(s, s.S.phase === 'throw' ? A_THROW : AI.choose(s.S, 'normal', { seed: rand32() })); },   // 시험용: 내 차례를 AI 가 대신
+    turnSec(n) { TURN_SEC = n; },                                  // 시험용: 차례 시간을 줄여서 보기
     canAct: () => canAct(SES),
     layout,
   };

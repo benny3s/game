@@ -187,6 +187,21 @@ const AI = require(path.join(__dirname, "..", "ai.js"));
   ok(Table.describe(1).length > 0 && Table.describe(0).length > 0, "1명 이하 안내");
 }
 {
+  // 다음 판 자리 짜기: 빼기 표시는 빠지고, 구경꾼은 4명까지 앉고, AI 자리는 사람에게 양보
+  const H = (id, extra) => Object.assign({ id, name: id, av: "🙂", total: 0, sub: false, drop: false }, extra || {});
+  const B = (name) => ({ id: null, name, av: "🀄", total: 0, sub: false, drop: false });
+  const ids = (L) => L.map(x => x.id || ("bot:" + x.name));
+  eq(ids(Table.nextLineup([H("a"), H("b")], [], 0)), ["a", "b"], "그대로");
+  eq(ids(Table.nextLineup([H("a"), H("b"), H("c", { drop: true })], [], 0)), ["a", "b"], "빼기 표시는 빠짐");
+  eq(ids(Table.nextLineup([H("a"), H("b")], [{ id: "x", name: "x", av: "🦊" }], 0)), ["a", "b", "x"], "구경꾼이 뒤에 앉음");
+  eq(ids(Table.nextLineup([H("a"), B("민수"), B("서연")], [{ id: "x", name: "x" }], 3)), ["a", "bot:민수", "x"], "AI 채우기 3명: 사람이 들어오면 AI 가 한 자리 양보");
+  eq(ids(Table.nextLineup([H("a"), B("민수"), B("서연")], [{ id: "x", name: "x" }], 4)), ["a", "bot:민수", "bot:서연", "x"], "AI 채우기 4명이면 그대로 4명");
+  eq(ids(Table.nextLineup([H("a"), H("b"), H("c")], [{ id: "x", name: "x" }, { id: "y", name: "y" }], 0)), ["a", "b", "c", "x"], "넘치면 4명까지만 (먼저 온 구경꾼부터)");
+  eq(ids(Table.nextLineup([H("a"), H("b", { drop: true })], [], 0)), ["a", "bot:민수"], "혼자 남으면 AI 가 채움 (최소 2명)");
+  eq(Table.nextLineup([H("a", { total: 7 }), H("b", { total: 3, sub: true })], [], 0).map(x => [x.total, x.sub]), [[7, false], [3, true]], "점수와 AI 대신 표시는 그대로");
+  eq(Table.nextLineup([H("a"), H("b")], [{ id: "a", name: "a" }], 0).length, 2, "이미 앉은 사람은 또 앉지 않음");
+}
+{
   // 4명 AI 끝까지: 나눠 주기·차례 순서(0→1→2→3→0)·타일 보존·끝남
   const lv = ["easy", "normal", "hard", "normal"];
   let done = 0, wins = [0, 0, 0, 0], orderOk = true, conserve = true, errs = 0;

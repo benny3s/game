@@ -247,3 +247,26 @@ table.st td.n{text-align:center;font-variant-numeric:tabular-nums}
 .ylob .pc span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ylob .ai{font-size:12.5px;color:var(--soft)}
 .ylob .seg .btn{padding:6px 10px;font-size:13px}
+
+/* ── 친구랑: 점수판 한 줄 · 내 차례 · 판 사이 준비 ── */
+.scorebar{display:flex;justify-content:safe center;gap:5px;overflow-x:auto;padding:2px 4px 3px;scrollbar-width:none;font:12.5px/1.2 var(--round);color:#fde7b0;flex:none}
+.scorebar::-webkit-scrollbar{display:none}
+.scorebar[hidden]{display:none}
+.scorebar .sbi{flex:none;padding:4px 8px;font-size:12px;border-radius:99px;background:rgba(0,0,0,.35);border:1px solid rgba(232,176,74,.22);white-space:nowrap;font-variant-numeric:tabular-nums}
+.scorebar .sbi b{color:#fef3c7;font-weight:700}
+.scorebar .sbi.on{background:linear-gradient(180deg,#fde047,#f59e0b);color:#422006;border-color:#fff7ed;box-shadow:0 0 12px rgba(250,204,21,.6)}
+.scorebar .sbi.on b{color:#422006}
+.scorebar .sbi.rest{opacity:.55}
+#sub.myturn{color:#422006;background:linear-gradient(180deg,#fde047,#f59e0b);border-radius:99px;padding:.1em .8em;font-weight:800;animation:subpulse 1s ease-in-out infinite}
+@keyframes subpulse{0%,100%{box-shadow:0 0 0 0 rgba(250,204,21,.7)}50%{box-shadow:0 0 0 6px rgba(250,204,21,0)}}
+.stage.myturn .tcard.turn{box-shadow:0 0 0 2px #facc15,0 0 18px rgba(250,204,21,.55),0 6px 18px rgba(0,0,0,.4)}
+.rdy{margin-top:10px;display:grid;gap:6px;text-align:left;font-size:13.5px}
+.rdy-row{display:flex;flex-wrap:wrap;gap:6px}
+.rdy-row>span{padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);white-space:nowrap}
+.rdy-row>span.ok{background:rgba(22,163,74,.25);border-color:#4ade80}
+.rdy-row>span.gone{background:rgba(127,29,29,.35);border-color:#f87171}
+.rdy-row button{border:0;border-radius:8px;padding:2px 7px;margin-left:2px;font:700 12px inherit;cursor:pointer;background:#fde68a;color:#422006}
+.rdy-w{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;opacity:.92}
+.rdy-w label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
+.waitmsg .btn{padding:.3em .8em;font-size:.9em}
+@media (prefers-reduced-motion:reduce){#sub.myturn{animation:none!important}}
