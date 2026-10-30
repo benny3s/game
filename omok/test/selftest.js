@@ -927,6 +927,22 @@ section('친구랑 자리 (구경 · 상담 2:2)');
   ok(!nx3[1].length && nx3[2].length === 1, '혼자 남으면 한쪽이 비어 있음 (대기실로)');
   const nt = S.reseat(S.seat({ h: { t: 1 }, b: { t: 2 }, c: { t: 3 } }, 'h', 1, true), pl, 'h', true);
   eq([nt[1].length, nt[2].length, nt.view], [2, 2, ['e']], '상담 2:1 판 뒤 새로 온 사람이 빈자리를 채움');
+  // 한 판 더 (방장이 고름): 신청한 구경꾼만 빈자리에 · AI 가 대신 앉은 사람은 자리 유지 · 빈자리 수
+  const k0 = S.next(one, pl, 'h', false, {});
+  eq([k0[1], k0[2], k0.view], [['b'], ['h'], ['c', 'd', 'e']], '방장이 안 고르면 색만 바뀜 (구경꾼은 자동으로 안 앉음)');
+  const k1 = S.next(one, pl2, 'h', false, {});
+  eq([k1[1], k1[2], k1.view], [[], ['h'], ['c', 'd', 'e']], '나간 자리는 신청한 구경꾼이 없으면 비워 둠');
+  const k2 = S.next(one, pl2, 'h', false, { pick: { d: true, c: true } });
+  eq([k2[1], k2[2], k2.view], [['c'], ['h'], ['d', 'e']], '신청한 구경꾼 중 먼저 온 사람(c)이 앉음');
+  const k3 = S.next(one, pl2, 'h', false, { sub: { b: true }, pick: { c: true } });
+  eq([k3[1], k3[2]], [['b'], ['h']], 'AI 가 대신 앉은 사람 자리는 나가 있어도 그대로');
+  const t4 = S.seat(pl, 'h', 1, true);                                      // 상담: 팀원 한 명이 빠진 판
+  const tr = S.remove(t4, 'c').seats;
+  eq(S.free(t4, pl, true, {}), 0, '상담 4명이 다 있으면 빈자리 0');
+  eq(S.free(tr, pl, true, {}), 1, '상담에서 한 명을 빼면 빈자리 1');
+  eq(S.free(one, pl2, false, {}), 1, '1:1 에서 한 명이 나가면 빈자리 1');
+  const kt = S.next(tr, pl, 'h', true, { pick: { e: true } });
+  eq([kt[1].length, kt[2].length, kt.view], [2, 2, ['c']], '상담에서 빠진 자리에 신청한 구경꾼이 앉아 다시 2:2 (빠졌던 c 는 구경으로)');
   // 대기실 설명
   eq([S.describe(2, false), S.describe(5, false), S.describe(4, true), S.describe(6, true)], ['2명이 대국해요', '2명 대국 · 3명 구경', '2:2 상담', '2:2 상담 · 2명 구경'], '대기실 설명 글');
 }

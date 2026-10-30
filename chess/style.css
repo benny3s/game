@@ -180,3 +180,26 @@ header.top h1{display:flex;align-items:center;gap:8px}
   .dock button{min-width:46px;font-size:10.5px}
   .bar .iconbtn{width:34px;height:34px}
 }
+
+/* ── 친구랑: 점수판 한 줄(구경 중 배지 · 양쪽 전적 · 구경 인원) · 내 차례 강조 · 한 판 더 준비 칸 ── */
+.viewbar{gap:5px;overflow-x:auto;scrollbar-width:none;justify-content:safe center;margin:0}
+.viewbar::-webkit-scrollbar{display:none}
+.viewbar[hidden]{display:none}
+.viewbar .rbi{flex:none;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;font-size:12px;border-radius:99px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1);color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+.viewbar .rbi b{color:#e0e7ff;max-width:84px;overflow:hidden;text-overflow:ellipsis}
+.viewbar .rbi .kp{margin-right:0;width:15px;height:15px}
+.viewbar .rbi.on{background:linear-gradient(180deg,#fde047,#f59e0b);color:#422006;border-color:#fff7ed;box-shadow:0 0 12px rgba(250,204,21,.6)}
+.viewbar .rbi.on b{color:#422006}
+body.playing .bar .t.myturn{color:#422006;background:linear-gradient(180deg,#fde047,#f59e0b);border-radius:99px;padding:1px 10px;font-weight:800;animation:subpulse 1s ease-in-out infinite}
+@keyframes subpulse{0%,100%{box-shadow:0 0 0 0 rgba(250,204,21,.7)}50%{box-shadow:0 0 0 6px rgba(250,204,21,0)}}
+.stage.myturn #board{box-shadow:0 0 0 3px #facc15,0 0 22px rgba(250,204,21,.5);border-radius:6px}
+.rdy{display:grid;gap:8px;text-align:left;font-size:13.5px}
+.rdy-row{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.rdy-row>span{padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);white-space:nowrap}
+.rdy-row>span.ok{background:rgba(22,163,74,.25);border-color:#4ade80}
+.rdy-row>span.gone{background:rgba(127,29,29,.35);border-color:#f87171}
+.rdy-row button{border:0;border-radius:8px;padding:2px 7px;margin-left:2px;font:700 12px inherit;cursor:pointer;background:#fde68a;color:#422006}
+.rdy-w{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;opacity:.92}
+.rdy-w label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
+.rdy-act{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.rdy-act .btn{flex:1 1 auto}

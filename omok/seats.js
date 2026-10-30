@@ -45,10 +45,30 @@
     while (q.length && (s1.length < want || s2.length < want)) (s1.length <= s2.length && s1.length < want ? s1 : s2).push(q.shift());
     return { 1: s1, 2: s2, view: q };
   }
+  // 한 판 더 자리 (방장이 정함): 색 바꾸기 · 남은 사람(오고 있거나 AI 가 대신 앉은 사람)은 그대로 · 빈자리는 '끼고 싶어요'(opt.pick) 한 구경꾼만, 들어온 순서대로
+  //   opt = { sub: { uid: true } AI 가 대신 앉은 사람, pick: { uid: true } 끼고 싶은 구경꾼 }
+  function next(prev, players, host, team, opt) {
+    opt = opt || {};
+    const here = u => !!(players && players[u]) || !!(opt.sub && opt.sub[u]);
+    const s1 = (prev[2] || []).filter(here), s2 = (prev[1] || []).filter(here);
+    const want = team ? 2 : 1;
+    while (s1.length > want) s1.pop();
+    while (s2.length > want) s2.pop();
+    const all = order(players, host).filter(u => !s1.includes(u) && !s2.includes(u));
+    const q = all.filter(u => opt.pick && opt.pick[u]);
+    while (q.length && (s1.length < want || s2.length < want)) (s1.length <= s2.length && s1.length < want ? s1 : s2).push(q.shift());
+    const placed = new Set([...s1, ...s2]);
+    return { 1: s1, 2: s2, view: all.filter(u => !placed.has(u)) };
+  }
+  // 빈자리 수: 다음 판에 구경꾼이 앉을 수 있는 자리 (나간 사람 자리 + 팀 빼기)
+  function free(prev, players, team, sub) {
+    const want = team ? 2 : 1, here = u => !!(players && players[u]) || !!(sub && sub[u]);
+    return Math.max(0, want * 2 - [...(prev[1] || []), ...(prev[2] || [])].filter(here).length);
+  }
   // 대기실 한 줄 설명
   function describe(n, team) {
     if (team) return n >= 4 ? `2:2 상담${n > 4 ? ` · ${n - 4}명 구경` : ''}` : n === 3 ? '3명이면 2:1 상담 (4명이면 2:2)' : '4명이면 2:2 상담';
     return n <= 2 ? '2명이 대국해요' : `2명 대국 · ${n - 2}명 구경`;
   }
-  return { order, seat, mover, colorOf, canMove, remove, reseat, describe };
+  return { order, seat, mover, colorOf, canMove, remove, reseat, next, free, describe };
 });

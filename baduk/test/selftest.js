@@ -226,6 +226,16 @@ section("친구랑 — 자리 · 구경꾼 · 늦게 온 사람 (room.js)");
   nx = RM.nextSeats(seats, P2, "H");
   ok(nx[2] === "H" && nx[1] === "B", "두던 친구가 나가면 첫 구경꾼(영희)이 들어옴");
   ok(!RM.full(RM.nextSeats(seats, { H: P.H }, "H")), "아무도 없으면 시작 못 함");
+  // 한 판 더 (방장이 고름): 신청한 구경꾼만 빈자리에 · AI 가 대신 앉은 사람은 자리 유지 · 빈자리 수
+  let np = RM.nextSeatsPick(seats, P, "H", {});
+  ok(np[1] === "A" && np[2] === "H", "방장이 안 고르면 그대로 (색만 바뀜)");
+  np = RM.nextSeatsPick(seats, P2, "H", {});
+  ok(np[2] === "H" && np[1] === null && !RM.full(np), "나간 자리는 구경꾼이 신청 안 했으면 비워 둠 (자동으로 앉히지 않음)");
+  np = RM.nextSeatsPick(seats, P2, "H", { pick: { C: true, B: true } });
+  ok(np[1] === "B" && np[2] === "H", "신청한 구경꾼 중 먼저 온 사람(영희)이 앉음");
+  np = RM.nextSeatsPick(seats, P2, "H", { sub: { A: true }, pick: { B: true } });
+  ok(np[1] === "A" && np[2] === "H", "AI 가 대신 앉은 사람 자리는 나가 있어도 그대로");
+  ok(RM.freeSeats(seats, P, {}) === 0 && RM.freeSeats(seats, P2, {}) === 1 && RM.freeSeats(seats, P2, { A: true }) === 0, "빈자리 수 (나간 사람 · AI 가 앉은 사람)");
   // AI 선생님 까닭 한 줄
   const W = RM.coachWhy;
   ok(/따낼/.test(W(B, fromPic([".X...", "XOX..", ".....", ".....", "....."], B.BLACK), xy(5, 1, 2))), "까닭: 백 한 점 따냄");

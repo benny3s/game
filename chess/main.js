@@ -197,7 +197,7 @@
     const g = G;
     setTimeout(() => { if (G === g) advance(); }, cfg.mode === 'watch' ? 500 : 300);
   }
-  function stopAll() { clearTimeout(aiTimer); clearInterval(tickT); reqId++; if (G) G.thinking = false; }
+  function stopAll() { clearTimeout(aiTimer); clearInterval(tickT); reqId++; turnStop(); if (G) G.thinking = false; }
   function goMenu() {
     if (ON) { const n = ON.net; endOnline(); leaving = true; try { if (window.ArenaUI && ArenaUI.net === n) ArenaUI.leave(); else n.leave(); } catch (e) {} leaving = false; }
     stopAll(); board.closePromo(); coachHide();
@@ -259,7 +259,7 @@
     if (mv) {
       sfx(mv.promotion ? 'promote' : mv.castle ? 'castle' : mv.captured ? 'capture' : 'move');
       if (mv.check) setTimeout(() => { if (G === g) sfx('check'); }, 90);
-      if (info.from !== 'remote' || g.me) Z.vibrate(mv.captured ? 14 : 7);
+      if (info.from !== 'remote' || g.me) buzz(mv.captured ? 14 : 7);
       // 선생님: 방금 이 화면의 사람이 둔 수 돌아보기 (AI·친구가 둔 수는 건드리지 않음)
       if (g.players[mv.color] && g.players[mv.color].kind === 'human')
         g.review = g.coachRes && g.coachRes.key === prevKey ? { prev: g.coachRes, played: mv.uci, san: mv.san, game: C.toJSON(s) } : null;
@@ -279,6 +279,7 @@
     }
     if (pl.kind === 'ai' && !G.thinking && !(G.mode === 'watch' && G.paused)) requestAI();
     coachTick();
+    if (G.mode === 'online') { subTurn(); turnSync(); }
   }
   function requestAI() {
     const g = G, s = g.s, c = C.turn(s), pl = g.players[c], id = ++reqId, t0 = performance.now();
@@ -358,6 +359,7 @@
       el.classList.toggle('think', !!(G.thinking && t === c && pl.kind === 'ai'));
     }
     drawClocks();
+    if (G.mode === 'online') drawViewers();
   }
   function drawMoves() {
     if (!G) return;
@@ -380,12 +382,16 @@
     const lbl = G.mode === 'ai' ? `${tierLabel(G.cfg.tier)} AI와 대국` : G.mode === 'duo' ? '👥 둘이서' : G.mode === 'online' ? '👥 친구랑' : `👀 ${tierLabel(G.cfg.ww)} vs ${tierLabel(G.cfg.wb)}`;
     $('lbl').textContent = lbl;
     const st = $('stat');
-    st.classList.remove('thinking');
+    st.classList.remove('thinking'); st.classList.remove('myturn'); $('stage').classList.remove('myturn');
     if (s.over) { st.textContent = resultLine(); return; }
     const chk = s.chess.inCheck() ? ' · 체크!' : '';
     if (G.thinking && pl.kind === 'ai') { st.textContent = `${CN[c]} AI가 생각 중`; st.classList.add('thinking'); return; }
     if (G.mode === 'ai') st.textContent = (c === G.me ? '내 차례' : '상대 차례') + chk;
-    else if (G.mode === 'online') st.textContent = (G.me ? (c === G.me ? '내 차례' : '친구 차례') : `${CN[c]} 차례`) + chk;
+    else if (G.mode === 'online') {                                    // 친구랑: 내 차례는 금색으로 반짝 + 남은 시간
+      const mine = humanTurn(), u = G.seats && G.seats[c];
+      st.textContent = (mine ? '내 차례' + (TT.left != null ? ` · ⏱${TT.left}` : '') : G.me ? `${u ? nmOf(u) + '님' : '상대'} 차례${u && ON && ON.sub[u] ? ' 🤖' : ''}` : `${CN[c]} ${u ? nmOf(u) + '님 ' : ''}차례`) + chk;
+      if (mine) { st.classList.add('myturn'); $('stage').classList.add('myturn'); }
+    }
     else st.textContent = `${CN[c]} 차례${G.mode === 'duo' && pl.kind === 'human' ? ` · ${pl.name}` : ''}${chk}`;
   }
   function resultLine() {
@@ -436,6 +442,7 @@
   // ── 끝 ──
   function finish() {
     const g = G; g.over = true; cancelAI(); clearInterval(tickT); tickT = 0; board.closePromo(); board.setArrow(null);
+    if (g.mode === 'online') { turnStop(); if (ON && ON.goneAsk) { try { ON.goneAsk(); } catch (e) {} } countScore(g); }   // 친구랑: 내 차례 시계 끄기 · '나갔어요' 창 닫기 · 이 방 전적 +1
     const s = g.s, w = s.winner;
     let res = 'd';
     if (g.mode === 'ai') { res = !w ? 'd' : w === g.me ? 'w' : 'l'; const st = stats(), r = st[g.cfg.tier] || { w: 0, l: 0, d: 0 }; r[res]++; st[g.cfg.tier] = r; save('stats', st); }
@@ -474,14 +481,17 @@
       body = (w ? pieceImg(w) + `<p class="bigline">${nm(w)}</p>` : '') + `<p class="sub">${why} · ${n}수</p>` +
         (g.mode === 'online' && !g.me ? `<p class="why">👀 구경 중 · ${ON && ON.host ? '' : '방장이 다음 판을 시작하면 이어서 봐요'}</p>` : '');
     }
-    const spec = g.mode === 'online' && !g.me;
-    const btns = [
-      spec ? { label: '계속 구경', primary: true } : { label: g.mode === 'watch' ? '한 판 더' : '다시 하기', primary: true, onClick: () => again() },
-      { label: '기보 복사', onClick: () => { copyPgn(); return false; } },
-      { label: '메뉴', ghost: true, onClick: () => goMenu() },
-    ];
-    if (g.mode === 'online' && ON && ON.host && window.ArenaUI) btns.splice(2, 0, { label: '대기실', onClick: () => ArenaUI.toLobby() });
+    const online = g.mode === 'online' && !!ON;
+    if (online) body += '<div class="rdy" id="rdyBox"></div>';         // 친구랑: 준비 · 시작은 이 칸에서 (손님은 ✋ 준비, 방장이 시작)
+    const btns = online
+      ? [{ label: '기보 복사', onClick: () => { copyPgn(); return false; } }].concat(ON.host && window.ArenaUI ? [{ label: '대기실', onClick: () => ArenaUI.toLobby() }] : [], [{ label: '메뉴', ghost: true, onClick: () => goMenu() }])
+      : [
+        { label: g.mode === 'watch' ? '한 판 더' : '다시 하기', primary: true, onClick: () => again() },
+        { label: '기보 복사', onClick: () => { copyPgn(); return false; } },
+        { label: '메뉴', ghost: true, onClick: () => goMenu() },
+      ];
     modal({ title, html: body, buttons: btns });
+    if (online) { const box = document.getElementById('rdyBox'); if (box) { wireReady(box); drawReady(); } }
   }
   function copyPgn() {
     if (!G) return;
@@ -492,12 +502,7 @@
   }
   function again() {
     if (!G) return;
-    if (G.mode === 'online') {
-      if (!ON) { goMenu(); return; }
-      if (ON.host) hostAgain();
-      else if (G.me) { ON.net.send({ t: 'again' }, true); Z.toast('방장에게 한 판 더 하자고 했어요', 1600); }
-      return;
-    }
+    if (G.mode === 'online') { if (!ON) goMenu(); else if (G.over) showResult(); return; }   // 다음 판은 결과 창의 준비 칸에서
     const cfg = G.cfg;
     if (cfg.mode === 'ai' && cfg.color !== 'r') cfg.color = G.me;   // 같은 색으로 다시
     newGame(cfg);
@@ -602,6 +607,9 @@
   // ════════ 친구랑: 방 최대 16명 — 2명이 두고 나머지는 실시간 구경 ════════
   // 방장이 판의 주인: 손님 수는 방장에게 보내고, 방장이 확인해 모두에게 (수 번호 n 으로 순서 맞춤). 늦게 온 사람은 'hello' → 방장이 판 전체(sync)
   let ON = null, leaving = false;
+  let TT = { key: '', t: 0, end: 0, left: null };   // ⏱ 내 차례 30초 (친구랑)
+  const TURN_SEC = 30;
+  const buzz = ms => { if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return; Z.vibrate(ms); };   // 한 번도 안 누른 화면은 브라우저가 막고 오류를 남김
   const nmOf = u => (ON && ON.names[u]) || '친구';
   function noteNames(p) { if (!ON) return; for (const u in p || {}) if (p[u] && p[u].name) ON.names[u] = p[u].name; }
   const colorOf = (seats, uid) => !seats || !uid ? null : seats.w === uid ? 'w' : seats.b === uid ? 'b' : null;
@@ -619,7 +627,7 @@
   function friendOpts() {
     return {
       game: 'chess', title: '체스', max: 16, min: 2, coach: true,
-      describe: n => n < 2 ? '친구가 한 명 더 들어오면 시작할 수 있어요' : n === 2 ? '2명이면 1:1 대국' : `${n}명이면 2명이 두고 ${n - 2}명은 구경해요 (다음 판엔 이긴 사람·구경꾼 순서로)`,
+      describe: n => n < 2 ? '친구가 한 명 더 들어오면 시작할 수 있어요' : n === 2 ? '2명이면 1:1 대국' : `${n}명이면 2명이 두고 ${n - 2}명은 구경해요 (다음 판엔 방장이 고른 구경꾼이 빈자리에)`,
       settings: {
         defaults: { hostColor: 'w', clock: 0 },
         label: cfgLabel,
@@ -639,25 +647,57 @@
     };
   }
   function openFriend() { if (!window.ArenaUI) return Z.toast('온라인 모듈을 불러오지 못했어요'); ArenaUI.open(friendOpts()); }
-  function endOnline() { if (!ON) return; ON.offs.forEach(f => { try { f(); } catch (e) {} }); ON = null; }
+  function endOnline() {
+    if (!ON) return;
+    ON.offs.forEach(f => { try { f(); } catch (e) {} });
+    for (const k in ON.goneT) clearTimeout(ON.goneT[k]);
+    if (ON.goneAsk) { try { ON.goneAsk(); } catch (e) {} }
+    turnStop(); ON = null;
+  }
   function startOnline({ net, role, cfg, players }) {
     endOnline();
     const c = cfg || {};
     const hostUid = (net.meta && net.meta.host) || (role === 'host' ? net.uid : '');
-    ON = { net, host: role === 'host', hostUid, uid: net.uid, cfg: c, names: {}, offs: [], coach: !!c.coach, syncAt: 0 };
+    ON = { net, host: role === 'host', hostUid, uid: net.uid, cfg: c, names: {}, offs: [], coach: !!c.coach, syncAt: 0,
+      score: {}, scoreRound: 0, sub: {}, ready: { round: 0, set: new Set(), pick: {} }, goneT: {}, goneAsk: null, myReady: 0 };
     noteNames(players || net.players);
     startRound(firstSeats(players || net.players, hostUid, ON.host ? c.hostColor : (c.hostColor === 'b' ? 'b' : 'w')), 1, !ON.host);   // 손님은 방장 판(sync)을 받을 때까지 조용히
-    if (ON.host) { ON.offs.push(net.on('msg', (from, m) => onHostMsg(from, m))); broadcastSync(); }
-    else { ON.offs.push(net.on('msg', m => onGuestMsg(m))); askSync(true); }
-    ON.offs.push(net.on('players', p => { noteNames(p); if (ON && ON.host) hostPlayers(p); drawBars(); drawViewers(); }));
+    if (ON.host) {
+      ON.offs.push(net.on('msg', (from, m) => onHostMsg(from, m)));
+      ON.offs.push(net.on('leave', uid => hostLeft(uid)));
+      ON.offs.push(net.on('join', uid => hostJoined(uid)));
+      broadcastSync();
+    } else { ON.offs.push(net.on('msg', m => onGuestMsg(m))); askSync(true); }
+    ON.offs.push(net.on('players', p => { noteNames(p); drawBars(); drawReady(); }));
   }
   function startRound(seats, round, quiet) {
     newGame({ mode: 'online', seats, round, uid: ON.uid, clock: (ON.cfg && ON.cfg.clock) || 0, quiet: !!quiet });
     applyOnlineUI(); drawViewers();
   }
+  // 방 안의 것들 (점수 · AI 가 대신 앉은 사람 · 한 판 더 준비): 방장이 정하고 모두에게
+  const readyOf = r => { if (ON.ready.round !== r) ON.ready = { round: r, set: new Set(), pick: {} }; return ON.ready; };
+  const roomPart = () => { const R = readyOf(G.round); return { score: ON.score, sr: ON.scoreRound, sub: Object.keys(ON.sub).filter(u => ON.sub[u]), ready: [...R.set], pick: R.pick, round: G.round }; };
   const syncMsg = () => ({ t: 'sync', round: G.round, seats: G.seats, start: G.s.start, moves: G.s.moves.slice(), over: G.s.over ? { winner: G.s.winner, reason: G.s.reason } : null,
-    clock: G.clock ? { w: Math.round(G.clock.w), b: Math.round(G.clock.b) } : null, names: ON.names, cfg: ON.cfg });
+    clock: G.clock ? { w: Math.round(G.clock.w), b: Math.round(G.clock.b) } : null, names: ON.names, cfg: ON.cfg, room: roomPart() });
   function broadcastSync() { if (ON && ON.host && G && G.mode === 'online') ON.net.broadcast(syncMsg(), true); }
+  function broadcastRoom() {
+    if (ON && ON.host && G && G.mode === 'online') ON.net.broadcast(Object.assign({ t: 'room' }, roomPart()), true);
+    drawBars(); drawReady();
+  }
+  function applyRoom(r) {
+    if (!r || !ON || ON.host) return;
+    if ((r.sr || 0) >= ON.scoreRound) { ON.score = r.score || {}; ON.scoreRound = r.sr || 0; }
+    ON.sub = {}; (r.sub || []).forEach(u => { ON.sub[u] = true; });
+    if (G && r.round === G.round) ON.ready = { round: r.round, set: new Set(r.ready || []), pick: r.pick || {} };
+    drawBars(); drawReady();
+  }
+  // 방장: 판이 끝나면 이긴 사람 +1승 · 진 사람 +1패 (사람 기준, 색이 바뀌어도 이어짐)
+  function countScore(g) {
+    if (!ON || !ON.host || ON.scoreRound >= g.round) return;
+    const w = g.s.winner; ON.scoreRound = g.round;
+    for (const c of ['w', 'b']) { const u = g.seats[c]; if (!u) continue; const r = ON.score[u] = ON.score[u] || { w: 0, l: 0, d: 0 }; if (!w) r.d++; else if (w === c) r.w++; else r.l++; }
+    broadcastRoom();
+  }
   function askSync(force) {
     if (!ON || ON.host) return;
     const t = Date.now(); if (!force && t - ON.syncAt < 800) return;
@@ -667,7 +707,12 @@
     if (!m || !ON || !G || G.mode !== 'online') return;
     if (m.t === 'hello') { ON.net.send(from, syncMsg(), true); return; }
     const col = colorOf(G.seats, from);
-    if (m.t === 'again') { if (G.over && col) hostAgain(); return; }
+    if (m.t === 'ready' || m.t === 'again') {                           // 한 판 더: 준비 (구경꾼이 보내면 '끼고 싶어요')
+      if (!G.over) return;
+      const R = readyOf(G.round); R.set.add(from);
+      if (!col) R.pick[from] = true;
+      broadcastRoom(); return;
+    }
     const back = () => ON.net.send(from, syncMsg(), true);              // 어긋났으면 그 사람에게 지금 판을 다시
     if (m.round !== G.round || G.over) { back(); return; }
     if (m.t === 'resign') { if (col) act({ resign: col }, { from: 'remote' }); return; }
@@ -678,6 +723,7 @@
   function onGuestMsg(m) {
     if (!m || !ON) return;
     if (m.t === 'sync') { applySync(m); return; }
+    if (m.t === 'room') { applyRoom(m); return; }
     if (!G || G.mode !== 'online') return;
     if (m.round !== G.round) { askSync(); return; }
     const setClock = () => { if (G.clock && typeof m.cw === 'number') { G.clock.w = m.cw; G.clock.b = m.cb; G.clock.at = performance.now(); drawClocks(); } };
@@ -701,6 +747,7 @@
     if (fresh) startRound(m.seats, m.round, true);
     const g = G;
     g.seats = m.seats; const meWas = g.me; g.me = colorOf(m.seats, ON.uid); g.players = onlinePlayers(m.seats, g.me);
+    if (m.room) applyRoom(m.room);
     if (meWas !== g.me || fresh) board.setFlip(g.me === 'b');
     if (fresh || !ON.synced) { ON.synced = true; Z.toast(!g.me ? '👀 구경 중이에요. 다음 판에 빈자리가 나면 앉을 수 있어요' : g.me === 'w' ? '⚪ 내가 백이에요. 먼저 둬요!' : '⚫ 내가 흑이에요. 친구가 먼저 둬요', 2000); }
     const cur = g.s.moves, nx = m.moves || [];
@@ -715,39 +762,155 @@
     if (m.clock && g.clock) { g.clock.w = m.clock.w; g.clock.b = m.clock.b; g.clock.at = performance.now(); }
     applyOnlineUI(); drawBars(); drawStat(); drawViewers(); coachEnter();
     if (G === g && !g.over) advance();
+    turnSync();
   }
-  // 방장: 두던 사람이 나가면 그 색 기권
-  function hostPlayers(p) {
-    if (!G || G.mode !== 'online') return;
-    for (const c of ['w', 'b']) {
-      const u = G.seats[c]; if (!u || (p && p[u])) continue;
-      if (!G.over) { Z.toast(`${nmOf(u)}님이 나가서 판이 끝났어요`, 2400); act({ resign: c }, { from: 'remote' }); }
+  // ── 방장: 두던 사람이 나가면 5초 기다렸다가 물음 (AI 가 대신 · 처음부터 · 기다리기). 돌아오면 그 자리로
+  function hostLeft(uid) {
+    if (!ON || !ON.host || !G || G.mode !== 'online') return;
+    drawBars(); drawReady();
+    if (!colorOf(G.seats, uid) || ON.sub[uid]) return;
+    Z.toast(`${nmOf(uid)}님 연결이 끊겼어요. 같은 링크로 다시 들어오면 이어서 해요`, 3200);
+    const on = ON;
+    clearTimeout(on.goneT[uid]);
+    on.goneT[uid] = setTimeout(() => { if (ON !== on || !G || (on.net.players || {})[uid] || on.sub[uid] || !colorOf(G.seats, uid)) return; askGone(uid); }, 5000);
+  }
+  function hostJoined(uid) {
+    if (!ON || !ON.host || !G || G.mode !== 'online') return;
+    clearTimeout(ON.goneT[uid]);
+    if (ON.goneAsk && ON.goneFor === uid) { try { ON.goneAsk(); } catch (e) {} }
+    if (ON.sub[uid]) {
+      delete ON.sub[uid];
+      Z.toast(`${nmOf(uid)}님이 돌아왔어요. 다시 직접 둬요`, 2400);
+      try { ON.net.chat(`🙌 ${nmOf(uid)}님이 돌아와서 직접 둬요`); } catch (e) {}
+      broadcastRoom();
     }
+    drawBars(); drawReady();
   }
-  // 방장: 다음 판 — 색 바꾸고, 빈자리는 구경하던 사람이 들어온 순서대로
+  function askGone(uid) {
+    if (!ON || !G || G.over || ON.goneAsk || !colorOf(G.seats, uid)) return;
+    const on = ON;
+    const close = modal({
+      title: `🔌 ${nmOf(uid)}님이 나갔어요`,
+      html: `<p class="sub">어떻게 할까요? AI(🐱 중급)가 대신 두거나, 대기실로 돌아가 처음부터 다시 할 수 있어요. 같은 링크로 다시 들어오면 그 자리로 돌아와요.</p>`,
+      buttons: [{ label: '🤖 AI가 대신 둬요', primary: true, onClick: () => subAI(uid) },
+        { label: '🔄 처음부터 다시 (대기실로)', onClick: () => { try { on.net.chat('🔄 방장이 처음부터 다시 하기로 했어요'); } catch (e) {} if (window.ArenaUI) ArenaUI.toLobby(); } },
+        { label: '⏳ 기다릴게요' }],
+      onClose: () => { if (on.goneAsk === close) { on.goneAsk = null; on.goneFor = null; } },
+    });
+    on.goneAsk = close; on.goneFor = uid;
+  }
+  function subAI(uid) {
+    if (!ON || !ON.host || !G) return;
+    ON.sub[uid] = true; clearTimeout(ON.goneT[uid]);
+    try { ON.net.chat(`🤖 ${nmOf(uid)}님 자리는 AI가 대신 둬요 (돌아오면 다시 직접)`); } catch (e) {}
+    broadcastRoom(); advance();
+  }
+  // 방장: 자리 주인이 없어 AI 가 대신 두는 차례면 둠 (🐱 중급)
+  function subTurn() {
+    if (!ON || !ON.host || !G || G.mode !== 'online' || G.over || G.subBusy) return;
+    const u = G.seats[C.turn(G.s)];
+    if (!u || !ON.sub[u]) return;
+    const g = G, n = g.s.moves.length, t0 = performance.now(); g.subBusy = true;
+    AIW.think(C.toJSON(g.s), { tier: 'normal', seed: (Math.random() * 1e9) | 0 }).catch(() => null).then(res => {
+      setTimeout(() => {
+        g.subBusy = false;
+        if (G !== g || g.over || g.s.moves.length !== n || !ON || !ON.sub[u]) return;
+        if (!(res && res.move && act(res.move, { from: 'remote' }))) { const L = C.legal(g.s); if (L.length) act(L[0].uci, { from: 'remote' }); }
+      }, Math.max(0, 700 - (performance.now() - t0)));
+    });
+  }
+  // ⏱ 내 차례 30초: 지나면 🐱 중급 AI 가 대신 둠 (10초 남으면 알림). 차례가 바뀔 때마다 새로 셈
+  function turnStop() { clearInterval(TT.t); TT = { key: '', t: 0, end: 0, left: null }; }
+  function turnSync() {
+    const on = !!(G && G.mode === 'online' && ON && !G.over && humanTurn());
+    const key = on ? G.round + ':' + G.s.moves.length : '';
+    if (key === TT.key) return;
+    turnStop(); TT.key = key;
+    if (!on) { drawStat(); return; }
+    const g = G;
+    TT.end = Date.now() + TURN_SEC * 1000; TT.left = TURN_SEC;
+    sfx('pop'); buzz(40);
+    TT.t = setInterval(() => {
+      if (G !== g || g.over || !humanTurn() || TT.key !== g.round + ':' + g.s.moves.length) { turnSync(); return; }
+      const left = Math.max(0, Math.ceil((TT.end - Date.now()) / 1000));
+      if (left !== TT.left) { TT.left = left; if (left === 10) { Z.toast('⏱ 10초 남았어요', 1500); buzz(30); } drawStat(); }
+      if (left <= 0) { clearInterval(TT.t); TT.t = 0; turnTimeout(g, key); }
+    }, 250);
+    drawStat();
+  }
+  async function turnTimeout(g, key) {
+    Z.toast('⏱ 30초가 지나서 AI가 대신 뒀어요', 2200);
+    board.closePromo(); board.clearSel();
+    let mv = '';
+    try { const res = await AIW.think(C.toJSON(g.s), { tier: 'normal', seed: (Math.random() * 1e9) | 0 }); mv = res && res.move; } catch (e) {}
+    if (G !== g || g.over || g.round + ':' + g.s.moves.length !== key) return;   // 그 사이 직접 뒀으면 그대로
+    if (!mv || !act(mv)) { const L = C.legal(g.s); if (L.length) act(L[0].uci); }
+  }
+  // 방장: 다음 판 — 색 바꾸고, 남은 사람(AI 가 대신 앉은 사람 포함)은 그대로, 빈자리는 방장이 고른 구경꾼
   function hostAgain() {
     if (!ON || !ON.host || !G) return;
-    const pl = ON.net.players || {}, o = order(pl, ON.hostUid);
+    const pl = ON.net.players || {}, o = order(pl, ON.hostUid), pick = readyOf(G.round).pick;
     let seats = { w: G.seats.b, b: G.seats.w };
-    for (const c of ['w', 'b']) if (!seats[c] || !pl[seats[c]]) seats[c] = '';
-    for (const c of ['w', 'b']) if (!seats[c]) { const u = o.find(x => x !== seats.w && x !== seats.b); if (u) seats[c] = u; }
+    for (const c of ['w', 'b']) if (!seats[c] || !(pl[seats[c]] || ON.sub[seats[c]])) seats[c] = '';
+    for (const c of ['w', 'b']) if (!seats[c]) { const u = o.find(x => x !== seats.w && x !== seats.b && pick[x]); if (u) seats[c] = u; }
     if (!seats.w || !seats.b) { Z.toast('같이 둘 친구가 없어요. 대기실에서 기다려요', 2200); if (window.ArenaUI) ArenaUI.toLobby(); return; }
     startRound(seats, G.round + 1);
     broadcastSync();
   }
-  function leaveOnlineGame() { endOnline(); stopAll(); closeModals(); coachHide(); G = null; show('menu'); drawMenu(); popHist(); }
+  function leaveOnlineGame() { endOnline(); stopAll(); closeModals(); coachHide(); G = null; $('viewbar').hidden = true; show('menu'); drawMenu(); popHist(); }
   function applyOnlineUI() {
     if (!G || G.mode !== 'online') return;
     $('specPill').hidden = !!G.me;
     drawDock();
   }
+  // 점수판 한 줄 (구경 중 배지 · 양쪽 이름 · 이 방 전적 · 지금 차례는 금색 · 구경 인원)
   function drawViewers() {
     const el = $('viewbar');
     if (!G || G.mode !== 'online' || !ON) { el.hidden = true; $('specPill').hidden = true; return; }
-    const pl = ON.net.players || {};
+    const pl = ON.net.players || {}, t = G.over ? '' : C.turn(G.s);
+    const chips = ['w', 'b'].map(c => {
+      const u = G.seats[c], nm = u ? (u === ON.uid ? '나' : nmOf(u)) + (ON.sub[u] ? '🤖' : !pl[u] ? '🔌' : '') : '빈자리';
+      const r = ON.score[u] || { w: 0, l: 0, d: 0 };
+      return `<span class="rbi${t === c ? ' on' : ''}"><i class="kp ${c}"></i><b>${esc(nm)}</b> ${r.w}승${r.l}패${r.d ? r.d + '무' : ''}</span>`;
+    });
     const v = order(pl, ON.hostUid).filter(u => !colorOf(G.seats, u));
-    el.hidden = !v.length && !!G.me;
-    el.innerHTML = (G.me ? '' : '<b class="vbadge">👀 구경 중</b>') + (v.length ? `<span class="vlist">구경 ${v.length}명 · ${v.map(u => esc(nmOf(u)) + (u === ON.uid ? ' (나)' : '')).join(', ')}</span>` : '<span class="vlist">다음 판에 빈자리가 나면 앉을 수 있어요</span>');
+    el.hidden = false;
+    el.innerHTML = (G.me ? '' : '<b class="vbadge">👀 구경 중</b>') + chips.join('') + (v.length ? `<span class="rbi" title="${esc(v.map(nmOf).join(', '))}">👀 구경 ${v.length}명</span>` : '');
+  }
+  // 결과 창 '한 판 더' 칸: 앉은 사람 준비 상태 · 구경꾼 신청 (손님은 ✋ 준비만, 시작은 방장이 — 혼자 다시 시작하는 사람 없음)
+  function drawReady() {
+    const box = document.getElementById('rdyBox');
+    if (!box || !box.isConnected || !G || G.mode !== 'online' || !ON || !G.over) return;
+    const host = ON.host, pl = ON.net.players || {}, R = readyOf(G.round);
+    const seated = ['w', 'b'].map(c => G.seats[c]).filter(Boolean);
+    const rows = seated.map(u => {
+      if (u === ON.hostUid) return `<span class="ok">👑 ${esc(nmOf(u))}</span>`;
+      const gone = !pl[u], sub = !!ON.sub[u], ok = (R.set.has(u) && !gone) || sub;
+      return `<span class="${ok ? 'ok' : gone ? 'gone' : ''}">${ok ? '✅' : gone ? '🔌' : '⏳'} ${esc(nmOf(u))}${sub ? ' (AI)' : ''}${host && gone && !sub ? ` <button type="button" data-ai="${esc(u)}">🤖 AI</button>` : ''}</span>`;
+    });
+    const watchers = order(pl, ON.hostUid).filter(u => !colorOf(G.seats, u));
+    const free = ['w', 'b'].filter(c => !(G.seats[c] && (pl[G.seats[c]] || ON.sub[G.seats[c]]))).length;
+    const wl = watchers.map(u => host
+      ? `<label><input type="checkbox" data-join="${esc(u)}" ${R.pick[u] ? 'checked' : ''}${free ? '' : ' disabled'}> ${esc(nmOf(u))}${R.set.has(u) ? ' ✋' : ''}</label>`
+      : `<span>${esc(nmOf(u))}${R.set.has(u) ? ' ✋' : ''}</span>`).join('');
+    let act = '';
+    if (host) {
+      const need = seated.filter(u => u !== ON.hostUid && !ON.sub[u]), k = need.filter(u => R.set.has(u) && pl[u]).length, all = k === need.length;
+      act = `<button type="button" class="btn primary" data-start${all ? '' : ' disabled'}>${all ? '다음 판 시작 ▶' : `다음 판 시작 (준비 ${k}/${need.length})`}</button>${all ? '' : '<button type="button" class="btn" data-force>안 기다리고 시작</button>'}`;
+    } else {
+      const on = ON.myReady === G.round;
+      act = `<button type="button" class="btn primary" data-ready${on ? ' disabled' : ''}>${on ? (G.me ? '✅ 준비 완료 · 방장을 기다려요' : '✅ 신청했어요 · 방장이 정해요') : G.me ? '✋ 준비' : '✋ 다음 판에 낄래요'}</button>`;
+    }
+    box.innerHTML = `<div class="rdy-row">${rows.join('')}</div>${watchers.length ? `<div class="rdy-w">👀 구경 ${watchers.length}명${host ? (free ? ` · 체크하면 다음 판에 같이 (${free}자리)` : ' · 자리가 다 찼어요') : ''}: ${wl}</div>` : ''}<div class="rdy-act">${act}</div>`;
+  }
+  function wireReady(box) {
+    box.onclick = e => {
+      const b = e.target.closest('button'); if (!b || !ON || !G) return;
+      if (b.hasAttribute('data-ready')) { ON.myReady = G.round; ON.net.send({ t: 'ready', round: G.round }, true); sfx('tap'); drawReady(); }
+      else if (b.hasAttribute('data-start') || b.hasAttribute('data-force')) { sfx('tap'); hostAgain(); }
+      else if (b.dataset.ai) subAI(b.dataset.ai);
+    };
+    box.onchange = e => { const c = e.target.closest('input[data-join]'); if (c && ON && ON.host) { readyOf(G.round).pick[c.dataset.join] = c.checked; broadcastRoom(); } };
   }
 
   addEventListener('visibilitychange', () => { if (G && G.clock) G.clock.at = performance.now(); });

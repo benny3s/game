@@ -23,6 +23,25 @@
     }
     return s;
   }
+  // 한 판 더 자리 (방장이 고름): 색 바꾸기 · 남은 사람(오고 있거나 AI 가 대신 앉은 사람)은 그대로 · 빈자리는 '끼고 싶어요'(opt.pick) 한 구경꾼만, 들어온 순서대로
+  //   opt = { sub: { uid: true } AI 가 대신 앉은 사람, pick: { uid: true } 끼고 싶은 구경꾼 }
+  function nextSeatsPick(seats, players, host, opt) {
+    opt = opt || {};
+    const here = u => !!u && (!!(players && players[u]) || !!(opt.sub && opt.sub[u]));
+    const s = { 1: seats[2], 2: seats[1] };
+    for (const c of [1, 2]) if (!here(s[c])) s[c] = null;
+    for (const c of [1, 2]) {
+      if (s[c]) continue;
+      const u = order(players, host).find(x => x !== s[1] && x !== s[2] && opt.pick && opt.pick[x]);
+      s[c] = u || null;
+    }
+    return s;
+  }
+  // 빈자리 수: 다음 판에 구경꾼이 앉을 수 있는 자리 (나간 사람 자리)
+  function freeSeats(seats, players, sub) {
+    const here = u => !!u && (!!(players && players[u]) || !!(sub && sub[u]));
+    return [1, 2].filter(c => !here(seats && seats[c])).length;
+  }
   const seatOf = (seats, uid) => (uid && seats && seats[1] === uid ? 1 : uid && seats && seats[2] === uid ? 2 : 0);
   const full = seats => !!(seats && seats[1] && seats[2]);
   // 구경꾼 목록 (들어온 순)
@@ -59,7 +78,7 @@
     return "내 돌을 튼튼하게 잇고 집을 넓히는 자리예요";
   }
 
-  const API = { coachWhy, order, seatsFrom, nextSeats, seatOf, full, spectators, canMove, validMove, snap, restore, names };
+  const API = { coachWhy, order, seatsFrom, nextSeats, nextSeatsPick, freeSeats, seatOf, full, spectators, canMove, validMove, snap, restore, names };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   else root.BadukRoom = API;
 })(typeof window !== "undefined" ? window : globalThis);
