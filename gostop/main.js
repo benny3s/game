@@ -635,6 +635,8 @@
   // 판이 끝날 때마다 칩 변화를 알림: 점수 변화 × 점당 칩 (합 0). 친구랑에서 손님은 방장이 보내니 알리지 않음 (섯다와 같음)
   function reportChips(ses) {
     const s = ses.S, r = s && s.result; if (!r) return;
+    ses.score = ses.score || { w: [], l: [] };
+    if (r.kind !== 'nagari' && r.winner >= 0) s.who.forEach((rs, p) => { const k = p === r.winner ? 'w' : 'l'; ses.score[k][rs] = (ses.score[k][rs] || 0) + 1; });
     const per = s.rules.chipPer, pts = G.pointDeltas(s), deltas = {};
     pts.forEach((x, i) => { deltas[i] = x * per; });
     ses.lastDeltas = deltas;
@@ -711,6 +713,7 @@
       if (s.ppeok[p]) tags.push(`<span class="tag pp">뻑${s.ppeok[p]}</span>`);
       h.seat.querySelector('.tags').innerHTML = tags.join('');
       h.seat.classList.toggle('turn', s.phase !== 'end' && (ses.actor != null ? ses.actor === p : s.turn === p));
+
       const cnt = [t.g, t.y, t.t, t.pi];
       const hot = [t.gwang > 0, t.yeol > 0 || t.godori > 0, t.tti > 0 || t.dan > 0, t.piPts > 0];
       h.labels.forEach((l, gi) => { l.innerHTML = `${GROUP_NAME[gi]} <b>${cnt[gi]}</b>`; l.classList.toggle('hot', hot[gi]); });
@@ -727,6 +730,18 @@
     if (s.carry && G.carryMult(s) > 1) sub += ` · 나가리 ×${G.carryMult(s)}`;
     $('sub').textContent = `${s.round}판 · ${sub}`;
     $('passBtn').hidden = !(s.phase === 'play' && s.turn === me && me >= 0 && s.pass[me] > 0 && ses.pending && !ses.pending.isResult);
+    const myTurn = me >= 0 && s.phase !== 'end' && s.turn === me && !!ses.pending && !ses.pending.isResult && !ses.hide && !ses.replaying;
+    $('sub').classList.toggle('myturn', myTurn);
+    $('stage').classList.toggle('myturn', myTurn);
+    // 점수판 한 줄: 방 자리마다 전적 · 칩, 지금 차례인 사람은 금색 (쉬는 사람은 흐리게)
+    const turnSeat = s.phase === 'end' ? -1 : ses.who[ses.actor != null ? ses.actor : s.turn];
+    $('scoreBar').hidden = false;
+    $('scoreBar').innerHTML = ses.seats.map((x, rs) => {
+      const W = (ses.score && ses.score.w[rs]) || 0, L = (ses.score && ses.score.l[rs]) || 0, ch = ses.chips && ses.chips[rs];
+      const nm = rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name;
+      return `<span class="sbi${rs === turnSeat ? ' on' : ''}${ses.who.indexOf(rs) < 0 ? ' rest' : ''}"><b>${esc(nm)}</b> ${W}승${L}패${ch != null ? ` 🪙${fmtN(ch)}` : ''}</span>`;
+    }).join('');
+    if (myTurn && ses.turnBell !== ses.seq) { ses.turnBell = ses.seq; if (ses.cfg.online || ses.hot) { sfx('pop'); C.vibrate(40); } }
     if (!$('passBtn').hidden) $('passN').textContent = s.pass[me];
   }
   function setThinking(ses, p, on) { const h = ses.hud && ses.hud[p]; if (!h) return; h.seat.querySelector('.nm').classList.toggle('thinking', on); h.seat.classList.toggle('busy', on); }
