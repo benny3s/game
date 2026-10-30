@@ -16,7 +16,7 @@
         Gate.onChange(fn) · openAdminModal() · createPass({ role: "friend"|"temp24h" }) · redeemPassCode · requestDeviceApproval … */
 const Gate = (() => {
   // ── 설정: true = 혼자 하기는 누구나 (잠금은 방 만들기 때만) · false = 허용된 기기만 게임 페이지가 열림
-  const OPEN_SOLO = true;
+  const OPEN_SOLO = false;   // 10-30 베니 님: 혼자 하기도 허용된 기기만 (방 링크로 초대받은 손님은 그 방에서만)
 
   const FB = {
     apiKey: "AIzaSyCSueePQfiHaRxUSZxoropiFjiq9arAaTs",
@@ -156,6 +156,17 @@ const Gate = (() => {
   const leftHours = exp => Math.max(1, Math.ceil((exp - now()) / 3600000));
 
   // ── 허용됨 / 허용 안 됨 상태 반영
+  let presenceOn = false;
+  function startPresence() {
+    if (presenceOn || IS_LOCAL || !user) return;
+    presenceOn = true;
+    try {
+      const ref = db().ref("game_presence/" + user.uid);
+      const put = () => ref.set({ name: String(state.name || "?").slice(0, 16), game: detectGameId().slice(0, 20), t: TS(), ua: detectDeviceName().slice(0, 60) }).catch(() => {});
+      ref.onDisconnect().remove().then(put, put);
+      setInterval(() => { if (!document.hidden) put(); }, 5 * 60 * 1000);   // 5분마다 '아직 있어요'
+    } catch (e) { presenceOn = false; }
+  }
   function applyAllowed(role, exp, name) {
     state.allowed = true;
     state.canHost = true;
@@ -167,6 +178,7 @@ const Gate = (() => {
     if (name) state.name = name;
     if (state.uid) writeCachedPass({ uid: state.uid, role: state.role, status: "active", expiresAt: state.expiresAt, name: state.name });
     hideLockOverlay(true);
+    startPresence();
     notify();
   }
   function applyNotAllowed(status, reason) {
@@ -303,7 +315,7 @@ const Gate = (() => {
       name,
       ua: detectDeviceName(),
       game: detectGameId(),
-      want: want === "today" ? "today" : "always",
+      want: ["day", "week", "month", "always"].includes(want) ? want : want === "today" ? "day" : "always",
       note: String(rawNote || "").trim().slice(0, 60),
       status: "pending",
       t: TS(),
@@ -526,7 +538,7 @@ const Gate = (() => {
       lockEl.className = "bgate-ov";
       document.body.appendChild(lockEl);
     }
-    let curTab = "req", want = "always";
+    let curTab = "req", want = "week";
     const isHostMode = mode === "host";
     const render = () => {
       lockEl.innerHTML = `
@@ -566,8 +578,7 @@ const Gate = (() => {
           <div class="bgate-field">
             <span class="lb">얼마나 쓸까요?</span>
             <div class="bgate-seg">
-              <button type="button" data-want="today" class="${want === "today" ? "on" : ""}">⏳ 오늘만<small>24시간</small></button>
-              <button type="button" data-want="always" class="${want === "always" ? "on" : ""}">♾️ 계속<small>이 기기에서 늘</small></button>
+              ${[["day", "⏳ 하루", "24시간"], ["week", "📅 1주", "7일"], ["month", "🗓️ 1달", "30일"], ["always", "♾️ 계속", "기한 없이"]].map(([k, t, sm]) => `<button type="button" data-want="${k}" class="${want === k ? "on" : ""}">${t}<small>${sm}</small></button>`).join("")}
             </div>
           </div>
           <button class="bgate-btn green" id="bgReqBtn">📲 베니에게 허용 요청</button>

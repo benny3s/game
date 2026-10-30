@@ -181,8 +181,8 @@
       ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-        ".write": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-        ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString())"
+        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (auth.uid === $uid && (!newData.exists() || (newData.child('t').val() === now && (!data.exists() || data.child('status').val() !== 'pending' || data.child('t').val() < now - 600000)))))",
+        ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString() && newData.child('status').val().length <= 16 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 60)) && (!newData.child('want').exists() || newData.child('want').val().matches(/^(today|day|week|month|always)$/)) && (!newData.child('ua').exists() || (newData.child('ua').isString() && newData.child('ua').val().length <= 60)) && (!newData.child('game').exists() || (newData.child('game').isString() && newData.child('game').val().length <= 20)))"
       }
     },
     "arena": {
@@ -459,6 +459,74 @@
               }
             }
           }
+        }
+      }
+    },
+    "game_presence": {
+      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+      "$uid": {
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('game').isString() && newData.child('game').val().length <= 20 && newData.child('t').isNumber())",
+        "name": {
+          ".validate": true
+        },
+        "game": {
+          ".validate": true
+        },
+        "t": {
+          ".validate": true
+        },
+        "mode": {
+          ".validate": "newData.isString() && newData.val().length <= 20"
+        },
+        "ua": {
+          ".validate": "newData.isString() && newData.val().length <= 60"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "game_reports": {
+      ".read": "auth != null && auth.token.admin === 1",
+      "$id": {
+        ".write": "auth != null && ((!data.exists() && newData.exists()) || auth.token.admin === 1)",
+        ".validate": "newData.hasChildren(['kind','game','msg','t']) && newData.child('t').val() === now",
+        "kind": {
+          ".validate": "newData.val().matches(/^(error|report)$/)"
+        },
+        "game": {
+          ".validate": "newData.isString() && newData.val().length <= 20"
+        },
+        "msg": {
+          ".validate": "newData.isString() && newData.val().length <= 500"
+        },
+        "src": {
+          ".validate": "newData.isString() && newData.val().length <= 200"
+        },
+        "ua": {
+          ".validate": "newData.isString() && newData.val().length <= 120"
+        },
+        "name": {
+          ".validate": "newData.isString() && newData.val().length <= 16"
+        },
+        "uid": {
+          ".validate": "newData.isString() && newData.val() === auth.uid"
+        },
+        "url": {
+          ".validate": "newData.isString() && newData.val().length <= 120"
+        },
+        "n": {
+          ".validate": "newData.isNumber()"
+        },
+        "t": {
+          ".validate": true
+        },
+        "seen": {
+          ".validate": "newData.isBoolean() && auth.token.admin === 1"
+        },
+        "$other": {
+          ".validate": false
         }
       }
     }

@@ -171,5 +171,55 @@
 
   const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 
-  window.Cozy = { esc, store, save, toast, modal, confetti, sfx, backGuard, howto, tierCards, TIERS, vibrate };
+  // ── 🐞 오류 자동 알림 + 문제 알리기 (모든 게임 공통) → game_reports → 베니비서 알림
+  //   페이지 오류는 저절로(같은 오류는 한 번, 한 화면에 5번까지), 사람이 쓴 신고는 '🐞' 손잡이로. 시험(?mock·?guest·로컬)은 안 보냄
+  const GAME = (((location.pathname.match(/\/game\/([a-z0-9_-]+)/i) || location.pathname.match(/\/([a-z0-9_-]+)\/(?:index\.html)?$/i) || [])[1]) || "portal").toLowerCase().replace(/^game$/, "portal").slice(0, 20);
+  const TESTING = /^(127\.0\.0\.1|localhost)$/.test(location.hostname) || location.protocol === "file:" || /[?&](mock|guest)\b/.test(location.search);
+  const errSeen = new Set(), errRecent = [];
+  let errSent = 0, repSent = 0;
+  const myName = () => { try { return (window.GME && GME.me && GME.me.name) || localStorage.getItem("game.arena.name") || ""; } catch (e) { return ""; } };
+  function sendReport(kind, msg, extra) {
+    if (TESTING || !window.Arena || !Arena.init) return Promise.resolve(false);
+    const row = Object.assign({ kind, game: GAME, msg: String(msg || "").slice(0, 500), ua: navigator.userAgent.slice(0, 120), url: (location.pathname + location.search).slice(0, 120), name: String(myName()).slice(0, 16) }, extra || {});
+    return Arena.init().then(() => { row.t = firebase.database.ServerValue.TIMESTAMP; return Arena.db().ref("game_reports").push(row); }).then(() => true, () => false);
+  }
+  function onErr(msg, src) {
+    msg = String(msg || "");
+    if (!msg || /^Script error\.?$/i.test(msg) || /ResizeObserver loop/i.test(msg)) return;   // 다른 사이트 스크립트·무해한 경고는 빼고
+    const k = msg + "|" + src;
+    if (errSeen.has(k)) return; errSeen.add(k);
+    errRecent.push(msg.slice(0, 120)); if (errRecent.length > 3) errRecent.shift();
+    if (errSent >= 5) return; errSent++;
+    sendReport("error", msg, { src: String(src || "").slice(0, 200) });
+  }
+  addEventListener("error", e => { if (e && e.message) onErr(e.message, `${String(e.filename || "").split("/").slice(-2).join("/")}:${e.lineno || 0}:${e.colno || 0}`); });
+  addEventListener("unhandledrejection", e => { const r = e && e.reason; if (r && r.name === "Cancel") return; onErr("(약속 실패) " + ((r && (r.message || r.code)) || String(r)), r && r.stack ? String(r.stack).split("\n")[1] || "" : ""); });
+  function openReport() {
+    const close = modal({
+      title: "🐞 문제 알리기",
+      html: `<p style="margin:0 0 8px">이상한 점을 적어 주세요. 베니 님 폰으로 바로 가요.</p><textarea id="czRep" maxlength="400" rows="4" placeholder="예: 고스톱에서 4월을 냈는데 안 가져와졌어요" style="width:100%;box-sizing:border-box;font:16px/1.4 inherit;border-radius:10px;padding:8px;background:rgba(0,0,0,.25);color:inherit;border:1px solid rgba(255,255,255,.2)"></textarea>`,
+      buttons: [{ label: "닫기" }, { label: "보내기", primary: true, onClick: () => {
+        const t = (document.getElementById("czRep") || {}).value || "";
+        if (!t.trim()) { toast("내용을 적어 주세요"); return false; }
+        if (repSent >= 3) { toast("고마워요! 조금 뒤에 다시 보내 주세요"); return; }
+        repSent++;
+        const msg = t.trim().slice(0, 400) + (errRecent.length ? `\n[최근 오류] ${errRecent.join(" / ")}`.slice(0, 100) : "");
+        sendReport("report", msg).then(ok => toast(ok ? "🐞 보냈어요. 고마워요!" : TESTING ? "시험 화면이라 안 보냈어요" : "못 보냈어요. 인터넷을 확인해 주세요", 2200));
+      } }],
+      dismiss: true,
+    });
+    setTimeout(() => { const el = document.getElementById("czRep"); if (el) el.focus(); }, 60);
+    return close;
+  }
+  function bugTab() {
+    if (GAME === "portal" || document.getElementById("czBug")) return;
+    const b = document.createElement("button");
+    b.id = "czBug"; b.type = "button"; b.setAttribute("aria-label", "문제 알리기"); b.textContent = "🐞";
+    b.style.cssText = "position:fixed;left:0;top:60%;z-index:54;width:30px;height:38px;border:1px solid rgba(255,255,255,.2);border-left:0;border-radius:0 12px 12px 0;background:rgba(15,23,42,.55);font-size:16px;cursor:pointer;opacity:.75;padding:0";
+    b.onclick = openReport;
+    document.body.appendChild(b);
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bugTab); else bugTab();
+
+  window.Cozy = { esc, store, save, toast, modal, confetti, sfx, backGuard, howto, tierCards, TIERS, vibrate, report: openReport, sendReport };
 })();

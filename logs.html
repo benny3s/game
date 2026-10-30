@@ -25,7 +25,7 @@ td.n{text-align:right;font-family:var(--mono)}
 .chat{font-size:13px;display:grid;gap:2px;max-height:180px;overflow-y:auto}
 .sum{display:flex;flex-wrap:wrap;gap:8px}
 .bar button.on{background:var(--accent,#2b6);color:#fff}
-#gView[hidden],#pView[hidden]{display:none!important}
+#gView[hidden],#pView[hidden],#nView[hidden]{display:none!important}
 tr.pr{cursor:pointer}tr.pr:hover td{background:rgba(255,255,255,.04)}
 .gm{display:inline-block;margin-right:6px;white-space:nowrap}
 .sum span{background:#0f1716;border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:12.5px}
@@ -35,12 +35,13 @@ tr.pr{cursor:pointer}tr.pr:hover td{background:rgba(255,255,255,.04)}
 <div class="wrap">
   <p class="crumb"><a href="./">← 게임 목록</a></p>
   <h1>게임 기록</h1>
-  <p class="lede">관리자만 볼 수 있어요. 사람별로 누가 언제 어떤 게임을 누구와 했는지 모아 보여요. 친구랑 방마다 누가 언제 들어오고 나갔는지, 판을 시작한 때, 채팅이 남아요 (지렁이·냥도쿠는 판 결과·연결 품질까지).</p>
-  <div class="bar"><button id="tabP" class="on">👤 사람별</button><button id="tabG">🎮 게임별</button></div>
-  <div id="pView" style="display:grid;gap:12px"><p class="help" id="pMsg">불러오는 중…</p><div class="tw" id="pTable"></div><div id="pDetail" style="display:grid;gap:10px"></div></div>
+  <p class="lede">관리자만 볼 수 있어요. 🟢 지금 누가 어떤 게임을 하는지·허용된 기기·기다리는 요청·신고를 한눈에, 사람별로 누가 언제 어떤 게임을 누구와 했는지 모아 보여요. 친구랑 방마다 누가 언제 들어오고 나갔는지, 판을 시작한 때, 채팅이 남아요 (지렁이·냥도쿠는 판 결과·연결 품질까지).</p>
+  <div class="bar"><button id="tabN" class="on">🟢 지금 · 기기</button><button id="tabP">👤 사람별</button><button id="tabG">🎮 게임별</button></div>
+  <div id="nView" style="display:grid;gap:12px"><p class="help" id="nMsg">불러오는 중…</p><div class="sum" id="nSum"></div><div id="nBody" style="display:grid;gap:12px"></div></div>
+  <div id="pView" hidden style="display:grid;gap:12px"><p class="help" id="pMsg">불러오는 중…</p><div class="tw" id="pTable"></div><div id="pDetail" style="display:grid;gap:10px"></div></div>
   <div id="gView" hidden style="display:grid;gap:12px">
   <div class="bar">
-    <select id="game"><option value="gostop">🎴 고스톱</option><option value="seotda">🀄 섯다</option><option value="poker">♠️ 홀덤</option><option value="baduk">⚫ 바둑</option><option value="omok">⚪ 오목</option><option value="cube">🀫 베니큐브</option><option value="chess">♟️ 체스</option><option value="yut">🪵 윷놀이</option><option value="billiards">🎱 당구</option><option value="volley">🏐 냥냥 배구</option><option value="land">🟩 땅따먹기</option><option value="nyang">🐱 냥도쿠</option><option value="snake">🐍 지렁이</option><option value="sc">⚔️ 스타 대결</option></select>
+    <select id="game"><option value="gostop">🎴 고스톱</option><option value="seotda">🀄 섯다</option><option value="poker">♠️ 홀덤</option><option value="baduk">⚫ 바둑</option><option value="omok">⚪ 오목</option><option value="cube">🀫 베니큐브</option><option value="chess">♟️ 체스</option><option value="janggi">🏯 장기</option><option value="onecard">🃏 원카드</option><option value="yut">🪵 윷놀이</option><option value="billiards">🎱 당구</option><option value="volley">🏐 냥냥 배구</option><option value="land">🟩 땅따먹기</option><option value="nyang">🐱 냥도쿠</option><option value="snake">🐍 지렁이</option><option value="sc">⚔️ 스타 대결</option></select>
     <select id="date"></select>
     <button id="csv">CSV 내려받기</button>
     <span class="help" id="msg">불러오는 중…</span>
@@ -64,10 +65,34 @@ let data = {};
 
 app.auth().onAuthStateChanged(async u => {
   if (!u || (await u.getIdTokenResult()).claims.admin !== 1) { $("msg").innerHTML = '관리자 로그인이 필요해요. <a href="https://benny3s.github.io/">포털</a>에서 Benny 를 3번 눌러 로그인한 뒤 다시 열어 주세요.'; return; }
-  loadGame(); loadPeople();
+  loadGame(); loadPeople(); loadNow();
 });
-$("tabP").onclick = () => { $("pView").hidden = false; $("gView").hidden = true; $("tabP").classList.add("on"); $("tabG").classList.remove("on"); };
-$("tabG").onclick = () => { $("pView").hidden = true; $("gView").hidden = false; $("tabG").classList.add("on"); $("tabP").classList.remove("on"); };
+const tabs = { N: "nView", P: "pView", G: "gView" };
+for (const k in tabs) $("tab" + k).onclick = () => { for (const j in tabs) { $(tabs[j]).hidden = j !== k; $("tab" + j).classList.toggle("on", j === k); } };
+// ── 🟢 지금 · 기기: 지금 접속 중(game_presence) · 허용된 기기(game_devices) · 기다리는 요청(game_requests) · 최근 신고(game_reports)
+function loadNow() {
+  const db = app.database(), ago = t => { if (!t) return "-"; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "방금" : m < 60 ? m + "분 전" : m < 1440 ? Math.round(m / 60) + "시간 전" : Math.round(m / 1440) + "일 전"; };
+  const left = e => { if (!e) return "기한 없음"; const d = (e - Date.now()) / 86400000; return d < 0 ? "<span class='bad'>끝남</span>" : d < 1 ? Math.max(1, Math.round(d * 24)) + "시간 남음" : Math.round(d) + "일 남음"; };
+  const data = {};
+  const draw = () => {
+    const pres = Object.entries(data.pres || {}).filter(([, p]) => p && Date.now() - (p.t || 0) < 15 * 60000).sort((a, b) => (b[1].t || 0) - (a[1].t || 0));
+    const devs = Object.entries(data.devs || {}).sort((a, b) => (b[1].lastSeen || b[1].t || 0) - (a[1].lastSeen || a[1].t || 0));
+    const reqs = Object.entries(data.reqs || {}).filter(([, r]) => r && r.status === "pending");
+    const reps = Object.entries(data.reps || {}).sort((a, b) => (b[1].t || 0) - (a[1].t || 0)).slice(0, 15);
+    $("nSum").innerHTML = `<span>🟢 지금 ${pres.length}명</span><span>📱 허용 기기 ${devs.filter(([, d]) => d.status === "active" && (!d.expiresAt || d.expiresAt > Date.now())).length}대</span><span>⏳ 기다리는 요청 ${reqs.length}</span><span>🐞 최근 신고·오류 ${reps.length}</span>`;
+    $("nMsg").textContent = "실시간으로 바뀌어요 (게임을 연 허용 기기만 '지금'에 보여요. 방 링크 손님은 사람별 기록에 남아요)";
+    $("nBody").innerHTML =
+      `<div class="sess"><h3>🟢 지금 접속 중</h3>${pres.length ? `<div class="tw"><table><tr><th>이름</th><th>게임</th><th>기기</th><th>마지막</th></tr>${pres.map(([, p]) => `<tr><td><b>${esc(p.name)}</b></td><td>${esc(GNAME[p.game] || p.game)}</td><td>${esc(p.ua || "")}</td><td>${ago(p.t)}</td></tr>`).join("")}</table></div>` : '<p class="help">지금은 아무도 없어요</p>'}</div>` +
+      (reqs.length ? `<div class="sess"><h3>⏳ 허용 기다리는 요청</h3><div class="tw"><table><tr><th>이름</th><th>원하는 기간</th><th>한마디</th><th>기기</th><th>언제</th></tr>${reqs.map(([, r]) => `<tr><td><b>${esc(r.name)}</b></td><td>${esc({ day: "하루", today: "하루", week: "1주", month: "1달", always: "계속" }[r.want] || "계속")}</td><td style="white-space:normal">${esc(r.note || "")}</td><td>${esc(r.ua || "")}</td><td>${ago(r.t)}</td></tr>`).join("")}</table></div><p class="help">허용·거절은 베니비서 카드에서 해요</p></div>` : "") +
+      `<div class="sess"><h3>📱 허용된 기기</h3><div class="tw"><table><tr><th>이름</th><th>상태</th><th>기간</th><th>마지막 접속</th><th>기기</th></tr>${devs.map(([, d]) => `<tr><td><b>${esc(d.name || "?")}</b></td><td class="${d.status === "active" ? "ok" : "bad"}">${esc({ active: "허용", paused: "멈춤", revoked: "해제" }[d.status] || d.status || "-")}</td><td>${left(d.expiresAt)}</td><td>${ago(d.lastSeen || d.t)}</td><td>${esc(d.ua || "")}</td></tr>`).join("")}</table></div><p class="help">멈춤·해제는 포털 '👑 출입·기기 관리'에서 해요</p></div>` +
+      (reps.length ? `<div class="sess"><h3>🐞 최근 신고 · 오류</h3><div class="tw"><table><tr><th>언제</th><th>종류</th><th>게임</th><th>누가</th><th>내용</th></tr>${reps.map(([, r]) => `<tr><td>${ago(r.t)}</td><td>${r.kind === "report" ? "🐞 신고" : "🧯 오류"}</td><td>${esc(GNAME[r.game] || r.game)}</td><td>${esc(r.name || "")}</td><td style="white-space:normal">${esc(String(r.msg || "").slice(0, 160))}${r.src ? ` <span class="help">${esc(r.src)}</span>` : ""}</td></tr>`).join("")}</table></div></div>` : "");
+  };
+  db.ref("game_presence").on("value", s => { data.pres = s.val(); draw(); }, () => {});
+  db.ref("game_devices").on("value", s => { data.devs = s.val(); draw(); }, () => {});
+  db.ref("game_requests").on("value", s => { data.reqs = s.val(); draw(); }, () => {});
+  db.ref("game_reports").limitToLast(30).on("value", s => { data.reps = s.val(); draw(); }, () => {});
+  setInterval(draw, 60000);
+}
 // ── 👤 사람별: 모든 게임의 친구랑 방 기록을 사람(이름) 기준으로 모음 (혼자 하기는 기록이 없어요)
 const GNAME = {}; for (const o of document.querySelectorAll("#game option")) GNAME[o.value] = o.textContent;
 let people = {};
