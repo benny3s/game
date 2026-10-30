@@ -1,9 +1,10 @@
-/* 텍사스 홀덤 포커 (Texas Hold'em) — 화면 · 둥근 테이블(2~8명) · AI 선생님 · 친구랑(방장이 판을 돌림) · 한 기기 · AI 구경 (main.js) */
+/* 텍사스 홀덤 포커 (Texas Hold'em) — 화면 · 둥근 테이블(2~8명) · AI 선생님 · 친구랑(방장이 판을 돌림 · 핸드 사이 준비 · 구경꾼 · 끊김 AI 대신 · 점수판 · 30초 시계) · 한 기기 · AI 구경 (main.js) */
 (function () {
   'use strict';
   const P = window.Poker;
   const AI = window.PokerAI;
   const MAXP = P.MAX_PLAYERS;                         // 8
+  const TURN_SEC = 30;                                // 친구랑: 한 차례 제한 시간 (넘으면 중급 AI 가 대신 둠)
 
   const $ = (id) => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -71,14 +72,15 @@
   }
 
   let toastT = null;
-  function showToast(msg) {
+  function showToast(msg, ms) {
     const t = $('toast');
     if (!t) return;
     t.textContent = msg;
     t.hidden = false;
     clearTimeout(toastT);
-    toastT = setTimeout(() => { t.hidden = true; }, 1500);
+    toastT = setTimeout(() => { t.hidden = true; }, ms || 1500);
   }
+  const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 
   // ─────────────────────────────────────────────────────────────
   // 세션 (SES): { alive, mode: solo|hot|watch|host|guest, S(전체 상태, 방장·혼자) | V(받은 시점 상태, 손님), me(-1 = 아무도 안 보는 중), seats }
@@ -93,12 +95,16 @@
       if (SES.cpBtn) { try { SES.cpBtn.destroy(); } catch (e) {} }
       if (SES.cp) { try { SES.cp.destroy(); } catch (e) {} }
       $('coachBtn').onclick = null;
-      if (SES.offs) SES.offs.forEach(f => { try { f(); } catch (e) {} });
+      if (SES.offs) SES.offs.splice(0).forEach(f => { try { f(); } catch (e) {} });
       if (SES.bank) { try { SES.bank.detach(); } catch (e) {} }
+      clockStop(SES);
+      if (SES.modals) SES.modals.splice(0).forEach(f => { try { f(); } catch (e) {} });
     }
     SES = null;
     $('endModal').hidden = true;
     $('coachPanel').hidden = true;
+    $('scoreBar').hidden = true;
+    $('subTitle').classList.remove('myturn');
     drawBankBtns(null);
   }
 
@@ -191,7 +197,7 @@
     else status = `<span class="bt">${v.bets[q] > 0 ? '베팅 ' + fmtN(v.bets[q]) : (v.turn === q && v.phase === 'bet' ? '생각 중' : '-')}</span>`;
     const h = out ? [] : (v.hands[q] && v.hands[q].length ? v.hands[q] : [-1, -1]);
     const cards = out ? '' : `<div class="cds">${cardHtml(h[0], 'mini')}${cardHtml(h[1], 'mini')}</div>`;
-    return `<div class="${cls.join(' ')}" data-q="${q}"><span class="nm">${esc(seat.em)} ${esc(seat.name)}${marks}</span><span class="cn">${fmtN(v.coins[q])}</span>${cards}${status}</div>`;
+    return `<div class="${cls.join(' ')}" data-q="${q}"><span class="nm">${esc(seat.em)} ${esc(seat.name)}${seat.sub ? ' 🤖' : ''}${marks}</span><span class="cn">${fmtN(v.coins[q])}</span>${cards}${status}</div>`;
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -253,7 +259,6 @@
     const outMe = !spect && v.out && v.out[me];
     const n = v.n;
 
-    $('subTitle').textContent = `${watch ? 'AI 구경' : ses.mode === 'hot' ? '한 기기' : ses.net ? '친구랑 ' + ses.net.code : '노리밋'} ${n}인`;
     $('streetBadge').textContent = v.over ? '게임 끝' : (P.STREET_NAMES[v.street] || '쇼다운');
     $('potVal').textContent = fmtN(v.pot);
     const pots = v.phase === 'end' ? [] : P.buildPots(v.totalBets, v.folded.map(f => !f));
@@ -273,9 +278,9 @@
     $('commRow').innerHTML = comm;
 
     const toCall = spect || outMe ? 0 : Math.max(0, v.curBet - v.bets[me]);
-    $('callInfo').textContent = v.over ? (v.result ? v.result.reason : '') : v.phase === 'end'
+    $('callInfo').dataset.base = $('callInfo').textContent = v.over ? (v.result ? v.result.reason : '') : v.phase === 'end'
       ? (v.result ? v.result.reason : '핸드 종료')
-      : spect ? '다음 사람을 기다려요'
+      : spect ? (ses.spec ? '구경 중이에요 · 다음 핸드에 같이 해요' : '다음 사람을 기다려요')
       : outMe ? '탈락했어요 · 구경 중' : toCall > 0 ? `콜 필요: ${fmtN(toCall)}칩` : '체크 가능 (추가 비용 0)';
 
     // 상대 자리들 (내 다음 사람부터 시계 방향)
@@ -285,7 +290,7 @@
     placeSeats();
 
     // 내 자리
-    const mySeat = spect ? { em: '🪑', name: '다음 사람을 기다려요' } : (ses.seats[me] || { em: '🧑', name: '나' });
+    const mySeat = spect ? (ses.spec ? { em: '👀', name: '구경 중' } : { em: '🪑', name: '다음 사람을 기다려요' }) : (ses.seats[me] || { em: '🧑', name: '나' });
     $('myAvatar').textContent = mySeat.em;
     $('myName').innerHTML = `${esc(mySeat.name)}${!spect && v.dealer === me ? ' <span class="mark d">D</span>' : ''}${!spect && v.sbSeat === me ? ' <span class="mark sb">SB</span>' : ''}${!spect && v.bbSeat === me ? ' <span class="mark bb">BB</span>' : ''}`;
     $('myCoins').textContent = spect ? '-' : fmtN(v.coins[me]);
@@ -297,6 +302,9 @@
 
     const myTurn = !watch && !spect && v.phase === 'bet' && v.turn === me && (ses.mode === 'guest' ? !ses.waiting : !!ses.pending);
     $('mySeat').classList.toggle('turn', myTurn);
+    $('mySeat').classList.toggle('pulse', myTurn && !!ses.net);               // 친구랑: 내 차례를 더 눈에 띄게
+    drawSub(ses);
+    if (ses.net && myTurn) { const bk = `${v.round}|${v.street}|${v.pot}|${v.raises}`; if (ses.bell !== bk) { ses.bell = bk; vibrate(40); } }
 
     // AI 선생님 분석 (패널이 꺼져 있어도 복기 노트용으로 내 차례엔 계산)
     let coachData = null;
@@ -307,7 +315,7 @@
       coachData = ses.cc.data;
       showCoach(ses, coachHtml(coachData));
     } else if (ses.coachAvail && (spect || v.phase === 'end')) {
-      showCoach(ses, `<div class="coach-detail">${spect ? '다음 사람 차례를 기다려요' : '핸드가 끝났어요. 결과를 확인해 보세요 🙂'}</div>`);
+      showCoach(ses, `<div class="coach-detail">${spect ? (ses.spec ? '구경 중이에요. 핸드가 끝나면 방장이 다음 핸드에 넣어 줄 수 있어요' : '다음 사람 차례를 기다려요') : '핸드가 끝났어요. 결과를 확인해 보세요 🙂'}</div>`);
     }
 
     const L = myTurn ? P.legal(v) : [];
@@ -329,6 +337,51 @@
       else cEl.textContent = `${fmtN(costVal)}칩`;
     }
     drawCoachBtn();
+    drawScore(ses);
+  }
+
+  // 위 막대 작은 글씨: 어떤 판인지 · 인원. 친구랑에서 내 차례면 금색으로 뛰고 남은 초(⏱)가 같이 떠요
+  function drawSub(ses) {
+    if (!ses || !ses.alive || !(ses.mode === 'guest' ? ses.V : ses.S)) return;
+    const v = getView(ses), me = ses.me, watch = ses.mode === 'watch';
+    const myTurn = !!ses.net && me >= 0 && v.phase === 'bet' && v.turn === me && (ses.mode === 'guest' ? !ses.waiting : !!ses.pending);
+    $('subTitle').textContent = myTurn ? `🔔 내 차례 ${ses.turnLeft != null ? '⏱' + ses.turnLeft : ''}`.trim() : `${watch ? 'AI 구경' : ses.mode === 'hot' ? '한 기기' : ses.net ? '친구랑 ' + ses.net.code : '노리밋'} ${v.n}인${ses.spec ? ' · 👀 구경' : ''}`;
+    $('subTitle').classList.toggle('myturn', myTurn);
+    // 좁은 폰은 위 막대 글이 숨으니(CSS) 테이블 가운데 안내에도 남은 초를 붙여요
+    const ci = $('callInfo'), base = ci.dataset.base;
+    if (base != null) ci.textContent = myTurn && ses.turnLeft != null ? `${base} · ⏱${ses.turnLeft}` : base;
+  }
+  // 점수판 한 줄 (친구랑): 자리마다 전적 · 칩(은행이 있으면 원), 지금 차례는 금색, 구경 인원
+  function drawScore(ses) {
+    const el = $('scoreBar');
+    if (!ses || !ses.alive || !ses.net || !(ses.mode === 'guest' ? ses.V : ses.S)) { el.hidden = true; return; }
+    const v = getView(ses), sc = ses.score || {}, turnSeat = v.phase === 'bet' ? v.turn : -1;
+    const seatUids = new Set(ses.seats.map(x => x.uid).filter(Boolean));
+    const watching = Object.keys(ses.net.players || {}).filter(u => !seatUids.has(u)).length;
+    el.hidden = false;
+    el.innerHTML = ses.seats.map((x, q) => {
+      const c = v.coins[q], money = c == null ? '' : ses.chipWon ? `${fmtN(Math.round(c * ses.chipWon))}원` : `🪙${fmtN(c)}`;
+      const rest = (v.out && v.out[q]) || (v.folded[q] && v.phase === 'bet');
+      return `<span class="sbi${q === turnSeat ? ' on' : ''}${rest ? ' rest' : ''}"><b>${esc(q === ses.me ? '나' : x.name)}</b> ${(sc.w && sc.w[q]) || 0}승${(sc.l && sc.l[q]) || 0}패${money ? ' ' + money : ''}${v.out && v.out[q] ? ' 탈락' : ''}</span>`;
+    }).join('') + (watching ? `<span class="sbi">👀 구경 ${watching}</span>` : '');
+  }
+
+  // ⏱ 친구랑 30초 시계: 방장은 차례마다 켜서 끝나면 AI 가 대신 두게 하고, 손님은 받은 남은 초를 보여 주기만 해요
+  function clockStop(ses) {
+    if (!ses) return;
+    if (ses.clock) { clearInterval(ses.clock.t); ses.clock = null; }
+    if (ses.turnLeft != null) { ses.turnLeft = null; if (ses.alive) drawSub(ses); }
+  }
+  function clockStart(ses, left, show, onExpire) {
+    clockStop(ses);
+    const end = Date.now() + left * 1000, clk = ses.clock = { end, t: 0 };
+    clk.t = setInterval(() => {
+      if (!ses.alive || ses.clock !== clk) { clearInterval(clk.t); return; }
+      const l = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      if (show && l !== ses.turnLeft) { ses.turnLeft = l; if (l === 10) { showToast('⏱ 10초 남았어요', 1500); vibrate(30); } drawSub(ses); }
+      if (l <= 0) { clearInterval(clk.t); if (onExpire) onExpire(); }
+    }, 250);
+    if (show) { ses.turnLeft = left; drawSub(ses); }
   }
 
   // 내가 고른 행동
@@ -339,7 +392,7 @@
       if (ses.waiting) return;
       noteTurn(ses, v, a);
       ses.waiting = true;
-      ses.net.send({ t: 'act', a }, true);
+      ses.net.send({ t: 'act', a, r: v.round }, true);
       renderGame(ses);
       return;
     }
@@ -411,7 +464,6 @@
   // ─────────────────────────────────────────────────────────────
   // 친구랑
   //  · 방장 기기가 덱·모든 카드를 쥐고 진행, 손님에게는 그 사람 시점(P.view)만 보냄 → 남의 홀카드는 쇼다운 전에 전달되지 않음
-  //  · 손님 → 방장: {t:'hi'} · {t:'act', a}   방장 → 손님: {t:'st', me, v, ro, coach} · {t:'full'}
   const FRIEND = {
     game: 'poker', title: '♠️ 텍사스 홀덤', max: MAXP, min: 2, coach: true,
     describe: n => `${n}명 · 블라인드 10/20 · 시작 칩 1,000`,
@@ -441,11 +493,20 @@
     window.ArenaUI.open(FRIEND);
   }
 
+  //  · 손님 → 방장: {t:'hi'} (참가·다시 들어옴 알림) · {t:'act', a, r} (내 베팅) · {t:'_ready', k} (판 사이 준비)
+  //  · 방장 → 손님: {t:'st', me, v, ro:[{name,em,ctrl,u,b}], coach, sc:{w,l}, left} (그 사람 시점 + 전적 + 내 차례 남은 초; 구경꾼은 me = -1, 아무 카드도 안 보임) · {t:'_rl', k, uids} (누가 준비했나)
+  //  · 모두 꼭 도착(rel=true). 손님이 새로 고침해도 같은 uid 라 방장이 자리를 지켜 두었다가 돌려줌
+  const seatOfUid = (ses, uid) => ses.seats.findIndex(x => x.uid === uid && x.ctrl !== 'me');
+  const readyKey = S => `${S.round}${S.over ? 'o' : ''}`;                  // 핸드 끝 = 라운드 번호, 게임 끝(우승) = 번호 + 'o'
   function startOnline({ net, role, cfg: c, players }) {
     endSession();
     $('startModal').hidden = true;
     c = c || {};
     const coachAvail = !!c.coach;
+    // 이 판(세션)이 붙인 듣기는 세션이 끝날 때 뗌 (대기실로 돌아갔다 다시 시작해도 겹치지 않게)
+    const hook = (ses, ev, fn) => { const off = net.on(ev, fn); if (typeof off === 'function') ses.offs.push(off); };
+    // 🏦 은행 모임이 있으면 1칩 = 몇 원인지 알아 둠 (점수판을 원으로)
+    const loadWon = ses => { if (c.bank && window.Bank && Bank.getMeta) Bank.getMeta(c.bank).then(m => { if (SES === ses && m && m.chipWon) { ses.chipWon = m.chipWon; renderGame(ses); } }, () => {}); };
     if (role === 'host') {
       const host = net.meta && net.meta.host;
       const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p))
@@ -458,11 +519,13 @@
       while (seats.length < target) { seats.push({ ctrl: 'ai', name: AI_NAMES[ai % AI_NAMES.length] + '(AI)', em: AI_EMS[ai % AI_EMS.length], tier: 'normal' }); ai++; }
       const n = seats.length;
       const me = Math.max(0, seats.findIndex(x => x.ctrl === 'me'));
-      const uidSeat = {};
-      seats.forEach((x, i) => { if (x.uid && x.uid !== net.uid) uidSeat[x.uid] = i; });
-      const ses = SES = { alive: true, mode: 'host', n, me, S: null, seats, net, cfgR: c, uidSeat, pending: null, remoteWait: null, coachLog: [], coachAvail, coachOn: coachAvail, offs: [], spectating: false, bank: null };
-      ses.offs.push(net.on('msg', (uid, m) => onHostMsg(ses, uid, m)));
-      ses.offs.push(net.on('leave', uid => onHostLeave(ses, uid)));
+      const ses = SES = { alive: true, mode: 'host', n, me, S: null, seats, net, cfgR: c, pending: null, remoteWait: null, coachLog: [], coachAvail, coachOn: coachAvail, offs: [], spectating: false, bank: null,
+        score: { w: seats.map(() => 0), l: seats.map(() => 0) }, readyMap: {}, joinPick: {}, watchers: new Set(), modals: [], chipWon: 0, turnLeft: null, clock: null };
+      hook(ses, 'msg', (uid, m) => onHostMsg(ses, uid, m));
+      hook(ses, 'leave', uid => onHostLeave(ses, uid));
+      hook(ses, 'join', uid => onHostJoin(ses, uid));
+      hook(ses, 'players', () => { if (SES !== ses) return; drawScore(ses); if (ses.drawReady) ses.drawReady(); });     // 구경 인원 · 준비 목록
+      loadWon(ses);
       // 시작 칩: 은행 모임이 있으면 각자 잔액(없으면 자동으로 빌림), AI 자리·은행 안 씀은 기본 칩
       const go = stacks => {
         if (!ses.alive) return;
@@ -477,73 +540,236 @@
         ses.bank.ready.then(go);
       } else go(null);
     } else {
-      const ses = SES = { alive: true, mode: 'guest', n: 2, me: 0, V: null, seats: [], net, cfgR: c, coachLog: [], coachAvail, coachOn: coachAvail, waiting: false, offs: [], lastKey: '', bank: null };
-      ses.offs.push(net.on('msg', m => onGuestMsg(ses, m)));
+      const ses = SES = { alive: true, mode: 'guest', n: 2, me: 0, V: null, seats: [], net, cfgR: c, coachLog: [], coachAvail, coachOn: coachAvail, waiting: false, offs: [], lastKey: '', bank: null,
+        score: null, readyMap: {}, spec: false, modals: [], chipWon: 0, turnLeft: null, clock: null };
+      hook(ses, 'msg', m => onGuestMsg(ses, m));
+      hook(ses, 'players', () => { if (SES !== ses) return; drawScore(ses); if (ses.drawReady) ses.drawReady(); });
       if (c.bank && window.Bank) ses.bank = Bank.attach({ game: 'poker', net, cfg: c, role: 'guest', onEvent: ev => bankEvent(ses, ev) });
+      loadWon(ses);
       drawBankBtns(ses);
       ensureCoach(ses);
       $('subTitle').textContent = '방장이 준비하는 중…';
       net.send({ t: 'hi' }, true);
+      // 첫 상태가 안 오면 계속 인사 (방장이 은행 장부를 여는 동안이나 다시 들어오는 길 포함)
       let tries = 0;
-      const t = setInterval(() => { if (!ses.alive || ses.V || ++tries > 8) { clearInterval(t); return; } net.send({ t: 'hi' }, true); }, 1500);
+      const t = setInterval(() => { if (!ses.alive || ses.V || ++tries > 40) { clearInterval(t); return; } net.send({ t: 'hi' }, true); }, 1500);
     }
   }
 
   function onHostMsg(ses, uid, m) {
-    if (!ses.alive || !m || !ses.S) return;                 // 판 준비 전 인사는 판이 시작될 때 publish 로 대신
-    const i = ses.uidSeat[uid];
+    if (!ses.alive || !m) return;
+    if (m.t === '_ready') { onHostReady(ses, uid, m); return; }
+    if (!ses.S) return;                                     // 판 준비 전 인사는 판이 시작될 때 publish 로 대신
+    const i = seatOfUid(ses, uid);
+    if (i >= 0 && ses.seats[i].sub) restoreSeat(ses, i);    // AI 가 대신 치던 자리인데 본인 메시지가 오면 돌아온 것
     if (m.t === 'hi') {
-      if (i == null) { ses.net.send(uid, { t: 'full' }, true); return; }
-      sendTo(ses, uid, i);
+      if (i < 0) { ses.watchers.add(uid); sendTo(ses, uid, -1); }       // 앉을 자리가 없으면 구경 (다음 핸드에 방장이 넣어 줄 수 있음)
+      else sendTo(ses, uid, i);
+      if (ses.S.phase === 'end') sendReadyList(ses, uid);
     } else if (m.t === 'act') {
-      if (i == null) return;
+      if (i < 0) return;
       const w = ses.remoteWait;
-      if (w && w.seat === i && ses.S.phase === 'bet' && ses.S.turn === i && P.isLegal(ses.S, m.a)) w.res(m.a);
+      if (w && w.seat === i && ses.S.phase === 'bet' && ses.S.turn === i && (m.r == null || m.r === ses.S.round) && P.isLegal(ses.S, m.a)) w.res(m.a);
       else sendTo(ses, uid, i);
     }
   }
-  function onHostLeave(ses, uid) {
-    const i = ses.uidSeat[uid];
-    if (i == null || !ses.alive) return;
-    const seat = ses.seats[i];
-    seat.ctrl = 'ai'; seat.tier = 'normal'; seat.name = `${seat.name}(AI)`;      // 나간 자리는 AI 가 이어 받음
-    delete ses.uidSeat[uid];
-    if (ses.remoteWait && ses.remoteWait.seat === i) ses.remoteWait.res(null);
-    publish(ses);
-    renderGame(ses);
+  // 방장: 손님이 (다시) 들어옴 — 앉았던 사람이면 자리를 돌려주고, 아니면 구경
+  function onHostJoin(ses, uid) {
+    if (!ses.alive) return;
+    const i = seatOfUid(ses, uid);
+    if (i >= 0) {
+      if (ses.goneAsk && ses.goneAsk.uid === uid) { try { ses.goneAsk.close(); } catch (e) {} }
+      if (ses.seats[i].sub) restoreSeat(ses, i);
+      if (ses.S) { sendTo(ses, uid, i); if (ses.S.phase === 'end') sendReadyList(ses, uid); }
+    } else if (ses.S) {
+      const nm = ((ses.net.players || {})[uid] || {}).name || '친구';
+      showToast(`👀 ${nm} 님이 구경하러 왔어요`, 2000);
+      ses.watchers.add(uid);
+      sendTo(ses, uid, -1);
+    }
+    drawScore(ses); if (ses.drawReady) ses.drawReady();
   }
-  const rosterOf = ses => ses.seats.map(x => ({ name: x.name, em: x.em, ctrl: x.ctrl === 'ai' ? 'a' : 'h' }));
+  function restoreSeat(ses, i) {
+    const st = ses.seats[i];
+    st.sub = false; st.drop = false; st.ctrl = 'remote'; st.tier = null;
+    showToast(`${st.name} 님이 돌아왔어요. 다시 직접 쳐요`, 2400);
+    try { ses.net.chat(`🙌 ${st.name} 님이 돌아와서 직접 쳐요`); } catch (e) {}
+    publish(ses); renderGame(ses);
+  }
+  // 방장: 앉은 사람 연결이 끊김 — 5초 안에 안 돌아오면 어떻게 할지 물음 (새로 고침은 금방 돌아와서 안 물음)
+  function onHostLeave(ses, uid) {
+    if (!ses.alive) return;
+    ses.watchers.delete(uid);
+    const i = seatOfUid(ses, uid);
+    if (i < 0) { drawScore(ses); if (ses.drawReady) ses.drawReady(); return; }
+    const st = ses.seats[i];
+    showToast(`${st.name} 님 연결이 끊겼어요. 같은 링크로 다시 들어오면 이어서 해요`, 3200);
+    drawScore(ses); if (ses.drawReady) ses.drawReady();
+    setTimeout(() => {
+      if (!ses.alive || SES !== ses || (ses.net.players || {})[uid] || ses.seats.indexOf(st) < 0 || st.sub || ses.goneAsk) return;
+      const j = ses.seats.indexOf(st);
+      if (ses.S && ses.S.out && ses.S.out[j]) return;                                  // 이미 탈락해 구경 중인 자리는 안 물음
+      askGone(ses, j);
+    }, 5000);
+  }
+  const canDropSeat = ses => ses.seats.filter(x => !x.drop).length > 2 && !ses.bank;     // 빼고도 2명 이상 남고, 은행 방이 아닐 때만
+  // 작은 선택 창 (포커 화면용): buttons = [{label, primary, onClick}] — 누르면 닫힘
+  function askBox({ title, html, buttons, onClose }) {
+    const ov = document.createElement('div');
+    ov.className = 'modal gone-modal';
+    ov.innerHTML = `<div class="modal-box"><h2>${esc(title)}</h2><p class="sub" style="margin-bottom:12px">${html}</p><div class="row-btns"></div></div>`;
+    let closed = false;
+    const close = () => { if (closed) return; closed = true; ov.remove(); if (onClose) try { onClose(); } catch (e) { console.error(e); } };
+    buttons.forEach(b => {
+      const el = document.createElement('button');
+      el.type = 'button'; el.className = b.primary ? 'primary' : 'ghost'; el.textContent = b.label;
+      el.onclick = () => { if (b.onClick) b.onClick(); close(); };
+      ov.querySelector('.row-btns').appendChild(el);
+    });
+    document.body.appendChild(ov);
+    return close;
+  }
+  function askGone(ses, i) {
+    const st = ses.seats[i]; if (!st || st.sub || ses.goneAsk) return;
+    const close = askBox({
+      title: `🔌 ${st.name} 님이 나갔어요`,
+      html: `어떻게 할까요? AI 는 ♠️ 중급이 대신 쳐요. 같은 링크로 다시 들어오면 그 자리로 돌아와요.${ses.bank ? '<br>은행 방은 자리를 빼지 않고 AI 가 대신 쳐요' : ''}`,
+      buttons: [{ label: '🤖 AI가 대신 쳐요', primary: true, onClick: () => subAI(ses, ses.seats.indexOf(st), false) }]
+        .concat(canDropSeat(ses) ? [{ label: '👋 다음 판부터 빼기', onClick: () => subAI(ses, ses.seats.indexOf(st), true) }] : [])
+        .concat([{ label: '🔄 처음부터 다시 (대기실로)', onClick: () => { try { ses.net.chat('🔄 방장이 처음부터 다시 하기로 했어요'); } catch (e) {} if (window.ArenaUI && ArenaUI.net === ses.net) ArenaUI.toLobby(); } }, { label: '⏳ 기다릴게요' }]),
+      onClose: () => { if (ses.goneAsk && ses.goneAsk.close === close) ses.goneAsk = null; ses.modals = ses.modals.filter(x => x !== close); },
+    });
+    ses.goneAsk = { uid: st.uid, close }; ses.modals.push(close);
+  }
+  // 나간 자리를 AI 가 이어 받음 (drop 이면 이번 핸드만 AI 가 치고 다음 판부터 자리가 빠짐). 돌아오면 restoreSeat 로 다시 본인
+  function subAI(ses, i, drop) {
+    const st = ses.seats[i]; if (!st || !ses.alive) return;
+    st.sub = true; st.drop = !!drop; st.ctrl = 'ai'; st.tier = 'normal';
+    try { ses.net.chat(drop ? `🤖 ${st.name} 님 자리는 이번 핸드만 AI 가 치고, 다음 판부터 빠져요` : `🤖 ${st.name} 님 자리는 AI 가 대신 쳐요 (돌아오면 다시 직접)`); } catch (e) {}
+    if (ses.remoteWait && ses.remoteWait.seat === i) ses.remoteWait.res(null);       // 지금 그 자리 차례를 기다리는 중이면 AI 가 바로 둠
+    publish(ses); renderGame(ses);
+    if (ses.drawReady) ses.drawReady();
+  }
+  const rosterOf = ses => ses.seats.map(x => ({ name: x.name, em: x.em, ctrl: x.ctrl === 'ai' ? 'a' : 'h', u: x.uid || null, b: x.sub ? 1 : 0 }));
+  // 그 사람 시점 상태 한 묶음 (i = -1 이면 구경꾼: 아무 카드도 안 보임)
+  function packSt(ses, i) {
+    const left = ses.clock && ses.S.phase === 'bet' ? Math.max(0, Math.ceil((ses.clock.end - Date.now()) / 1000)) : null;
+    return { t: 'st', me: i, v: P.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail, sc: ses.score, left };
+  }
   function sendTo(ses, uid, i) {
-    try { ses.net.send(uid, { t: 'st', me: i, v: P.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail }, true); } catch (e) { console.error(e); }
+    try { ses.net.send(uid, packSt(ses, i), true); } catch (e) { console.error(e); }
   }
   function publish(ses) {
     if (ses.mode !== 'host' || !ses.S) return;
-    for (const [uid, i] of Object.entries(ses.uidSeat)) sendTo(ses, uid, i);
+    const pl = ses.net.players || {};
+    ses.seats.forEach((x, i) => { if (x.uid && x.uid !== ses.net.uid && pl[x.uid]) sendTo(ses, x.uid, i); });
+    for (const u of [...ses.watchers]) { if (pl[u]) sendTo(ses, u, -1); else ses.watchers.delete(u); }
+  }
+
+  // 판 사이 '준비': 손님이 누르면 방장이 모아서 모두에게 알림 (구경꾼이 누르면 '다음 핸드에 낄래요')
+  const readyOf = (ses, k) => (ses.readyMap[k] = ses.readyMap[k] || new Set());
+  function sendReadyList(ses, uid) {
+    const k = readyKey(ses.S), m = { t: '_rl', k, uids: [...readyOf(ses, k)] };
+    if (uid) ses.net.send(uid, m, true); else ses.net.broadcast(m, true);
+  }
+  function onHostReady(ses, uid, m) {
+    if (!ses.S || ses.S.phase !== 'end' || m.k !== readyKey(ses.S)) return;
+    const i = seatOfUid(ses, uid);
+    if (i >= 0 && ses.seats[i].sub) restoreSeat(ses, i);
+    readyOf(ses, m.k).add(uid);
+    if (i < 0) ses.joinPick[uid] = true;                    // 구경꾼이 '낄래요' 를 누르면 일단 체크해 둠 (방장이 풀 수 있음)
+    sendReadyList(ses);
+    if (ses.drawReady) ses.drawReady();
+  }
+
+  // 방장: 자리 바꾸기 — 다음 판부터 빠질 자리를 빼고, 방장이 체크한 구경꾼을 최대 인원까지 앉힘. 자리 번호가 달라지면 {keep, add} 를 돌려줌 (전적·자리 목록은 여기서 바꿈)
+  function reseatSeats(ses) {
+    const old = ses.seats, pl = ses.net.players || {};
+    let keep = old.map((x, i) => i).filter(i => !old[i].drop);
+    const have = new Set(old.map(x => x.uid).filter(Boolean));
+    const fresh = Object.keys(pl).filter(u => !have.has(u) && !(pl[u] && pl[u].watch) && ses.joinPick[u]).sort((a, b) => ((pl[a] && pl[a].t) || 0) - ((pl[b] && pl[b].t) || 0));
+    if (keep.length + Math.min(fresh.length, Math.max(0, MAXP - keep.length)) < 2) keep = old.map((x, i) => i);     // 2명 밑으로는 못 빼요
+    const add = fresh.slice(0, Math.max(0, MAXP - keep.length));
+    if (!add.length && keep.length === old.length) { old.forEach(x => { x.drop = false; }); return null; }
+    const gone = old.filter((x, i) => keep.indexOf(i) < 0).map(x => x.name);
+    const sc = ses.score;
+    ses.score = { w: keep.map(i => sc.w[i] || 0).concat(add.map(() => 0)), l: keep.map(i => sc.l[i] || 0).concat(add.map(() => 0)) };
+    const seats = keep.map(i => old[i]);
+    for (const u of add) {
+      const k = seats.length;
+      seats.push({ ctrl: 'remote', uid: u, name: (pl[u] && pl[u].name) || `친구${k + 1}`, em: (pl[u] && pl[u].avatar) || '🙂' });
+      delete ses.joinPick[u]; ses.watchers.delete(u);
+    }
+    old.splice(0, old.length, ...seats);                    // 은행 장부가 같은 배열을 보고 있어서 통째로 바꾸지 않고 자리만 갈아 끼움
+    ses.n = seats.length; ses.me = Math.max(0, old.findIndex(x => x.ctrl === 'me'));
+    const msg = [add.length ? `${add.map(u => (pl[u] && pl[u].name) || '친구').join(', ')} 님 합류` : '', gone.length ? `${gone.join(', ')} 님 빠짐` : ''].filter(Boolean).join(' · ');
+    showToast(`${msg} → ${ses.n}명`, 2600);
+    try { ses.net.chat(`📣 ${msg} → 이번 판부터 ${ses.n}명`); } catch (e) {}
+    return { keep, add: add.length };
+  }
+  // 다음 핸드: 자리가 바뀌면 상태 배열도 새 자리 번호에 맞춰 옮김 (칩은 자리 따라감, 새로 앉은 사람은 기본 칩)
+  function reseatForNext(ses) {
+    const prev = ses.S, plan = reseatSeats(ses);
+    if (!plan) return;
+    const { keep, add } = plan, p = P.fastClone(prev), start = CHIPS.start('online', 1)[0];
+    const pick = (arr, def) => keep.map(i => arr[i]).concat(Array.from({ length: add }, () => def));
+    p.n = keep.length + add;
+    p.coins = keep.map(i => prev.coins[i]).concat(Array.from({ length: add }, () => start));
+    p.out = pick(prev.out, false); p.folded = pick(prev.folded, true); p.allIn = pick(prev.allIn, false);
+    p.bets = pick(prev.bets, 0); p.totalBets = pick(prev.totalBets, 0); p.acted = pick(prev.acted, false);
+    p.hands = keep.map(i => prev.hands[i]).concat(Array.from({ length: add }, () => []));
+    p.sbSeat = keep.indexOf(prev.sbSeat); p.bbSeat = keep.indexOf(prev.bbSeat);
+    // 딜러 버튼: 빠진 자리면 그 다음 자리가 다음 딜러가 되게 (nextRound 가 한 칸 더 넘기므로 바로 앞 칸으로)
+    let target = keep.findIndex(o => o > prev.dealer); if (target < 0) target = 0;
+    p.dealer = keep.indexOf(prev.dealer) >= 0 ? keep.indexOf(prev.dealer) : (target - 1 + p.n) % p.n;
+    p.result = null;
+    ses.S = p;
+  }
+  // 판(핸드)이 끝날 때 한 번: 이긴 자리 승, 같이 친 나머지 패 (탈락해 구경하던 자리는 빼고)
+  function tally(ses) {
+    const r = ses.S.result;
+    if (!r || r.kind === 'over' || ses.tallied === ses.S.round) return;
+    ses.tallied = ses.S.round;
+    for (let q = 0; q < ses.S.n; q++) {
+      if (ses.S.out[q]) continue;
+      const k = (r.winners || []).includes(q) ? 'w' : 'l';
+      ses.score[k][q] = (ses.score[k][q] || 0) + 1;
+    }
   }
 
   function onGuestMsg(ses, m) {
     if (!ses.alive || !m) return;
     if (m.t === 'full') { alert('이미 시작된 판이에요. 다음에 같이 해요'); if (window.ArenaUI) ArenaUI.leave(); return; }
+    if (m.t === '_rl') { const R = readyOf(ses, m.k); (m.uids || []).forEach(u => R.add(u)); if (ses.drawReady) ses.drawReady(); return; }
     if (m.t !== 'st') return;
-    const prev = ses.V;
-    ses.V = m.v; ses.me = m.me; ses.n = m.v.n; ses.waiting = false;
-    ses.seats = m.ro.map(r => ({ name: r.name, em: r.em, ctrl: r.ctrl === 'a' ? 'ai' : 'remote' }));
+    const prev = ses.V, wasSpec = ses.spec;
+    ses.V = m.v; ses.me = m.me; ses.n = m.v.n; ses.waiting = false; ses.spec = m.me < 0;
+    ses.seats = m.ro.map(r => ({ name: r.name, em: r.em, ctrl: r.ctrl === 'a' ? 'ai' : 'remote', uid: r.u || null, sub: !!r.b }));
+    if (m.sc) ses.score = m.sc;
     if (!prev || prev.round !== m.v.round) ses.coachLog = [];
+    if (prev && m.v.round < prev.round) { ses.readyMap = {}; ses.lastKey = ''; }      // 새 게임 (핸드 번호가 처음으로)
     $('startModal').hidden = true;
+    // 내 차례 시계: 방장이 보낸 남은 초부터 세기만 해요 (시간이 다 되면 방장이 AI 로 대신 둠)
+    const mine = m.me >= 0 && m.v.phase === 'bet' && m.v.turn === m.me;
+    if (mine && m.left != null) clockStart(ses, m.left, true, null);
+    else if (!mine) clockStop(ses);
     renderGame(ses);
+    if (wasSpec && !ses.spec) showToast('🎉 자리에 앉았어요! 같이 해요', 2400);
     const key = `${m.v.round}|${m.v.over ? 'o' : m.v.phase}`;
     if (m.v.phase === 'end') {
       if (ses.lastKey !== key) { ses.lastKey = key; showEnd(ses); }
     } else {
       $('endModal').hidden = true;
+      ses.drawReady = null;
       if (!prev || prev.turn !== m.v.turn) { if (m.v.turn === ses.me) showToast('내 차례예요'); }
     }
   }
 
+  // 방장: 한 사람 차례를 기다림 (시계 30초가 먼저 끝나 AI 가 대신 하고, 이건 못 받았을 때를 위한 여유)
   function waitRemote(ses, seat) {
     return new Promise(res => {
       const done = a => { clearTimeout(tm); if (ses.remoteWait && ses.remoteWait.seat === seat) ses.remoteWait = null; res(a); };
-      const tm = setTimeout(() => done(null), 90000);       // 90초 안에 안 하면 AI 가 대신
+      const tm = setTimeout(() => done(null), (TURN_SEC + 8) * 1000);
       ses.remoteWait = { seat, res: done };
     });
   }
@@ -586,10 +812,16 @@
             a = await new Promise(res => { ses.pending = { resolve: res }; renderGame(ses); });
             ses.me = -1;
           } else if (seat.ctrl === 'me') {
+            // 친구랑: 30초 안에 못 고르면 중급 AI 가 대신 둠 (⏱ 남은 초는 위 막대에, 10초 남으면 알림)
+            if (ses.mode === 'host') clockStart(ses, TURN_SEC, true, () => { const pe = ses.pending; if (!pe) return; showToast('⏱ 30초가 지나서 AI 가 대신 냈어요', 2000); ses.pending = null; pe.resolve(aiChoose(ses, p)); });
             a = await new Promise(res => { ses.pending = { resolve: res }; renderGame(ses); });
+            clockStop(ses);
           } else if (seat.ctrl === 'remote') {
+            clockStart(ses, TURN_SEC, false, () => { if (ses.remoteWait && ses.remoteWait.seat === p) ses.remoteWait.res(null); });   // 시간이 다 되면 AI 가 대신
+            if (seat.uid && (ses.net.players || {})[seat.uid]) sendTo(ses, seat.uid, p);       // 손님 화면에 남은 초가 뜨게 한 번 더
             a = await waitRemote(ses, p);
-            if (a == null) { if (!ses.alive) return; await sleep(300); a = aiChoose(ses, p); }
+            clockStop(ses);
+            if (a == null) { if (!ses.alive) return; if (ses.seats[p] === seat && seat.ctrl === 'remote') showToast(`⏱ ${seat.name} 님 시간이 지나서 AI 가 대신 냈어요`, 2000); await sleep(300); a = aiChoose(ses, p); }
           } else {
             await sleep(ses.mode === 'watch' ? 520 : 680);
             if (!ses.alive) return;
@@ -602,6 +834,7 @@
           renderGame(ses);
         }
         if (!ses.alive) return;
+        if (ses.mode === 'host') tally(ses);
         publish(ses);
         renderGame(ses);
         CHIPS.report(ses.mode, { round: ses.S.round, over: false, coins: ses.S.coins.slice(), seats: seatsInfo(ses), me: ses.me });
@@ -617,6 +850,7 @@
           ses.S.coins = r.coins;
           ses.S.coins.forEach((v, i) => { if (v > 0 && ses.S.out[i] && ses.bank.tracks(i)) ses.S.out[i] = false; });
         }
+        if (ses.mode === 'host') reseatForNext(ses);          // 친구랑: 빠질 사람은 빼고, 방장이 체크한 구경꾼은 앉힘
         // 다음 핸드 (칩이 바닥난 자리는 여기서 탈락)
         ses.S = P.nextRound(ses.S, rand32());
         if (ses.S.over) {
@@ -625,11 +859,13 @@
           const o = await showOver(ses);
           if (!ses.alive) return;
           if (o === 'again') {
-            const n = ses.S.n;
+            if (ses.mode === 'host') reseatSeats(ses);        // 새 게임: 빠질 사람은 빼고 구경꾼은 앉힘 (모두 처음 칩으로 다시)
+            const n = ses.mode === 'host' ? ses.seats.length : ses.S.n;
             const stacks = ses.bank ? await ses.bank.restart() : null;
             if (!ses.alive) return;
             ses.S = P.create({ players: n, stacks: withBank(CHIPS.start(ses.mode, n), stacks), seed: rand32() });
             ses.spectating = false;
+            ses.readyMap = {}; ses.tallied = 0;               // 새 게임은 핸드 번호가 1 부터 다시 → 지난 게임의 준비·집계 표시를 지움
             continue;
           }
           if (o === 'lobby') { if (window.ArenaUI) ArenaUI.toLobby(); return; }
@@ -655,16 +891,65 @@
   // ─────────────────────────────────────────────────────────────
   // 결과 창
   function setEndButtons(list) {
-    const box = $('endBtns');
+    const box = $('endBtns'), out = [];
     box.innerHTML = '';
     for (const it of list) {
-      if (it.note) { const p = document.createElement('p'); p.className = 'wait-note'; p.textContent = it.note; box.append(p); continue; }
+      if (it.note) { const p = document.createElement('p'); p.className = 'wait-note'; p.textContent = it.note; box.append(p); out.push(null); continue; }
       const b = document.createElement('button');
       b.type = 'button'; b.className = it.primary ? 'primary' : 'ghost'; b.textContent = it.label;
       b.onclick = it.onClick;
-      box.append(b);
+      box.append(b); out.push(b);
     }
+    return out;
   }
+  // 결과 창 안 '준비' 목록: 앉은 사람 ✅/⏳/🔌, 구경 N명. 방장은 끊긴 사람을 AI 로 바꾸거나 빼고, 구경꾼을 체크해 다음 판부터 앉힘. 다 준비돼야 '다음' 이 켜짐
+  //  key = 이번 결과 번호 (핸드 끝 = 라운드, 게임 끝 = 라운드 + 'o'), over = 게임 끝 결과 (탈락자도 새 게임에는 같이 하니 기다림)
+  function mountReady(ses, key, nb, fb, label, over) {
+    document.querySelectorAll('#endModal .rdy').forEach(e => e.remove());
+    const host = ses.mode === 'host', rb = document.createElement('div');
+    rb.className = 'rdy'; $('endBtns').before(rb);
+    const draw = () => {
+      if (!rb.isConnected || !ses.alive || !ses.net) return;
+      const v = getView(ses), pl = ses.net.players || {}, R = readyOf(ses, key), hostUid = host ? ses.net.uid : (ses.net.meta || {}).host;
+      const isOut = i => !over && !!(v.out && v.out[i]);               // 탈락해 구경하는 자리는 안 기다림
+      const seated = [];
+      ses.seats.forEach((x, i) => {
+        if (x.ctrl === 'ai' && !x.sub) return;                         // 처음부터 AI 인 자리는 안 보임
+        if (x.uid && x.uid === hostUid) { seated.push(`<span class="ok">👑 ${esc(x.name)}</span>`); return; }
+        const gone = !pl[x.uid], ok = R.has(x.uid) || x.sub, out = isOut(i);
+        const fix = host && gone && !x.sub && !out ? ` <button type="button" data-ai="${i}">🤖 AI</button>${canDropSeat(ses) ? ` <button type="button" data-drop="${i}">👋 빼기</button>` : ''}` : '';
+        seated.push(`<span class="${out ? 'dim' : ok ? 'ok' : gone ? 'gone' : ''}">${out ? '💤' : ok ? '✅' : gone ? '🔌' : '⏳'} ${esc(x.name)}${x.sub ? ' (AI)' : ''}${out ? ' 탈락' : ''}${fix}</span>`);
+      });
+      const seatUids = new Set(ses.seats.map(x => x.uid).filter(Boolean));
+      const watchers = Object.keys(pl).filter(u => !seatUids.has(u));
+      const nameOf2 = u => esc((pl[u] && pl[u].name) || '친구');
+      const wl = watchers.map(u => host ? `<label><input type="checkbox" data-join="${esc(u)}" ${ses.joinPick[u] ? 'checked' : ''}> ${nameOf2(u)}${R.has(u) ? ' ✋' : ''}</label>` : `<span>${nameOf2(u)}${R.has(u) ? ' ✋' : ''}</span>`).join('');
+      rb.innerHTML = `<div class="rdy-row">${seated.join('')}</div>${watchers.length ? `<div class="rdy-w">👀 구경 ${watchers.length}명${host ? ` · 체크하면 다음 판부터 같이 (최대 ${MAXP}명)` : ''}: ${wl}</div>` : ''}`;
+      if (!host) return;
+      const need = ses.seats.filter((x, i) => x.ctrl === 'remote' && !isOut(i)), k = need.filter(x => R.has(x.uid)).length, all = k === need.length;
+      nb.disabled = !all; nb.textContent = all ? label : `${label} (준비 ${k}/${need.length})`;
+      if (fb) fb.hidden = all;
+      rb.querySelectorAll('[data-join]').forEach(c => { c.onchange = () => { ses.joinPick[c.dataset.join] = c.checked; }; });
+      rb.querySelectorAll('[data-ai]').forEach(b => { b.onclick = () => { subAI(ses, +b.dataset.ai, false); draw(); }; });
+      rb.querySelectorAll('[data-drop]').forEach(b => { b.onclick = () => { subAI(ses, +b.dataset.drop, true); draw(); }; });
+    };
+    draw();
+    return draw;
+  }
+  // 손님 '✋ 준비' 단추 한 벌 (구경꾼은 '낄래요'). 눌렀다는 건 준비 목록(R)이 알고 있어서 새로 고침 뒤에도 방장이 알려 주면 이어짐
+  function guestReadyBtn(ses, key) {
+    const R = readyOf(ses, key);
+    return {
+      label: '✋ 준비', primary: true,
+      onClick: () => { R.add(ses.net.uid); ses.net.send({ t: '_ready', k: key }, true); guestReadyBtn.paint(ses, key); if (ses.drawReady) ses.drawReady(); },
+    };
+  }
+  guestReadyBtn.paint = (ses, key) => {
+    const b = ses.readyBtn; if (!b) return;
+    const on = readyOf(ses, key).has(ses.net.uid);
+    b.textContent = on ? (ses.spec ? '✅ 신청했어요 · 방장을 기다려요' : '✅ 준비 완료 · 방장을 기다려요') : ses.spec ? '✋ 다음 핸드에 낄래요' : '✋ 준비';
+    b.disabled = on;
+  };
   const nameOf = (ses, q) => (ses.seats[q] ? ses.seats[q].name : `자리${q + 1}`);
 
   // 한 핸드 결과. 방장·혼자는 '다음 핸드' 를 기다림 (구경·탈락 후엔 4초 뒤 자동), 손님은 방장이 넘기면 닫힘
@@ -680,6 +965,7 @@
       let title;
       if (ses.mode === 'watch') title = `🍿 ${esc(nameOf(ses, r.topPayout != null ? r.topPayout : (r.winners || [0])[0]))} 승리`;
       else if (hot) title = `🎉 ${esc(nameOf(ses, r.topPayout != null ? r.topPayout : r.winner))} 승리! (+${fmtN((r.payouts || [])[r.topPayout != null ? r.topPayout : r.winner])})`;
+      else if (ses.spec) title = `👀 ${esc(nameOf(ses, r.topPayout != null ? r.topPayout : (r.winners || [0])[0]))} 승리`;
       else title = splitMain && iWon ? '🤝 스플릿 팟!' : iWon ? `🎉 이겼어요! (+${fmtN(myPay)}칩)` : (v.out && v.out[me]) ? '😶 구경 중' : '😢 아쉬운 패배';
       $('endTitle').textContent = title;
       $('endSub').textContent = r.reason;
@@ -719,20 +1005,26 @@
             : '👏 에퀴티와 팟 오즈에 맞는 좋은 플레이였어요!'}</div>`;
       } else cBox.hidden = true;
 
-      const done = val => { $('endModal').hidden = true; resolve(val); };
+      const done = val => { $('endModal').hidden = true; ses.drawReady = null; resolve(val); };
+      document.querySelectorAll('#endModal .rdy').forEach(e => e.remove());
+      const key = readyKey(v);
       if (ses.mode === 'guest') {
-        const list = [{ note: '방장이 다음 핸드를 시작하면 이어서 해요' }];
-        if (ses.bank) list.push({ label: '💰 빌리기', onClick: () => $('loanBtn').click() });
+        const list = [guestReadyBtn(ses, key)];
+        if (ses.bank && !ses.spec) list.push({ label: '💰 빌리기', onClick: () => $('loanBtn').click() });
         list.push({ label: '나가기', onClick: () => { $('endModal').hidden = true; if (window.ArenaUI) ArenaUI.leave(); else openMenu(); } });
-        setEndButtons(list);
+        const bs = setEndButtons(list);
+        ses.readyBtn = bs[0]; guestReadyBtn.paint(ses, key);
+        ses.drawReady = mountReady(ses, key, bs[0], null, '', false);
       } else {
         const list = [{ label: '다음 핸드 진행', primary: true, onClick: () => done('next') }];
+        if (ses.mode === 'host') list.push({ label: '안 기다리고 시작', onClick: () => done('next') });
         if (ses.mode === 'host' && ses.bank && window.Bank) {
           list.push({ label: '💰 빌리기', onClick: () => $('loanBtn').click() });
           list.push({ label: '🏦 정산', onClick: () => ses.bank.flush().then(() => Bank.panel({ game: 'poker', gid: ses.bank.gid, tab: 'settle' })) });
         }
         list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });
-        setEndButtons(list);
+        const bs = setEndButtons(list);
+        if (ses.mode === 'host') ses.drawReady = mountReady(ses, key, bs[0], bs[1], '다음 핸드 진행', false);
         if (ses.mode === 'watch' || ses.spectating) setTimeout(() => { if (!$('endModal').hidden && ses.alive) done('next'); }, 4200);
       }
       $('endModal').hidden = false;
@@ -751,14 +1043,20 @@
       $('endCoachBox').hidden = true;
       const order = v.coins.map((c, i) => ({ i, c })).sort((a, b) => b.c - a.c);
       $('endShowdown').innerHTML = order.map((o, k) => `<div class="sd-row${o.i === champ ? ' win' : ''}"><div><b>${k + 1}위 ${esc(nameOf(ses, o.i))}${o.i === me && nameOf(ses, o.i) !== '나' ? ' (나)' : ''}</b></div><div><strong style="color:#fde68a">${fmtN(o.c)}칩</strong>${o.c === 0 ? ' · 탈락' : ''}</div></div>`).join('');
-      const done = val => { $('endModal').hidden = true; resolve(val); };
+      const done = val => { $('endModal').hidden = true; ses.drawReady = null; resolve(val); };
+      document.querySelectorAll('#endModal .rdy').forEach(e => e.remove());
+      const key = readyKey(v);
       if (ses.mode === 'guest') {
-        setEndButtons([{ note: '방장이 새 게임을 시작하면 이어서 해요' }, { label: '나가기', onClick: () => { $('endModal').hidden = true; if (window.ArenaUI) ArenaUI.leave(); else openMenu(); } }]);
+        const bs = setEndButtons([guestReadyBtn(ses, key), { label: '나가기', onClick: () => { $('endModal').hidden = true; if (window.ArenaUI) ArenaUI.leave(); else openMenu(); } }]);
+        ses.readyBtn = bs[0]; guestReadyBtn.paint(ses, key);
+        ses.drawReady = mountReady(ses, key, bs[0], null, '', true);
       } else {
         const list = [{ label: '새 게임', primary: true, onClick: () => done('again') }];
+        if (ses.mode === 'host') list.push({ label: '안 기다리고 시작', onClick: () => done('again') });
         if (ses.mode === 'host' && ses.bank && window.Bank) list.push({ label: '🏦 정산', onClick: () => ses.bank.flush().then(() => Bank.panel({ game: 'poker', gid: ses.bank.gid, tab: 'settle' })) });
         list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });
-        setEndButtons(list);
+        const bs = setEndButtons(list);
+        if (ses.mode === 'host') ses.drawReady = mountReady(ses, key, bs[0], bs[1], '새 게임', true);
       }
       $('endModal').hidden = false;
     });
@@ -826,6 +1124,7 @@
     else startLocal();
   });
 
+  window.__poker = { get ses() { return SES; } };          // 시험용 (읽기만)
   // 처음 화면: 배경용 빈 테이블
   drawMenu();
   $('coachBtn').hidden = true;
