@@ -258,6 +258,11 @@
     render(mv || null);
     if (mv) {
       sfx(mv.promotion ? 'promote' : mv.castle ? 'castle' : mv.captured ? 'capture' : 'move');
+      // 특수한 수는 한 번 알려 줌 (캐슬링은 킹·룩이 같이 움직여서 '두 번 둔 것'처럼 보임)
+      const sideName = g.me ? (mv.color === g.me ? '내가 ' : '상대가 ') : '';
+      if (mv.castle) Z.toast(`🏰 ${sideName}캐슬링 — 킹이 두 칸, 룩이 킹 옆으로 넘어오는 한 수예요`, 2600);
+      else if (mv.promotion) Z.toast(`👑 ${sideName}폰 승진!`, 1800);
+      else if (mv.ep) Z.toast(`↗️ ${sideName}앙파상 — 옆으로 지나간 폰을 잡는 특별한 수예요`, 2400);
       if (mv.check) setTimeout(() => { if (G === g) sfx('check'); }, 90);
       if (info.from !== 'remote' || g.me) buzz(mv.captured ? 14 : 7);
       // 선생님: 방금 이 화면의 사람이 둔 수 돌아보기 (AI·친구가 둔 수는 건드리지 않음)
