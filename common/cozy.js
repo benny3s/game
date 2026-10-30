@@ -23,11 +23,13 @@
   }
 
   // 창: 버튼을 누르면 닫히고 onClick 실행 (onClick 이 false 를 돌려주면 안 닫힘)
-  function modal({ title = "", html = "", buttons = [{ label: "확인", primary: true }], dismiss = false, cls = "" } = {}) {
+  // onClose 는 어떻게 닫히든(단추·바깥 누르기·Esc) 한 번 불림
+  function modal({ title = "", html = "", buttons = [{ label: "확인", primary: true }], dismiss = false, cls = "", onClose = null } = {}) {
     const ov = document.createElement("div"); ov.className = "overlay " + cls;
     ov.innerHTML = `<div role="dialog" aria-modal="true">${title ? `<h2>${esc(title)}</h2>` : ""}<div class="mbody">${html}</div><div class="row"></div></div>`;
     const row = ov.querySelector(".row");
-    const close = () => { ov.remove(); document.removeEventListener("keydown", onKey); };
+    let closed = false;
+    const close = () => { if (closed) return; closed = true; ov.remove(); document.removeEventListener("keydown", onKey); if (onClose) try { onClose(); } catch (e) { console.error(e); } };
     buttons.forEach(b => {
       const el = document.createElement("button"); el.className = "btn" + (b.primary ? " primary" : b.ghost ? " ghost" : "");
       el.textContent = b.label; el.onclick = () => { if (b.onClick && b.onClick(el) === false) return; close(); };
@@ -142,7 +144,7 @@
     const k = "cozy.howto." + id;
     if (!force && store(k, false)) return false;
     save(k, true);
-    modal({ title, html: `<ul class="howto" style="text-align:left;font-size:15px;color:var(--ink)">${items.map(s => `<li>${s}</li>`).join("")}</ul>`, buttons: [{ label: "알겠어요", primary: true, onClick: () => { onClose && onClose(); } }], dismiss: true });
+    modal({ title, html: `<ul class="howto" style="text-align:left;font-size:15px;color:var(--ink)">${items.map(s => `<li>${s}</li>`).join("")}</ul>`, buttons: [{ label: "알겠어요", primary: true }], dismiss: true, onClose });
     return true;
   }
 
