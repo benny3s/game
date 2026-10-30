@@ -887,6 +887,66 @@ else {
 }
 
 // ════════════════════════════════════════════════════════════════
+section('친구랑 자리 (구경 · 상담 2:2)');
+{
+  const S = require('../seats.js');
+  // 방장 h, 그다음 들어온 순서 b(10) → c(20) → d(30) → e(40) — 객체 순서는 일부러 뒤섞음
+  const pl = { e: { t: 40 }, c: { t: 20 }, h: { t: 99 }, d: { t: 30 }, b: { t: 10 } };
+  eq(S.order(pl, 'h'), ['h', 'b', 'c', 'd', 'e'], '들어온 순서: 방장 먼저, 그다음 t 순');
+  const one = S.seat(pl, 'h', 1, false);
+  eq([one[1], one[2], one.view], [['h'], ['b'], ['c', 'd', 'e']], '1:1 — 방장 흑 · 첫 손님 백 · 나머지 구경');
+  const oneW = S.seat(pl, 'h', 2, false);
+  eq([oneW[1], oneW[2]], [['b'], ['h']], '방장이 백을 고르면 첫 손님이 흑');
+  // 구경꾼은 둘 수 없음 · 차례인 사람만
+  const s = O.create(15, 'free', 1);
+  ok(S.canMove(one, 'h', s) && !S.canMove(one, 'b', s), '흑 차례엔 방장만 둠');
+  ok(!S.canMove(one, 'c', s) && !S.canMove(one, 'e', s), '구경꾼은 흑 차례에 못 둠');
+  O.play(s, 112);
+  ok(S.canMove(one, 'b', s) && !S.canMove(one, 'h', s) && !S.canMove(one, 'd', s), '백 차례엔 첫 손님만 (구경꾼 못 둠)');
+  eq([S.colorOf(one, 'h'), S.colorOf(one, 'b'), S.colorOf(one, 'c')], [1, 2, 0], '내 색: 구경은 0');
+  // 상담: 방장 팀 [h, c] · 상대 [b, d], 같은 색끼리 번갈아 (흑 h c h c… · 백 b d b d…)
+  const tm = S.seat(pl, 'h', 1, true);
+  eq([tm[1], tm[2], tm.view], [['h', 'c'], ['b', 'd'], ['e']], '상담 — 1·3번째가 방장 팀, 2·4번째가 상대 팀, 5번째부터 구경');
+  const s2 = O.create(15, 'free', 2), seq = [];
+  const cells = [112, 113, 127, 128, 142, 143, 157, 158];
+  for (const c of cells) { seq.push(S.mover(tm, s2.turn, s2.moves.length)); O.play(s2, c); }
+  eq(seq, ['h', 'b', 'c', 'd', 'h', 'b', 'c', 'd'], '상담 차례: 흑 h → 백 b → 흑 c → 백 d → …');
+  ok(!S.canMove(tm, 'e', s2), '상담에서도 구경꾼은 못 둠');
+  // 나감: 1:1 에서 두던 사람이 나가면 그 색이 비고, 상담에서는 팀원이 남음
+  eq(S.remove(one, 'b').empty, 2, '1:1 에서 백이 나가면 백이 빔 (판 끝)');
+  const rt = S.remove(tm, 'c');
+  eq([rt.empty, rt.seats[1]], [0, ['h']], '상담에서 팀원 하나가 나가면 남은 사람이 이어서');
+  ok(S.mover(rt.seats, 1, 4) === 'h', '혼자 남은 팀원이 그 색을 계속 둠');
+  // 다음 판: 색 바꾸기 · 나간 자리는 구경하던 사람이 순서대로
+  const nx = S.reseat(one, pl, 'h', false);
+  eq([nx[1], nx[2], nx.view], [['b'], ['h'], ['c', 'd', 'e']], '다음 판: 색을 바꿈');
+  const pl2 = Object.assign({}, pl); delete pl2.b;
+  const nx2 = S.reseat(one, pl2, 'h', false);
+  eq([nx2[1], nx2[2], nx2.view], [['c'], ['h'], ['d', 'e']], '나간 자리는 첫 구경꾼(c)이 앉음');
+  const nx3 = S.reseat(one, { h: { t: 1 } }, 'h', false);
+  ok(!nx3[1].length && nx3[2].length === 1, '혼자 남으면 한쪽이 비어 있음 (대기실로)');
+  const nt = S.reseat(S.seat({ h: { t: 1 }, b: { t: 2 }, c: { t: 3 } }, 'h', 1, true), pl, 'h', true);
+  eq([nt[1].length, nt[2].length, nt.view], [2, 2, ['e']], '상담 2:1 판 뒤 새로 온 사람이 빈자리를 채움');
+  // 대기실 설명
+  eq([S.describe(2, false), S.describe(5, false), S.describe(4, true), S.describe(6, true)], ['2명이 대국해요', '2명 대국 · 3명 구경', '2:2 상담', '2:2 상담 · 2명 구경'], '대기실 설명 글');
+}
+
+// ════════════════════════════════════════════════════════════════
+section('AI 선생님 까닭 (threatKind: 내 위협 · 상대 자리 막기)');
+{
+  // main.js coachReason 이 쓰는 판단: 그 자리에 내가 두면 / 상대가 두면 생기는 위협
+  const b = new Array(225).fill(0), N = 15;
+  [112, 113, 114].forEach(i => { b[i] = 1; });                      // 흑 가로 셋 (H8 I8 J8)
+  b[115] = 1; eq(O.threatKind(b, N, 115, 1, 'free'), 'open4', '셋 옆에 두면 열린 사'); b[115] = 0;
+  b[111] = 2;                                                       // 한쪽을 백이 막음
+  b[115] = 1; eq(O.threatKind(b, N, 115, 1, 'free'), 'four', '한쪽이 막힌 넷은 사'); b[115] = 0;
+  b[111] = 0;
+  const c = new Array(225).fill(0); [112, 113].forEach(i => { c[i] = 2; });   // 백 가로 둘
+  c[114] = 2; eq(O.threatKind(c, N, 114, 2, 'free'), 'three', '상대가 두면 열린 삼 → 막을 자리'); c[114] = 0;
+  c[200] = 1; eq(O.threatKind(c, N, 200, 1, 'free'), null, '떨어진 자리는 위협 없음');
+}
+
+// ════════════════════════════════════════════════════════════════
 section('AI 끼리 대국 (worker_threads 로 여러 판 동시에)');
 // 판 하나를 일꾼 스레드에서: 노드 예산으로만 세기를 정하고 시간 상한은 넉넉히 → 같은 씨앗이면 같은 판 (결정적)
 function runGames(jobs) {

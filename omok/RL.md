@@ -107,7 +107,7 @@ O.coordName(idx) → 'H8'           // 열 A~O, 줄 1~15 (아래가 1)
 ## 7. 지금 AI (`ai.js`, 웹 워커 `ai-worker.js`)
 
 ```js
-OmokAI.think(state, { tier: 'easy'|'normal'|'hard', seed, maxNodes, timeMs, hint })
+OmokAI.think(state, { tier: 'easy'|'normal'|'hard', seed, maxNodes, timeMs, hint })   // hint: 🧑‍🏫 AI 선생님 추천용 (잡음 없이 가장 좋은 수)
 // → { move, kind: 'book'|'win'|'block'|'open4'|'vcf'|'vct'|'defend-vcf'|'defend-vct'|'search'|'easy'|'lost', score, depth, nodes, ms }
 ```
 
@@ -138,13 +138,16 @@ OmokAI.think(state, { tier: 'easy'|'normal'|'hard', seed, maxNodes, timeMs, hint
    모델(예: onnxruntime-web, 고정 버전 CDN)을 `importScripts` 로 불러 `O.planes(state)` 를 넣고,
    나온 225칸 점수를 `O.legalMask(state)` 로 가린 뒤 가장 큰 칸(또는 MCTS)을 `move` 로 돌려주면 끝.
    `state` 는 JSON 이라 워커에서 `O.fromJSON` 없이 바로 써도 됩니다(코어 함수는 평범한 배열을 받음).
-3. **원격(친구랑, 나중)**: `{ kind: 'remote' }` 를 더하고 `common/arena.js` 의 믿을 만한 통로(r)로 칸 번호만 주고받기.
-   방장이 `O.step()` 으로 판정하고 수순은 `encode()` 문자열로 `setShared` 하면 나중에 들어온 사람도 `fromRecord()` 로 이어 봄.
-   상대 차례에 기권은 `O.resign(s, color)`.
+3. **원격(친구랑)**: 이미 붙어 있음 — 코어(`core.js`)와 RL API 는 그대로이고, 누가 두는지만 `seats.js`(`OmokSeats`)가 정함.
+   방 최대 16명: 방장 먼저 들어온 순서로 2명이 두고(상담 2:2 면 4명, 같은 색끼리 `mover(seats, 색, 수 번호)` 로 번갈아) 나머지는 구경.
+   방장이 판의 주인: 손님 수 `{ t:'move', a, n, round }` → 방장이 `O.step()` 으로 확인해 모두에게(믿을 만한 통로),
+   늦게 온 구경꾼은 `hello` → 방장이 `{ t:'sync', rec: encode(), seats }` 로 판 전체를 주고 `fromRecord()` 로 이어 봄.
+   기권은 `O.resign(s, color)`. 학습한 정책을 친구랑에 넣을 때도 `G.players` 대신 자리표(seats)에 봇 uid 를 앉히면 됨.
 
 ## 9. 시험
 
 `node game/omok/test/selftest.js` (약 1분 반, `quick` 을 붙이면 더 짧게):
 규칙(렌주 금수 quintet 판 · 쌍삼 금지 · 자유 · 장목 승패) · 수/무르기/기권/무승부/기보/JSON · planes/대칭 · 결정성 ·
 AI 전술(한 수 승리 · 사 막기 · 열린 삼 막기 · 금수 이용 · VCF/VCT 문제) · quintet 대조(무작위 렌주 국면 VCF 일치, VCT 첫 수 전수 확인) ·
-AI 끼리 대국(worker_threads 로 58판: 난이도 순서 · 사람 흉내 봇과의 간격 · 반칙 없음 · 한 수 시간).
+AI 끼리 대국(worker_threads 로 58판: 난이도 순서 · 사람 흉내 봇과의 간격 · 반칙 없음 · 한 수 시간) ·
+친구랑 자리(`seats.js`: 들어온 순서 · 구경꾼은 못 둠 · 상담 번갈아 순서 · 나감/다음 판 자리 채우기).

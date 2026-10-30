@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=4">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <div class="wrap">
@@ -20,19 +20,19 @@
 
   <section id="home" class="card">
     <div class="tabs" role="tablist">
-      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자·둘이</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
-    <!-- 혼자: AI 대전 · 둘이서 -->
+    <!-- 혼자·둘이: AI 대전 · 한 기기 둘이서 -->
     <div id="soloBox" class="box">
       <div class="seg center" id="modeSeg"></div>
       <div id="aiOpts" class="box">
         <div class="tiers three" id="tiers"></div>
         <div class="optrow"><span class="small">내 돌</span><div class="seg" id="colorSeg"></div></div>
       </div>
-      <p class="lede center" id="twoDesc" hidden>한 화면에서 번갈아 둬요. 가족이나 친구랑 마주 앉아 한 판!</p>
+      <p class="lede center" id="twoDesc" hidden>폰·PC 하나로 두 사람이 번갈아 둬요. 가족이나 친구랑 마주 앉아 한 판! (🧑‍🏫 AI 선생님도 같이 봐 줘요)</p>
     </div>
 
     <!-- AI 구경 -->
@@ -71,13 +71,14 @@
     <span class="vs">vs</span>
     <div class="side" id="sideW"><span class="av"><i class="st w"></i><b class="emo"></b></span><b class="nm"></b><span class="say"></span><span class="n"></span></div>
   </div>
+  <div class="viewbar" id="viewbar" hidden></div>
   <div class="stage" id="stage">
     <canvas id="board" role="img" aria-label="오목 판"></canvas>
   </div>
   <div class="dockwrap" id="dockwrap">
     <div class="dock" id="dockPlay">
       <button id="undoBtn"><span class="ic">↶</span><span>되돌리기</span></button>
-      <button id="hintBtn"><span class="ic">💡<span class="badge" id="hintBadge"></span></span><span>힌트</span></button>
+      <button id="coachBtn"><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
       <button id="resignBtn"><span class="ic">🏳️</span><span>기권</span></button>
       <button id="restartBtn"><span class="ic">↺</span><span>처음부터</span></button>
       <button class="snd"><span class="ic">🔊</span><span>소리 켬</span></button>
@@ -108,10 +109,12 @@
 <script src="../common/arena-mock.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
+<script src="../common/coach.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/simplex-noise@2.4.0/simplex-noise.js"></script>
 <script src="core.js?v=4"></script>
+<script src="seats.js?v=1"></script>
 <script src="board.js?v=4"></script>
-<script src="main.js?v=4"></script>
+<script src="main.js?v=6"></script>
 </body>
 </html>
