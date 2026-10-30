@@ -19,7 +19,7 @@
     tab: C.store(KEY + 'tab', 'solo'), mode: C.store(KEY + 'mode', 2), tier: C.store(KEY + 'tier', 'normal'),
     bonus: C.store(KEY + 'bonus', 0), speed: C.store(KEY + 'speed', 'normal'), coach: C.store(KEY + 'coach', 1),
     wMode: C.store(KEY + 'wMode', 2), wTiers: C.store(KEY + 'wTiers', ['hard', 'normal', 'easy']), wSpeed: C.store(KEY + 'wSpeed', 'normal'),
-    bank: C.store(KEY + 'bank', null), bankName: C.store(KEY + 'bankName', null),     // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
+    bank: C.store(KEY + 'bank', 'gbasic'), bankName: C.store(KEY + 'bankName', '기본 은행'),     // 친구랑: 은행 모임(gid) — 처음엔 🏦 기본 은행, null = 은행 안 씀 (연습 칩)
     lMode: C.store(KEY + 'lMode', 2), lSeats: C.store(KEY + 'lSeats', ['human', 'human', 'normal', 'normal', 'normal']),
   };
   const saveOpt = k => C.save(KEY + k, opt[k]);
@@ -153,7 +153,13 @@
           el.innerHTML = `<div data-bank></div><details class="hr-top"${lobbyRulesOpen ? ' open' : ''}><summary>🛠️ 우리 집 규칙 · <b>${esc(presetName(r))}</b><small>${esc(ruleSummary(r))}</small></summary><div class="hr-body"></div></details>`;
           // 🏦 은행 모임 (방장이 고르고, 친구는 보기만). cfg.bank / cfg.bankName 으로 모두에게 전해짐
           const bx = el.querySelector('[data-bank]');
-          if (window.Bank && bx && el.isConnected) Bank.lobbyPicker(bx, { bank: cfg && cfg.bank, bankName: cfg && cfg.bankName }, canEdit, p => { opt.bank = p.bank || null; opt.bankName = p.bankName || null; saveOpt('bank'); saveOpt('bankName'); update({ bank: opt.bank, bankName: opt.bankName }); });
+          if (window.Bank && bx && el.isConnected) Bank.lobbyPicker(bx, { bank: cfg && cfg.bank, bankName: cfg && cfg.bankName }, canEdit, p => {
+            opt.bank = p.bank || null; opt.bankName = p.bankName || null; saveOpt('bank'); saveOpt('bankName');
+            // 기본 은행(1칩 = 100원)이면 1점 = 1칩(100원)부터
+            const patch = { bank: opt.bank, bankName: opt.bankName };
+            if (opt.bank === 'gbasic' && r.chipPer > 1) { const nr = Object.assign({}, r, { chipPer: 1 }); setRules(nr); patch.rules = nr; }
+            update(patch);
+          });
           const det = el.querySelector('details');
           det.addEventListener('toggle', () => { lobbyRulesOpen = det.open; });
           const body = el.querySelector('.hr-body');
@@ -515,6 +521,7 @@
     setupCoach(ses);
     // 🏦 은행 (방장이 모임을 고른 방만): 방장은 장부에 연결해 시작 칩을 받고, 친구는 빌리기만 요청
     if (cfg && cfg.bank && window.Bank) {
+      if (Bank.getMeta) Bank.getMeta(cfg.bank).then(m => { if (SES === ses && m && m.chipWon) { ses.chipWon = m.chipWon; drawCoinPill(); if (ses.S && ses.hud) drawHud(ses); } }, () => {});
       const seatsB = ses.seats;
       if (role === 'host') {
         ses.bank = Bank.attach({ game: 'gostop', net, cfg, seats: seatsB, min: bankMin(rules), onEvent: ev => bankEvent(ses, ev) });
@@ -534,13 +541,13 @@
     runMatch(ses);
   }
   // 은행에서 자동으로 빌려 주는 기준: 이 칩보다 적으면 다음 판 전에 빌려요 (점당 칩의 20배)
-  const bankMin = rules => Math.max(1, (rules.chipPer || 10) * 20);
+  const bankMin = () => 1;                                 // 바닥나면(1칩 아래) 다음 판 전에 은행이 자동으로 더 빌려 줌
   function bankEvent(ses, ev) {
     if (!ses.alive || !ev) return;
     const host = ses.cfg.role === 'host';
     if (ev.op === 'queued') C.toast(ev.mine || !host ? `💰 다음 판에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님이 ${fmtN(ev.n)}칩 빌리기 (다음 판에)`, 2200);
     else if (ev.op === 'loan') {
-      C.toast(`💰 ${ev.name} 님이 은행에서 ${fmtN(ev.n)}칩 빌렸어요`, 2200);
+      C.toast(`💰 ${ev.name} 님이 은행에서 ${ses.chipWon ? fmtN(Math.round(ev.n * ses.chipWon)) + '원' : fmtN(ev.n) + '칩'} 빌렸어요${ev.auto ? ' (바닥나서 자동)' : ''}`, 2600);
       if (host && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
     } else if (ev.op === 'no' || ev.op === 'error') C.toast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'), 2600);
   }
@@ -754,7 +761,7 @@
   // 친구랑은 내 칩(방장이 알려 주는 장부 값), 나머지는 냥코인
   function drawCoinPill() {
     const ses = SES, i = ses && ses.cfg.online ? ses.cfg.me : -1;
-    $('coinPill').textContent = i >= 0 && ses.chips && ses.chips[i] != null ? '🪙 ' + fmtN(ses.chips[i]) + '칩' : '🪙 ' + fmtN(coins);
+    $('coinPill').textContent = i >= 0 && ses.chips && ses.chips[i] != null ? (ses.chipWon ? '💰 ' + fmtN(Math.round(ses.chips[i] * ses.chipWon)) + '원' : '🪙 ' + fmtN(ses.chips[i]) + '칩') : '🪙 ' + fmtN(coins);
   }
   function drawHud(ses) {
     const s = ses.S; if (!s || !ses.hud) return;
@@ -801,9 +808,9 @@
     const turnSeat = s.phase === 'end' ? -1 : ses.who[ses.actor != null ? ses.actor : s.turn];
     $('scoreBar').hidden = false;
     $('scoreBar').innerHTML = ses.seats.map((x, rs) => {
-      const W = (ses.score && ses.score.w[rs]) || 0, L = (ses.score && ses.score.l[rs]) || 0, ch = ses.chips && ses.chips[rs];
+      const W = (ses.score && ses.score.w[rs]) || 0, L = (ses.score && ses.score.l[rs]) || 0, ch = ses.chips && ses.chips[rs], money = ch == null ? '' : ses.chipWon ? fmtN(Math.round(ch * ses.chipWon)) + '원' : '🪙' + fmtN(ch);
       const nm = rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name;
-      return `<span class="sbi${rs === turnSeat ? ' on' : ''}${ses.who.indexOf(rs) < 0 ? ' rest' : ''}"><b>${esc(nm)}</b> ${W}승${L}패${ch != null ? ` 🪙${fmtN(ch)}` : ''}</span>`;
+      return `<span class="sbi${rs === turnSeat ? ' on' : ''}${ses.who.indexOf(rs) < 0 ? ' rest' : ''}"><b>${esc(nm)}</b> ${W}승${L}패${money ? ' ' + money : ''}</span>`;
     }).join('') + (() => {
       const pl = ses.cfg.online && ses.net && ses.net.players; if (!pl) return '';
       const n = Object.keys(pl).filter(u => !ses.seats.some(x => x.uid === u)).length;

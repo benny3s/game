@@ -32,8 +32,8 @@
     hotSeats: C.store(KEY + 'hotSeats', ['h', 'h', 'h', 'a', 'a', 'a']),   // 한 기기: 자리별 사람(h)/AI(a)
     wMode: Math.max(2, Math.min(MAXP, +C.store(KEY + 'wMode', 3) || 3)),
     fill: +C.store(KEY + 'fill', 0) || 0,        // 친구랑: 빈자리를 AI 로 채울 목표 인원 (0 = 안 채움)
-    bank: C.store(KEY + 'bank', null),           // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
-    bankName: C.store(KEY + 'bankName', null),
+    bank: C.store(KEY + 'bank', 'gbasic'), // 처음엔 🏦 기본 은행           // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
+    bankName: C.store(KEY + 'bankName', '기본 은행'),
   };
   const saveOpt = k => C.save(KEY + k, opt[k]);
   let stats = C.store(KEY + 'stats', { played: 0, won: 0, coins: 500 });

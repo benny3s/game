@@ -20,8 +20,8 @@
     count: Math.max(2, Math.min(MAXP, +store('poker.count', 4) || 4)),     // 혼자·구경·한 기기 인원
     fill: +store('poker.fill', 0) || 0,                // 친구랑: 빈자리를 AI 로 채울 목표 인원
     hotSeats: store('poker.hotSeats', ['h', 'h', 'h', 'a', 'a', 'a', 'a', 'a']),
-    bank: store('poker.bank', null),                   // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
-    bankName: store('poker.bankName', null),
+    bank: store('poker.bank', 'gbasic'),             // 처음엔 🏦 기본 은행                   // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
+    bankName: store('poker.bankName', '기본 은행'),
   };
   const TIER_META = {
     easy:   { name: '캐주얼 루키', avatar: '🌱' },

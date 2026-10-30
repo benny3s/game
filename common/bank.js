@@ -248,12 +248,25 @@ if (typeof window !== "undefined") (() => {
       room: info.room ? clean(info.room, 8) : null, name: info.name ? clean(info.name, 12) : null, note: info.note ? clean(info.note, 60) : null,
     });
   }
-  async function createGroup({ name, chipWon, loanUnit }) {
+  // 🏦 기본 은행: 따로 안 만들어도 처음부터 있음 (1칩 = 100원, 한 번 빌리면 50칩 = 5,000원 · 칩은 100원·500원 두 가지로 셈)
+  const DEFAULT = { gid: "gbasic", name: "기본 은행", chipWon: 100, loanUnit: 50 };
+  async function ensureDefault(groups) {
+    if (groups.some(g => g.gid === DEFAULT.gid) || !canManage()) return groups;
+    try { await createGroup(DEFAULT); return [{ gid: DEFAULT.gid, name: DEFAULT.name, t: 0 }].concat(groups); } catch (e) { return groups; }
+  }
+  // 원으로 보이기: 500원·100원 칩 묶음 (은행이 알아서 바꿔 줌)
+  const won = (chips, meta) => Math.round(int(chips) * ((meta && meta.chipWon) || 0));
+  function chipText(chips, meta) {
+    if (!meta || !meta.chipWon) return fmt(int(chips)) + "칩";
+    const w = won(chips, meta);
+    return fmt(w) + "원";
+  }
+  async function createGroup({ name, chipWon, loanUnit, gid }) {
     await S.ready();
     name = clean(name, 20) || "우리 모임";
     chipWon = Math.min(100000, Math.max(0.01, Number(chipWon) || 10));
     loanUnit = Math.min(1e7, Math.max(10, Math.round(Number(loanUnit) || 1000)));
-    const gid = ("g" + S.key().replace(/[^A-Za-z0-9_-]/g, "")).slice(0, 24);
+    gid = gid && /^g[A-Za-z0-9_-]{3,23}$/.test(gid) ? gid : ("g" + S.key().replace(/[^A-Za-z0-9_-]/g, "")).slice(0, 24);
     const t = S.now();
     await S.update("bank", { [gid + "/meta"]: { name, chipWon, loanUnit, created: t, by: byName() }, ["_list/" + gid]: { name, t } });
     return { gid, name, chipWon, loanUnit };
@@ -596,11 +609,11 @@ if (typeof window !== "undefined") (() => {
     };
     const desc = async gid => {
       if (!gid) { sub.textContent = "칩은 연습용 — 장부에 안 남아요"; return; }
-      try { const m = await getMeta(gid); sub.textContent = `1칩 = ${fmt(m.chipWon)}원 · 시작 칩 = 각자 잔액 (없으면 ${fmt(m.loanUnit)}칩 자동으로 빌림)`; } catch (e) { sub.textContent = ""; }
+      try { const m = await getMeta(gid); sub.textContent = `1칩 = ${fmt(m.chipWon)}원 · 각자 잔액으로 시작 (없거나 바닥나면 ${fmt(m.loanUnit * m.chipWon)}원씩 자동으로 빌림)`; } catch (e) { sub.textContent = ""; }
     };
     const set = (gid, name) => { update({ bank: gid || null, bankName: gid ? name || "모임" : null }); desc(gid); el.dispatchEvent(new Event("change", { bubbles: true })); };
     sel.disabled = true;
-    try { groups = await listGroups(); } catch (e) { groups = []; }
+    try { groups = await ensureDefault(await listGroups()); } catch (e) { groups = []; }
     fill(); sel.disabled = false;
     const found = cfg.bank && groups.find(g => g.gid === cfg.bank);
     sel.value = found ? cfg.bank : "";
@@ -743,7 +756,7 @@ if (typeof window !== "undefined") (() => {
 
   window.Bank = {
     MOCK, calc: C, store: S, canManage, pidFor, toast,
-    listGroups, createGroup, getMeta, getMembers, stackFor, borrow, applyDeltas, adjust, addMember, saveSettlement,
+    DEFAULT, chipText, listGroups, createGroup, getMeta, getMembers, stackFor, borrow, applyDeltas, adjust, addMember, saveSettlement,
     panel, lobbyPicker, label, attach, askLoan, createDialog,
   };
 })();
