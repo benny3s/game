@@ -9,6 +9,17 @@
   const TAU = Math.PI * 2;
   const GROUND_D = 46, MIN_TOP = 380, PAD_X = 10;          // 모래 아래쪽 보이는 깊이 · 하늘 최소 높이 · 벽 바깥 여백
   const INK = '#5b4636';
+  // 스매시 방향 힌트 화살표: 이름 → (앞쪽 성분, 위쪽 성분). 앞 = 그물 쪽
+  const AIM_VEC = { power: [1, -0.3], drive: [1, 0], spike: [0.3, -1], dunk: [0.8, -0.8], lob: [0.25, 1], rise: [0.85, 0.55], back: [-1, 0.4], set: [-0.45, 1] };
+  // 작은 화살표 (화면 좌표, 끝점 기준 · dx dy 는 단위 방향)
+  function arrowTo(g, x, y, dx, dy, len, w, col) {
+    const bx = x - dx * len, by = y - dy * len, hx = -dy, hy = dx, hl = w * 2.6;
+    for (const halo of [true, false]) {                           // 흰 테두리 먼저 → 하늘색 배경에서도 보이게
+      g.beginPath(); g.moveTo(bx, by); g.lineTo(x - dx * hl * 0.6, y - dy * hl * 0.6); g.lineCap = 'round'; g.lineJoin = 'round'; g.strokeStyle = halo ? 'rgba(255,255,255,.85)' : col; g.lineWidth = halo ? w + 3 : w; g.stroke();
+      g.beginPath(); g.moveTo(x, y); g.lineTo(x - dx * hl + hx * hl * 0.62, y - dy * hl + hy * hl * 0.62); g.lineTo(x - dx * hl - hx * hl * 0.62, y - dy * hl - hy * hl * 0.62); g.closePath();
+      if (halo) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 3; g.stroke(); } else { g.fillStyle = col; g.fill(); }
+    }
+  }
 
   // 털 색 (치즈 · 고등어 · 까망 · 삼색)
   const FURS = {
@@ -469,9 +480,11 @@
           case 'land': a.sqv += clamp(e.v, 0, 20) * 0.16; if (e.v > 7 || e.dive) puff(c.x, 0, e.dive ? 7 : 4, 22, 50, 11); break;
           case 'dive': a.sqv += 1; puff(c.x, 0, 6, 18, 40, 11); break;
           case 'swing': a.ear = 3; break;
+          case 'swipe': a.ear = 3; a.sqv += 0.6; break;                 // 방향 없이 땅에서 스매시: 제자리 헛손질 (살짝 움찔)
           case 'hit': {
             const sp = e.v || 8;
             ball.trail = [];                                          // 맞은 곳부터 새 꼬리
+            if (e.kind === 'smash' && e.vx != null) parts.push({ k: 'arrow', x: e.x, y: e.y, ang: Math.atan2(e.vy, e.vx), life: 0, max: 0.55, c: e.perfect ? '#f5a623' : '#ff7a3d' });   // 날아가는 쪽으로 화살표
             if (e.kind === 'smash') {
               const col = (FURS[furs[ci]] || FURS.cheese).accent;
               ball.hot = 1; ball.hotCol = e.perfect ? '#ffcf5c' : col;
@@ -653,7 +666,17 @@
         else if (p.k === 'puff') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.93; const r = p.r * (1 + u * 1.3) * k; circ(g, X(p.x), Y(p.y), r); g.fillStyle = `rgba(255,250,240,${0.7 * (1 - u)})`; g.fill(); g.strokeStyle = `rgba(214,182,140,${0.45 * (1 - u)})`; g.lineWidth = 1.2 * k; g.stroke(); }
         else if (p.k === 'spark') { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; p.rot += p.vr * dt; star(g, X(p.x), Y(p.y), p.r * k * (1 - u * 0.6), 4, 0.42, p.rot); g.fillStyle = hexA(p.c, 1 - u); g.fill(); }
         else if (p.k === 'ring') { const r = lerp(p.r0, p.r1, easeOut(u)) * k; circ(g, X(p.x), Y(p.y), r); g.strokeStyle = hexA(p.c, 0.9 * (1 - u)); g.lineWidth = p.w * k * (1 - u * 0.5); g.stroke(); }
+        else if (p.k === 'arrow') { const dx = Math.cos(p.ang), dy = -Math.sin(p.ang), r = (34 + 40 * easeOut(u)) * k; g.save(); g.globalAlpha = 0.95 * (1 - u * u); arrowTo(g, X(p.x) + dx * r, Y(p.y) + dy * r, dx, dy, 30 * k, Math.max(3, 4.6 * k), p.c); g.restore(); }
         else if (p.k === 'heart') { p.x += p.vx * dt + Math.sin(time * 5 + p.ph) * 0.4; p.y += p.vy * dt; heart(g, X(p.x), Y(p.y), p.r * k * (u < 0.15 ? u / 0.15 : 1)); g.fillStyle = `rgba(255,128,150,${1 - u * u})`; g.fill(); }
+      }
+      // 스매시 방향 힌트: 휘두르는 동안 앞발 쪽에 지금 누른 방향을 작은 화살표로 (배우기 쉽게 · 옅게)
+      for (let i = 0; i < cats.length; i++) {
+        const q = cats[i], c = q.c;
+        if (!(c.swing > 0) || c.dive > 0 || c.ground) continue;
+        const f = (i & 1) === 0 ? 1 : -1, v = AIM_VEC[V.aimOf(c, i & 1)]; if (!v) continue;
+        const vl = Math.hypot(v[0], v[1]), dx = v[0] * f / vl, dy = -v[1] / vl;     // 화면 좌표 방향 (y 는 아래가 +)
+        const px = X(q.x + f * C.PAW_DX) + dx * 40 * k, py = Y(q.y + C.PAW_DY) + dy * 40 * k;
+        g.save(); g.globalAlpha = 0.85 * clamp(c.swing / C.SWING_T + 0.4, 0, 1); arrowTo(g, px + dx * 14 * k, py + dy * 14 * k, dx, dy, 26 * k, Math.max(2.6, 4 * k), '#ff8a4c'); g.restore();
       }
       if (parts.length > 260) parts.splice(0, parts.length - 260);
 

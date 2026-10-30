@@ -117,30 +117,94 @@ section('규칙');
   s3.ball = { x: 150, y: 140, vx: 0, vy: -6 }; run(s3, 2); run(s3, 2); run(s3, 2);
   ok(s3.touches[0] === 1, '연달아 붙어 있는 접촉은 한 번으로');
 }
-{ // 공중 스매시: 세 가지 방향, 너무 빠른 공은 스매시 안 됨
-  const shots = {};
-  for (const [name, held] of [['spike', 0], ['drive', IN.RIGHT], ['lob', IN.LEFT]]) {
-    const s = playState(); s.cats[1].x = 600; s.ball.y = 9999;
-    s.cats[0].x = 240;
-    run(s, 1, IN.JUMP);
-    for (let k = 0; k < 9; k++) V.step(s, IN.JUMP, 0);
-    const c = s.cats[0];
-    s.ball = { x: c.x + C.PAW_DX + 10, y: c.y + C.PAW_DY + 25, vx: 0, vy: -1 };
-    const ev = V.step(s, IN.JUMP | IN.SMASH | held, 0);
+{ // 공중 스매시: 누른 방향대로 (방향 없음·앞·위·아래·뒤 + 조합), 너무 빠른 공은 스매시 안 됨
+  const F = IN.RIGHT, B = IN.LEFT, UP = IN.UP, DN = IN.DOWN, J = IN.JUMP;
+  // 고양이를 wait+1 틱 점프시킨 뒤 앞발 근처에 공을 놓고 bits 를 누른 채 스매시. side 1 이면 좌우를 뒤집어 같은 일을 함 (bits 는 왼쪽 기준: F 가 그물 쪽)
+  const air = (bits, side, wait) => {
+    side = side || 0;
+    const s = playState(); s.ball.y = 9999;
+    const me = side, other = 1 - side, ins = [0, 0];
+    s.cats[me].x = side === 0 ? 240 : C.W - 240; s.cats[other].x = side === 0 ? 600 : 40;
+    const flip = b => side === 0 ? b : (b & ~3) | ((b & 1) << 1) | ((b & 2) >> 1);
+    for (let k = 0; k <= (wait || 9); k++) { ins[me] = J; V.step(s, ins[0], ins[1]); }
+    const c = s.cats[me], f = side === 0 ? 1 : -1;
+    s.ball = { x: c.x + f * (C.PAW_DX + 10), y: c.y + C.PAW_DY + 25, vx: 0, vy: -1 };
+    ins[me] = IN.SMASH | flip(bits);
+    const ev = V.step(s, ins[0], ins[1]);
     const h = ev.find(e => e.t === 'hit');
-    shots[name] = { h, vx: s.ball.vx, vy: s.ball.vy, land: V.predictLanding(s.ball) };
+    return { h, s, c, f, vx: s.ball.vx * f, vy: s.ball.vy, sp: Math.hypot(s.ball.vx, s.ball.vy), land: V.predictLanding(s.ball, 500), b0: { x: s.ball.x, y: s.ball.y } };
+  };
+  const table = [[0, 'power'], [F, 'drive'], [UP, 'lob'], [DN, 'spike'], [F | UP, 'rise'], [F | DN, 'dunk'], [B, 'back'], [B | UP, 'set'], [B | DN, 'back'], [UP | DN, 'power'], [F | UP | DN, 'drive']];
+  let allAim = true; const got = {};
+  for (const side of [0, 1]) for (const [bits, want] of table) {
+    const r = air(bits, side);
+    got[side + ':' + bits] = r.h && r.h.aim;
+    if (!(r.h && r.h.kind === 'smash' && r.h.aim === want)) allAim = false;
   }
-  ok(['spike', 'drive', 'lob'].every(n => shots[n].h && shots[n].h.kind === 'smash' && shots[n].h.aim === n), '스매시 방향: 그냥=내리꽂기·앞=강타·뒤=살짝 넘기기', Object.fromEntries(Object.entries(shots).map(([k, v]) => [k, v.h && v.h.aim])));
-  ok(shots.spike.h.perfect, '공이 오자마자 휘두르면 퍼펙트');
-  ok(Object.values(shots).every(v => v.land.x > C.NET_X), '세 스매시 모두 상대 코트로', Object.values(shots).map(v => Math.round(v.land.x)));
-  ok(shots.spike.vy < shots.drive.vy && shots.lob.vy > 0 && Math.abs(shots.drive.vx) > Math.abs(shots.spike.vx), '내리꽂기가 가장 가파르고 강타가 가장 빠름');
-  ok(shots.lob.land.t > shots.spike.land.t * 2 && shots.lob.land.x < shots.drive.land.x, '살짝 넘기기는 느리고 짧게');
+  ok(allAim, '스매시 방향 이름: 없음=power · 앞=drive · 위=lob · 아래=spike · 앞+위=rise · 앞+아래=dunk · 뒤=back · 뒤+위=set · 뒤+아래=back (양쪽 고양이 모두)', got);
+  const R = {}; for (const [bits, name] of table.slice(0, 8)) R[name] = air(bits);
+  ok(R.power.h.perfect, '공이 오자마자 휘두르면 퍼펙트');
+  ok(['power', 'drive', 'spike', 'dunk', 'lob', 'rise'].every(n => R[n].vx > 0 && R[n].land.x > C.NET_X), '앞쪽·위·아래 스매시는 모두 상대 쪽으로 넘어감', Object.fromEntries(Object.entries(R).map(([k, v]) => [k, Math.round(v.land.x)])));
+  ok(R.power.vx > 8 && R.power.sp > 16, '방향 없이: 곧고 힘찬 공 (빠르게 앞으로)', [R.power.vx, R.power.sp]);
+  ok(R.drive.sp > R.power.sp + 1 && R.drive.vy >= R.power.vy - 0.01 && R.drive.vx > R.power.vx, '앞: 더 빠르고 더 납작한 강타', [R.drive.sp, R.power.sp]);
+  ok(R.lob.vy > 5 && R.lob.sp < 12 && R.lob.land.t > R.power.land.t * 2, '위: 높이 띄우는 공 (느리고 오래 떠 있음)', [R.lob.vy, R.lob.land.t]);
+  ok(R.rise.vy > 4 && R.rise.land.x > R.lob.land.x, '앞+위: 올라가며 깊이 떨어짐 (위보다 멀리)', [Math.round(R.rise.land.x), Math.round(R.lob.land.x)]);
+  // 가파르기 비교는 그물 가까이에서 (멀면 어느 각도든 같은 곳으로 모임)
+  const near = {};
+  for (const n of ['power', 'drive', 'spike', 'dunk']) { const b = { x: C.NET_X - 30, y: 250, vx: 0, vy: 0 }; V.shoot(b, 0, n, false, 0); near[n] = { vx: +b.vx.toFixed(1), vy: +b.vy.toFixed(1), sp: +Math.hypot(b.vx, b.vy).toFixed(1) }; }
+  ok(near.spike.vy < near.power.vy - 2 && near.power.vy < near.drive.vy && near.dunk.vy <= near.spike.vy && near.dunk.sp > near.spike.sp, '아래=가파르게 내리꽂기 (곧게보다 가파름) · 앞+아래는 더 빠름', near);
+  ok(R.back.vx < -0.5 && R.back.vy > 6 && R.back.land.x < R.back.b0.x && R.back.land.x > C.BACK_LO - 1 && R.back.land.x < C.NET_X, '뒤: 뒤로 높이 — 제 코트 뒤쪽에 떨어짐', [R.back.vx, R.back.vy, Math.round(R.back.land.x), Math.round(R.back.b0.x)]);
+  ok(R.set.vy > R.back.vy + 2 && R.set.land.t > R.back.land.t + 8 && R.set.land.x <= R.back.land.x + 1, '뒤+위: 더 높고 더 오래, 더 뒤로', [Math.round(R.set.land.x), R.set.land.t, R.back.land.t]);
+  // 점프 키 = 위: 오르는 중엔 높이 뛰려고 누른 것 / 꼭대기를 지나 내려올 땐 '위' (J 비트를 같이 누름)
+  const rising = air(J, 0, 9), falling = air(J, 0, 24);
+  ok(rising.h && rising.c.vy > C.UP_VY && rising.h.aim === 'power', '점프를 누른 채 오르는 중에 스매시 → 위로 읽지 않음 (곧게)', [rising.c.vy, rising.h && rising.h.aim]);
+  ok(falling.h && falling.c.vy <= C.UP_VY && !falling.c.ground && falling.h.aim === 'lob', '점프를 누른 채 내려오며 스매시 → 위 (높이 띄우기)', [falling.c.vy, falling.h && falling.h.aim]);
+  const fw = air(J | F, 0, 24);
+  ok(fw.h && fw.h.aim === 'rise', '점프 누른 채 + 앞 → 앞+위', fw.h && fw.h.aim);
+  const e0 = air(0, 0).h; ok(e0.vx > 0 && Math.abs(Math.hypot(e0.vx, e0.vy) - e0.v) < 1e-6, 'hit 일에 공 속도(vx·vy)가 들어 있음 (화살표용)');
+  // 모든 방향 × 높이 × 자리: 앞쪽 계열은 상대 코트로, 뒤 계열은 제 코트 안에서 오래 떠서 받을 수 있고 그물에 안 걸림
+  let badFwd = 0, badBack = 0, nB = 0, minT = 1e9, hitNet = 0;
+  for (const side of [0, 1]) for (let d = 0; d <= 260; d += 23) for (let y = 60; y <= 320; y += 20) {
+    const x = side === 0 ? C.NET_X - 30 - d : C.NET_X + 30 + d;
+    for (const aim of ['power', 'drive', 'spike', 'dunk', 'lob', 'rise']) {
+      const b = { x, y, vx: 0, vy: 0 }; V.shoot(b, side, aim, false, 0); const L = V.predictLanding(b, 500);
+      if (!(side === 0 ? L.x > C.NET_X : L.x < C.NET_X)) badFwd++;
+    }
+    for (const aim of ['back', 'set']) {
+      const b = { x, y, vx: 0, vy: 0 }; V.shoot(b, side, aim, false, 0); nB++;
+      const q = { ...b }; let t = 0; const evs = [];
+      while (q.y > C.BALL_R && t < 500) { V.ballPhys(q, evs); t++; }
+      if (evs.some(e => e.t === 'net')) hitNet++;
+      const own = side === 0 ? q.x < C.NET_X - C.NET_HW - 20 : q.x > C.NET_X + C.NET_HW + 20;
+      if (!own || t < 50) badBack++;
+      minT = Math.min(minT, t);
+    }
+  }
+  ok(badFwd === 0, '그물에서 30 넘게 떨어진 곳이면 어떤 높이에서든 앞쪽 계열 6가지가 모두 상대 코트로 넘어감', badFwd);
+  ok(badBack === 0 && hitNet === 0, '뒤로 스매시(back·set)는 어디서 쳐도 제 코트 안에 떨어지고 50틱(0.8초) 넘게 떠 있고 그물에 걸리지 않음', { badBack, hitNet, minT, nB });
+  // 뒤로 친 공은 정말 받을 수 있음: 고양이가 떨어질 자리로 달려가면 점수 나기 전에 받음
+  let playable = 0, tried = 0;
+  for (const aim of [B, B | UP]) for (const x0 of [120, 200, 280]) {
+    const s = playState(); s.cats[1].x = 600; s.ball.y = 9999;
+    s.cats[0].x = x0; for (let k = 0; k < 10; k++) V.step(s, J, 0);
+    const c = s.cats[0]; s.ball = { x: c.x + C.PAW_DX + 10, y: c.y + C.PAW_DY + 25, vx: 0, vy: -1 };
+    V.step(s, IN.SMASH | aim, 0);
+    tried++;
+    const L = V.predictLanding(s.ball, 500); let got = false;
+    for (let t = 0; t < 200 && s.phase === 'play' && !got; t++) {
+      const dx = L.x - 10 - s.cats[0].x, inp = Math.abs(dx) < 6 ? 0 : dx > 0 ? IN.RIGHT : IN.LEFT;
+      for (const e of V.step(s, inp, 0)) if (e.t === 'hit' && e.side === 0 && e.kind !== 'smash') got = true;
+    }
+    if (got && s.score[1] === 0) playable++;
+  }
+  ok(playable === tried, '뒤로 스매시한 공을 달려가 받으면 점수 없이 이어짐 (스스로 점수를 내주지 않음)', [playable, tried]);
+  { const r = air(B | UP, 0); let sc = false; for (let t = 0; t < 40; t++) if (V.step(r.s, 0, 0).some(e => e.t === 'point')) sc = true; ok(!sc, '뒤로 친 직후 40틱 동안은 점수가 나지 않음'); }
   const s = playState(); s.cats[1].x = 600; s.cats[0].x = 240; s.ball.y = 9999;
-  run(s, 10, IN.JUMP);
+  run(s, 10, J);
   const c = s.cats[0];
   s.ball = { x: c.x + C.PAW_DX + 10, y: c.y + C.PAW_DY + 25, vx: -19, vy: -4 };
-  const ev = V.step(s, IN.JUMP | IN.SMASH, 0);
-  ok(!ev.some(e => e.t === 'hit' && e.kind === 'smash'), '스매시처럼 빠른 공은 받아칠 수 없음 (막거나 받기만)');
+  const ev2 = V.step(s, J | IN.SMASH, 0);
+  ok(!ev2.some(e => e.t === 'hit' && e.kind === 'smash'), '스매시처럼 빠른 공은 받아칠 수 없음 (막거나 받기만)');
 }
 { // 스매시가 어디로 가나: 그물 앞 높은 곳에서 내리꽂으면 그물 바로 뒤로 · 너무 낮으면 살짝 넘기기로 바뀌어 넘어감
   const shot = (x, y, aim, side) => { const b = { x, y, vx: 0, vy: 0 }; const used = V.shoot(b, side, aim, false); return { used, b, L: V.predictLanding(b, 400) }; };
@@ -173,7 +237,7 @@ section('규칙');
 { // 땅 스매시 = 다이빙: 빨리 미끄러지고, 일어나는 동안 조작 안 됨
   const s = playState(); s.ball.y = 9999; s.cats[0].x = 100;
   const ev = run(s, 1, IN.SMASH | IN.RIGHT);
-  ok(ev.some(e => e.t === 'dive' && e.dir === 1) && s.cats[0].dive > 0, '땅에서 스매시 → 다이빙');
+  ok(ev.some(e => e.t === 'dive' && e.dir === 1) && s.cats[0].dive > 0, '땅에서 스매시 + 방향키 → 다이빙');
   run(s, C.DIVE_T, IN.RIGHT);
   const moved = s.cats[0].x - 100;
   ok(moved > 70 && moved < 140, '다이빙은 멀리(코트 반의 1/3쯤) 미끄러짐', moved);
@@ -182,9 +246,23 @@ section('규칙');
   ok(s.cats[0].x >= x1 && s.cats[0].y === 0 && s.cats[0].ground, '일어나는 동안엔 못 움직이고 못 뜀 (미끄러지던 것만 마저 멈춤)');
   run(s, C.REC_T, 0); run(s, 6, IN.LEFT);
   ok(s.cats[0].x < x1 - 5, '다 일어나면 다시 움직임');
-  const s2 = playState(); s2.ball.y = 9999; s2.cats[1].x = 500;
-  run(s2, 1, 0, IN.SMASH);
-  ok(s2.cats[1].diveDir === -1, '방향 없이 다이빙하면 그물 쪽으로');
+  { // 땅에서 방향 없이 스매시만 누르면 다이빙·미끄러짐 없음 (제자리 헛손질)
+    const s2 = playState(); s2.ball.y = 9999; s2.cats[1].x = 500; s2.cats[0].x = 150;
+    const evs = run(s2, 1, IN.SMASH, IN.SMASH); run(s2, 40, IN.SMASH, 0);
+    ok(!evs.some(e => e.t === 'dive') && evs.filter(e => e.t === 'swipe').length === 2, '방향 없이 땅에서 스매시 → 다이빙 안 함 (swipe 일만)');
+    ok(s2.cats.every(c => c.dive === 0 && c.rec === 0 && c.ground && c.y === 0 && c.vx === 0) && s2.cats[0].x === 150 && s2.cats[1].x === 500, '방향 없이 스매시: 한 칸도 안 움직임 · 일어나기 시간도 없음');
+    run(s2, 1, 0, 0); run(s2, 1, IN.SMASH | IN.JUMP, 0);
+    ok(!s2.cats[0].ground && s2.cats[0].swing > 0, '단, 점프와 같이 누르면 공중 휘두르기');
+    const s2b = playState(); s2b.ball.y = 9999; s2b.cats[0].x = 150; run(s2b, 1, IN.SMASH | IN.LEFT);
+    ok(s2b.cats[0].diveDir === -1 && s2b.cats[0].dive > 0, '왼쪽(뒤) 방향키 + 스매시 → 뒤쪽으로 다이빙');
+    // 스매시를 먼저 누르고 방향키가 몇 틱 늦어도 다이빙 (사람 손가락 오차)
+    const s2c = playState(); s2c.ball.y = 9999; s2c.cats[0].x = 150; run(s2c, 1, IN.SMASH); run(s2c, 2, 0); run(s2c, 1, IN.RIGHT);
+    ok(s2c.cats[0].dive > 0 && s2c.cats[0].diveDir === 1, '스매시 → 2틱 뒤 방향키 → 그래도 다이빙');
+    const s2d = playState(); s2d.ball.y = 9999; s2d.cats[0].x = 150; run(s2d, 1, IN.SMASH); run(s2d, 8, 0); run(s2d, 3, IN.RIGHT);
+    ok(s2d.cats[0].dive === 0, '한참 뒤에 방향키를 눌렀을 땐 다이빙 아님');
+    const s2e = playState(); s2e.ball.y = 9999; s2e.cats[0].x = 150; run(s2e, 20, IN.RIGHT); const x0 = s2e.cats[0].x; run(s2e, 1, IN.RIGHT | IN.SMASH);
+    ok(s2e.cats[0].dive > 0 && s2e.cats[0].x > x0, '달리다가 스매시 → 그 방향으로 다이빙');
+  }
   const s3 = playState(); s3.cats[0].x = 100; s3.cats[1].x = 600;
   run(s3, 1, IN.SMASH | IN.RIGHT);
   for (let k = 0; k < 5; k++) V.step(s3, 0, 0);
@@ -206,8 +284,8 @@ section('규칙');
   ok(s.target === 11 && s.maxTouches === 0, '기본: 11점 · 터치 제한 없음 (가족용)', [s.target, s.maxTouches]);
   ok(V.create({ target: 7, maxTouches: 3 }, 3).maxTouches === 3, '터치 제한은 옵션으로 켤 수 있음');
   let rt = true;
-  for (let n = 0; n < 16; n++) if (V.bits(V.unbits(n)) !== n) rt = false;
-  ok(rt && V.bits({ left: true, smash: true }) === (IN.LEFT | IN.SMASH), 'bits ↔ unbits');
+  for (let n = 0; n < 64; n++) if (V.bits(V.unbits(n)) !== n) rt = false;
+  ok(rt && V.bits({ left: true, smash: true }) === (IN.LEFT | IN.SMASH) && V.bits({ up: true, down: true }) === (IN.UP | IN.DOWN), 'bits ↔ unbits');
   run(s, 200, IN.RIGHT | IN.JUMP, IN.LEFT);
   const back = V.fromJSON(JSON.stringify(s));
   ok(back && V.hash(back) === V.hash(s), 'JSON 문자열로 저장했다 되살려도 같은 상태');
@@ -225,9 +303,11 @@ section('규칙');
 // ─────────────────────────────────────────────
 section('학습용 함수 (obs · 행동표 · 좌우 뒤집기)');
 {
-  ok(V.ACTIONS.length === 12, '행동 12가지');
+  ok(V.ACTIONS.length === 15, '행동 15가지 (예전 12 + 아래 스매시 3)');
+  ok(V.ACTIONS.slice(0, 12).every(a => a[3] === 0), '0~11 번은 예전 그대로 (아래 없음)');
   let rt = true;
-  for (let a = 0; a < 12; a++) for (const side of [0, 1]) if (V.inputToAction(V.actionToInput(a, side), side) !== a) rt = false;
+  for (let a = 0; a < 15; a++) for (const side of [0, 1]) if (V.inputToAction(V.actionToInput(a, side), side) !== a) rt = false;
+  ok(V.actionToInput(12, 0) === (IN.DOWN | IN.SMASH) && V.actionToInput(14, 1) === (IN.DOWN | IN.SMASH | IN.LEFT), '12~14 = 아래+스매시 (방향 없음/뒤/앞)');
   ok(rt, '행동 → 입력 → 행동 되돌리기');
   ok(V.actionToInput(8, 0) === IN.RIGHT && V.actionToInput(8, 1) === IN.LEFT, "'앞' 은 오른쪽 고양이에겐 왼쪽");
   const s = V.create({}, 77);
@@ -561,22 +641,22 @@ function dblBots(seed, tA, tB) {
 section('한 기기 키 묶음 (keys.js)');
 {
   const K = require(path.join(__dirname, '..', 'keys.js'));
-  const { L, R, J, S } = K.BITS;
+  const { L, R, J, S, DN } = K.BITS;
   let allOk = true, bad = null;
   for (let m = 1; m < 16; m++) {                                    // 사람 자리 조합 15가지 모두
     const hs = [0, 1, 2, 3].filter(k => m & (1 << k)), { map } = K.build(hs);
     for (const k of [0, 1, 2, 3]) {
       const bits = Object.values(map).filter(v => v[0] === k).reduce((a, v) => a | v[1], 0);
-      const want = hs.includes(k) ? (L | R | J | S) : 0;
+      const want = hs.includes(k) ? (L | R | J | S | DN) : 0;
       if (bits !== want) { allOk = false; bad = { hs, k, bits }; }
     }
   }
-  ok(allOk, '사람 자리 어떤 조합이든 자리마다 이동·점프·스매시 키가 다 있고, AI 자리엔 키가 없음 (한 키 = 한 자리)', bad);
-  const old2 = { KeyA: [0, L], KeyD: [0, R], KeyW: [0, J], KeyF: [0, S], KeyS: [0, S], KeyG: [0, S], Space: [0, S], ArrowLeft: [1, L], ArrowRight: [1, R], ArrowUp: [1, J], Enter: [1, S], NumpadEnter: [1, S], Slash: [1, S], ArrowDown: [1, S] };
+  ok(allOk, '사람 자리 어떤 조합이든 자리마다 이동·점프·아래·스매시 키가 다 있고, AI 자리엔 키가 없음 (한 키 = 한 자리)', bad);
+  const new2 = { KeyA: [0, L], KeyD: [0, R], KeyW: [0, J], KeyS: [0, DN], KeyE: [0, S], KeyF: [0, S], KeyG: [0, S], Space: [0, S], ArrowLeft: [1, L], ArrowRight: [1, R], ArrowUp: [1, J], ArrowDown: [1, DN], Enter: [1, S], NumpadEnter: [1, S], Slash: [1, S] };
   const two = K.build([0, 1]).map;
-  ok(JSON.stringify(Object.keys(old2).sort().map(c => [c, two[c]])) === JSON.stringify(Object.keys(old2).sort().map(c => [c, old2[c]])) && Object.keys(two).length === Object.keys(old2).length, '둘이서(왼쪽①·오른쪽①)는 예전 1P·2P 키 그대로');
+  ok(JSON.stringify(Object.keys(new2).sort().map(c => [c, two[c]])) === JSON.stringify(Object.keys(new2).sort().map(c => [c, new2[c]])) && Object.keys(two).length === Object.keys(new2).length, '둘이서(왼쪽①·오른쪽①): WASD(S=아래)+E·Space 스매시 / 방향키(↓=아래)+Enter 스매시');
   const four = K.build([0, 1, 2, 3]).map;
-  ok(four.KeyF[0] === 2 && four.KeyG[0] === 2 && four.KeyS[0] === 0 && four.Numpad5[0] === 3 && four.KeyK[0] === 3, '넷이면 F·G 는 왼쪽② 몫, S 는 왼쪽① 스매시, 숫자판·IJKL 은 오른쪽②');
+  ok(four.KeyF[0] === 2 && four.KeyG[0] === 2 && four.KeyG[1] === DN && four.KeyB[1] === S && four.KeyS[0] === 0 && four.KeyS[1] === DN && four.Numpad5[0] === 3 && four.KeyK[0] === 3 && four.Semicolon[1] === S, '넷이면 F·G 는 왼쪽② 몫(G=아래·B=스매시), S 는 왼쪽① 아래, 숫자판·IJKL 은 오른쪽②');
   // 사람 4명 복식이 한 판 끝까지 (사람 대신 봇 입력을 자리 키로 흉내)
   const s = V.create({ target: 3, team: 2 }, 77), tl = {}, tr = {};
   const bots = [0, 1, 2, 3].map(k => B.create('normal', k & 1, 70 + k, { cat: k, team: (k & 1) ? tr : tl }));
@@ -584,9 +664,10 @@ section('한 기기 키 묶음 (keys.js)');
   let okKeys = true;
   while (s.phase !== 'over' && s.tick < 30000) {
     const ins = bots.map(b => b.act(s));
-    const down = new Set(); ins.forEach((v, k) => { for (const b of [L, R, J, S]) if (v & b) down.add(inv[k + ':' + b]); });
+    const want = ins.map(v => (v & IN.UP) ? (v & ~IN.UP) | J : v);   // 키보드엔 ▲ 단추가 없음: 위 = 점프 키
+    const down = new Set(); want.forEach((v, k) => { for (const b of [L, R, J, S, DN]) if (v & b) down.add(inv[k + ':' + b]); });
     const back = [0, 0, 0, 0]; for (const c of down) { const m = four[c]; back[m[0]] |= m[1]; }
-    if (back.some((v, k) => v !== ins[k])) okKeys = false;
+    if (back.some((v, k) => v !== want[k])) okKeys = false;
     V.step(s, back[0], back[1], back[2], back[3]);
   }
   ok(okKeys && s.phase === 'over', '키 4묶음으로 넷이 동시에 눌러도 서로 안 섞이고 한 판이 끝남', [okKeys, s.phase]);

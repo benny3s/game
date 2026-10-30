@@ -72,7 +72,7 @@
   function seatKeysHtml(k) {
     const kb = s => `<kbd>${s}</kbd>`;
     if (touchUI) { const hs = localHumans(), i = hs.indexOf(k); return i < 0 ? '' : i === 0 ? '👈 화면 아래 왼쪽 단추' : '👉 화면 아래 오른쪽 단추'; }
-    const st = KS.SETS[k]; return `${kb(st.show[0])}${kb(st.show[1])} 이동 ${kb(st.show[2])} 점프 ${kb(st.show[3])} 스매시`;
+    const st = KS.SETS[k]; return `${kb(st.show[0])}${kb(st.show[1])} 이동 ${kb(st.show[2])} 점프 ${kb(st.show[3])} 아래 ${kb(st.show[4])} 스매시`;
   }
   function drawLocal() {
     const box = $('lseats'); if (!box) return;
@@ -122,15 +122,16 @@
     const team = cfg.lteam, N = team * 2, fu = localFurs();
     start({ kind: 'duo', team, seats: cfg.lseat.slice(0, N), furs: fu.slice(0, N), target: cfg.ltarget });
   };
+  const TOUCH_KEYS = '왼쪽 ◀ ▶ 로 움직이고, 오른쪽 점프 · 스매시를 눌러요<br>스매시 단추를 누른 채 위·아래로 끌면 ▲ 위 · ▼ 아래로 쳐요 (◀ ▶ 와 같이 쓰면 앞·뒤)';
   function keysHtml(duo) {
     const k = s => `<kbd>${s}</kbd>`;
     if (duo && G && G.o.seats) {                                    // 한 기기: 사람 자리마다 키 한 줄
       const hs = G.o.seats.map((v, c) => v === 'h' ? c : -1).filter(c => c >= 0);
-      if (touchUI) return hs.length > 1 ? `아래 단추를 반씩 나눠 써요 · 왼쪽 = ${SEAT_NAME[hs[0]]}, 오른쪽 = ${SEAT_NAME[hs[1]]}` : '왼쪽 ◀ ▶ 로 움직이고, 오른쪽 점프 · 스매시를 눌러요';
+      if (touchUI) return hs.length > 1 ? `아래 단추를 반씩 나눠 써요 · 왼쪽 = ${SEAT_NAME[hs[0]]}, 오른쪽 = ${SEAT_NAME[hs[1]]}<br>스매시 단추를 누른 채 위·아래로 끌면 ▲ 위 · ▼ 아래로 쳐요` : TOUCH_KEYS;
       return [0, 2, 1, 3].filter(c => hs.includes(c)).map(c => `${SEAT_NAME[c]} ${seatKeysHtml(c)}`).join('<br>');
     }
-    if (touchUI) return '왼쪽 ◀ ▶ 로 움직이고, 오른쪽 점프 · 스매시를 눌러요';
-    return `${k('←')}${k('→')} 또는 ${k('A')}${k('D')} 이동 · ${k('↑')}/${k('W')} 점프 · ${k('Space')} 스매시`;
+    if (touchUI) return TOUCH_KEYS;
+    return `${k('←')}${k('→')} 또는 ${k('A')}${k('D')} 이동 · ${k('↑')}/${k('W')} 점프 · ${k('↓')}/${k('S')} 아래 · ${k('Space')} 스매시<br>스매시와 같이 누른 방향대로 날아가요: 그물 쪽 = 강타 · 점프 키 = 높이 · 아래 키 = 내리꽂기 · 그물 반대쪽 = 뒤로`;
   }
   function furs(el, cur, onPick) {
     if (!el.children.length) {
@@ -258,7 +259,9 @@
   // 누르고 있는 것 · 틱 사이에 눌렀다 뗀 것 · 터치 — 자리 번호별 (혼자·친구랑은 0번, 한 기기는 고양이 번호 0~3)
   const held = [0, 0, 0, 0], latch = [0, 0, 0, 0], touchHeld = [0, 0, 0, 0];
   const L = IN.LEFT, Rt = IN.RIGHT, J = IN.JUMP, S = IN.SMASH;
-  const KEYS1 = { ArrowLeft: [0, L], KeyA: [0, L], ArrowRight: [0, Rt], KeyD: [0, Rt], ArrowUp: [0, J], KeyW: [0, J], Space: [0, S], ArrowDown: [0, S], KeyS: [0, S], Enter: [0, S], NumpadEnter: [0, S], KeyF: [0, S], KeyZ: [0, S], Slash: [0, S] };
+  const Dn = IN.DOWN;
+  // 혼자·친구랑: 방향 = ←→ 또는 AD · 위(점프) = ↑ W · 아래 = ↓ S · 스매시 = Space Enter E F Z /
+  const KEYS1 = { ArrowLeft: [0, L], KeyA: [0, L], ArrowRight: [0, Rt], KeyD: [0, Rt], ArrowUp: [0, J], KeyW: [0, J], ArrowDown: [0, Dn], KeyS: [0, Dn], Space: [0, S], Enter: [0, S], NumpadEnter: [0, S], KeyE: [0, S], KeyF: [0, S], KeyZ: [0, S], Slash: [0, S] };
   const down = new Set();
   const keyMap = () => G && G.o.kind === 'duo' && G.keys ? G.keys : KEYS1;   // 한 기기: 사람 자리마다 키 묶음 (keys.js)
   function recalcKeys() { held.fill(0); const m = keyMap(); for (const c of down) { const k = m[c]; if (k) held[k[0]] |= k[1]; } }
@@ -311,22 +314,34 @@
     for (const b of padBtns) { const d = Math.hypot(x - b.cx, y - b.cy); if (d < b.r * 1.38 && d < bd) { bd = d; best = b; } }
     return best;
   }
+  const SLIDE = 22;                                               // 스매시 단추에서 이만큼(px) 끌면 위·아래
+  const grab = (b, e) => b.bit === S ? Object.assign({}, b, { y0: e.clientY, ext: 0 }) : b;   // 스매시는 처음 누른 높이를 기억
   function syncPad() {
     touchHeld.fill(0);
     const on = new Set();
-    for (const b of ptrs.values()) if (b) { touchHeld[b.p] |= b.bit; on.add(b.el); }
-    for (const el of $('pad').querySelectorAll('.pb')) el.classList.toggle('on', on.has(el));
+    for (const b of ptrs.values()) if (b) { touchHeld[b.p] |= b.bit | (b.ext || 0); on.add(b.el); }
+    for (const el of $('pad').querySelectorAll('.pb')) {
+      el.classList.toggle('on', on.has(el));
+      let d = '';
+      for (const b of ptrs.values()) if (b && b.el === el && b.ext) d = b.ext === IN.UP ? 'up' : 'dn';
+      if (el.dataset.dir !== d) { if (d) el.dataset.dir = d; else delete el.dataset.dir; }
+    }
   }
   addEventListener('pointerdown', e => {
     if (!G || !padBtns.length || overlayOpen()) return;
     const b = hitPad(e.clientX, e.clientY); if (!b) return;
     e.preventDefault();
-    ptrs.set(e.pointerId, b); latch[b.p] |= b.bit; syncPad();
+    ptrs.set(e.pointerId, grab(b, e)); latch[b.p] |= b.bit; syncPad();
   }, { passive: false });
   addEventListener('pointermove', e => {
     if (!ptrs.has(e.pointerId)) return;
-    const b = hitPad(e.clientX, e.clientY);
-    if (b !== ptrs.get(e.pointerId)) { ptrs.set(e.pointerId, b); if (b) latch[b.p] |= b.bit; syncPad(); }
+    const cur = ptrs.get(e.pointerId), b = hitPad(e.clientX, e.clientY);
+    if (cur && cur.bit === S && (!b || b.bit === S)) {              // 스매시 단추를 누른 채 위·아래로 끌면 방향 (단추를 벗어나도 유지)
+      const dy = e.clientY - cur.y0, ext = dy < -SLIDE ? IN.UP : dy > SLIDE ? IN.DOWN : 0;
+      if (ext !== cur.ext) { cur.ext = ext; syncPad(); }
+      return;
+    }
+    if (b !== cur) { ptrs.set(e.pointerId, b && grab(b, e)); if (b) latch[b.p] |= b.bit; syncPad(); }
   });
   const ptrUp = e => { if (ptrs.delete(e.pointerId)) syncPad(); };
   addEventListener('pointerup', ptrUp); addEventListener('pointercancel', ptrUp);
@@ -401,7 +416,7 @@
     banner(o.kind === 'watch' ? 'AI 구경' : o.kind === 'online' ? (myCat < 0 ? '👀 구경 중' : '친구랑 대결!') : '준비~', team === 2 ? `${teamName(0)} vs ${teamName(1)}` : `${FURS[o.furs[0]].name} vs ${FURS[o.furs[1]].name}`, 1300);
     SND.play('start');
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    if (o.kind !== 'watch' && o.kind !== 'online') Cozy.howto('volley', '냥냥 배구 하는 법', howtoItems());
+    if (o.kind !== 'watch' && o.kind !== 'online') Cozy.howto('volley-aim', '냥냥 배구 하는 법', howtoItems());
     // 폰 세로로 둘이서: 한 번만 '가로로 돌리면 더 편해요'
     if (o.kind === 'duo' && hcats.length >= 2 && touchUI && innerHeight > innerWidth && !Cozy.store('volley.duoTip', false)) {
       Cozy.save('volley.duoTip', true); later(() => Cozy.toast('가로로 돌리면 둘이서 하기 더 편해요 📱', 2800), 600);
@@ -438,6 +453,7 @@
       if (e.t === 'hit') {
         G.lastHit = e;
         const ci = e.cat != null ? e.cat : e.side, mine = G.local[ci] || G.o.kind === 'watch';     // 퍼펙트·나이스 글씨는 내 고양이 것만 (AI 구경은 둘 다)
+        if (e.kind === 'smash' && mine && AIM_TXT[e.aim]) popText(AIM_TXT[e.aim], e.x, e.y + (e.perfect ? 66 : 38), 'aim');
         if (e.kind === 'smash' && e.perfect && mine) popText('퍼펙트!', e.x, e.y + 36);
         else if (e.kind === 'dig' && mine) popText('나이스!', e.x, e.y + 34);
         if (G.local[ci] && e.kind === 'smash') Cozy.vibrate(12);
@@ -448,6 +464,7 @@
       else if (e.t === 'over') onOver(e);
     }
   }
+  const AIM_TXT = { lob: '높이~', rise: '깊이!', dunk: '쾅!', back: '뒤로~', set: '올려요~' };   // 평범한 방향(곧게·강타·내리꽂기)은 글씨 없이 화살표만
   const furName = i => FURS[G.o.furs[i]].name;
   // 편 이름: 1:1 이면 고양이 이름, 2:2 면 '치즈·고등어' 처럼 둘
   const teamName = w => G.team === 2 ? `${furName(w)}·${furName(w + 2)}` : furName(w);
@@ -482,7 +499,7 @@
     later(() => showResult(e.w), 1700);
   }
   const TIPS = ['공이 떨어질 곳으로 먼저 가서 기다려 보세요', '공이 앞발에 닿기 직전에 스매시를 누르면 퍼펙트! 더 빠르게 날아가요', '공이 낮으면 땅에서 스매시! 몸을 날려 받아요',
-    '그물 앞에서 높이 뛰어 그냥 스매시하면 그물 바로 뒤로 꽂혀요', '앞쪽을 누른 채 스매시하면 납작하고 빠른 강타가 나가요', '상대가 그물 앞에 있으면 뒤쪽을 누르고 스매시, 살짝 넘겨 봐요',
+    '그물 앞에서 높이 뛰어 아래를 누르고 스매시하면 그물 바로 뒤로 꽂혀요', '그물 쪽을 누른 채 스매시하면 납작하고 빠른 강타가 나가요', '상대가 그물 앞에 있으면 위를 누르고 스매시, 높이 살짝 넘겨 봐요', '땅에서 방향키 없이 스매시만 누르면 안 움직여요. 몸을 날리려면 방향키도 같이!',
     '그물보다 높은 곳에서 쳐야 세게 넘어가요'];
   function showResult(w) {
     const s = G.s, o = G.o, sc = s.score;
@@ -584,9 +601,13 @@
     const items = [
       t ? '왼쪽 ◀ ▶ 로 움직이고, <b>점프</b> 로 뛰어올라요' : duo ? '자리마다 정해진 키로 움직이고 점프·스매시해요 (아래 키 안내)' : `${k('←')}${k('→')} (또는 ${k('A')}${k('D')}) 로 움직이고 ${k('↑')} (${k('W')}) 로 점프해요`,
       '공이 머리에 닿으면 통 하고 넘어가요. 공이 떨어질 곳에 먼저 가 있어요',
-      `공 가까이 뛰어올라 <b>스매시</b>${t || duo ? '' : ` (${k('Space')})`}! 앞쪽을 같이 누르면 강타, 뒤쪽은 살짝 넘기기, 그냥 누르면 내리꽂기`,
+      `공 가까이 뛰어올라 <b>스매시</b>${t || duo ? '' : ` (${k('Space')})`}! <b>누른 방향대로</b> 날아가요 (그물 쪽이 앞)`,
+      '그냥 = 곧고 힘찬 공 · 앞 = 더 빠른 강타 · 위 = 높이 띄우기 · 아래 = 내리꽂기 · 뒤 = 내 쪽 뒤로 높이 (짝에게 올려 주기!) · 앞+위 = 깊이, 앞+아래 = 더 빠른 내리꽂기, 뒤+위 = 더 높이 뒤로',
+      t ? '위·아래는 <b>스매시 단추를 누른 채 위나 아래로 끌어요</b> (◀ ▶ 를 같이 누르면 앞·뒤 조합). 스매시 때 공 쪽에 작은 화살표가 떠요'
+        : duo ? '스매시를 누를 때 같이 누른 방향이 공 방향이에요. 공 쪽에 작은 화살표가 떠요'
+          : `위 = <b>점프 키(${k('↑')}/${k('W')})를 누른 채</b> (높이 오르는 중엔 제외), 아래 = ${k('↓')}/${k('S')}. 스매시 때 공 쪽에 작은 화살표가 떠요`,
       '공이 앞발에 닿기 직전에 누르면 <b>퍼펙트</b>! 그물보다 높은 곳에서 쳐야 세게 넘어가요',
-      '땅에서 스매시를 누르면 몸을 날려 낮은 공을 받아요 (일어나는 데 잠깐 걸려요)',
+      '땅에서는 <b>방향키를 누른 채</b> 스매시해야 몸을 날려 낮은 공을 받아요 (그냥 누르면 안 움직여요 · 일어나는 데 잠깐 걸려요)',
       `상대 쪽 모래에 공이 떨어지면 1점! 먼저 ${G ? G.s.target : 11}점 내면 이겨요`,
     ];
     if (duo) items.push(keysHtml(true));

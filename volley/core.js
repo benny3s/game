@@ -3,7 +3,7 @@
    - 60Hz 고정 틱. Math.random·Date·performance·삼각함수 없음 (sqrt·사칙연산만 → 어느 언어로 옮겨도 같은 값)
    - 상태는 JSON 으로 그대로 저장·전송되는 평범한 객체 (온라인 때 방장 시뮬을 그대로 흘려보냄)
    - 좌표: x 0~640 (왼쪽 벽 0, 그물 320), y 는 모래 바닥(0)에서 위로 +. 고양이 x,y = 발 가운데
-   - 입력 = 비트 {LEFT 1, RIGHT 2, JUMP 4, SMASH 8} (화면 기준 방향) */
+   - 입력 = 비트 {LEFT 1, RIGHT 2, JUMP 4, SMASH 8, DOWN 16, UP 32} (화면 기준 방향). DOWN·UP 은 공중 스매시 방향용 */
 (function (root) {
   'use strict';
 
@@ -23,13 +23,18 @@
     SPIKE_V: 17.5, DRIVE_V: 19.5, PERFECT_K: 1.12,                  //   내리꽂기 · 강타 속도 (타이밍 좋으면 더 빠름)
     LOB_APEX: 60, LOB_D0: 70, LOB_DK: 0.5, LOB_DMAX: 190, LOB_VX: 9,   //   살짝 넘기기: 그물 앞에서 치면 짧게, 뒤에서 치면 길게
     HEAT_FROM: 12, HEAT_K: 0.02, HEAT_MAX: 0.3,                     // 랠리가 길어지면(넘김 12번 넘게) 스매시가 조금씩 빨라짐 → 끝없는 랠리 없음
-    DIVE_T: 16, DIVE_V: 10, DIVE_HOP: 2.4, DIVE_FR: 0.86, REC_T: 16, DIVE_R: 24,   // 땅 스매시 = 다이빙 · 일어나는 시간
+    DIVE_T: 16, DIVE_V: 10, DIVE_HOP: 2.4, DIVE_FR: 0.86, REC_T: 16, DIVE_R: 24,   // 땅 스매시 + 방향키 = 다이빙 · 일어나는 시간
+    DIVE_BUF: 4,                                                    //   스매시와 방향키를 이 틱 안에 차례로 눌러도 다이빙 (방향 없이 스매시만 누르면 그냥 헛손질)
     DIG_VY: 12.5, DIG_VX: 2.4,                                      //   다이빙으로 받으면 높이 떠오름
+    UP_VY: 1,                                                       // 공중 스매시 '위' = ▲ 단추, 또는 점프를 누른 채 (오르는 중이 아닐 때만 — 높이 뛰려고 누른 점프와 헷갈리지 않게)
+    POWER_V: 17.5, DUNK_V: 19.6,                                    //   방향 없이(내리꽂기와 같은 속도지만 덜 가파름) · 앞+아래 스매시 속도
+    BACK_APEX: 110, BACK_D: 100, SET_APEX: 220, SET_D: 150, BACK_LO: 60, BACK_HI: 50,   //   뒤로 스매시: 공이 오르는 높이 · 뒤로 가는 거리 · 놓일 자리(제 코트 벽에서 BACK_LO ~ 그물에서 BACK_HI)
+    RISE_APEX: 40, RISE_D: 240, RISE_VX: 13,                        //   앞+위: 낮게 깔리듯 오르다 상대 코트 깊이 떨어짐
     TOUCH_MERGE: 8, READY_T: 60, READY_T0: 84, POINT_T: 96,         // 같은 접촉 묶음 · 서브 전 대기 · 점수 후 쉬는 시간
     SERVE_X: 160, SERVE_DX: 16, SERVE_Y: 236, SERVE_TOSS: 4,        // 서브: 공이 서버 머리 위(그물 쪽으로 살짝)에서 톡 올라갔다 떨어짐
     D_BACK: 112, D_FRONT: 238, TM_SEP: 58, TM_DY: 70, TM_PUSH: 1.6,  // 2:2 복식: 뒤·앞 자리 · 같은 편끼리는 부드럽게 밀어냄(딱딱하게 부딪히지 않음 → 끼지 않음)
   };
-  const IN = { LEFT: 1, RIGHT: 2, JUMP: 4, SMASH: 8 };
+  const IN = { LEFT: 1, RIGHT: 2, JUMP: 4, SMASH: 8, DOWN: 16, UP: 32 };   // DOWN·UP 은 스매시 방향 전용 (움직임엔 영향 없음)
 
   // 스매시 각도표 [cos, sin] (sin + = 아래로). 삼각함수 대신 숫자로 박아 둠 → 다른 언어에서도 같은 값
   // 가파른 것부터 보고, 그물을 넘는 첫 각도를 씀 (그물 앞에서 치면 바로 뒤로 꽂히고, 멀리서 치면 저절로 납작해짐)
@@ -38,10 +43,14 @@
   // 강타: 납작하고 빠르게 (그물을 넘는 첫 각도 · 뒤 벽을 맞고 튀어나오기도 함)
   const DRIVE_ANG = [[0.970296, 0.241922], [0.984808, 0.173648], [0.994522, 0.104528], [0.999391, 0.034899], [0.99863, -0.052336], [0.990268, -0.139173],
     [0.97437, -0.224951], [0.951057, -0.309017]];                                                                                             // 14° ~ -18°
+  // 방향 없이 치는 스매시: 내리꽂기보다 덜 가파른 곳(28°)부터 — 곧게 뻗는 힘찬 공
+  const POWER_ANG = SPIKE_ANG.slice(6);
 
-  // 행동표 (학습용): [방향 0 없음 / -1 뒤 / +1 앞(상대 쪽), 점프, 스매시] → 12가지
+  // 행동표 (학습용): [방향 0 없음 / -1 뒤 / +1 앞(상대 쪽), 점프, 스매시, 아래] → 15가지
+  //   0~11 은 예전 그대로 (아래 없음). 12~14 = 아래 + 스매시 (방향 없음 / 뒤 / 앞) → 내리꽂기 · 뒤로 · 앞+아래
   const ACTIONS = [];
-  for (const d of [0, -1, 1]) for (const j of [0, 1]) for (const k of [0, 1]) ACTIONS.push([d, j, k]);
+  for (const d of [0, -1, 1]) for (const j of [0, 1]) for (const k of [0, 1]) ACTIONS.push([d, j, k, 0]);
+  for (const d of [0, -1, 1]) ACTIONS.push([d, 0, 1, 1]);
   const OBS_N = 18, OBS_N2 = 26;
 
   // 씨앗 난수 (mulberry32) — 상태 안에 들어 있어 저장·복원해도 이어짐
@@ -60,7 +69,7 @@
   // 복식: 이 편에서 지금 뒤(서브 차례)에 서는 고양이
   const backCat = (s, side) => side + 2 * s.rot[side];
   function newCat(i, prevIn, x) {
-    return { x: x == null ? homeX(i) : x, y: 0, vx: 0, vy: 0, ground: true, swing: 0, swingCd: 0, dive: 0, diveDir: 0, rec: 0, noHit: 0, prevIn: prevIn || 0 };
+    return { x: x == null ? homeX(i) : x, y: 0, vx: 0, vy: 0, ground: true, swing: 0, swingCd: 0, dive: 0, diveDir: 0, rec: 0, noHit: 0, dbuf: 0, prevIn: prevIn || 0 };
   }
 
   // 새 경기. opts: { target: 7|11|15, maxTouches: 0 = 제한 없음(기본, 가족용) | 3 = 진짜 배구처럼, server: 0|1 (없으면 씨앗으로),
@@ -201,33 +210,59 @@
   }
 
   const LOB_UP = [0, 60, 150, 260], LOB_SLOW = [1, 0.6, 0.35, 0.2];
-  // 스매시 공 속도. aim: spike(그냥) / drive(앞) / lob(뒤). 돌려주는 값 = 실제로 친 방법
-  // 너무 낮아서 어느 각도로도 그물을 못 넘기면 살짝 넘기기로 바뀜 (제 코트에 내리꽂지 않게)
-  function shoot(b, i, aim, perfect, ht) {
-    const f = i === 0 ? 1 : -1;
-    if (aim !== 'lob') {
-      const tbl = aim === 'drive' ? DRIVE_ANG : SPIKE_ANG;
-      let S = (aim === 'drive' ? C.DRIVE_V : C.SPIKE_V) * (perfect ? C.PERFECT_K : 1) * (1 + (ht || 0));
-      if (S > C.BALL_MAX - 0.01) S = C.BALL_MAX - 0.01;
-      for (let n = 0; n < tbl.length; n++) {                        // 그물을 넘는 가장 가파른 각도
-        const vx = f * S * tbl[n][0], vy = -S * tbl[n][1];
-        if (clearsNet(b.x, b.y, vx, vy, f)) { b.vx = vx; b.vy = vy; return aim; }
-      }
-    }
-    const dNet = (C.NET_X - b.x) * f;
-    let D = C.LOB_D0 + C.LOB_DK * (dNet > 0 ? dNet : 0);
-    if (D > C.LOB_DMAX) D = C.LOB_DMAX;
-    const top0 = (b.y > C.NET_H + 40 ? b.y : C.NET_H + 40) + C.LOB_APEX;
-    for (let n = 0; n < 16; n++) {                                  // 그물에 걸리면 더 높이·더 천천히 띄워 봄 (그물 바로 옆 낮은 공도)
+  // 스매시 방향 이름 (내 고양이가 보는 쪽 = 앞 = 그물 쪽 기준)
+  //   방향 없음 power(곧게 힘찬 공) · 앞 drive(더 빠르고 납작) · 위 lob(높이 띄워 살짝 넘김) · 아래 spike(가파르게 내리꽂기)
+  //   앞+위 rise(낮게 오르다 깊이) · 앞+아래 dunk(가파르고 더 빠르게) · 뒤 back(제 코트 뒤로 높이 — 짝에게 올려 주기) · 뒤+위 set(더 높고 더 뒤로)
+  //   뒤+아래 는 back 과 같음
+  function aimOf(c, i) {
+    const f = i === 0 ? 1 : -1, pin = c.prevIn | 0;
+    const h = (((pin & IN.RIGHT) ? 1 : 0) - ((pin & IN.LEFT) ? 1 : 0)) * f;
+    const dn = (pin & IN.DOWN) !== 0, up = (pin & IN.UP) !== 0 || ((pin & IN.JUMP) !== 0 && c.vy <= C.UP_VY);
+    const v = up === dn ? 0 : up ? 1 : -1;
+    return h > 0 ? (v > 0 ? 'rise' : v < 0 ? 'dunk' : 'drive') : h < 0 ? (v > 0 ? 'set' : 'back') : (v > 0 ? 'lob' : v < 0 ? 'spike' : 'power');
+  }
+  // 포물선으로 상대 코트 D 만큼 뒤(그물에서)에 떨어뜨리기. 그물에 걸리면 더 높이·더 천천히 띄워 봄 (그물 바로 옆 낮은 공도)
+  function arcShot(b, f, apex, D, vcap) {
+    const top0 = (b.y > C.NET_H + 40 ? b.y : C.NET_H + 40) + apex;
+    for (let n = 0; n < 16; n++) {
       const top = top0 + LOB_UP[n >> 2], vy = Math.sqrt(2 * C.G_BALL * (top - b.y));
       const t = (vy + Math.sqrt(vy * vy + 2 * C.G_BALL * (b.y - C.BALL_R))) / C.G_BALL;
       let vx = (C.NET_X + f * D - b.x) / t * LOB_SLOW[n & 3];
-      if (vx > C.LOB_VX) vx = C.LOB_VX; else if (vx < -C.LOB_VX) vx = -C.LOB_VX;
+      if (vx > vcap) vx = vcap; else if (vx < -vcap) vx = -vcap;
       const vmin = n & 3 ? 0.3 : 1;                                 // 늘 상대 쪽으로
       if (vx * f < vmin) vx = f * vmin;
       b.vx = vx; b.vy = vy;
       if (clearsNet(b.x, b.y, vx, vy, f)) break;
     }
+  }
+  // 뒤로 스매시: 제 코트 안쪽(벽에서 BACK_LO ~ 그물에서 BACK_HI)으로 높이 띄움 → 오래 떠 있어서 뛰어가 다시 받을 수 있음 (바로 제 코트에 꽂히지 않음)
+  function backShot(b, f, apex, D) {
+    const u = f > 0 ? b.x : C.W - b.x;                              // 제 벽에서 잰 거리
+    let tu = u - D; const hi = C.NET_X - C.BACK_HI;
+    if (tu < C.BACK_LO) tu = C.BACK_LO; else if (tu > hi) tu = hi;
+    const tx = f > 0 ? tu : C.W - tu;
+    const top = (b.y > C.NET_H + 40 ? b.y : C.NET_H + 40) + apex, vy = Math.sqrt(2 * C.G_BALL * (top - b.y));
+    const t = (vy + Math.sqrt(vy * vy + 2 * C.G_BALL * (b.y - C.BALL_R))) / C.G_BALL;
+    b.vx = (tx - b.x) / t; b.vy = vy;
+  }
+  // 스매시 공 속도. aim 은 aimOf 이름. 돌려주는 값 = 실제로 친 방법
+  // 너무 낮아서 어느 각도로도 그물을 못 넘기면 살짝 넘기기(lob)로 바뀜 (제 코트에 내리꽂지 않게)
+  function shoot(b, i, aim, perfect, ht) {
+    const f = i === 0 ? 1 : -1;
+    const tbl = aim === 'drive' ? DRIVE_ANG : aim === 'power' ? POWER_ANG : aim === 'spike' || aim === 'dunk' ? SPIKE_ANG : null;
+    if (tbl) {
+      let S = (aim === 'drive' ? C.DRIVE_V : aim === 'power' ? C.POWER_V : aim === 'dunk' ? C.DUNK_V : C.SPIKE_V) * (perfect ? C.PERFECT_K : 1) * (1 + (ht || 0));
+      if (S > C.BALL_MAX - 0.01) S = C.BALL_MAX - 0.01;
+      for (let n = 0; n < tbl.length; n++) {                        // 그물을 넘는 가장 가파른 각도
+        const vx = f * S * tbl[n][0], vy = -S * tbl[n][1];
+        if (clearsNet(b.x, b.y, vx, vy, f)) { b.vx = vx; b.vy = vy; return aim; }
+      }
+    } else if (aim === 'rise') { arcShot(b, f, C.RISE_APEX, C.RISE_D, C.RISE_VX); return aim; }
+    else if (aim === 'back' || aim === 'set') { if (aim === 'set') backShot(b, f, C.SET_APEX, C.SET_D); else backShot(b, f, C.BACK_APEX, C.BACK_D); return aim; }
+    const dNet = (C.NET_X - b.x) * f;
+    let D = C.LOB_D0 + C.LOB_DK * (dNet > 0 ? dNet : 0);
+    if (D > C.LOB_DMAX) D = C.LOB_DMAX;
+    arcShot(b, f, C.LOB_APEX, D, C.LOB_VX);
     return 'lob';
   }
 
@@ -238,10 +273,8 @@
     if (c.swing > 0 && !c.ground && c.dive === 0 && !fast) {        // 공중 스매시: 휘두르는 중 + 앞발 범위 + 너무 빠르지 않은 공
       const px = c.x + f * C.PAW_DX, py = c.y + C.PAW_DY, dx = b.x - px, dy = b.y - py, rr = C.PAW_R + C.BALL_R;
       if (dx * dx + dy * dy < rr * rr) {
-        const held = ((c.prevIn & IN.RIGHT) ? 1 : 0) - ((c.prevIn & IN.LEFT) ? 1 : 0);
-        const want = held * f > 0 ? 'drive' : held * f < 0 ? 'lob' : 'spike';
         const perfect = C.SWING_T - c.swing <= C.PERFECT_T;
-        const aim = shoot(b, i, want, perfect, ht);
+        const aim = shoot(b, i, aimOf(c, i), perfect, ht);          // 이 순간 누르고 있는 방향대로
         c.swing = 0; c.noHit = C.NOHIT_T;
         return { kind: 'smash', aim, perfect };
       }
@@ -283,6 +316,10 @@
     return { kind: 'bump', aim: '', perfect: false };
   }
 
+  function startDive(c, i, k, d, ev) {
+    c.dive = C.DIVE_T; c.diveDir = d; c.vx = d * C.DIVE_V; c.vy = C.DIVE_HOP; c.ground = false; c.swing = 0; c.dbuf = 0;
+    ev.push({ t: 'dive', side: i, cat: k, dir: d });
+  }
   // ── 고양이 움직임 (입력 → 속도 → 위치)
   function moveCat(s, k, inp, ev) {
     const i = sideOf(k), c = s.cats[k], f = i === 0 ? 1 : -1;
@@ -293,6 +330,7 @@
     if (c.swing > 0) c.swing--;
     if (c.swingCd > 0) c.swingCd--;
     if (c.noHit > 0) c.noHit--;
+    if (c.dbuf > 0) c.dbuf--;
     if (c.dive > 0) {                                               // 다이빙 중: 조작 없음, 모래에서 미끄러지며 느려짐
       c.dive--;
       if (c.ground) c.vx *= C.DIVE_FR;
@@ -305,11 +343,11 @@
       const dv = want - c.vx;
       c.vx += dv > a ? a : dv < -a ? -a : dv;
       if (jump && c.ground) { c.vy = C.JUMP_V; c.ground = false; ev.push({ t: 'jump', side: i, cat: k }); }
+      else if (dir !== 0 && c.dbuf > 0 && c.ground && !press && s.phase !== 'ready') startDive(c, i, k, dir, ev);   // 스매시를 먼저 누르고 방향키가 조금 늦은 경우
       if (press && s.phase !== 'ready') {
         if (c.ground) {
-          const d = dir !== 0 ? dir : f;
-          c.dive = C.DIVE_T; c.diveDir = d; c.vx = d * C.DIVE_V; c.vy = C.DIVE_HOP; c.ground = false; c.swing = 0;
-          ev.push({ t: 'dive', side: i, cat: k, dir: d });
+          if (dir !== 0) startDive(c, i, k, dir, ev);               // 방향키를 누른 채 스매시일 때만 몸을 날림
+          else { c.dbuf = C.DIVE_BUF; ev.push({ t: 'swipe', side: i, cat: k }); }   // 방향 없이는 제자리 헛손질 (안 움직임)
         } else if (c.swingCd === 0) {
           c.swing = C.SWING_T; c.swingCd = C.SWING_T + C.SWING_CD;
           ev.push({ t: 'swing', side: i, cat: k });
@@ -360,7 +398,7 @@
       if (r.kind === 'smash') { s.stats.smashes[i]++; if (r.perfect) s.stats.perfect[i]++; }
       if (r.kind === 'dig') s.stats.digs[i]++;
     }
-    ev.push({ t: 'hit', side: i, cat: k, kind: r.kind, aim: r.aim, perfect: r.perfect, x: b.x, y: b.y, v: Math.sqrt(b.vx * b.vx + b.vy * b.vy), n: s.touches[i] });
+    ev.push({ t: 'hit', side: i, cat: k, kind: r.kind, aim: r.aim, perfect: r.perfect, x: b.x, y: b.y, v: Math.sqrt(b.vx * b.vx + b.vy * b.vy), vx: b.vx, vy: b.vy, n: s.touches[i] });
     if (live && s.maxTouches > 0 && s.touches[i] > s.maxTouches) {
       ev.push({ t: 'fault', side: i, reason: 'touches' });
       awardPoint(s, 1 - i, 'touches', ev);
@@ -441,17 +479,18 @@
   function actionToInput(a, side) {
     const A = ACTIONS[a] || ACTIONS[0];
     const fwd = side === 0 ? IN.RIGHT : IN.LEFT, back = side === 0 ? IN.LEFT : IN.RIGHT;
-    return (A[0] > 0 ? fwd : A[0] < 0 ? back : 0) | (A[1] ? IN.JUMP : 0) | (A[2] ? IN.SMASH : 0);
+    return (A[0] > 0 ? fwd : A[0] < 0 ? back : 0) | (A[1] ? IN.JUMP : 0) | (A[2] ? IN.SMASH : 0) | (A[3] ? IN.DOWN : 0);
   }
   function inputToAction(inp, side) {                               // 사람 플레이 기록 → 행동 번호 (흉내 학습용)
     const r = (inp & IN.RIGHT) ? 1 : 0, l = (inp & IN.LEFT) ? 1 : 0;
     let d = r - l; if (side === 1) d = -d;
+    if ((inp & IN.DOWN) && (inp & IN.SMASH)) return 12 + (d === 0 ? 0 : d < 0 ? 1 : 2);   // 아래 + 스매시 (12~14)
     return (d === 0 ? 0 : d < 0 ? 1 : 2) * 4 + ((inp & IN.JUMP) ? 2 : 0) + ((inp & IN.SMASH) ? 1 : 0);
   }
 
   // 입력 비트 ↔ 읽기 쉬운 모양 ({ left, right, jump, smash })
-  const bits = o => o ? (o.left ? IN.LEFT : 0) | (o.right ? IN.RIGHT : 0) | (o.jump ? IN.JUMP : 0) | (o.smash ? IN.SMASH : 0) : 0;
-  const unbits = n => ({ left: !!(n & IN.LEFT), right: !!(n & IN.RIGHT), jump: !!(n & IN.JUMP), smash: !!(n & IN.SMASH) });
+  const bits = o => o ? (o.left ? IN.LEFT : 0) | (o.right ? IN.RIGHT : 0) | (o.jump ? IN.JUMP : 0) | (o.smash ? IN.SMASH : 0) | (o.down ? IN.DOWN : 0) | (o.up ? IN.UP : 0) : 0;
+  const unbits = n => ({ left: !!(n & IN.LEFT), right: !!(n & IN.RIGHT), jump: !!(n & IN.JUMP), smash: !!(n & IN.SMASH), down: !!(n & IN.DOWN), up: !!(n & IN.UP) });
 
   // ── 도구: 복사 · 해시 · 좌우 뒤집기 (테스트·데이터 늘리기용)
   const clone = s => JSON.parse(JSON.stringify(s));
@@ -483,6 +522,6 @@
   }
 
   const API = { C, IN, ACTIONS, OBS_N, OBS_N2, SPIKE_ANG, DRIVE_ANG, create, step, obs, obsTeam, sideOf, homeX2, actionToInput, inputToAction, bits, unbits, clone, fromJSON, hash, mirror, rand,
-    ballPhys, predictLanding, catShape, pawOf, contact, shoot, clearsNet, heat, homeX };
+    ballPhys, predictLanding, catShape, pawOf, contact, shoot, aimOf, clearsNet, heat, homeX, POWER_ANG };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Volley = API;
 })(this);

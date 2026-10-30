@@ -94,6 +94,7 @@ body.vb-pad .toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 66px)}
 .pops{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
 .pops i{position:absolute;font:21px var(--round);font-style:normal;color:#ff7a3d;text-shadow:0 2px 0 #fff,0 0 12px rgba(255,255,255,.95);transform:translate(-50%,-50%);animation:popUp .85s ease-out forwards;white-space:nowrap}
 .pops i.hot{color:#f2647e;font-size:19px;animation-duration:1.3s}
+.pops i.aim{color:#2f9c84;font-size:17px;animation-duration:.8s}
 @keyframes popUp{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}20%{opacity:1;transform:translate(-50%,-70%) scale(1.15)}100%{opacity:0;transform:translate(-50%,-170%) scale(1)}}
 
 /* 엄지 단추 (폰): 왼쪽 ◀ ▶ · 오른쪽 스매시·점프 — 손가락 여러 개 같이 눌러도 됨 */
@@ -108,6 +109,13 @@ body.vb-pad .toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 66px)}
 .pb.sm{background:var(--accent);color:#fff;box-shadow:0 4px 0 var(--accent-d),var(--shadow);font-size:18px;margin-bottom:calc(var(--pb) * .42)}
 .pb.jp{background:var(--accent2);color:#fff;box-shadow:0 4px 0 var(--accent2-d),var(--shadow);font-size:19px}
 .pb.on{transform:translateY(3px) scale(.95);box-shadow:0 1px 0 var(--tint-d)}
+/* 스매시 단추: 위·아래 화살표 힌트 (누른 채 끌면 해당 방향이 켜짐) */
+.pb.sm{position:relative}
+.pb.sm em{font-style:normal}
+.pb.sm .ar{position:absolute;left:0;right:0;text-align:center;font:10px/1 var(--round);font-style:normal;opacity:.55;transition:opacity .08s,transform .08s}
+.pb.sm .ar.u{top:6px}.pb.sm .ar.d{bottom:6px}
+.pb.sm[data-dir="up"] .ar.u,.pb.sm[data-dir="dn"] .ar.d{opacity:1;transform:scale(1.7)}
+.pb.sm[data-dir="up"] .ar.d,.pb.sm[data-dir="dn"] .ar.u{opacity:.15}
 .pb.mv.on{background:var(--tint2)}
 .pb.sm.on{background:var(--accent-d);box-shadow:0 1px 0 var(--accent-d)}
 .pb.jp.on{background:var(--accent2-d);box-shadow:0 1px 0 var(--accent2-d)}
@@ -118,6 +126,7 @@ body.vb-pad .toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 66px)}
 .play.duo .ptag{display:block;grid-column:1/-1;text-align:center;font:14px/1 var(--round);color:var(--soft)}
 .play.duo .pb{width:62px;height:62px;font-size:22px}
 .play.duo .pb.sm{margin:0;font-size:14px}
+.play.duo .pb.sm .ar{font-size:8px;top:4px}.play.duo .pb.sm .ar.d{top:auto;bottom:4px}
 .play.duo .pb.jp{font-size:15px}
 
 /* 폰 가로: 판이 화면을 다 쓰고, 단추는 반투명하게 아래 구석에 */

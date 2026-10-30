@@ -1,8 +1,8 @@
 /* 냥냥 배구 — AI 고양이. 코어 함수(ballPhys·contact·shoot)만 써서 공을 미리 굴려 보고 움직임
    - 반응 지연: 공을 몇 틱 늦게 '보고', 그 뒤로는 물리대로 이어 그려 판단 (사람처럼 맞은 직후엔 잠깐 헛걸음)
    - 받기: 서 있을(또는 뛰어오를) 자리 후보마다 진짜 접촉 계산을 돌려 공이 어디에 떨어질지 보고 고름
-   - 스매시: 점프 궤적을 틱마다 공 길과 맞춰 봐서 앞발에 먼저 닿는 계획만 씀, 상대 자리를 보고 내리꽂기/강타/살짝 넘기기
-   - 다이빙: 달려서는 못 닿고 몸을 날리면 닿는 공만
+   - 스매시: 점프 궤적을 틱마다 공 길과 맞춰 봐서 앞발에 먼저 닿는 계획만 씀, 상대 자리를 보고 방향(곧게·강타·내리꽂기·살짝 넘기기·깊이 등)을 고름 — 단계마다 쓰는 방향이 다름
+   - 다이빙: 달려서는 못 닿고 몸을 날리면 닿는 공만 — 땅 스매시는 방향키와 함께일 때만 몸을 날리므로 늘 가는 쪽 키를 같이 누름
    VolleyBots.create(tier, side, seed).act(state) → 입력 비트. 학습한 정책도 같은 모양(policy) */
 (function (root) {
   'use strict';
@@ -10,12 +10,13 @@
   const C = V.C, IN = V.IN;
 
   // 단계별 성격: 반응 지연(틱)·자리 오차·스매시 의지·스매시 거리·휘두르기 타이밍(이르게 누르는 틱, 3 이하면 퍼펙트)·다이빙·자리 후보 간격·노림수·점프 받기
+  //   aims = 쓰는 스매시 방향 (초급은 곧게·강타·살짝 넘기기만 아무거나, 중급은 내리꽂기까지 섞어 고르고, 고급은 앞+아래·앞+위까지 모두 재서 가장 좋은 것). 뒤로 스매시(back·set)는 안 씀
   //   react = 스매시 자리를 고를 때 '상대가 이만큼 늦게 반응한다'고 보는 틱 (작을수록 빠른 상대도 못 닿는 곳을 노림)
   const TIERS = {
     // 초급: 처음 하는 사람도 점수를 꽤 낼 만큼 느긋하게 (selftest 의 '초보 사람 흉내'로 맞춤)
-    easy: { label: '초급', delay: 17, delayVar: 7, noise: 35, smash: 0.1, smashRange: 80, lead: 8, leadVar: 3, dive: 0.2, step: 16, aim: 0, react: 12, serveSmash: 0, home: 0, jumpBump: 0 },
-    normal: { label: '중급', delay: 9, delayVar: 4, noise: 11, smash: 0.5, smashRange: 150, lead: 6, leadVar: 3, dive: 0.65, step: 8, aim: 0.5, react: 6, serveSmash: 0.3, home: 0, jumpBump: 0.5 },
-    hard: { label: '고급', delay: 4, delayVar: 2, noise: 3, smash: 0.9, smashRange: 230, lead: 4, leadVar: 2, dive: 1, step: 4, aim: 1, react: 3, serveSmash: 0.6, home: 1, jumpBump: 1 },
+    easy: { label: '초급', delay: 17, delayVar: 7, noise: 35, smash: 0.1, smashRange: 80, lead: 8, leadVar: 3, dive: 0.2, step: 16, aim: 0, react: 12, serveSmash: 0, home: 0, jumpBump: 0, aims: ['power', 'drive', 'lob'] },
+    normal: { label: '중급', delay: 9, delayVar: 4, noise: 11, smash: 0.5, smashRange: 150, lead: 6, leadVar: 3, dive: 0.65, step: 8, aim: 0.5, react: 6, serveSmash: 0.3, home: 0, jumpBump: 0.5, aims: ['power', 'drive', 'spike', 'lob'] },
+    hard: { label: '고급', delay: 4, delayVar: 2, noise: 3, smash: 0.9, smashRange: 230, lead: 4, leadVar: 2, dive: 1, step: 4, aim: 1, react: 3, serveSmash: 0.6, home: 1, jumpBump: 1, aims: ['power', 'drive', 'spike', 'dunk', 'lob', 'rise'] },
   };
 
   function makeRng(seed) {
@@ -47,9 +48,11 @@
     const bell = () => (rnd() + rnd() + rnd() - 1.5) * 1.15;
     const fwdBit = side === 0 ? IN.RIGHT : IN.LEFT, backBit = side === 0 ? IN.LEFT : IN.RIGHT;
     let hist = [], plan = null, delay = P.delay, noiseX = 0, homeOff = 0, mood = { smash: false, dive: false, serve: false };
-    let lastPhase = '', prevOut = 0, moving = false;
+    let lastPhase = '', prevOut = 0, moving = false, swingHold = null;
 
-    function reset() { hist = []; plan = null; lastPhase = ''; prevOut = 0; moving = false; }
+    // 방향 이름 → 누를 키 (앞=상대 쪽): 앞·위·아래·뒤 조합
+    const aimBits = aim => ({ drive: fwdBit, dunk: fwdBit | IN.DOWN, rise: fwdBit | IN.UP, lob: IN.UP, spike: IN.DOWN, back: backBit, set: backBit | IN.UP }[aim] || 0);
+    function reset() { hist = []; plan = null; lastPhase = ''; prevOut = 0; moving = false; swingHold = null; }
     // 공이 새 길로 바뀔 때마다 이번 공을 어떻게 대할지 한 번만 정함 → 매 틱 흔들리지 않음
     function newTrajectory() {
       delay = Math.max(1, Math.round(P.delay + (rnd() - 0.5) * 2 * P.delayVar));
@@ -165,10 +168,10 @@
             if (!r) continue;
             const q = Pt[r.k];
             if (q.vx * q.vx + q.vy * q.vy > vin2) continue;
-            let aim = 'spike', as = -9;
-            const aims = ['spike', 'drive', 'lob'];
+            let aim = 'power', as = -9;
+            const aims = P.aims;
             if (rnd() < P.aim) { for (const am of aims) { const v = shotScore(q, am, ops, ht); if (v > as) { as = v; aim = am; } } }
-            else { aim = aims[Math.floor(rnd() * 3)]; as = shotScore(q, aim, ops, ht); }
+            else { aim = aims[Math.floor(rnd() * aims.length)]; as = shotScore(q, aim, ops, ht); }
             if (as < -1) continue;
             const contact = now + 1 + r.k, lead0 = Math.max(0, Math.round(P.lead + (rnd() - 0.5) * 2 * P.leadVar));
             const lead = hover > 0 || s.hits === 0 ? Math.min(lead0, 3) : lead0;   // 서브 토스는 맞는 때가 조금 늦어지기 쉬워 일찍 휘두르지 않음
@@ -299,9 +302,9 @@
       const t1 = s.tick + 1;
       if (plan.kind === 'smash' || plan.kind === 'jbump') {
         if (!plan.jumped && me.ground && t1 >= plan.jumpStep) { out |= IN.JUMP; plan.jumped = true; }
-        else if (plan.jumped && me.vy > 0) out |= IN.JUMP;            // 끝까지 높이
-        if (plan.kind === 'smash' && (!me.ground || out & IN.JUMP) && !plan.swung && t1 >= plan.swingStep && !(prevOut & IN.SMASH)) { out |= IN.SMASH; plan.swung = true; }
-        if (plan.kind === 'smash' && plan.swung && t1 <= plan.contact + 3) out |= plan.aim === 'drive' ? fwdBit : plan.aim === 'lob' ? backBit : 0;
+        else if (plan.jumped && me.vy > (plan.kind === 'smash' && plan.swung ? C.UP_VY + 0.9 : 0)) out |= IN.JUMP;   // 끝까지 높이 (휘두른 뒤엔 꼭대기 근처에서 떼서 점프가 '위' 방향으로 읽히지 않게)
+        if (plan.kind === 'smash' && (!me.ground || out & IN.JUMP) && !plan.swung && t1 >= plan.swingStep && !(prevOut & IN.SMASH)) { out |= IN.SMASH; plan.swung = true; swingHold = { aim: plan.aim, t0: t1, until: t1 + C.SWING_T }; }
+        if (plan.kind === 'smash' && plan.swung && t1 <= plan.contact + 3) out |= aimBits(plan.aim);
         else out |= steer(me, plan.x, 3);
         if (plan.jumped && me.ground && !(out & IN.JUMP) && t1 > plan.jumpStep + 3) plan = { kind: 'home', x: clampX(s.team === 2 ? homeFor(s) : V.homeX(side)), made: s.tick };
       } else if (plan.kind === 'dive') {
@@ -316,6 +319,11 @@
       } else {
         out |= steer(me, plan.x, plan.kind === 'home' ? 10 : 4);
       }
+      // 휘두르는 동안엔 계획이 바뀌어도 고른 방향만 누름 (자리 맞추려는 좌우 키가 섞여 엉뚱한 방향으로 나가지 않게), 점프도 꼭대기 근처에선 뗌
+      if (swingHold && t1 <= swingHold.until && (t1 === swingHold.t0 || me.swing > 0)) {
+        out = (out & ~(IN.LEFT | IN.RIGHT | IN.UP | IN.DOWN)) | aimBits(swingHold.aim);
+        if (!me.ground && me.vy <= C.UP_VY + 0.9) out &= ~IN.JUMP;
+      } else swingHold = null;
       prevOut = out;
       return out;
     }

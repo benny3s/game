@@ -10,7 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=6">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <div class="wrap" id="menu">
@@ -46,9 +46,9 @@
       <p class="keys small" id="keys"></p>
       <ul class="howto">
         <li>공이 머리에 닿으면 통 하고 넘어가요. 떨어질 곳에 먼저 가 있어요</li>
-        <li>공 가까이 뛰어올라 <b>스매시</b>! 앞을 같이 누르면 강타, 뒤를 누르면 살짝 넘기기</li>
+        <li>공 가까이 뛰어올라 <b>스매시</b>! <b>같이 누른 방향</b>대로 날아가요 — 그냥 = 곧게 · 앞 = 빠른 강타 · 위 = 높이 · 아래 = 내리꽂기 · 뒤 = 내 쪽 뒤로 높이(짝에게 올려 주기)</li>
         <li>공이 앞발에 닿기 직전에 누르면 <b>퍼펙트</b>! 그물 앞에서 높이 치면 받기 어려워요</li>
-        <li>땅에서 스매시를 누르면 몸을 날려 낮은 공을 받아요</li>
+        <li>땅에서는 <b>방향키를 누른 채</b> 스매시해야 몸을 날려 낮은 공을 받아요 (그냥 누르면 안 움직여요)</li>
         <li>상대 쪽 모래에 공이 떨어지면 1점, 먼저 정한 점수를 내면 이겨요</li>
       </ul>
     </div>
@@ -117,12 +117,12 @@
     <div class="cl" data-p="0">
       <span class="ptag">1P</span>
       <div class="dpad"><span class="pb mv" data-b="1">◀</span><span class="pb mv" data-b="2">▶</span></div>
-      <div class="acts"><span class="pb sm" data-b="8">스매시</span><span class="pb jp" data-b="4">점프</span></div>
+      <div class="acts"><span class="pb sm" data-b="8"><i class="ar u">▲</i><em>스매시</em><i class="ar d">▼</i></span><span class="pb jp" data-b="4">점프</span></div>
     </div>
     <div class="cl" data-p="1">
       <span class="ptag">2P</span>
       <div class="dpad"><span class="pb mv" data-b="1">◀</span><span class="pb mv" data-b="2">▶</span></div>
-      <div class="acts"><span class="pb sm" data-b="8">스매시</span><span class="pb jp" data-b="4">점프</span></div>
+      <div class="acts"><span class="pb sm" data-b="8"><i class="ar u">▲</i><em>스매시</em><i class="ar d">▼</i></span><span class="pb jp" data-b="4">점프</span></div>
     </div>
   </div>
   <div class="dock" id="dock">
@@ -148,11 +148,11 @@
 <script src="../common/cozy.js?v=6"></script>
 <script src="../common/arena.js?v=6"></script>
 <script src="../common/arena-ui.js?v=6"></script>
-<script src="core.js?v=5"></script>
-<script src="keys.js?v=1"></script>
-<script src="bots.js?v=5"></script>
-<script src="render.js?v=5"></script>
+<script src="core.js?v=6"></script>
+<script src="keys.js?v=2"></script>
+<script src="bots.js?v=6"></script>
+<script src="render.js?v=6"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=6"></script>
+<script src="main.js?v=7"></script>
 </body>
 </html>
