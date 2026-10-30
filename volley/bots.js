@@ -34,9 +34,12 @@
   const jumpY = j => C.JUMP_V * j - C.G_CAT * j * (j + 1) / 2;    // 점프를 누르고 있을 때 j 틱째 높이
   const jumpVy = j => C.JUMP_V - C.G_CAT * j;
 
-  function create(tier, side, seed) {
+  // 복식이면 opt = { cat: 고양이 번호(0~3), team: 같은 편 두 봇이 함께 쓰는 빈 객체 {} } — 누가 받을지 둘이 같은 답을 보게 함
+  function create(tier, side, seed, opt) {
     const P = TIERS[tier] || TIERS.normal;
-    const rnd = makeRng(seed == null ? 0xC0FFEE + side * 7919 : seed);
+    opt = opt || {};
+    const ci = opt.cat == null ? side : opt.cat, team = opt.team || {};
+    const rnd = makeRng(seed == null ? 0xC0FFEE + ci * 7919 : seed);
     const f = side === 0 ? 1 : -1;
     const mine = x => side === 0 ? x < C.NET_X : x > C.NET_X;
     const lo = side === 0 ? C.CAT_HW : C.NET_X + C.NET_HW + C.CAT_HW, hi = side === 0 ? C.NET_X - C.NET_HW - C.CAT_HW : C.W - C.CAT_HW;
@@ -100,26 +103,43 @@
     }
     // 스매시 결과 점수: 상대가 제때 닿기 어려운 곳일수록 높음
     //   여유 = 공이 떨어지는 틱 - (달려가는 틱 + 상대 반응 P.react) → 음수면 못 닿음. 0~2 점 + 조금의 변덕
-    function shotScore(p, aim, op, ht) {
+    function shotScore(p, aim, ops, ht) {
       const b = { x: p.x, y: p.y, vx: 0, vy: 0 };
       const used = V.shoot(b, side, aim, false, ht);
       const L = V.predictLanding(b, 200);
       if (mine(L.x)) return -5;
-      const busy = op.dive + op.rec + (op.ground ? 0 : 5);
-      const run = Math.max(0, Math.abs(L.x - op.x) - 44) / C.MOVE_V + 3 + busy;
-      const margin = L.t - run - P.react;
+      let margin = 1e9;                                               // 상대가 둘이면 가장 빨리 닿는 쪽 기준
+      for (const op of ops) {
+        const busy = op.dive + op.rec + (op.ground ? 0 : 5);
+        const run = Math.max(0, Math.abs(L.x - op.x) - 44) / C.MOVE_V + 3 + busy;
+        const mg = L.t - run - P.react; if (mg < margin) margin = mg;
+      }
       const m = margin < -12 ? -12 : margin > 12 ? 12 : margin;
       return 1 - m / 12 + (used !== aim ? -0.3 : 0) + rnd() * 0.25;
     }
 
     function think(s, est, hover) {
-      const me = s.cats[side], op = s.cats[1 - side], now = s.tick;
+      const me = s.cats[ci], two = s.team === 2, now = s.tick;
+      const ops = two ? [s.cats[1 - side], s.cats[3 - side]] : [s.cats[1 - side]], op = ops[0];
       const Pt = path(est, hover, 260);
       const end = Pt[Pt.length - 1];
       let comes = mine(end.x);
       if (!comes) for (let k = 0; k < Pt.length; k++) if (mine(Pt[k].x) && Pt[k].y < 240) { comes = true; break; }
-      const homeX = V.homeX(side) + (P.home ? f * ((op.x - C.NET_X) * f < 90 ? -14 : 8) : 0);
+      const homeX = two ? homeFor(s) : V.homeX(side) + (P.home ? f * ((op.x - C.NET_X) * f < 90 ? -14 : 8) : 0);
       if (!comes || s.phase === 'point' || s.phase === 'over') return { kind: 'home', x: clampX(homeX + homeOff), made: now };
+      if (two) {                                                      // 복식: 맡은 고양이만 공에 가고, 다른 하나는 빈 곳(앞이면 뒤, 뒤면 앞)을 지킴
+        const tk = taker(s);
+        if (tk.cat !== ci) {
+          // 내 쪽 벽에서 잰 거리(u)로: 짝이 뒤에서 받으면 앞을, 앞에서 받으면 뒤를 지키되 짝 자리에서 90 이상 떨어져 (서로 길을 막지 않게)
+          const mx = team.tgt && team.tgt.key === team.key ? team.tgt.x : s.cats[ci ^ 2].x;   // 짝이 가려는 자리 (아직 모르면 지금 자리)
+          const u0 = side === 0 ? mx : C.W - mx, uMax = C.NET_X - C.NET_HW - C.CAT_HW;
+          const fr = Math.max(C.D_FRONT, u0 + 90), bk = Math.min(C.D_BACK, u0 - 90);
+          const myU = side === 0 ? me.x : C.W - me.x;                 // 짝을 가로질러 가지 않게: 내가 짝보다 앞이면 앞을, 뒤면 뒤를 먼저
+          const frontFirst = Math.abs(myU - u0) < 30 ? u0 < 215 : myU > u0;
+          let u = frontFirst ? (fr <= uMax ? fr : bk >= C.CAT_HW ? bk : uMax) : (bk >= C.CAT_HW ? bk : fr <= uMax ? fr : C.CAT_HW);
+          return { kind: 'home', x: clampX((side === 0 ? u : C.W - u) + homeOff * 0.5), made: now, cover: true };
+        }
+      }
       const busy = me.rec + me.dive;
       const need = x => Math.abs(x - me.x) / C.MOVE_V + 2 + busy;
       // 터치 제한이 없어도 세 번 안에 넘기려 함 (머리로 공을 계속 튀기며 시간 끌지 않게)
@@ -147,8 +167,8 @@
             if (q.vx * q.vx + q.vy * q.vy > vin2) continue;
             let aim = 'spike', as = -9;
             const aims = ['spike', 'drive', 'lob'];
-            if (rnd() < P.aim) { for (const am of aims) { const v = shotScore(q, am, op, ht); if (v > as) { as = v; aim = am; } } }
-            else { aim = aims[Math.floor(rnd() * 3)]; as = shotScore(q, aim, op, ht); }
+            if (rnd() < P.aim) { for (const am of aims) { const v = shotScore(q, am, ops, ht); if (v > as) { as = v; aim = am; } } }
+            else { aim = aims[Math.floor(rnd() * 3)]; as = shotScore(q, aim, ops, ht); }
             if (as < -1) continue;
             const contact = now + 1 + r.k, lead0 = Math.max(0, Math.round(P.lead + (rnd() - 0.5) * 2 * P.leadVar));
             const lead = hover > 0 || s.hits === 0 ? Math.min(lead0, 3) : lead0;   // 서브 토스는 맞는 때가 조금 늦어지기 쉬워 일찍 휘두르지 않음
@@ -159,7 +179,8 @@
       // (나) 몸으로 받기: 자리 후보마다 진짜 접촉을 돌려 봄
       const scoreBump = (r, xc, extra) => {
         let sc;
-        if (!mine(r.land)) sc = 1 + 0.5 * Math.abs(r.land - op.x) / 320 + (r.t < 40 ? 0.15 : 0);
+        let od = 1e9; for (const o of ops) { const d = Math.abs(r.land - o.x); if (d < od) od = d; }
+        if (!mine(r.land)) sc = 1 + 0.5 * od / 320 + (r.t < 40 ? 0.15 : 0);
         else sc = touchesLeft > 1 ? 0.1 + (r.apex > 210 && (C.NET_X - r.land) * f < 140 ? 0.25 : 0) : -2;
         if (need(xc) > r.k + 1 - extra) sc -= 3;
         return sc - 0.0015 * Math.abs(xc - me.x) - extra * 0.004;
@@ -194,6 +215,7 @@
       if ((!best || best.score < 0) && mood.dive && mine(end.x) && touchesLeft > 0) consider({ kind: 'dive', x: end.x, land: now + Pt.length, score: 0, made: now });
       if (!best) best = { kind: 'chase', x: clampX(end.x - f * 12), score: -1, made: now };
       best.x = clampX(best.x + (best.kind === 'smash' || best.kind === 'jbump' ? noiseX * 0.35 : noiseX));
+      if (two) team.tgt = { key: team.key, x: best.x };              // 짝이 비켜 설 수 있게 내가 갈 자리를 알려 둠
       return best;
     }
 
@@ -207,12 +229,49 @@
       return me.vx < 0 && -dx < stop ? 0 : IN.LEFT;
     }
 
+    // 복식 자리: 그물에 더 가까운 쪽이 앞, 다른 쪽이 뒤 (같은 자리면 번호 큰 쪽이 앞)
+    //   한 번 정하면 공이 그물을 넘을 때까지 그대로 (team 객체로 같이 봄 → 둘이 같은 자리로 몰리며 오락가락하지 않음)
+    function homeFor(s) {
+      const key = s.stats.rallies + ":" + s.crosses + ":" + (s.phase === "ready" ? "r" : "p");
+      if (team.rk !== key || team.rside !== side) {
+        const me = s.cats[ci], mate = s.cats[ci ^ 2], d = (me.x - mate.x) * f;
+        team.front = s.phase === "ready" && s.rot ? side + 2 * (1 - s.rot[side]) : d > 0 || (d === 0 && ci >= 2) ? ci : ci ^ 2;
+        team.rk = key; team.rside = side;
+      }
+      return V.homeX2(side, team.front === ci);
+    }
+    // 복식: 이번 공(랠리·접촉·넘김이 같은 동안)은 누가 받나 — 같은 편 봇이 team 객체로 한 번만 정해 같이 씀
+    //   진짜 공 길에서 처음 받을 높이로 내려오는 곳까지 가까운 쪽 (방금 친 고양이는 다음 터치를 짝에게 미룸 · 몸 날린 뒤엔 늦음)
+    const takeKey = s => s.stats.rallies + ':' + s.hits + ':' + s.crosses + ':' + (s.phase === 'ready' ? 'r' : 'p');
+    function taker(s) {
+      const key = takeKey(s);
+      if (team.key === key && team.side === side) return team.pick;
+      let x0;
+      if (s.phase === 'ready') x0 = s.ball.x;
+      else {
+        const b = { x: s.ball.x, y: s.ball.y, vx: s.ball.vx, vy: s.ball.vy };
+        x0 = null;
+        for (let t = 0; t < 220; t++) { V.ballPhys(b, null); if (mine(b.x) && b.vy < 0 && b.y < 150) { x0 = b.x; break; } if (b.y <= C.BALL_R) break; }
+        if (x0 == null) x0 = b.x;
+      }
+      let best = -1, bc = 1e9;
+      for (const k of [side, side + 2]) {
+        const c = s.cats[k];
+        let cost = Math.abs(x0 - c.x) + (c.dive + c.rec) * C.MOVE_V;
+        if (s.phase === 'ready') cost = s.serveCat === k ? 0 : 999;
+        else if (s.lastSide === side && s.lastCat === k) cost += 70;
+        if (cost < bc) { bc = cost; best = k; }
+      }
+      team.key = key; team.side = side; team.pick = { cat: best, x: x0 };
+      return team.pick;
+    }
+
     function act(s) {
-      const me = s.cats[side], b = s.ball;
+      const me = s.cats[ci], b = s.ball;
       hist.push({ x: b.x, y: b.y, vx: b.vx, vy: b.vy, phase: s.phase });
       if (hist.length > 40) hist.shift();
       if (s.phase !== lastPhase) {                                     // 새 점수·서브: 처음부터
-        if (s.phase === 'ready') { hist = [hist[hist.length - 1]]; mood.serve = s.server === side && rnd() < P.serveSmash; homeOff = bell() * P.noise * 0.4; }
+        if (s.phase === 'ready') { hist = [hist[hist.length - 1]]; mood.serve = (s.team === 2 ? s.serveCat === ci : s.server === side) && rnd() < P.serveSmash; homeOff = bell() * P.noise * 0.4; }
         lastPhase = s.phase; newTrajectory(); plan = null;
       }
       if (s.phase === 'over') { prevOut = 0; return 0; }
@@ -231,7 +290,9 @@
       else if (s.hits === 0 && s.phase === 'play') est = b;            // 서브 토스는 누구나 뻔히 보임 (늦게 본 것처럼 잘못 짐작하지 않게)
       else { const q = { x: seen.x, y: seen.y, vx: seen.vx, vy: seen.vy }; for (let k = 0; k < hist.length - 1 - di; k++) V.ballPhys(q, null); est = q; }
       const locked = plan && (plan.kind === 'smash' || plan.kind === 'jbump') && plan.jumped;
-      const stale = !plan || changed || ((plan.kind === 'home' || plan.kind === 'bump' || plan.kind === 'chase') && s.tick - plan.made >= 12);
+      let stale = !plan || changed || ((plan.kind === 'home' || plan.kind === 'bump' || plan.kind === 'chase') && s.tick - plan.made >= (plan.cover ? 5 : 12)) || (s.team === 2 && plan.kind === 'dive' && s.tick + 1 > plan.land + 4);
+      // 복식: 짝이 '내 공!' 하고 맡았으면 늦게 봤어도 바로 비켜 줌 (둘이 같은 공으로 달려가 겹치지 않게)
+      if (s.team === 2 && plan && !locked && plan.kind !== 'home' && team.key === takeKey(s) && team.side === side && team.pick.cat !== ci) stale = true;
       if (stale && !(locked && !changed)) plan = think(s, est, hover);
 
       let out = 0;
@@ -242,7 +303,7 @@
         if (plan.kind === 'smash' && (!me.ground || out & IN.JUMP) && !plan.swung && t1 >= plan.swingStep && !(prevOut & IN.SMASH)) { out |= IN.SMASH; plan.swung = true; }
         if (plan.kind === 'smash' && plan.swung && t1 <= plan.contact + 3) out |= plan.aim === 'drive' ? fwdBit : plan.aim === 'lob' ? backBit : 0;
         else out |= steer(me, plan.x, 3);
-        if (plan.jumped && me.ground && !(out & IN.JUMP) && t1 > plan.jumpStep + 3) plan = { kind: 'home', x: clampX(V.homeX(side)), made: s.tick };
+        if (plan.jumped && me.ground && !(out & IN.JUMP) && t1 > plan.jumpStep + 3) plan = { kind: 'home', x: clampX(s.team === 2 ? homeFor(s) : V.homeX(side)), made: s.tick };
       } else if (plan.kind === 'dive') {
         const left = plan.land - t1, dist = Math.abs(plan.x - me.x) - 40;
         const run = dist / C.MOVE_V + 2;
@@ -258,7 +319,7 @@
       prevOut = out;
       return out;
     }
-    return { tier, side, act, reset, P, get plan() { return plan; } };
+    return { tier, side, cat: ci, act, reset, P, get plan() { return plan; } };
   }
 
   // ── 나중에 학습한 정책을 끼우는 자리: 작은 MLP(JSON) → 관찰 18개 → 행동 12개 중 가장 큰 것

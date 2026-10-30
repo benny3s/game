@@ -55,6 +55,29 @@ body.vb-pad .toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 66px)}
 .who{position:relative;width:32px;height:32px;display:grid;place-items:center;flex:none}
 .who canvas{width:32px;height:32px;display:block}
 .who.srv::after{content:"";position:absolute;right:-5px;top:-4px;width:13px;height:13px;border-radius:50%;background:conic-gradient(from 20deg,#ffb194 0 33%,#fff6e8 0 66%,#a8dfcf 0);box-shadow:0 0 0 1.5px var(--ink),0 2px 4px rgba(140,98,70,.25)}
+/* 2:2 복식: 편마다 얼굴 둘을 겹쳐서 */
+.who.two{width:46px;display:flex;align-items:center}
+.who.two canvas{width:28px;height:28px}
+.who.two canvas+canvas{margin-left:-10px}
+.play.desk .who.two{width:46px}
+.play.desk .who.two canvas{width:28px;height:28px}
+@media (min-width:600px){.play.desk .who.two{width:62px}.play.desk .who.two canvas{width:38px;height:38px}}
+.team-tip:empty{display:none}
+/* 한 기기에서 여럿: 자리마다 사람/AI */
+.lseats{display:grid;gap:8px}
+.lseat{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 10px;padding:9px 10px;border-radius:16px;background:rgba(0,0,0,.18);border:1.5px solid rgba(255,255,255,.08);border-left:5px solid #ec8a45}
+.lseat.r{border-left-color:#6d97c4}
+.lface{width:40px;height:40px;cursor:pointer}
+.lface canvas{width:40px;height:40px;display:block}
+.lmid{display:grid;min-width:0;line-height:1.3}
+.lmid b{font:16px/1.2 var(--round);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lmid .small kbd{font-size:11px;padding:1px 5px}
+.lseat .seg{flex-wrap:nowrap}
+.lseat .seg .btn{padding:7px 9px;font-size:13.5px}
+.lseat .ltier{grid-column:2/-1;justify-content:flex-end}
+.lseat .lkind .btn:disabled{opacity:.35}
+.ltip{margin:0;text-align:center}
+.tabs .btn{white-space:nowrap}
 .court{position:relative;border-radius:20px;box-shadow:var(--shadow);background:#fff1e3}
 #cv{border-radius:20px}
 .play.touch:not(.land) .stage{align-items:start}

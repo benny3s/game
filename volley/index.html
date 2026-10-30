@@ -4,13 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#fff6ea">
-<meta name="description" content="통통한 고양이 두 마리의 해변 배구. AI 고양이와 한 판, 둘이서 한 화면, AI 구경">
+<meta name="description" content="통통한 고양이들의 해변 배구. 1:1 · 2:2 복식, AI 고양이와 한 판, 둘이서 한 화면, 친구랑 최대 4명, AI 구경">
 <title>냥냥 배구</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=4">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <div class="wrap" id="menu">
@@ -23,6 +23,7 @@
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabLocal" aria-pressed="false">한 기기</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
@@ -32,9 +33,10 @@
         <span class="small" id="furLbl">내 고양이</span>
         <div class="furs" id="fur1"></div>
       </div>
-      <div class="opt" id="fur2Row" hidden>
-        <span class="small">오른쪽 고양이</span>
-        <div class="furs" id="fur2"></div>
+      <div class="opt">
+        <span class="small">몇 대 몇</span>
+        <div class="seg" id="team"></div>
+        <span class="small team-tip" id="teamTip"></span>
       </div>
       <div class="opt">
         <span class="small">몇 점 내기</span>
@@ -51,6 +53,21 @@
       </ul>
     </div>
 
+    <div id="localBox" class="box" hidden>
+      <p class="lede">폰·PC 하나로 여럿이 같이 해요. 자리마다 <b>사람</b>이나 <b>AI</b> 를 골라요.</p>
+      <div class="opt">
+        <span class="small">몇 대 몇</span>
+        <div class="seg" id="lteam"></div>
+      </div>
+      <div class="lseats" id="lseats"></div>
+      <p class="small ltip" id="ltip"></p>
+      <div class="opt">
+        <span class="small">몇 점 내기</span>
+        <div class="seg" id="ltarget"></div>
+      </div>
+      <button class="btn primary big" id="localBtn">▶ 시작!</button>
+    </div>
+
     <div id="watchBox" class="box" hidden>
       <p class="lede">AI 고양이끼리 겨루는 걸 구경해요. 강한 AI는 상대 빈자리를 노려 스매시해요.</p>
       <div class="opt">
@@ -60,6 +77,10 @@
       <div class="opt">
         <span class="small">오른쪽 고양이</span>
         <div class="seg" id="wr"></div>
+      </div>
+      <div class="opt">
+        <span class="small">몇 대 몇</span>
+        <div class="seg" id="wteam"></div>
       </div>
       <div class="opt">
         <span class="small">몇 점 내기</span>
@@ -127,10 +148,11 @@
 <script src="../common/cozy.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
-<script src="core.js?v=4"></script>
-<script src="bots.js?v=4"></script>
-<script src="render.js?v=4"></script>
+<script src="core.js?v=5"></script>
+<script src="keys.js?v=1"></script>
+<script src="bots.js?v=5"></script>
+<script src="render.js?v=5"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=4"></script>
+<script src="main.js?v=6"></script>
 </body>
 </html>

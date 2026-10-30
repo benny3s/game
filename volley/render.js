@@ -440,7 +440,7 @@
     }
     function setFurs(f, t) { furs = f.slice(); tags = t || null; }
     function reset() {
-      A = [newAnim(), newAnim()]; A[0].sqv = A[1].sqv = -4.5;           // 새 경기: 둘 다 '뽀용' 하고 등장
+      A = furs.map(() => newAnim()); for (const a of A) a.sqv = -4.5;   // 새 경기: 모두 '뽀용' 하고 등장 (복식이면 넷)
       parts = []; marks = []; ball.trail = []; ball.hot = 0; ball.heat = 0; shake = 0; netWob = 0;
     }
 
@@ -462,7 +462,8 @@
     function events(evs, s) {
       let stop = 0;
       for (const e of evs) {
-        const c = e.side != null ? s.cats[e.side] : null, a = e.side != null ? A[e.side] : null;
+        const ci = e.cat != null ? e.cat : e.side;                     // 복식이면 고양이 번호(cat), 1:1 이면 편 = 고양이
+        const c = ci != null ? s.cats[ci] : null, a = ci != null ? A[ci] : null;
         switch (e.t) {
           case 'jump': a.sqv -= 3.2; puff(c.x, 0, 3, 14, 40, 9); break;
           case 'land': a.sqv += clamp(e.v, 0, 20) * 0.16; if (e.v > 7 || e.dive) puff(c.x, 0, e.dive ? 7 : 4, 22, 50, 11); break;
@@ -472,7 +473,7 @@
             const sp = e.v || 8;
             ball.trail = [];                                          // 맞은 곳부터 새 꼬리
             if (e.kind === 'smash') {
-              const col = FURS[furs[e.side]].accent;
+              const col = (FURS[furs[ci]] || FURS.cheese).accent;
               ball.hot = 1; ball.hotCol = e.perfect ? '#ffcf5c' : col;
               ring(e.x, e.y, 10, e.perfect ? 70 : 52, e.perfect ? '#ffd36e' : '#ffffff', e.perfect ? 0.38 : 0.3, e.perfect ? 5 : 4);
               sparks(e.x, e.y, e.perfect ? 14 : 9, e.perfect ? ['#ffd36e', '#fff6d8', '#ffab8f'] : ['#ffffff', '#ffe0cf', col], e.perfect ? 260 : 200);
@@ -500,13 +501,18 @@
           case 'serve': ring(s.ball.x, s.ball.y, 8, 40, '#ffffff', 0.35, 3); serveGlow = 0; ball.heat = 0; break;
           case 'heat': ball.heat = clamp(e.v / C.HEAT_MAX, 0, 1); if (e.n === C.HEAT_FROM + 1) ring(s.ball.x, s.ball.y, 10, 46, '#ff9f7f', 0.4, 4); break;
           case 'point': {
-            const w = e.w, l = 1 - w;
-            A[w].mood = 'happy'; A[w].moodT = 1.7; A[w].hopv = 0;
-            A[l].mood = 'dizzy'; A[l].moodT = 1.7;
-            hearts(s.cats[w].x, s.cats[w].y + 95, 3);
+            for (let j = 0; j < A.length && j < s.cats.length; j++) {
+              if ((j & 1) === e.w) { A[j].mood = 'happy'; A[j].moodT = 1.7; A[j].hopv = 0; hearts(s.cats[j].x, s.cats[j].y + 95, 3); }
+              else { A[j].mood = 'dizzy'; A[j].moodT = 1.7; }
+            }
             break;
           }
-          case 'over': A[e.w].mood = 'happy'; A[e.w].moodT = 99; A[1 - e.w].mood = 'sad'; A[1 - e.w].moodT = 99; hearts(s.cats[e.w].x, s.cats[e.w].y + 95, 5); break;
+          case 'over':
+            for (let j = 0; j < A.length && j < s.cats.length; j++) {
+              const win = (j & 1) === e.w; A[j].mood = win ? 'happy' : 'sad'; A[j].moodT = 99;
+              if (win) hearts(s.cats[j].x, s.cats[j].y + 95, 5);
+            }
+            break;
           case 'ready': for (const q of A) if (q.moodT < 50) { q.mood = ''; q.moodT = 0; } ball.trail = []; ball.hot = 0; ball.heat = 0; break;
         }
       }
@@ -525,7 +531,8 @@
       const X = x => cam.ox + x * k, Y = y => cam.oy - y * k;
       const ip = (a, b) => a + (b - a) * alpha;
       // 스프링 · 깜빡임 · 기분
-      for (let i = 0; i < 2; i++) {
+      while (A.length < s.cats.length) A.push(newAnim());
+      for (let i = 0; i < s.cats.length; i++) {
         const a = A[i], c = s.cats[i];
         for (let t = dt; t > 1e-6; t -= 1 / 60) {                      // 스프링은 잘게 나눠 (프레임이 길어도 튀지 않게)
           const h = Math.min(t, 1 / 60);
@@ -538,7 +545,7 @@
         a.ear = Math.max(0, a.ear - dt * 12);
         if (c.ground && c.dive === 0) a.run += Math.abs(c.vx) * 60 * dt / 17; else a.run *= 0.9;
         a.tail += dt * (1.6 + Math.abs(c.vx) * 0.25);
-        a.lean += ((c.vx * (i === 0 ? 1 : -1)) * 0.022 - a.lean) * Math.min(1, dt * 12);
+        a.lean += ((c.vx * ((i & 1) === 0 ? 1 : -1)) * 0.022 - a.lean) * Math.min(1, dt * 12);
         // 이긴 고양이는 제자리에서 폴짝
         if (a.mood === 'happy' && c.ground && Math.abs(c.vx) < 0.5) { if (a.hop <= 0 && a.hopv <= 0) { a.hopv = 150; a.sqv -= 1.5; } }
         a.hopv -= 900 * dt; a.hop += a.hopv * dt; if (a.hop < 0) { if (a.hopv < -60) a.sqv += 1.2; a.hop = 0; a.hopv = 0; }
@@ -595,7 +602,7 @@
         ell(g, X(m.x), Y(-1), 20 * k, 4.5 * k); g.fillStyle = `rgba(190,140,90,${al})`; g.fill();
       }
 
-      const cats = s.cats.map((c, i) => ({ c, x: ip(prev.c[i][0], c.x), y: ip(prev.c[i][1], c.y) }));
+      const cats = s.cats.map((c, i) => { const p = prev.c[i] || [c.x, c.y]; return { c, x: ip(p[0], c.x), y: ip(p[1], c.y) }; });
       const bx = ip(prev.b[0], s.ball.x), by = ip(prev.b[1], s.ball.y);
       // 그림자 (높을수록 작고 옅게)
       for (const q of cats) {
@@ -608,7 +615,7 @@
 
       // 고양이
       const lwPx = 1.25 + 0.95 * k;
-      for (let i = 0; i < 2; i++) drawCat(g, i, cats[i], s, bx, by, X, Y, k, lwPx, opt);
+      for (let i = cats.length - 1; i >= 0; i--) drawCat(g, i, cats[i], s, bx, by, X, Y, k, lwPx, opt);   // 복식 짝(2·3)을 먼저 그려 뒤에
 
       // 서브 대기: 공 아래 반짝 고리
       if (s.phase === 'ready') {
@@ -681,7 +688,7 @@
     // 고양이 한 마리 (자세·표정 고르고 그리기)
     function drawCat(g, i, q, s, bx, by, X, Y, k, lwPx, opt) {
       const c = q.c, a = A[i], fur = FURS[furs[i]] || FURS.cheese;
-      const f = i === 0 ? 1 : -1;
+      const f = (i & 1) === 0 ? 1 : -1;
       const lw = lwPx / k;
       const P = { tail: Math.sin(a.tail), run: a.run, stride: 0, lift: 0, tuck: 0, look: [0, 0], eyes: 'open', mouth: 'w', brows: false, air: !c.ground, arm: null, arm0: 0, swoosh: 0, ear: a.ear, spin: time * 6 };
       // 공 쪽으로 눈동자
@@ -691,7 +698,7 @@
       if (moving) { P.stride = clamp(Math.abs(c.vx) * 0.9, 0, 6); P.lift = 3; }
       if (!c.ground) P.tuck = 4;
       // 표정
-      const inPlay = s.phase === 'play', mySide = i === 0 ? bx < C.NET_X : bx > C.NET_X;
+      const inPlay = s.phase === 'play', mySide = (i & 1) === 0 ? bx < C.NET_X : bx > C.NET_X;
       if (a.mood === 'happy') { P.eyes = 'happy'; P.mouth = 'open'; }
       else if (a.mood === 'dizzy') { P.eyes = 'dizzy'; P.mouth = 'wavy'; }
       else if (a.mood === 'sad') { P.eyes = 'sad'; P.mouth = 'frown'; }

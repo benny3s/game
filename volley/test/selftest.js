@@ -440,5 +440,157 @@ ok(Math.abs(sideWins[0] - sideWins[1]) <= N * 3 * 0.35, '왼쪽·오른쪽 유�
   ok(p99 < 4, 'AI 가 거의 늘 한 틱에 4ms 안에 생각함 (99%)', +p99.toFixed(3));
 }
 
+// ─────────────────────────────────────────────
+section('2:2 복식');
+const run4 = (s, n, ins) => { const ev = []; for (let i = 0; i < n; i++) ev.push(...V.step(s, ins[0] || 0, ins[1] || 0, ins[2] || 0, ins[3] || 0)); return ev; };
+function dblBots(seed, tA, tB) {
+  const tl = {}, tr = {};
+  return [0, 1, 2, 3].map(k => B.create((k & 1) ? tB : tA, k & 1, seed * 7 + k, { cat: k, team: (k & 1) ? tr : tl }));
+}
+{
+  // 1:1 상태 모양은 그대로 (복식 필드 없음)
+  const s1 = V.create({ target: 7 }, 5);
+  ok(s1.cats.length === 2 && !('team' in s1) && !('rot' in s1), '1:1 상태에는 복식 필드가 없음 (예전 저장·학습 그대로)');
+  const s = V.create({ target: 7, team: 2, server: 0 }, 5);
+  ok(s.team === 2 && s.cats.length === 4 && s.serveCat === 0, '복식: 고양이 넷 · 첫 서브는 왼쪽 0번', [s.cats.length, s.serveCat]);
+  ok(V.sideOf(0) === 0 && V.sideOf(2) === 0 && V.sideOf(1) === 1 && V.sideOf(3) === 1, '0·2 왼쪽 · 1·3 오른쪽');
+  const xs = s.cats.map(c => c.x);
+  ok(xs[0] < xs[2] && xs[2] < C.NET_X && xs[1] > C.NET_X && xs[3] > xs[1], '서브 편은 서버가 뒤 · 짝이 앞, 받는 편은 처음 서브를 가져올 때 앞(1번)이 돌아 뒤로 감', xs);
+  ok(Math.abs(s.ball.x - (xs[0] + C.SERVE_DX)) < 1e-9, '공은 서버(뒤 고양이) 머리 위');
+  // 그물·벽은 넷 모두에게
+  const s2 = V.create({ team: 2, server: 0 }, 6);
+  run4(s2, 150, [IN.RIGHT, IN.LEFT, IN.RIGHT, IN.LEFT]);
+  ok(s2.cats.every((c, k) => (k & 1) ? c.x >= C.NET_X + C.NET_HW + C.CAT_HW - 1e-9 : c.x <= C.NET_X - C.NET_HW - C.CAT_HW + 1e-9), '넷 다 그물을 못 넘음', s2.cats.map(c => Math.round(c.x)));
+  // 같은 편끼리 끼지 않음: 둘이 같은 쪽 벽으로 밀어 붙여도, 한쪽이 비켜 가면 바로 떨어짐
+  const s3 = V.create({ team: 2, server: 0 }, 7); s3.phase = 'play'; s3.ball.y = 9999;
+  run4(s3, 120, [IN.LEFT, 0, IN.LEFT, 0]);
+  const gapWall = Math.abs(s3.cats[2].x - s3.cats[0].x);
+  ok(s3.cats[0].x >= C.CAT_HW - 1e-9 && s3.cats[2].x >= C.CAT_HW - 1e-9, '벽에 몰려도 둘 다 코트 안');
+  run4(s3, 40, [0, 0, IN.RIGHT, 0]);
+  ok(Math.abs(s3.cats[2].x - s3.cats[0].x) > 150, '벽에 몰린 짝에서 비켜 가면 막힘 없이 떨어짐 (끼지 않음)', [gapWall, Math.round(s3.cats[2].x - s3.cats[0].x)]);
+  // 서로 마주 달려도 겹친 채 멈추지 않고 밀려남, 위아래로 떨어져 있으면 지나감
+  const s4 = V.create({ team: 2, server: 0 }, 8); s4.phase = 'play'; s4.ball.y = 9999;
+  s4.cats[0].x = 150; s4.cats[2].x = 151;
+  run4(s4, 60, [0, 0, 0, 0]);
+  ok(Math.abs(s4.cats[2].x - s4.cats[0].x) >= C.TM_SEP - 1e-6, '딱 겹친 짝은 부드럽게 떼어 놓음', Math.round(s4.cats[2].x - s4.cats[0].x));
+  const s5 = V.create({ team: 2, server: 0 }, 9); s5.phase = 'play'; s5.ball.y = 9999;
+  s5.cats[0].x = 100; s5.cats[2].x = 200; s5.cats[2].y = 100; s5.cats[2].ground = false; s5.cats[2].vy = 0;
+  const pushFree = (() => { const a = V.clone(s5); a.cats[2].y = 100; V.step(a, IN.RIGHT, 0, 0, 0); return a.cats[2].x; })();
+  ok(Math.abs(pushFree - 200) < 1e-9, '위에 떠 있는 짝은 밀지 않음 (밑으로 지나갈 수 있음)', pushFree);
+  // 터치: 같은 편 다른 고양이는 붙어 있어도 새 터치
+  const s6 = V.create({ team: 2, server: 0, maxTouches: 3 }, 10); s6.phase = 'play';
+  s6.cats[0].x = 120; s6.cats[2].x = 200;
+  s6.ball = { x: 120, y: 120, vx: 0, vy: -2 };
+  const ev6 = run4(s6, 6, [0, 0, 0, 0]);
+  s6.ball = { x: 200, y: 120, vx: 0, vy: -2 };
+  const ev7 = run4(s6, 6, [0, 0, 0, 0]);
+  const h6 = ev6.find(e => e.t === 'hit'), h7 = ev7.find(e => e.t === 'hit');
+  ok(h6 && h6.cat === 0 && h7 && h7.cat === 2 && s6.touches[0] === 2 && s6.lastCat === 2, '짝에게 넘기면 터치 2 (hit 이벤트에 cat 번호)', [h6 && h6.cat, h7 && h7.cat, s6.touches[0]]);
+  // 서브 돌아가기: 서브를 되찾은 편은 다른 고양이가 서브 → 넷이 돌아가며
+  const s7 = V.create({ team: 2, server: 0, target: 99 }, 11), order = [s7.serveCat];
+  const win = w => { const land = 1 - w; s7.phase = 'play'; s7.ball = { x: land ? 500 : 140, y: C.BALL_R + 1, vx: 0, vy: -3 }; run4(s7, 1 + C.POINT_T + 2, [0, 0, 0, 0]); order.push(s7.serveCat); };
+  win(1); win(0); win(1); win(0); win(0); win(1);
+  ok(order.join('') === '0123001', '서브 차례: 0 → 1 → 2 → 3 → 0 (점수 낸 편이 계속 서브)', order.join(''));
+  const s8 = V.create({ team: 2, server: 1 }, 12);
+  ok(s8.serveCat === 1 && s8.cats[1].x > s8.cats[3].x, '오른쪽이 먼저 서브해도 1번이 뒤에서');
+  // 거울·저장
+  const m = V.mirror(s7);
+  ok(m.cats.length === 4 && m.serveCat === (s7.serveCat ^ 1) && m.rot[0] === s7.rot[1] && Math.abs(m.cats[0].x - (C.W - s7.cats[1].x)) < 1e-9, '복식 거울 상태');
+  const back = V.fromJSON(JSON.stringify(s7));
+  ok(back && V.hash(back) === V.hash(s7), '복식 상태도 JSON 으로 저장·복원');
+  // obsTeam
+  const o = V.obsTeam(s7, 2);
+  ok(o.length === V.OBS_N2 && Array.from(o).every(Number.isFinite), `복식 obs 길이 ${V.OBS_N2} · 모두 유한`);
+  const om = V.obsTeam(V.mirror(s7), 3);
+  ok(Array.from(o).every((v, i) => Math.abs(v - om[i]) < 1e-6), '복식 obs 도 거울 쪽과 같음');
+}
+// 결정성 · 봇끼리 복식
+{
+  const play = (seed, cut) => {
+    let s = V.create({ target: 5, team: 2 }, seed); const bots = dblBots(seed, 'hard', 'normal'); let evN = 0;
+    for (let t = 0; t < 6000 && s.phase !== 'over'; t++) {
+      const ins = bots.map(b => b.act(s));
+      evN += V.step(s, ins[0], ins[1], ins[2], ins[3]).length;
+      if (cut && t === 2500) s = V.fromJSON(JSON.stringify(s));
+    }
+    return V.hash(s) + ':' + evN;
+  };
+  ok(play(3) === play(3) && play(3) === play(3, true), '복식도 같은 씨앗·봇 → 같은 해시 (중간 JSON 복사 포함)');
+  const rows = [], touchBy = [0, 0, 0, 0];
+  let games = 0, done = 0, longest = 0, maxStick = 0, serveSet = new Set(), coverOK = 0, coverN = 0, rallyCross = 0, points = 0;
+  for (const [tA, tB] of [['hard', 'hard'], ['normal', 'normal'], ['normal', 'hard'], ['easy', 'normal']]) {
+    let wA = 0;
+    for (let g = 0; g < 4; g++) {
+      const seed = 500 + games * 13, s = V.create({ target: 7, team: 2 }, seed), bots = dblBots(seed, tA, tB);
+      const stick = [0, 0];
+      while (s.phase !== 'over' && s.tick < 40000) {
+        const ins = bots.map(b => b.act(s));
+        const ev = V.step(s, ins[0], ins[1], ins[2], ins[3]);
+        for (const e of ev) { if (e.t === 'hit' && e.cat != null) touchBy[e.cat]++; if (e.t === 'serve') serveSet.add(e.cat); if (e.t === 'point') { points++; } }
+        for (const sd of [0, 1]) {
+          const a = s.cats[sd], b = s.cats[sd + 2];
+          stick[sd] = Math.abs(a.x - b.x) < 40 && Math.abs(a.y - b.y) < 40 ? stick[sd] + 1 : 0;
+          if (stick[sd] > maxStick) maxStick = stick[sd];
+          // 공이 내 편에 있을 때 둘 중 하나는 앞(그물 쪽 절반), 하나는 뒤에 있나 (역할 나누기)
+          if (s.phase === 'play' && s.tick % 15 === 0 && (sd === 0 ? s.ball.x < C.NET_X : s.ball.x > C.NET_X)) {
+            coverN++; const da = Math.abs(a.x - C.NET_X), db = Math.abs(b.x - C.NET_X);
+            if (Math.abs(da - db) > 60) coverOK++;
+          }
+        }
+      }
+      games++; if (s.phase === 'over') done++; if (s.winner === 0) wA++;
+      if (s.stats.longest > longest) longest = s.stats.longest;
+      rallyCross += s.stats.longest;
+    }
+    rows.push({ 대결: `${tA} vs ${tB}`, 왼쪽승: `${wA}/4` });
+  }
+  console.table(rows);
+  console.log(`  고양이별 터치 ${touchBy.join(' / ')} · 가장 긴 랠리 ${longest}번 넘김 · 같은 편 겹침 최대 ${maxStick}틱 · 앞뒤 나눔 ${(coverOK / coverN * 100).toFixed(0)}%`);
+  ok(done === games, '봇 복식 경기가 모두 끝까지 감 (멈춤 없음)', [done, games]);
+  ok(touchBy.every(n => n > 0.12 * touchBy.reduce((p, q) => p + q, 0)), '넷 모두 공을 고루 받음 (한 마리만 뛰지 않음 = 같이 함)', touchBy);
+  ok(serveSet.size === 4, '네 고양이 모두 서브해 봄', [...serveSet]);
+  ok(longest >= 8, '복식도 랠리가 이어짐 (공에 닿을 수 있음)', longest);
+  ok(maxStick < 45, '같은 편 둘이 0.75초 넘게 겹쳐 있지 않음', maxStick);
+  ok(coverOK / coverN > 0.6, '공이 내 편에 오면 대개 하나는 앞·하나는 뒤 (자리 나눔)', +(coverOK / coverN).toFixed(2));
+  const hh = { w: 0 };
+  for (let g = 0; g < 6; g++) { const seed = 900 + g, s = V.create({ target: 5, team: 2 }, seed), bots = dblBots(seed, 'hard', 'easy'); while (s.phase !== 'over' && s.tick < 40000) { const ins = bots.map(b => b.act(s)); V.step(s, ins[0], ins[1], ins[2], ins[3]); } if (s.winner === 0) hh.w++; }
+  ok(hh.w >= 5, '복식에서도 고급 팀이 초급 팀을 이김', hh.w);
+}
+
+// ─────────────────────────────────────────────
+section('한 기기 키 묶음 (keys.js)');
+{
+  const K = require(path.join(__dirname, '..', 'keys.js'));
+  const { L, R, J, S } = K.BITS;
+  let allOk = true, bad = null;
+  for (let m = 1; m < 16; m++) {                                    // 사람 자리 조합 15가지 모두
+    const hs = [0, 1, 2, 3].filter(k => m & (1 << k)), { map } = K.build(hs);
+    for (const k of [0, 1, 2, 3]) {
+      const bits = Object.values(map).filter(v => v[0] === k).reduce((a, v) => a | v[1], 0);
+      const want = hs.includes(k) ? (L | R | J | S) : 0;
+      if (bits !== want) { allOk = false; bad = { hs, k, bits }; }
+    }
+  }
+  ok(allOk, '사람 자리 어떤 조합이든 자리마다 이동·점프·스매시 키가 다 있고, AI 자리엔 키가 없음 (한 키 = 한 자리)', bad);
+  const old2 = { KeyA: [0, L], KeyD: [0, R], KeyW: [0, J], KeyF: [0, S], KeyS: [0, S], KeyG: [0, S], Space: [0, S], ArrowLeft: [1, L], ArrowRight: [1, R], ArrowUp: [1, J], Enter: [1, S], NumpadEnter: [1, S], Slash: [1, S], ArrowDown: [1, S] };
+  const two = K.build([0, 1]).map;
+  ok(JSON.stringify(Object.keys(old2).sort().map(c => [c, two[c]])) === JSON.stringify(Object.keys(old2).sort().map(c => [c, old2[c]])) && Object.keys(two).length === Object.keys(old2).length, '둘이서(왼쪽①·오른쪽①)는 예전 1P·2P 키 그대로');
+  const four = K.build([0, 1, 2, 3]).map;
+  ok(four.KeyF[0] === 2 && four.KeyG[0] === 2 && four.KeyS[0] === 0 && four.Numpad5[0] === 3 && four.KeyK[0] === 3, '넷이면 F·G 는 왼쪽② 몫, S 는 왼쪽① 스매시, 숫자판·IJKL 은 오른쪽②');
+  // 사람 4명 복식이 한 판 끝까지 (사람 대신 봇 입력을 자리 키로 흉내)
+  const s = V.create({ target: 3, team: 2 }, 77), tl = {}, tr = {};
+  const bots = [0, 1, 2, 3].map(k => B.create('normal', k & 1, 70 + k, { cat: k, team: (k & 1) ? tr : tl }));
+  const inv = {}; for (const [c, [k, b]] of Object.entries(four)) if (!(k + ':' + b in inv)) inv[k + ':' + b] = c;
+  let okKeys = true;
+  while (s.phase !== 'over' && s.tick < 30000) {
+    const ins = bots.map(b => b.act(s));
+    const down = new Set(); ins.forEach((v, k) => { for (const b of [L, R, J, S]) if (v & b) down.add(inv[k + ':' + b]); });
+    const back = [0, 0, 0, 0]; for (const c of down) { const m = four[c]; back[m[0]] |= m[1]; }
+    if (back.some((v, k) => v !== ins[k])) okKeys = false;
+    V.step(s, back[0], back[1], back[2], back[3]);
+  }
+  ok(okKeys && s.phase === 'over', '키 4묶음으로 넷이 동시에 눌러도 서로 안 섞이고 한 판이 끝남', [okKeys, s.phase]);
+}
+
 console.log(`\n${fail ? '✗ 실패' : '✓ 통과'}: ${pass}개 통과, ${fail}개 실패 · ${((Date.now() - T0) / 1000).toFixed(1)}초`);
 process.exit(fail ? 1 : 0);

@@ -27,6 +27,7 @@
     DIG_VY: 12.5, DIG_VX: 2.4,                                      //   다이빙으로 받으면 높이 떠오름
     TOUCH_MERGE: 8, READY_T: 60, READY_T0: 84, POINT_T: 96,         // 같은 접촉 묶음 · 서브 전 대기 · 점수 후 쉬는 시간
     SERVE_X: 160, SERVE_DX: 16, SERVE_Y: 236, SERVE_TOSS: 4,        // 서브: 공이 서버 머리 위(그물 쪽으로 살짝)에서 톡 올라갔다 떨어짐
+    D_BACK: 112, D_FRONT: 238, TM_SEP: 58, TM_DY: 70, TM_PUSH: 1.6,  // 2:2 복식: 뒤·앞 자리 · 같은 편끼리는 부드럽게 밀어냄(딱딱하게 부딪히지 않음 → 끼지 않음)
   };
   const IN = { LEFT: 1, RIGHT: 2, JUMP: 4, SMASH: 8 };
 
@@ -41,7 +42,7 @@
   // 행동표 (학습용): [방향 0 없음 / -1 뒤 / +1 앞(상대 쪽), 점프, 스매시] → 12가지
   const ACTIONS = [];
   for (const d of [0, -1, 1]) for (const j of [0, 1]) for (const k of [0, 1]) ACTIONS.push([d, j, k]);
-  const OBS_N = 18;
+  const OBS_N = 18, OBS_N2 = 26;
 
   // 씨앗 난수 (mulberry32) — 상태 안에 들어 있어 저장·복원해도 이어짐
   function rand(s) {
@@ -52,11 +53,18 @@
   }
 
   const homeX = i => i === 0 ? C.SERVE_X : C.W - C.SERVE_X;
-  function newCat(i, prevIn) {
-    return { x: homeX(i), y: 0, vx: 0, vy: 0, ground: true, swing: 0, swingCd: 0, dive: 0, diveDir: 0, rec: 0, noHit: 0, prevIn: prevIn || 0 };
+  // 복식 자리: 편(side) 0 왼쪽 · 1 오른쪽, front = 그물 앞
+  const homeX2 = (side, front) => { const x = front ? C.D_FRONT : C.D_BACK; return side === 0 ? x : C.W - x; };
+  // 고양이 k 의 편: 0·2 왼쪽, 1·3 오른쪽 (1:1 이면 고양이 번호 = 편)
+  const sideOf = k => k & 1;
+  // 복식: 이 편에서 지금 뒤(서브 차례)에 서는 고양이
+  const backCat = (s, side) => side + 2 * s.rot[side];
+  function newCat(i, prevIn, x) {
+    return { x: x == null ? homeX(i) : x, y: 0, vx: 0, vy: 0, ground: true, swing: 0, swingCd: 0, dive: 0, diveDir: 0, rec: 0, noHit: 0, prevIn: prevIn || 0 };
   }
 
-  // 새 경기. opts: { target: 7|11|15, maxTouches: 0 = 제한 없음(기본, 가족용) | 3 = 진짜 배구처럼, server: 0|1 (없으면 씨앗으로) }
+  // 새 경기. opts: { target: 7|11|15, maxTouches: 0 = 제한 없음(기본, 가족용) | 3 = 진짜 배구처럼, server: 0|1 (없으면 씨앗으로),
+  //   team: 1 (기본, 1:1) | 2 (2:2 복식 — 고양이 4마리: 0·2 왼쪽, 1·3 오른쪽) }
   function create(opts, seed) {
     opts = opts || {};
     const s = {
@@ -72,19 +80,53 @@
       cats: [newCat(0), newCat(1)],
       ball: { x: 0, y: 0, vx: 0, vy: 0 },
     };
+    if (opts.team === 2) {                                          // 복식 필드는 2:2 때만 (1:1 상태 모양은 그대로)
+      s.team = 2; s.rot = [0, 0]; s.serveCat = 0; s.lastCat = -1;
+      s.cats.push(newCat(0), newCat(1));
+    }
     s.server = opts.server === 0 || opts.server === 1 ? opts.server : (rand(s) < 0.5 ? 0 : 1);
+    if (s.team === 2) s.rot[1 - s.server] = 1;                      // 받는 편은 처음 서브를 가져올 때 돌아서 0번이 서브
     resetRally(s, C.READY_T0);
     return s;
   }
 
   // 점수 사이: 자리로 돌아가고 공은 서버 머리 위에 떠 있음
   function resetRally(s, t) {
-    s.cats = [newCat(0, s.cats[0].prevIn), newCat(1, s.cats[1].prevIn)];
+    let sx;
+    if (s.team === 2) {                                             // 복식: 편마다 뒤 1마리 · 앞 1마리, 서브는 서브 편의 뒤 고양이
+      const cats = [];
+      for (let k = 0; k < 4; k++) { const sd = sideOf(k); cats.push(newCat(sd, s.cats[k].prevIn, homeX2(sd, backCat(s, sd) !== k))); }
+      s.cats = cats; s.serveCat = backCat(s, s.server); s.lastCat = -1;
+      sx = homeX2(s.server, false);
+    } else {
+      s.cats = [newCat(0, s.cats[0].prevIn), newCat(1, s.cats[1].prevIn)];
+      sx = homeX(s.server);
+    }
     const f = s.server === 0 ? 1 : -1;
-    s.ball = { x: homeX(s.server) + f * C.SERVE_DX, y: C.SERVE_Y, vx: 0, vy: 0 };
+    s.ball = { x: sx + f * C.SERVE_DX, y: C.SERVE_Y, vx: 0, vy: 0 };
     s.ballSide = s.server; s.touches = [0, 0]; s.lastSide = -1; s.lastTick = -99;
     s.hits = 0; s.crosses = 0; s.lastHitter = -1; s.lastKind = '';
     s.phase = 'ready'; s.phaseT = t;
+  }
+  // 복식: 같은 편 둘이 겹치면 부드럽게 떼어 놓음 (한 틱에 최대 TM_PUSH, 위아래로 떨어져 있으면 그냥 지나감)
+  //   딱딱한 충돌이 아니라서 벽에 몰려도 서로 끼어 멈추는 일이 없음 — 비켜 가는 쪽 입력은 늘 그대로 먹힘
+  function separate(s) {
+    for (let sd = 0; sd < 2; sd++) {
+      const a = s.cats[sd], b = s.cats[sd + 2];
+      let dx = b.x - a.x; const dy = b.y - a.y;
+      if (dy >= C.TM_DY || dy <= -C.TM_DY) continue;
+      const ad = dx < 0 ? -dx : dx;
+      if (ad >= C.TM_SEP) continue;
+      let push = (C.TM_SEP - ad) / 2; if (push > C.TM_PUSH) push = C.TM_PUSH;
+      const d = dx > 0 ? 1 : dx < 0 ? -1 : (sd === 0 ? 1 : -1);    // 딱 겹치면 번호 작은 쪽이 벽 쪽으로
+      a.x -= d * push; b.x += d * push;
+      clampCat(a, sd); clampCat(b, sd);
+    }
+  }
+  function clampCat(c, i) {
+    const lo = i === 0 ? C.CAT_HW : C.NET_X + C.NET_HW + C.CAT_HW;
+    const hi = i === 0 ? C.NET_X - C.NET_HW - C.CAT_HW : C.W - C.CAT_HW;
+    if (c.x < lo) { c.x = lo; if (c.vx < 0) c.vx = 0; } else if (c.x > hi) { c.x = hi; if (c.vx > 0) c.vx = 0; }
   }
 
   // ── 공 물리 (중력·벽·그물). ev 가 없으면 예측용 (봇이 미리 굴려 봄)
@@ -242,8 +284,8 @@
   }
 
   // ── 고양이 움직임 (입력 → 속도 → 위치)
-  function moveCat(s, i, inp, ev) {
-    const c = s.cats[i], f = i === 0 ? 1 : -1;
+  function moveCat(s, k, inp, ev) {
+    const i = sideOf(k), c = s.cats[k], f = i === 0 ? 1 : -1;
     if (s.phase === 'over') inp = 0;
     const dir = ((inp & IN.RIGHT) ? 1 : 0) - ((inp & IN.LEFT) ? 1 : 0);
     const jump = (inp & IN.JUMP) !== 0, press = (inp & IN.SMASH) !== 0 && !(c.prevIn & IN.SMASH);
@@ -262,15 +304,15 @@
       const a = c.ground ? (dir !== 0 && dir * c.vx >= 0 ? C.ACC : C.DEC) : C.ACC_AIR;
       const dv = want - c.vx;
       c.vx += dv > a ? a : dv < -a ? -a : dv;
-      if (jump && c.ground) { c.vy = C.JUMP_V; c.ground = false; ev.push({ t: 'jump', side: i }); }
+      if (jump && c.ground) { c.vy = C.JUMP_V; c.ground = false; ev.push({ t: 'jump', side: i, cat: k }); }
       if (press && s.phase !== 'ready') {
         if (c.ground) {
           const d = dir !== 0 ? dir : f;
           c.dive = C.DIVE_T; c.diveDir = d; c.vx = d * C.DIVE_V; c.vy = C.DIVE_HOP; c.ground = false; c.swing = 0;
-          ev.push({ t: 'dive', side: i, dir: d });
+          ev.push({ t: 'dive', side: i, cat: k, dir: d });
         } else if (c.swingCd === 0) {
           c.swing = C.SWING_T; c.swingCd = C.SWING_T + C.SWING_CD;
-          ev.push({ t: 'swing', side: i });
+          ev.push({ t: 'swing', side: i, cat: k });
         }
       }
     }
@@ -282,15 +324,14 @@
     c.x += c.vx; c.y += c.vy;
     if (c.y <= 0) {
       c.y = 0;
-      if (!c.ground) { ev.push({ t: 'land', side: i, v: -c.vy, dive: c.dive > 0 }); c.ground = true; c.swing = 0; }
+      if (!c.ground) { ev.push({ t: 'land', side: i, cat: k, v: -c.vy, dive: c.dive > 0 }); c.ground = true; c.swing = 0; }
       c.vy = 0;
     }
-    const lo = i === 0 ? C.CAT_HW : C.NET_X + C.NET_HW + C.CAT_HW;
-    const hi = i === 0 ? C.NET_X - C.NET_HW - C.CAT_HW : C.W - C.CAT_HW;
-    if (c.x < lo) { c.x = lo; if (c.vx < 0) c.vx = 0; } else if (c.x > hi) { c.x = hi; if (c.vx > 0) c.vx = 0; }
+    clampCat(c, i);
   }
 
   function awardPoint(s, w, reason, ev) {
+    if (s.team === 2 && s.server !== w) s.rot[w] ^= 1;             // 복식: 서브를 되찾은 편은 한 칸 돌아 다른 고양이가 서브
     s.score[w]++; s.server = w;
     if (s.crosses > s.stats.longest) s.stats.longest = s.crosses;
     s.stats.rallies++;
@@ -303,20 +344,23 @@
   }
 
   // 접촉 기록: 같은 고양이가 잇달아 닿으면 터치 +1, 상대가 닿거나 공이 그물을 넘으면 처음부터
-  function hitCat(s, i, ev) {
-    const b = s.ball, r = contact(s.cats[i], i, b, heat(s));
+  //   복식: 같은 편 다른 고양이가 받으면 (붙어 있어도) 새 터치
+  function hitCat(s, k, ev) {
+    const i = sideOf(k), b = s.ball, r = contact(s.cats[k], i, b, heat(s));
     if (!r) return;
     const live = s.phase === 'play';
     if (live) {
-      if (!(s.lastSide === i && s.tick - s.lastTick < C.TOUCH_MERGE)) {
+      const same = s.team === 2 ? s.lastCat === k : true;
+      if (!(s.lastSide === i && same && s.tick - s.lastTick < C.TOUCH_MERGE)) {
         if (s.lastSide === i) s.touches[i]++; else { s.touches[i] = 1; s.touches[1 - i] = 0; }
         s.hits++;
       }
+      if (s.team === 2) s.lastCat = k;
       s.lastSide = i; s.lastTick = s.tick; s.lastHitter = i; s.lastKind = r.kind;
       if (r.kind === 'smash') { s.stats.smashes[i]++; if (r.perfect) s.stats.perfect[i]++; }
       if (r.kind === 'dig') s.stats.digs[i]++;
     }
-    ev.push({ t: 'hit', side: i, kind: r.kind, aim: r.aim, perfect: r.perfect, x: b.x, y: b.y, v: Math.sqrt(b.vx * b.vx + b.vy * b.vy), n: s.touches[i] });
+    ev.push({ t: 'hit', side: i, cat: k, kind: r.kind, aim: r.aim, perfect: r.perfect, x: b.x, y: b.y, v: Math.sqrt(b.vx * b.vx + b.vy * b.vy), n: s.touches[i] });
     if (live && s.maxTouches > 0 && s.touches[i] > s.maxTouches) {
       ev.push({ t: 'fault', side: i, reason: 'touches' });
       awardPoint(s, 1 - i, 'touches', ev);
@@ -324,19 +368,22 @@
   }
 
   // ── 한 틱 진행. 반환 = 이번 틱에 일어난 일 (소리·효과용)
-  function step(s, inA, inB) {
-    const ev = [];
+  //   복식이면 고양이 번호 순서로 넷: step(s, 고양이0, 고양이1, 고양이2, 고양이3) — 0·2 왼쪽, 1·3 오른쪽
+  function step(s, inA, inB, inC, inD) {
+    const ev = [], two = s.team === 2;
     s.tick++;
     moveCat(s, 0, inA | 0, ev);
     moveCat(s, 1, inB | 0, ev);
+    if (two) { moveCat(s, 2, inC | 0, ev); moveCat(s, 3, inD | 0, ev); separate(s); }
     const b = s.ball;
     if (s.phase === 'ready') {                                      // 공은 서버 머리 위에 떠 있음 (아직 안 닿음)
-      if (--s.phaseT <= 0) { s.phase = 'play'; b.vy = C.SERVE_TOSS; ev.push({ t: 'serve', side: s.server }); }
+      if (--s.phaseT <= 0) { s.phase = 'play'; b.vy = C.SERVE_TOSS; ev.push({ t: 'serve', side: s.server, cat: two ? s.serveCat : s.server }); }
       return ev;
     }
     ballPhys(b, ev);
     const o = s.tick & 1;                                           // 둘 다 닿을 때 순서 치우치지 않게 번갈아
-    hitCat(s, o, ev); hitCat(s, 1 - o, ev);
+    if (two) { hitCat(s, o, ev); hitCat(s, o + 2, ev); hitCat(s, 1 - o, ev); hitCat(s, 3 - o, ev); }
+    else { hitCat(s, o, ev); hitCat(s, 1 - o, ev); }
     clampSpeed(b, C.BALL_MAX);
     const side = b.x < C.NET_X - 2 ? 0 : b.x > C.NET_X + 2 ? 1 : s.ballSide;
     if (side !== s.ballSide) {
@@ -360,16 +407,26 @@
     }
     if (s.phase === 'point' && --s.phaseT <= 0) {
       if (s.winner >= 0) { s.phase = 'over'; ev.push({ t: 'over', w: s.winner }); }
-      else { resetRally(s, C.READY_T); ev.push({ t: 'ready', side: s.server }); }
+      else { resetRally(s, C.READY_T); ev.push({ t: 'ready', side: s.server, cat: two ? s.serveCat : s.server }); }
     }
     return ev;
   }
 
   // ── 학습용: 관찰값 (각자 자기가 왼쪽에 있는 것처럼 좌우를 뒤집어 봄). 길이 OBS_N = 18
-  function obs(s, side, out) {
-    const o = out || new Float32Array(OBS_N);
+  function obs(s, side, out) { return obsOf(s, side, side, 1 - side, out || new Float32Array(OBS_N)); }
+  // 복식용 관찰 (길이 OBS_N2 = 26): 고양이 k 기준 obs 18개(상대 = 맞은편 k^1) + 같은 편 x,y,vx,vy + 다른 상대 x,y,vx,vy
+  function obsTeam(s, k, out) {
+    const o = out || new Float32Array(OBS_N2), side = sideOf(k);
+    obsOf(s, side, k, k ^ 1, o);
+    const m = side === 0 ? 1 : -1, X = x => m * (x - C.NET_X) / C.NET_X;
+    const put = (c, n) => { o[n] = X(c.x); o[n + 1] = c.y / 150; o[n + 2] = m * c.vx / C.MOVE_V; o[n + 3] = c.vy / C.JUMP_V; };
+    const mate = s.cats[k ^ 2], op2 = s.cats[k ^ 3];
+    if (mate && op2) { put(mate, 18); put(op2, 22); } else for (let n = 18; n < 26; n++) o[n] = 0;
+    return o;
+  }
+  function obsOf(s, side, ki, ko, o) {
     const m = side === 0 ? 1 : -1, X = x => m * (x - C.NET_X) / C.NET_X;   // 내 쪽 -1~0, 상대 쪽 0~1
-    const me = s.cats[side], op = s.cats[1 - side], b = s.ball;
+    const me = s.cats[ki], op = s.cats[ko], b = s.ball;
     o[0] = X(me.x); o[1] = me.y / 150; o[2] = m * me.vx / C.MOVE_V; o[3] = me.vy / C.JUMP_V;
     o[4] = X(op.x); o[5] = op.y / 150; o[6] = m * op.vx / C.MOVE_V; o[7] = op.vy / C.JUMP_V;
     o[8] = X(b.x); o[9] = b.y / 300; o[10] = m * b.vx / 20; o[11] = b.vy / 20;
@@ -414,7 +471,8 @@
   function mirror(s0) {
     const s = clone(s0), W = C.W;
     const fc = c => Object.assign(c, { x: W - c.x, vx: -c.vx, diveDir: -c.diveDir, prevIn: swapLR(c.prevIn) });
-    s.cats = [fc(s.cats[1]), fc(s.cats[0])];
+    s.cats = s.team === 2 ? [fc(s.cats[1]), fc(s.cats[0]), fc(s.cats[3]), fc(s.cats[2])] : [fc(s.cats[1]), fc(s.cats[0])];
+    if (s.team === 2) { s.rot = [s.rot[1], s.rot[0]]; s.serveCat ^= 1; if (s.lastCat >= 0) s.lastCat ^= 1; }
     s.ball.x = W - s.ball.x; s.ball.vx = -s.ball.vx;
     const sw = a => [a[1], a[0]], fl = v => v === 0 || v === 1 ? 1 - v : v;
     s.score = sw(s.score); s.touches = sw(s.touches);
@@ -424,7 +482,7 @@
     return s;
   }
 
-  const API = { C, IN, ACTIONS, OBS_N, SPIKE_ANG, DRIVE_ANG, create, step, obs, actionToInput, inputToAction, bits, unbits, clone, fromJSON, hash, mirror, rand,
+  const API = { C, IN, ACTIONS, OBS_N, OBS_N2, SPIKE_ANG, DRIVE_ANG, create, step, obs, obsTeam, sideOf, homeX2, actionToInput, inputToAction, bits, unbits, clone, fromJSON, hash, mirror, rand,
     ballPhys, predictLanding, catShape, pawOf, contact, shoot, clearsNet, heat, homeX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Volley = API;
 })(this);
