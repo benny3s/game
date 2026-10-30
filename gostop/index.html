@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#fff6ea">
+<meta name="theme-color" content="#0f4d27">
 <title>고스톱</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
-<link rel="stylesheet" href="../common/cozy.css?v=1">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="../common/cozy.css?v=2">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <div class="wrap" id="home">
@@ -21,6 +21,7 @@
   <section class="card" id="menuCard">
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
@@ -80,10 +81,14 @@
 <div class="overlay" id="resBox" hidden><div><h2 id="resTitle"></h2><div id="resBig"></div><div id="resBody"></div><div class="row" id="resBtns"></div></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
-<script src="../common/cozy.js?v=1"></script>
-<script src="core.js?v=1"></script>
-<script src="ai.js?v=1"></script>
-<script src="cards.js?v=1"></script>
-<script src="main.js?v=1"></script>
+<script src="../common/cozy.js?v=2"></script>
+<script src="../common/me.js?v=2"></script>
+<script src="../common/arena-mock.js?v=2"></script>
+<script src="../common/arena.js?v=2"></script>
+<script src="../common/arena-ui.js?v=2"></script>
+<script src="core.js?v=2"></script>
+<script src="ai.js?v=2"></script>
+<script src="cards.js?v=2"></script>
+<script src="main.js?v=2"></script>
 </body>
 </html>

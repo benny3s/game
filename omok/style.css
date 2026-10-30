@@ -1,5 +1,15 @@
-/* 오목 — cozy.css(냥도쿠 가족 디자인) 위에 이 게임만의 것: 꿀빛 강조색 · 작은 바둑돌 그림 · 대국 줄 · 착수 확인 줄 · 가로 화면 */
-:root{ --accent:#f0a05a; --accent-d:#d27f3a; --wood:#efcf9a; --wood-d:#c99a5e; --stone:#2b2523; }
+/* 오목 — 전통 목재 대국실 · 비자나무 오목판 · 옻칠 흑돌과 조개 백돌 테마 */
+:root{ --accent:#d97706; --accent-d:#b45309; --wood:#efcf9a; --wood-d:#c99a5e; --stone:#2b2523; }
+body{background:radial-gradient(120% 90% at 50% 0%,#fdf8ee 0%,#f2e3c6 65%,#e5cfa6 100%)}
+body.playing{background:radial-gradient(110% 90% at 50% 35%,#362214 0%,#23150b 70%,#170d06 100%)}
+body.playing .bar{background:rgba(46,28,15,.9);border:1.5px solid rgba(217,119,6,.4);border-radius:16px;padding:5px 10px;color:#fef3c7}
+body.playing .bar .iconbtn{background:#452712;border-color:rgba(217,119,6,.5);color:#fef3c7}
+body.playing .bar .lbl{color:#fde68a}
+body.playing .bar .t{color:#fcd34d}
+body.playing .rulepill{background:#452712;border:1.5px solid rgba(217,119,6,.45);color:#fde68a}
+body.playing .side{background:#fdf6e9;border-color:#d6b88a}
+body.playing .dock button{color:#fde68a}
+body.playing .dock button .ic{background:#3d2310;border-color:rgba(217,119,6,.45);color:#fef3c7}
 
 /* 작은 돌 그림 (머리글 · 이름표 · 착수 단추) */
 .st{display:inline-block;width:1em;height:1em;border-radius:50%;vertical-align:-.12em;flex:none}

@@ -59,9 +59,32 @@
   }
   $('tabSolo').onclick = () => { sfx('tap'); opt.tab = 'solo'; saveOpt('tab'); drawMenu(); };
   $('tabWatch').onclick = () => { sfx('tap'); opt.tab = 'watch'; saveOpt('tab'); drawMenu(); };
+  if ($('tabFriend')) $('tabFriend').onclick = () => { sfx('tap'); openFriendModal(); };
   $('startBtn').onclick = () => { sfx('pop'); startGame({ watch: false }); };
   $('watchBtn').onclick = () => { sfx('pop'); startGame({ watch: true }); };
   $('rulesBtn').onclick = () => showRules();
+
+  function openFriendModal() {
+    if (!window.ArenaUI) return C.toast('온라인 모듈을 불러오지 못했어요');
+    ArenaUI.open({
+      game: 'gostop', title: '고스톱', max: 3, min: 2,
+      buildConfig: (hostEl) => {
+        const state = { mode: opt.mode || 2, bonus: opt.bonus || 0 };
+        hostEl.innerHTML = `<div style="display:grid;gap:8px;margin-top:4px">
+          <div class="optrow"><span class="small">인원</span><div class="seg" id="fModeSeg"></div></div>
+          <div class="optrow"><span class="small">보너스 피</span><div class="seg" id="fBonusSeg"></div></div>
+        </div>`;
+        const drawF = () => {
+          segBtns(hostEl.querySelector('#fModeSeg'), [[2, '맞고 (2인)'], [3, '고스톱 (3인, 빈자리 AI)']], state.mode, v => { state.mode = +v; drawF(); });
+          segBtns(hostEl.querySelector('#fBonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], state.bonus, v => { state.bonus = +v; drawF(); });
+        };
+        drawF();
+        return () => ({ n: state.mode, bonus: state.bonus, seed: rand32() });
+      },
+      renderConfig: (cfg) => `${(cfg && cfg.n) === 3 ? '3인 고스톱' : '2인 맞고'} · 보너스 피 ${(cfg && cfg.bonus) || 0}장`,
+      onStart: ({ net, role, cfg, players }) => startOnline({ net, role, cfg, players }),
+    });
+  }
 
   // ── 규칙 창 ───────────────────────────────────────────────
   const RULES_HTML = `<div class="rules">
@@ -147,7 +170,7 @@
   class Cancel extends Error {}
   let SES = null;
   function newSession(cfg) {
-    const ses = { cfg, alive: true, timers: new Set(), waiters: [], modals: [], pending: null, paused: false, S: null, seats: [], sel: -1, pre: -1, hintCard: -1 };
+    const ses = { cfg, alive: true, timers: new Set(), waiters: [], modals: [], pending: null, paused: false, S: null, seats: [], sel: -1, pre: -1, hintCard: -1, net: null, seq: 0, actQ: [], actWaiters: [] };
     ses.wait = ms => new Promise((res, rej) => {
       if (!ses.alive) return rej(new Cancel());
       const t = setTimeout(() => { ses.timers.delete(t); if (ses.alive) res(); else rej(new Cancel()); }, Math.max(0, ms));
@@ -162,9 +185,11 @@
     ses.wake = () => { const w = ses.waiters.splice(0); w.forEach(f => f()); };
     ses.dispose = () => {
       ses.alive = false;
+      if (ses.net) { try { ses.net.leave(); } catch (e) {} ses.net = null; }
       for (const t of ses.timers) clearTimeout(t);
       ses.timers.clear();
       if (ses.pending) { const p = ses.pending; ses.pending = null; p.reject(new Cancel()); }
+      for (const w of ses.actWaiters.splice(0)) { try { w.reject(new Cancel()); } catch (e) {} }
       for (const close of ses.modals.splice(0)) { try { close(); } catch (e) {} }
       ses.wake();
       document.querySelectorAll('.overlay:not(#goBox):not(#resBox)').forEach(o => o.remove());
@@ -181,7 +206,7 @@
   function startGame({ watch }) {
     if (SES) SES.dispose();
     const n = watch ? opt.wMode : opt.mode;
-    const cfg = { watch, n, bonus: watch ? 2 : opt.bonus, seed: startSeed };
+    const cfg = { watch, n, bonus: watch ? 2 : opt.bonus, seed: startSeed, me: watch ? -1 : 0 };
     startSeed = 0;
     const ses = SES = newSession(cfg);
     const used = {};
@@ -192,18 +217,57 @@
     buildHud(ses);
     drawDock();
     runMatch(ses);
-    if (!watch) setTimeout(() => { if (SES === ses) showHowto(false); }, 400);
+  }
+
+  function startOnline({ net, role, cfg, players }) {
+    if (SES) SES.dispose();
+    const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p)).sort((a, b) => (a.slot ?? 9) - (b.slot ?? 9));
+    const n = Math.max(2, Math.min(3, (cfg && cfg.n) || plist.length || 2));
+    const myIdx = Math.max(0, plist.findIndex(p => p.uid === net.uid));
+    const sesCfg = { watch: false, online: true, role, n, bonus: (cfg && cfg.bonus) || 0, seed: (cfg && cfg.seed) || 12345, me: myIdx };
+    const ses = SES = newSession(sesCfg);
+    ses.net = net;
+    const AV = ['🎴', '🌸', '🌕'];
+    ses.seats = Array.from({ length: n }, (_, i) => {
+      const pl = plist[i];
+      if (pl) return { ctrl: i === myIdx ? 'me' : 'remote', tier: null, name: i === myIdx ? (pl.name || '나') : (pl.name || `친구${i + 1}`), em: i === myIdx ? '나' : AV[i % AV.length], uid: pl.uid };
+      return { ctrl: role === 'host' ? 'ai' : 'remote', tier: 'normal', name: '냥냥이(AI)', em: '🐱' };
+    });
+    const pushAct = (m) => {
+      if (!m || m.t !== 'act') return;
+      if (m.seq != null && m.seq < ses.seq) return;
+      if (ses.actWaiters.length) {
+        const w = ses.actWaiters.shift();
+        w.resolve(m.a);
+      } else {
+        ses.actQ.push(m.a);
+      }
+      if (role === 'host') net.broadcast(m);
+    };
+    if (role === 'host') net.on('msg', (_uid, m) => pushAct(m));
+    else net.on('msg', m => pushAct(m));
+    net.sendAct = (a) => {
+      const m = { t: 'act', seq: ses.seq, a };
+      if (role === 'host') net.broadcast(m);
+      else net.send(m);
+    };
+    show('play');
+    buildHud(ses);
+    drawDock();
+    runMatch(ses);
   }
   Cozy.backGuard($('backBtn'), () => { sfx('tap'); goHome(); });
 
   async function runMatch(ses) {
     try {
-      let s = G.create({ players: ses.cfg.n, bonus: ses.cfg.bonus, seed: ses.cfg.seed || rand32(), first: 0 });
+      const baseSeed = (ses.cfg.seed || rand32()) >>> 0;
+      let s = G.create({ players: ses.cfg.n, bonus: ses.cfg.bonus, seed: baseSeed, first: 0 });
       for (;;) {
         await playRound(ses, s);
         const next = await showResult(ses);
         if (next !== 'next') { goHome(); return; }
-        s = G.nextRound(ses.S, { seed: rand32() });
+        const rSeed = ses.cfg.online ? ((baseSeed + (ses.S.round + 1) * 0x9e3779b9) >>> 0) : rand32();
+        s = G.nextRound(ses.S, { seed: rSeed });
       }
     } catch (e) {
       if (e instanceof Cancel) return;
@@ -214,23 +278,29 @@
 
   // ── 자리 · 이름표 (HUD) ───────────────────────────────────
   const GROUP_NAME = ['광', '끗', '띠', '피'];
-  const meSeat = ses => (ses.cfg.watch ? -1 : 0);
-  function seatPos(ses, p) { return p === 0 ? 'bottom' : ses.cfg.n === 2 ? 'top' : p === 1 ? 'right' : 'left'; }
+  const meSeat = ses => (ses.cfg.watch ? -1 : (ses.cfg.me ?? 0));
+  function seatPos(ses, p) {
+    const me = meSeat(ses);
+    const rel = me >= 0 ? (p - me + ses.cfg.n) % ses.cfg.n : p;
+    return rel === 0 ? 'bottom' : ses.cfg.n === 2 ? 'top' : rel === 1 ? 'right' : 'left';
+  }
   function buildHud(ses) {
-    const st = $('stage');
+    const st = $('stage'), me = meSeat(ses);
     st.querySelectorAll('.hud').forEach(e => e.remove());
     ses.hud = [];
     for (let p = 0; p < ses.cfg.n; p++) {
-      const s = ses.seats[p];
+      const s = ses.seats[p], isBottom = seatPos(ses, p) === 'bottom';
       const seat = document.createElement('div');
-      seat.className = 'seat hud' + (p === 0 ? ' mine' : '');
-      seat.innerHTML = `<span class="av"${p === 0 && !ses.cfg.watch ? ' style="background:var(--accent);color:#fff;font:15px var(--round)"' : ''}>${esc(s.em)}</span><span class="nm">${esc(s.name)}</span><span class="sc">0점</span><span class="tags"></span>`;
+      seat.className = 'seat hud' + (isBottom ? ' mine' : '');
+      seat.innerHTML = `<span class="av"${p === me && !ses.cfg.watch ? ' style="background:var(--accent);color:#fff;font:15px var(--round)"' : ''}>${esc(s.em)}</span><span class="nm">${esc(s.name)}</span><span class="sc">0점</span><span class="tags"></span>`;
       st.appendChild(seat);
       const labels = GROUP_NAME.map(() => { const l = document.createElement('span'); l.className = 'glbl hud'; st.appendChild(l); return l; });
       const hc = document.createElement('span'); hc.className = 'hcount hud'; hc.hidden = true; st.appendChild(hc);
       ses.hud.push({ seat, labels, hc });
     }
-    $('lbl').textContent = ses.cfg.watch ? '🍿 AI 구경' : `${ses.cfg.n === 2 ? '맞고' : '고스톱'} · ${TIER[ses.seats[1].tier].em} ${TIER[ses.seats[1].tier].name}`;
+    if (ses.cfg.watch) $('lbl').textContent = '🍿 AI 구경';
+    else if (ses.cfg.online) $('lbl').textContent = `👥 친구랑 ${ses.cfg.n === 2 ? '맞고' : '고스톱'} (${ses.net.code})`;
+    else $('lbl').textContent = `${ses.cfg.n === 2 ? '맞고' : '고스톱'} · ${TIER[ses.seats[1].tier].em} ${TIER[ses.seats[1].tier].name}`;
     drawCoinPill();
   }
   function drawCoinPill() { $('coinPill').textContent = '🪙 ' + fmtN(coins); }
@@ -259,7 +329,7 @@
       const hot = [t.gwang > 0, t.yeol > 0 || t.godori > 0, t.tti > 0 || t.dan > 0, t.piPts > 0];
       h.labels.forEach((l, gi) => { l.innerHTML = `${GROUP_NAME[gi]} <b>${cnt[gi]}</b>`; l.classList.toggle('hot', hot[gi]); });
     }
-    for (let p = 1; p < s.n; p++) { const hc = ses.hud[p].hc, k = VM ? VM.hand[p].length : s.hands[p].length; hc.hidden = !!ses.cfg.watch || !k; hc.textContent = k; }
+    for (let p = 0; p < s.n; p++) { if (seatPos(ses, p) === 'bottom') continue; const hc = ses.hud[p].hc, k = VM ? VM.hand[p].length : s.hands[p].length; hc.hidden = !!ses.cfg.watch || !k; hc.textContent = k; }
     $('deckN').textContent = s.deck.length ? `더미 ${s.deck.length}` : '';
     const me = meSeat(ses);
     let sub = '';
@@ -400,10 +470,11 @@
       seat.classList.toggle('vert', !!ca.infoAt.vert);
       ca.groups.forEach((g, gi) => { const l = h.labels[gi]; l.style.left = g.cx + 'px'; l.style.top = (g.y - 14) + 'px'; });
       // 상대 손패(뒷면) 자리: 이름표 오른쪽
-      if (p !== 0 || ses.cfg.watch) geo.oppHand[p] = null;
+      if (seatPos(ses, p) !== 'bottom' || ses.cfg.watch) geo.oppHand[p] = null;
     }
     // 상대 손패 부채: 이름표 오른쪽 끝
-    for (let p = 1; p < ses.cfg.n; p++) {
+    for (let p = 0; p < ses.cfg.n; p++) {
+      if (seatPos(ses, p) === 'bottom') continue;
       const ca = geo.cap[p], box = ca.box;
       const bw = Math.max(12, Math.min(geo.land ? 18 : 24, geo.ow * 0.8));
       const infoW = ses.hud[p].seat.offsetWidth || 150;            // 이름·점수가 차지한 너비만큼 비켜서
@@ -470,7 +541,7 @@
     // 손패
     for (let p = 0; p < s.n; p++) {
       const h = VM.hand[p];
-      if (p === 0) {
+      if (seatPos(ses, p) === 'bottom') {
         const H = geo.hand, cw = H.cw, n = h.length;
         const myTurn = !!ses.pending && !ses.pending.isResult && s.phase === 'play' && s.turn === me;
         const tm = new Set(); VM.slots.forEach(sl => { if (sl) tm.add(sl.m); });
@@ -478,7 +549,7 @@
         const x0 = H.x + H.w / 2 - (step * (n - 1)) / 2;
         h.forEach((id, i) => {
           const lift = id === ses.sel ? H.lift : (myTurn && tm.has(G.monthOf(id)) ? H.lift * 0.32 : 0) + (id === ses.hover ? H.lift * 0.3 : 0);
-          out[id] = { x: x0 + i * step, y: H.y + H.h - cw * 0.8 - 2 - lift, s: cw / 100, r: 0, z: id === ses.sel ? 330 : 200 + i, up: !!(watch || me === 0) };
+          out[id] = { x: x0 + i * step, y: H.y + H.h - cw * 0.8 - 2 - lift, s: cw / 100, r: 0, z: id === ses.sel ? 330 : 200 + i, up: !!(watch || me === p) };
         });
       } else {
         const oh = geo.oppHand[p], n = h.length, bw = oh.bw;
@@ -595,7 +666,18 @@
       await ses.ready();
       const p = ses.S.turn;
       drawHud(ses);
-      const a = ses.seats[p].ctrl === 'me' ? await humanTurn(ses) : await aiTurn(ses, p);
+      const ctrl = ses.seats[p].ctrl;
+      let a;
+      if (ctrl === 'me') {
+        a = await humanTurn(ses);
+        if (ses.net && ses.net.sendAct) ses.net.sendAct(a);
+      } else if (ctrl === 'remote') {
+        a = await remoteTurn(ses, p);
+      } else {
+        a = await aiTurn(ses, p);
+        if (ses.net && ses.net.sendAct) ses.net.sendAct(a);
+      }
+      ses.seq++;
       ses.check();
       const { state, events } = G.step(ses.S, a);
       ses.S = state;
@@ -606,6 +688,20 @@
       await syncAll(ses, D(220));
     }
     drawHud(ses);
+  }
+
+  function remoteTurn(ses, p) {
+    setThinking(ses, p, true);
+    if (ses.actQ.length) {
+      setThinking(ses, p, false);
+      return Promise.resolve(ses.actQ.shift());
+    }
+    return new Promise((resolve, reject) => {
+      ses.actWaiters.push({
+        resolve: a => { setThinking(ses, p, false); resolve(a); },
+        reject: e => { setThinking(ses, p, false); reject(e); },
+      });
+    });
   }
 
   // 나누기: 더미에서 바닥 → 손패 순서로 한 장씩
@@ -813,16 +909,16 @@
     syncAll(ses, D(140));
   }
   function playSelected(ses) {
-    const s = ses.S, c = ses.sel; if (c < 0 || !ses.pending) return;
+    const s = ses.S, c = ses.sel, me = meSeat(ses); if (c < 0 || !ses.pending) return;
     const L = G.legal(s), m = G.monthOf(c);
     if (G.isBonus(c)) return finishHuman(ses, G.A_PLAY + c);
     if (L.indexOf(G.A_BOMB + m) >= 0) {
       const tc = s.table.find(x => G.monthOf(x) === m);
-      return ask(ses, '💣 폭탄!', `<p style="margin:0">손에 ${m + 1}월이 세 장, 바닥에 한 장이 있어요.<br>세 장을 한꺼번에 내면 네 장을 다 가져오고 <b>피 한 장씩</b> 받아요. 이기면 <b>두 배</b>!</p><div class="cardrow" style="margin-top:8px">${s.hands[0].filter(x => G.monthOf(x) === m).concat(tc).map(x => ART.use(x)).join('')}</div>`,
+      return ask(ses, '💣 폭탄!', `<p style="margin:0">손에 ${m + 1}월이 세 장, 바닥에 한 장이 있어요.<br>세 장을 한꺼번에 내면 네 장을 다 가져오고 <b>피 한 장씩</b> 받아요. 이기면 <b>두 배</b>!</p><div class="cardrow" style="margin-top:8px">${s.hands[me].filter(x => G.monthOf(x) === m).concat(tc).map(x => ART.use(x)).join('')}</div>`,
         [{ label: '💣 폭탄', primary: true, a: G.A_BOMB + m }, { label: '한 장만 내기', a: G.A_PLAY + c }]);
     }
     if (L.indexOf(G.A_SHAKE + c) >= 0) {
-      return ask(ses, '👋 흔들까요?', `<p style="margin:0">손에 ${m + 1}월이 세 장 있어요. 보여 주고 내면 이겼을 때 점수가 <b>두 배</b>예요.<br><span class="small">(세 장을 상대도 보게 돼요)</span></p><div class="cardrow" style="margin-top:8px">${s.hands[0].filter(x => G.monthOf(x) === m).map(x => ART.use(x)).join('')}</div>`,
+      return ask(ses, '👋 흔들까요?', `<p style="margin:0">손에 ${m + 1}월이 세 장 있어요. 보여 주고 내면 이겼을 때 점수가 <b>두 배</b>예요.<br><span class="small">(세 장을 상대도 보게 돼요)</span></p><div class="cardrow" style="margin-top:8px">${s.hands[me].filter(x => G.monthOf(x) === m).map(x => ART.use(x)).join('')}</div>`,
         [{ label: '👋 흔들기', primary: true, a: G.A_SHAKE + c }, { label: '그냥 내기', a: G.A_PLAY + c }]);
     }
     finishHuman(ses, G.A_PLAY + c);
@@ -846,7 +942,7 @@
   }
   function askKook(ses) {
     sfx('pop');
-    const s = ses.S, ty = G.tally(s, 0, 'Y'), tp = G.tally(s, 0, 'P');
+    const s = ses.S, p = s.turn, ty = G.tally(s, p, 'Y'), tp = G.tally(s, p, 'P');
     ask(ses, '🍶 국진을 어떻게 쓸까요?', `<div class="cardrow">${ART.use(G.KOOK)}</div><p style="margin:6px 0 0">9월 술잔은 <b>열끗</b>으로 두거나 <b>쌍피</b>(피 두 장)로 쓸 수 있어요.</p>
       <table class="brk" style="margin-top:6px"><tr><td>열끗으로</td><td class="n">열끗 ${ty.y}장 · 지금 ${ty.base}점</td></tr><tr><td>쌍피로</td><td class="n">피 ${tp.pi}장 · 지금 ${tp.base}점</td></tr></table>`,
     [{ label: '열끗으로', primary: ty.base >= tp.base, a: G.A_KOOK_Y }, { label: '쌍피로', primary: tp.base > ty.base, a: G.A_KOOK_P }]);
@@ -1046,4 +1142,9 @@
   ART.install();
   drawMenu();
   show('home');
+  if (window.ArenaUI) ArenaUI.checkUrl({
+    game: 'gostop', title: '고스톱', max: 3, min: 2,
+    renderConfig: (cfg) => `${(cfg && cfg.n) === 3 ? '3인 고스톱' : '2인 맞고'} · 보너스 피 ${(cfg && cfg.bonus) || 0}장`,
+    onStart: ({ net, role, cfg, players }) => startOnline({ net, role, cfg, players }),
+  });
 })();

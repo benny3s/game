@@ -1,6 +1,14 @@
-/* 바둑 — 포근한 가족 디자인(common/cozy.css) 위에 바둑만의 것: 꿀색 강조 · 나무 판 · 돌 칩 · 계가 상자 · 가로 화면 */
-:root{ --accent:#f2a25c; --accent-d:#d4843f; --wood:#f0d39f; }
-body{word-break:keep-all;overflow-wrap:anywhere}
+/* 바둑 — 전통 기원(棋院) 대국실 · 비자나무 바둑판 · 묵직한 흑백 바둑돌 테마 */
+:root{ --accent:#b45309; --accent-d:#92400e; --wood:#f0d39f; }
+body{word-break:keep-all;overflow-wrap:anywhere;background:radial-gradient(120% 90% at 50% 0%,#faf5e8 0%,#efe2c6 65%,#e2ceaa 100%)}
+body.playing{background:radial-gradient(110% 90% at 50% 35%,#1e2923 0%,#121a16 70%,#0b100d 100%)}
+body.playing .bar{background:rgba(20,32,26,.9);border:1.5px solid rgba(212,175,55,.35);border-radius:16px;padding:5px 10px}
+body.playing .bar .iconbtn{background:#24382e;border-color:rgba(212,175,55,.45);color:#fef3c7}
+body.playing .bar .lbl{color:#fde68a}
+body.playing .bar .t{color:#a7f3d0}
+body.playing .bar .pill{background:#24382e;border-color:rgba(212,175,55,.45);color:#fde68a}
+body.playing .dock button{color:#d1fae5}
+body.playing .dock button .ic{background:#1f3329;border-color:rgba(212,175,55,.4);color:#fef3c7}
 header.top h1{display:flex;align-items:center;gap:10px}
 .logo{position:relative;width:40px;height:34px;flex:none}
 .logo .st{position:absolute;width:26px;height:26px}

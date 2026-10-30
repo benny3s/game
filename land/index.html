@@ -10,8 +10,9 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=1">
 <style>
-/* 땅따먹기: 공통 포근한 모양(cozy.css) + 이 게임만의 것 (크레파스 산호색 · 모눈종이 무대) */
-:root{ --accent:#ff9472; --accent-d:#e0735a; }
+/* 땅따먹기: 공통 포근한 모양(cozy.css) + 이 게임만의 것 (크레파스 산호색 · 스케치북 모눈종이 무대) */
+:root{ --accent:#ff7e55; --accent-d:#d95b35; --bg:#fdf3e6; }
+body{background:radial-gradient(circle at 50% 15%,#fffdf9 0%,#f7e8d4 100%);min-height:100dvh}
 html:has(body.playing){overscroll-behavior:none}
 header.top h1{white-space:nowrap}
 
@@ -148,6 +149,7 @@ header.top h1{white-space:nowrap}
   <section id="home" class="card">
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
     <p class="lede" id="lede"></p>
@@ -203,6 +205,8 @@ header.top h1{white-space:nowrap}
 <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
 <script src="../common/cozy.js?v=1"></script>
+<script src="../common/arena.js?v=1"></script>
+<script src="../common/arena-ui.js?v=1"></script>
 <script src="core.js?v=1"></script>
 <script src="bots.js?v=1"></script>
 <script src="art.js?v=1"></script>

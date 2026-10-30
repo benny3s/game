@@ -8,7 +8,7 @@
         "$code": {
           ".validate": "$code.length === 4",
           "meta": {
-            ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "state": {
@@ -66,7 +66,7 @@
           ".validate": "$code.length === 4",
           ".write": "auth != null && !newData.exists() && (root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
           "meta": {
-            ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "state": {
@@ -109,7 +109,7 @@
           ".validate": "$code.length === 4",
           ".write": "auth != null && !newData.exists() && (root.child('nyang/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
           "meta": {
-            ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "players": {
@@ -146,6 +146,20 @@
         }
       }
     },
+    "arena_invites": {
+      ".read": "auth != null && auth.token.admin === 1",
+      "$token": {
+        ".write": "auth != null && auth.token.admin === 1",
+        ".validate": "$token.length === 6"
+      }
+    },
+    "arena_hosts": {
+      ".read": "auth != null && auth.token.admin === 1",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1)",
+        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && newData.child('ok').val() === true && newData.child('token').isString() && root.child('arena_invites/' + newData.child('token').val()).exists()))"
+      }
+    },
     "arena": {
       "$game": {
         ".validate": "$game.matches(/^[a-z]{2,12}$/)",
@@ -155,7 +169,7 @@
             ".validate": "$code.length === 4",
             ".write": "auth != null && !newData.exists() && (root.child('arena/' + $game + '/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
             "meta": {
-              ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
+              ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
               ".validate": "!newData.exists() || (newData.child('host').val() === auth.uid && newData.child('max').isNumber() && newData.child('max').val() >= 1 && newData.child('max').val() <= 16)"
             },
             "players": {

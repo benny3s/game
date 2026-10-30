@@ -78,10 +78,48 @@
   }
   $('tabSolo').onclick = () => { sfx('tap'); pref.tab = 'solo'; savePref(); drawMenu(); };
   $('tabWatch').onclick = () => { sfx('tap'); pref.tab = 'watch'; savePref(); drawMenu(); };
+  if ($('tabFriend')) $('tabFriend').onclick = () => { sfx('tap'); openFriendModal(); };
   $('startBtn').onclick = () => { sfx('tap'); startFromMenu(); };
   $('helpBtn').onclick = () => howto(true);
   $('setBtn').onclick = openSettings;
   $('recBtn').onclick = openRecords;
+
+  function openFriendModal() {
+    if (!window.ArenaUI) return Cozy.toast('온라인 모듈을 불러오지 못했어요');
+    ArenaUI.open({
+      game: 'omok', title: '오목', max: 2, min: 2,
+      buildConfig: (hostEl) => {
+        const state = { rule: pref.rule || 'standard', hostColor: 1 };
+        hostEl.innerHTML = `<div style="display:grid;gap:8px;margin-top:4px">
+          <div class="optrow"><span class="small">규칙</span><div class="seg" id="fRuleSeg"></div></div>
+          <div class="optrow"><span class="small">방장 돌</span><div class="seg" id="fColSeg"></div></div>
+        </div>`;
+        const drawF = () => {
+          seg(hostEl.querySelector('#fRuleSeg'), RULES.map(r => [r, O.RULES[r].name]), state.rule, v => { state.rule = v; drawF(); });
+          seg(hostEl.querySelector('#fColSeg'), [[1, '⚫ 흑'], [2, '⚪ 백']], state.hostColor, v => { state.hostColor = +v; drawF(); });
+        };
+        drawF();
+        return () => ({ rule: state.rule, hostColor: state.hostColor });
+      },
+      renderConfig: (cfg) => `${(O.RULES[cfg && cfg.rule] || O.RULES.standard).name} · 방장 ${(cfg && cfg.hostColor) === 2 ? '백' : '흑'}`,
+      onStart: ({ net, role, cfg, players }) => startOnline({ net, role, cfg, players }),
+    });
+  }
+  function startOnline({ net, role, cfg, players }) {
+    const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p)).sort((a, b) => (a.slot ?? 9) - (b.slot ?? 9));
+    const hostCol = (cfg && cfg.hostColor) === 2 ? 2 : 1;
+    const me = role === 'host' ? hostCol : (3 - hostCol);
+    const myPl = plist.find(p => p.uid === net.uid) || { name: '나' };
+    const oppPl = plist.find(p => p.uid !== net.uid) || { name: '친구' };
+    newGame({ mode: 'online', rule: (cfg && cfg.rule) || 'standard', me, myName: myPl.name || '나', oppName: oppPl.name || '친구', net, role });
+    const onMsg = (m) => {
+      if (!m || !G || G.mode !== 'online') return;
+      if (m.t === 'move') act(m.a, { from: 'remote', color: m.color });
+      else if (m.t === 'again') newGame(Object.assign({}, G.cfg, { me: 3 - G.me }));
+    };
+    if (role === 'host') net.on('msg', (_uid, m) => onMsg(m));
+    else net.on('msg', m => onMsg(m));
+  }
   function startFromMenu() {
     if (pref.tab === 'watch') newGame({ mode: 'watch', rule: pref.rule, wb: pref.wb, ww: pref.ww });
     else if (pref.mode === 'two') newGame({ mode: 'two', rule: pref.rule });
@@ -172,22 +210,28 @@
     if (cfg.mode === 'ai') {
       me = cfg.color === 'white' ? 2 : cfg.color === 'random' ? (Math.random() < 0.5 ? 1 : 2) : 1;
       players = { [me]: { kind: 'human' }, [3 - me]: { kind: 'ai', tier: cfg.tier } };
+    } else if (cfg.mode === 'online') {
+      me = cfg.me || 1;
+      players = { [me]: { kind: 'human', name: cfg.myName || '나' }, [3 - me]: { kind: 'remote', name: cfg.oppName || '친구' } };
     } else if (cfg.mode === 'two') players = { 1: { kind: 'human' }, 2: { kind: 'human' } };
     else players = { 1: { kind: 'ai', tier: cfg.wb }, 2: { kind: 'ai', tier: cfg.ww } };
     const key = JSON.stringify([cfg.mode, cfg.tier, cfg.wb, cfg.ww, rule]);
     if (session.key !== key) session = { key, a: 0, b: 0 };
-    G = { cfg, s, mode: cfg.mode, rule, me, players, hints: cfg.mode === 'ai' ? 3 : 0, hintUsed: 0, undos: 0, secs: 0, over: false,
+    G = { cfg, s, mode: cfg.mode, rule, me, players, net: cfg.net || null, role: cfg.role || null, hints: cfg.mode === 'ai' ? 3 : 0, hintUsed: 0, undos: 0, secs: 0, over: false,
       thinking: false, paused: false, fast: false, review: null, said: {}, startAt: Date.now() };
     preview = hover = cursor = -1;
     board.clearFx();
     show('play');
     $('dockPlay').hidden = cfg.mode === 'watch'; $('dockWatch').hidden = cfg.mode !== 'watch'; $('dockReview').hidden = true;
     $('hintBtn').hidden = cfg.mode !== 'ai';
+    $('undoBtn').hidden = cfg.mode === 'online';
+    $('restartBtn').hidden = cfg.mode === 'online';
     drawWatchDock();
     syncAll();
     tickT = setInterval(tick, 1000);
     sfx('start');
-    if (cfg.mode === 'ai' && (cfg.color === 'random' || me === 2)) Cozy.toast(me === 1 ? (cfg.color === 'random' ? '🎲 이번엔 흑이에요. 먼저 둬요!' : '내가 흑이에요. 먼저 둬요!') : `${cfg.color === 'random' ? '🎲 이번엔 백' : '내가 백'}이에요. ${tier(cfg.tier).em} AI가 먼저 둬요`, 1800);
+    if (cfg.mode === 'online') Cozy.toast(me === 1 ? '⚫ 내가 흑이에요. 먼저 둬요!' : '⚪ 내가 백이에요. 친구가 먼저 둬요!', 1800);
+    else if (cfg.mode === 'ai' && (cfg.color === 'random' || me === 2)) Cozy.toast(me === 1 ? (cfg.color === 'random' ? '🎲 이번엔 흑이에요. 먼저 둬요!' : '내가 흑이에요. 먼저 둬요!') : `${cfg.color === 'random' ? '🎲 이번엔 백' : '내가 백'}이에요. ${tier(cfg.tier).em} AI가 먼저 둬요`, 1800);
     if (cfg.mode !== 'watch' && howto(false)) { /* 처음이면 안내를 먼저 */ }
     setTimeout(() => { if (G && G.s === s) advance(); }, cfg.mode === 'watch' ? 500 : 250);
   }
@@ -197,6 +241,7 @@
     hideBubble();
   }
   function goMenu() {
+    if (G && G.net) { try { G.net.leave(); } catch (e) {} }
     stopAll(); G = null; board.clearFx(); show('menu'); drawMenu();
     session = { key: '', a: 0, b: 0 };
     for (const c of modals.slice().reverse()) c();                      // 열린 창(기권 묻기 등)도 닫음
@@ -223,10 +268,15 @@
   function act(a, info) {
     if (!G || G.over || G.review) return false;
     const g = G, mover = g.s.turn;
-    const ev = a === O.RESIGN ? O.resign(g.s, info && info.color || mover) : O.step(g.s, a);
+    const col = info && info.color || mover;
+    const ev = a === O.RESIGN ? O.resign(g.s, col) : O.step(g.s, a);
     if (ev[0].type === 'illegal') {
       if (ev[0].reason === 'forbidden') { sfx('bad'); Cozy.vibrate(30); Cozy.toast(BAN_MSG[ev[0].ban] || '둘 수 없는 자리예요'); }
       return false;
+    }
+    if (g.mode === 'online' && g.net && !(info && info.from === 'remote')) {
+      const m = { t: 'move', a, color: col };
+      if (g.role === 'host') g.net.broadcast(m); else g.net.send(m);
     }
     preview = hover = cursor = -1; showConfirm(false); board.setHint(-1); board.setGhost(null);   // 둔 자리에 미리 보기 · 커서가 남지 않게 (둘이서)
     let won = null;
@@ -348,6 +398,10 @@
         body = `<p class="bigline">${T.em} ${T.name} AI가 이겼어요${why}</p><p class="sub">${n}수 · ${fmtT(g.secs)}</p>
           <p class="why">${s.reason === 'resign' ? '다음 판은 끝까지 버텨 봐요!' : '상대의 열린 삼과 사를 먼저 막아 보세요. 복기로 어디서 갈렸는지 볼 수 있어요.'}</p>${recTxt}`;
       } else { title = '🤝 비겼어요'; body = `<p class="sub">${n}수 · 판이 가득 찼어요</p>${recTxt}`; }
+    } else if (g.mode === 'online') {
+      const wonMe = w === g.me;
+      title = !w ? '🤝 비겼어요' : wonMe ? '🎉 이겼어요!' : '😿 아쉽게 졌어요';
+      body = (w ? `<div class="winst"><i class="st ${w === 1 ? 'b' : 'w'}"></i></div>` : '') + `<p class="sub">${n}수 · ${fmtT(g.secs)}${why}</p><p class="why">점수 흑 ${session.a} : ${session.b} 백</p>`;
     } else if (g.mode === 'two') {
       title = w ? `${COLOR_NAME[w]} 승리!` : '🤝 비겼어요';
       body = (w ? `<div class="winst"><i class="st ${w === 1 ? 'b' : 'w'}"></i></div>` : '') + `<p class="sub">${n}수 · ${fmtT(g.secs)}${why}</p><p class="why">점수 흑 ${session.a} : ${session.b} 백</p>`;
@@ -362,7 +416,18 @@
       { label: '메뉴', ghost: true, onClick: () => goMenu() },
     ] });
   }
-  function again() { if (!G) return; const cfg = G.review && G.review.cfg ? G.review.cfg : G.cfg; if (!cfg) { goMenu(); return; } newGame(cfg); }
+  function again() {
+    if (!G) return;
+    const cfg = G.review && G.review.cfg ? G.review.cfg : G.cfg;
+    if (!cfg) { goMenu(); return; }
+    if (G.mode === 'online' && G.net) {
+      const m = { t: 'again' };
+      if (G.role === 'host') G.net.broadcast(m); else G.net.send(m);
+      newGame(Object.assign({}, cfg, { me: 3 - G.me }));
+      return;
+    }
+    newGame(cfg);
+  }
 
   // ── 복기: 끝난 판 · 지난 대국을 한 수씩 ──
   function startReview() {
@@ -424,13 +489,14 @@
       const el = $(c === 1 ? 'sideB' : 'sideW'), p = G.players[c];
       let emo, nm, sayTxt = '';
       if (G.mode === 'ai') { if (p.kind === 'human') { emo = '🙂'; nm = '나'; } else { emo = tier(p.tier).em; nm = tier(p.tier).name; } }
+      else if (G.mode === 'online') { emo = p.kind === 'human' ? '🙂' : '👥'; nm = p.name || COLOR_NAME[c]; }
       else if (G.mode === 'two') { emo = ''; nm = COLOR_NAME[c]; }
       else { emo = tier(p.tier).em; nm = tier(p.tier).name; }
       const turn = !s.over && !G.review && s.turn === c;
       if (G.review) sayTxt = '';
       else if (s.over) sayTxt = s.winner === c ? '승리!' : s.winner ? '' : '무승부';
       else if (turn && G.paused) sayTxt = '멈춤';
-      else if (turn) sayTxt = p.kind === 'ai' ? (G.thinking ? '생각 중' : '') : G.mode === 'ai' ? '내 차례' : '차례';
+      else if (turn) sayTxt = p.kind === 'ai' ? (G.thinking ? '생각 중' : '') : p.kind === 'remote' ? '상대 차례' : (G.mode === 'ai' || G.mode === 'online') ? '내 차례' : '차례';
       el.querySelector('.emo').textContent = emo;
       el.querySelector('.av').classList.toggle('stoneav', G.mode === 'two');
       el.querySelector('.nm').textContent = nm;
@@ -439,7 +505,7 @@
       el.querySelector('.n').textContent = session.a || session.b ? String(sc) : '';
       el.classList.toggle('turn', turn);
     }
-    $('lbl').textContent = G.review ? '📜 복기' : G.mode === 'ai' ? `${tier(G.cfg.tier).em} ${tier(G.cfg.tier).name} AI와 대국` : G.mode === 'two' ? '👥 둘이서' : '👀 AI 구경';
+    $('lbl').textContent = G.review ? '📜 복기' : G.mode === 'ai' ? `${tier(G.cfg.tier).em} ${tier(G.cfg.tier).name} AI와 대국` : G.mode === 'online' ? `👥 친구랑 (${G.net ? G.net.code : ''})` : G.mode === 'two' ? '👥 둘이서' : '👀 AI 구경';
     $('rulePill').textContent = O.RULES[G.rule].name;
   }
   function drawStat() {
@@ -598,7 +664,7 @@
   $('resignBtn').onclick = () => {
     if (!G || G.over || G.review) return;
     sfx('tap');
-    const who = G.mode === 'ai' ? G.me : G.s.turn;
+    const who = (G.mode === 'ai' || G.mode === 'online') ? G.me : G.s.turn;
     askClose = modal({ title: '기권할까요?', html: `<p class="sub">${G.mode === 'two' ? `${COLOR_NAME[who]}이 기권하면 ${COLOR_NAME[3 - who]} 승리예요.` : '이번 판은 진 걸로 남아요.'}</p>`, dismiss: true, onClose: () => { askClose = null; },
       buttons: [{ label: '계속 둘래요', primary: true }, { label: '기권', ghost: true, onClick: () => { if (G && !G.over) { cancelAI(); act(O.RESIGN, { color: who }); } } }] });
   };
@@ -661,6 +727,11 @@
 
   // ── 시작 ──
   drawMenu();
+  if (window.ArenaUI) ArenaUI.checkUrl({
+    game: 'omok', title: '오목', max: 2, min: 2,
+    renderConfig: (cfg) => `${(O.RULES[cfg && cfg.rule] || O.RULES.standard).name} · 방장 ${(cfg && cfg.hostColor) === 2 ? '백' : '흑'}`,
+    onStart: ({ net, role, cfg, players }) => startOnline({ net, role, cfg, players }),
+  });
   OmokBoard.prewarm();
   getWorker();                                                         // 워커를 미리 깨워 둠 (첫 수가 빠르게)
   if (worker) think(O.toJSON(O.create(15, pref.rule)), { tier: 'easy' }).catch(() => {});

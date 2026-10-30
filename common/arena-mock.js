@@ -108,5 +108,6 @@ window.ArenaMock = util => {
     init: async () => null, host, join, listRooms, deleteRoom: async () => null,
     inviteUrl: util.inviteUrl, roomFromUrl: util.roomFromUrl, cleanCode: util.cleanCode,
     now: () => Date.now(), GUEST: false, ROOT: "mock/", mock: true, db: () => null, uid, ready: true,
+    canHost: true, isAdmin: true, createHostInvite: async () => ({ code: "MOCK77", url: location.href }), claimHostInvite: async () => true,
   };
 };

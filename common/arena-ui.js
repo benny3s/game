@@ -66,16 +66,22 @@
     me = { name: n || "친구" + Math.floor(Math.random() * 90 + 10) }; return me.name;
   }
 
-  // ── 첫 화면: 방 만들기 · 코드로 들어가기 · 열린 방
+  // ── 첫 화면: 방 만들기(관리자·가족 호스트만) · 코드로 들어가기 · 열린 방
   function home(msg = "") {
     show(); clearList();
-    box.innerHTML = `<button class="arn-x" data-x aria-label="닫기">✕</button>
+    const canHost = Arena.canHost !== false;
+    const isAdmin = !!Arena.isAdmin;
+    box.innerHTML = `<button class="arn-x" id="arLeave" data-x aria-label="닫기">✕</button>
       <h2>친구랑 ${esc(opt.title)}</h2>
-      <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
-      <button class="arn-btn pri" data-host>🏠 방 만들기</button>
-      <div class="arn-row"><input class="arn-code" maxlength="4" placeholder="코드" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
+      <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${canHost ? '<span style="font-size:12px;background:rgba(63,174,122,.16);color:#2d8a5e;padding:3px 8px;border-radius:99px">👑 방장 권한</span>' : ''}${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
+      ${canHost
+        ? `<button class="arn-btn pri" id="arCreate" data-host>🏠 방 만들기 (친구 초대)</button>`
+        : `<div style="background:rgba(0,0,0,.04);border-radius:16px;padding:11px 13px;font-size:13.5px;color:var(--soft,#8b7b70);line-height:1.45">🔒 <b>방 만들기</b>는 관리자(베니·와이프) 전용이에요.<br>초대받은 <b>4자리 방 코드</b>를 입력해 입장하세요!</div>`}
+      <div class="arn-row"><input class="arn-code" maxlength="4" placeholder="방 코드" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
       <div class="arn-msg">${esc(msg)}</div>
-      <p class="arn-soft">열린 방</p><div class="arn-list"><p class="arn-soft">찾는 중…</p></div>`;
+      <p class="arn-soft">열린 방</p><div class="arn-list"><p class="arn-soft">찾는 중…</p></div>
+      ${isAdmin && !Arena.mock ? `<div style="border-top:1px solid var(--line,rgba(0,0,0,.08));padding-top:10px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="arn-soft" style="font-size:12.5px">👑 가족(와이프) 기기에 방 만들기 권한 주기</span><button class="arn-btn" data-mk-host-inv style="padding:8px 12px;font-size:13px">초대 코드 발급</button></div>` : ""}
+      ${!canHost ? `<details style="font-size:13px;color:var(--soft,#8b7b70)"><summary style="cursor:pointer">🔑 가족 호스트(방장) 등록 코드가 있나요?</summary><div class="arn-row" style="margin-top:8px"><input class="arn-code" id="arnHostIn" maxlength="6" placeholder="6자리" style="font-size:17px;letter-spacing:4px"><button class="arn-btn" data-claim-host style="padding:10px 14px;font-size:14px">등록</button></div></details>` : ""}`;
     const inp = box.querySelector(".arn-code");
     inp.addEventListener("input", () => { inp.value = Arena.cleanCode(inp.value); });
     inp.addEventListener("keydown", e => { if (e.key === "Enter") box.querySelector("[data-join]").click(); });
@@ -89,7 +95,7 @@
         const state = r.empty ? "빈 방" : busy ? "게임 중" : full ? "꽉 참" : "기다리는 중";
         const btn = r.empty ? `<button class="arn-btn" data-del="${esc(r.code)}">지우기</button>` : `<button class="arn-btn" data-code="${esc(r.code)}" ${full || busy ? "disabled" : ""}>들어가기</button>`;
         return `<div class="arn-room"><div class="who"><b>${esc(r.h || "?")}의 방</b><span>${esc(state)} · ${r.n}/${r.max}명${r.m ? " · " + esc(r.m) : ""}</span></div>${btn}</div>`;
-      }).join("") : `<p class="arn-soft">아직 열린 방이 없어요. 방을 만들고 친구에게 링크를 보내 보세요.</p>`;
+      }).join("") : `<p class="arn-soft">${canHost ? "아직 열린 방이 없어요. 방을 만들고 친구에게 초대 링크를 보내 보세요." : "지금 열린 방이 없어요. 초대 링크나 방 코드를 받으면 들어갈 수 있어요."}</p>`;
     };
     draw(); listT = setInterval(draw, 4000);
   }
@@ -100,13 +106,13 @@
     const isHost = net.isHost;
     box.innerHTML = `<button class="arn-x" data-leave aria-label="나가기">✕</button>
       <h2>${esc(opt.title)} 대기실</h2>
-      <div class="arn-big"><span>방 코드</span><b>${esc(net.code)}</b></div>
+      <div class="arn-big"><span>방 코드</span><b id="arCode">${esc(net.code)}</b></div>
       <button class="arn-btn" data-share>🔗 초대 링크 보내기</button>
       <div class="arn-list" data-pl></div>
       <div class="arn-set" data-set></div>
       <div class="arn-msg" data-msg></div>
-      ${isHost ? `<button class="arn-btn pri" data-start disabled>시작하기</button>` : `<p class="arn-wait">방장이 시작하면 바로 시작돼요</p>`}
-      <button class="arn-btn" data-leave>나가기</button>`;
+      ${isHost ? `<button class="arn-btn pri" id="arStart" data-start disabled>시작하기</button>` : `<p class="arn-wait">방장이 시작하면 바로 시작돼요</p>`}
+      <button class="arn-btn" id="arLeave" data-leave>나가기</button>`;
     drawPlayers(); drawSettings();
   }
   function drawPlayers() {
@@ -119,13 +125,28 @@
       return `<div class="arn-pl">${uid === host ? "👑" : "🙂"} <b>${esc(p.name || "?")}</b>${mine ? "<i>나</i>" : ""}${dot}${net.isHost && !mine ? `<button class="kick" data-kick="${esc(uid)}">내보내기</button>` : ""}</div>`;
     }).join("");
     const btn = box.querySelector("[data-start]");
-    if (btn) { const n = ids.length, min = opt.min || 2; btn.disabled = n < min; btn.textContent = n < min ? `친구를 기다리는 중 (${n}/${min}명)` : "시작하기"; }
+    if (btn) { const n = ids.length, min = opt.min || opt.minPlayers || 2; btn.disabled = n < min; btn.textContent = n < min ? `친구를 기다리는 중 (${n}/${min}명)` : "시작하기"; }
   }
   function drawSettings() {
-    if (!box || !net || !opt.settings || !opt.settings.render) return; const el = box.querySelector("[data-set]"); if (!el) return;
-    const c = (net.meta && net.meta.cfg) || cfg || opt.settings.defaults || {};
+    if (!box || !net) return; const el = box.querySelector("[data-set]"); if (!el) return;
+    const c = (net.meta && net.meta.cfg) || cfg || (opt.settings && opt.settings.defaults) || {};
     el.innerHTML = "";
-    opt.settings.render(el, c, net.isHost, patch => { if (!net.isHost) return; cfg = { ...c, ...patch }; net.setPhase("lobby", cfg); drawSettings(); });
+    if (opt.settings && opt.settings.render) {
+      opt.settings.render(el, c, net.isHost, patch => { if (!net.isHost) return; cfg = { ...c, ...patch }; net.setPhase("lobby", cfg); drawSettings(); });
+    } else if (opt.buildConfig && opt.buildConfig.length >= 1 && net.isHost) {
+      const fn = opt.buildConfig(el);
+      if (typeof fn === "function") {
+        opt._getBuiltCfg = fn;
+        el.addEventListener("click", () => { cfg = fn(); net.setPhase("lobby", cfg); });
+      }
+    } else if (opt.extraOptionsHtml && net.isHost) {
+      el.innerHTML = opt.extraOptionsHtml;
+      el.addEventListener("change", () => {
+        if (opt.buildConfig) { cfg = opt.buildConfig(); net.setPhase("lobby", cfg); }
+      });
+    } else if (opt.renderConfig) {
+      el.innerHTML = `<p class="arn-soft" style="text-align:center">${esc(opt.renderConfig(c))}</p>`;
+    }
   }
   const ctx = () => ({ net, role: net.isHost ? "host" : "guest", code: net.code, cfg: (net.meta && net.meta.cfg) || cfg, players: net.players, uid: net.uid, name: me && me.name });
 
@@ -157,8 +178,18 @@
   async function doHost() {
     const b = box.querySelector("[data-host]"); if (b) { b.disabled = true; b.textContent = "방 만드는 중…"; }
     try {
-      cfg = { ...(opt.settings && opt.settings.defaults || {}), ...(cfg || {}) };
-      net = await Arena.host(opt.game, { name: me.name, cfg, max: opt.max || 2, label: opt.settings && opt.settings.label });
+      let built = {};
+      if (opt.buildConfig) {
+        if (opt.buildConfig.length >= 1) {
+          const tmp = document.createElement("div");
+          const fn = opt.buildConfig(tmp);
+          built = typeof fn === "function" ? fn() : (fn || {});
+        } else {
+          built = opt.buildConfig() || {};
+        }
+      }
+      cfg = { ...(opt.settings && opt.settings.defaults || {}), ...built, ...(cfg || {}) };
+      net = await Arena.host(opt.game, { name: me.name, cfg, max: opt.max || opt.maxPlayers || 2, label: (opt.settings && opt.settings.label) || opt.renderConfig });
       playing = false; wire(); setUrlRoom(net.code); lobby();
     } catch (e) { home("방을 못 만들었어요: " + e.message); }
   }
@@ -187,6 +218,18 @@
     else if (t.matches("[data-rename]")) { GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
     else if (t.matches("[data-host]")) doHost();
     else if (t.matches("[data-join]")) doJoin(box.querySelector(".arn-code").value);
+    else if (t.matches("[data-mk-host-inv]")) {
+      t.disabled = true; t.textContent = "발급 중…";
+      Arena.createHostInvite().then(async ({ code, url }) => {
+        try { await navigator.clipboard.writeText(url); } catch (e) {}
+        home(`가족 호스트 코드 [${code}] 발급 완료! (링크가 복사되었어요)`);
+      }).catch(err => home("발급 실패: " + err.message));
+    }
+    else if (t.matches("[data-claim-host]")) {
+      const v = box.querySelector("#arnHostIn") && box.querySelector("#arnHostIn").value;
+      t.disabled = true;
+      Arena.claimHostInvite(v, me && me.name).then(() => home("👑 가족 호스트 권한이 등록되었어요! 이제 방을 만들 수 있어요.")).catch(err => home("등록 실패: " + err.message));
+    }
     else if (t.dataset.code) doJoin(t.dataset.code);
     else if (t.dataset.del) { t.disabled = true; Arena.deleteRoom(opt.game, t.dataset.del).catch(() => {}).then(() => home()); }
     else if (t.matches("[data-share]")) share();
@@ -212,5 +255,14 @@
     leave() { if (net) end(""); },
     get net() { return net; }, get playing() { return playing; }, get me() { return me; },
     hasInvite: () => !!Arena.roomFromUrl(),
+    checkUrl(fn) {
+      const sp = new URLSearchParams(location.search);
+      if (Arena.roomFromUrl() || sp.get("room") === "host" || sp.has("host_invite")) {
+        setTimeout(() => {
+          if (typeof fn === "function") fn();
+          else if (fn && typeof fn === "object") open(fn);
+        }, 60);
+      }
+    },
   };
 })();

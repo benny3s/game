@@ -67,6 +67,10 @@
   // 5x5 새 땅 + 머리를 가운데에 (판 가운데 쪽을 보고 시작)
   function placeBase(st, p, cx, cy) {
     const B = C.BASE, k = p.id + 1, W = st.W;
+    if (p.area > 0) {
+      for (let i = 0; i < st.owner.length; i++) if (st.owner[i] === k) setOwner(st, i, 0);
+    }
+    for (const c of p.trail) if (st.trail[c] === k) st.trail[c] = 0;
     for (let y = cy - B; y <= cy + B; y++) for (let x = cx - B; x <= cx + B; x++) setOwner(st, y * W + x, k);
     const dx = (st.W - 1) / 2 - cx, dy = (st.H - 1) / 2 - cy;
     p.dir = Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 1 : 3) : (dy >= 0 ? 2 : 0);
@@ -120,9 +124,13 @@
       if (p.wait <= 0 && respawn(st, p, ev)) ev.push({ t: 'spawn', p: p.id, x: p.x, y: p.y });
     }
 
-    // 2) 방향 바꾸고 다음 칸 정하기
+    // 2) 방향 바꾸고 다음 칸 정하기 (원인 우선순위: cut > crash > self > wall, 플레이어 번호에 영향받지 않게)
+    const PRIO = { wall: 1, self: 2, crash: 3, cut: 4 };
     const tgt = new Array(n).fill(-1), why = new Array(n).fill(null);
-    const mark = (id, cause, by, w) => { if (!why[id]) why[id] = { cause, by, w: w || null }; };
+    const mark = (id, cause, by, w) => {
+      const cur = why[id];
+      if (!cur || PRIO[cause] > PRIO[cur.cause]) why[id] = { cause, by, w: w || null };
+    };
     for (const p of players) {
       if (!p.alive || p.fresh) continue;
       p.dir = turn(p.dir, actions ? (actions[p.id] | 0) : 0);
@@ -376,6 +384,7 @@
     for (const p of st.players) {
       mix(p.x); mix(p.y); mix(p.dir); mix(p.alive ? 1 : 0); mix(p.area); mix(p.kills); mix(p.deaths);
       mix(p.wait); mix(p.trail.length); mix(p.exit); mix(p.best);
+      for (const c of p.trail) mix(c);
     }
     return ('0000000' + h.toString(16)).slice(-8);
   }

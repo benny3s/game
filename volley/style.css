@@ -1,5 +1,6 @@
-/* 냥냥 배구 — cozy.css 위에 이 게임만의 모양: 노을빛 주황 · 고양이 고르기 · 점수판 · 큰 엄지 단추 */
-:root{--accent:#ff9466;--accent-d:#e2724a}
+/* 냥냥 배구 — cozy.css 위에 이 게임만의 모양: 해변 노을빛 주황 · 모래사장 분위기 · 고양이 고르기 · 점수판 · 큰 엄지 단추 */
+:root{--accent:#ff8247;--accent-d:#dc5f26;--bg:#fff2dc;--card:#fffaf2;--paper:#fff6e8;--tint:#ffe5c2;--tint-d:#ecc494}
+body{background:radial-gradient(ellipse at 50% 0%,#fff8ec 0%,#ffe8c5 65%,#ffd8a8 100%);min-height:100dvh}
 
 /* ── 메뉴 ── */
 .box{display:grid;gap:12px}

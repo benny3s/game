@@ -3,57 +3,1298 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Benny 게임</title>
+<meta name="theme-color" content="#171a21">
+<title>Benny Arcade — 스팀형 AI & 멀티 게임 포털</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="common/ui.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Jua&display=swap">
 <style>
-/* 레이아웃: 게임 카드 목록 (games.json 에서 읽어 그림). 게임이 늘면 목록에 한 줄 추가 */
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:12px}
-.card{display:grid;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;color:inherit;text-decoration:none;transition:border-color .12s,transform .12s}
-.card:hover{border-color:var(--ai);transform:translateY(-2px)}
-.card .e{font-size:30px;line-height:1}
-.card b{font-size:17px}
-.card p{margin:0;color:var(--muted);font-size:13px}
-.tags{display:flex;flex-wrap:wrap;gap:5px}
-.tags i{font:500 11.5px/1 var(--mono);font-style:normal;color:var(--ai);background:#16302c;border-radius:99px;padding:4px 8px}
+:root {
+  --bg-top: #171a21;
+  --bg-main: #1b2838;
+  --bg-deep: #101822;
+  --panel: #16202d;
+  --panel-hi: #1f2f42;
+  --panel-card: linear-gradient(165deg, #1e2d3f 0%, #141f2c 100%);
+  --line: #2a3f5a;
+  --line-hi: #66c0f4;
+  --ink: #c7d5e0;
+  --ink-bright: #ffffff;
+  --muted: #8f98a0;
+  --steam-blue: #66c0f4;
+  --steam-blue-d: #1a9fff;
+  --steam-green: #a4d007;
+  --steam-green-bg: linear-gradient(90deg, #75b022 0%, #588a1b 100%);
+  --steam-green-hi: linear-gradient(90deg, #8ed629 0%, #6aa621 100%);
+  --gold: #fbbf24;
+  --sans: 'IBM Plex Sans KR', system-ui, -apple-system, sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+  --display: 'Jua', 'IBM Plex Sans KR', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: radial-gradient(circle at 50% 0%, #243b55 0%, var(--bg-main) 45%, var(--bg-deep) 100%);
+  color: var(--ink);
+  font: 400 15px/1.55 var(--sans);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--steam-blue); text-decoration: none; }
+button { font: inherit; cursor: pointer; }
+
+/* ── Top Steam Navbar ── */
+.topbar {
+  background: rgba(23, 26, 33, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(102, 192, 244, 0.18);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+.topbar-in {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.brand-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #1a9fff 0%, #0f4c81 100%);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  box-shadow: 0 4px 14px rgba(26, 159, 255, 0.35);
+}
+.brand-txt b {
+  display: block;
+  font: 700 18px/1.1 var(--sans);
+  color: var(--ink-bright);
+  letter-spacing: 0.03em;
+}
+.brand-txt span {
+  font-size: 12px;
+  color: var(--steam-blue);
+}
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.nav-pill {
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.14s;
+}
+.nav-pill:hover {
+  color: #fff;
+  border-color: var(--steam-blue);
+  background: rgba(102, 192, 244, 0.14);
+}
+.top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.search-box input {
+  background: #101822;
+  border: 1px solid #2a3f5a;
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 12px 7px 32px;
+  font-size: 13.5px;
+  width: 210px;
+  transition: border-color 0.15s, width 0.2s;
+}
+.search-box input:focus {
+  outline: none;
+  border-color: var(--steam-blue);
+  width: 250px;
+}
+.search-box .ic {
+  position: absolute;
+  left: 10px;
+  font-size: 13px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.host-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #355070;
+  background: #1a2a3a;
+  color: var(--ink-bright);
+  transition: all 0.14s;
+}
+.host-badge:hover {
+  border-color: var(--steam-blue);
+  background: #22384f;
+}
+.host-badge.active {
+  border-color: rgba(251, 191, 36, 0.65);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(217, 119, 6, 0.15));
+  color: #fde68a;
+}
+
+/* ── Main Container ── */
+.container {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 22px 18px 64px;
+}
+
+/* ── Featured Hero Spotlight (Steam Store Carousel) ── */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.section-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-bright);
+}
+.section-head span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  background: linear-gradient(135deg, #131e2b 0%, #0d1520 100%);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.48);
+  margin-bottom: 12px;
+}
+.hero-art {
+  position: relative;
+  min-height: 290px;
+  background: #0e1621;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  overflow: hidden;
+}
+.hero-art svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+.hero-art-badge {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  background: rgba(16, 24, 34, 0.86);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(102, 192, 244, 0.4);
+  color: var(--steam-blue);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.hero-info {
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+}
+.hero-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hero-title .em {
+  font-size: 32px;
+  line-height: 1;
+}
+.hero-title h3 {
+  margin: 0;
+  font-size: 24px;
+  color: #fff;
+}
+.hero-sub {
+  margin: 4px 0 0;
+  color: var(--steam-blue);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.hero-desc {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+.hero-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+.hero-meta div span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.hero-meta div b {
+  color: var(--ink-bright);
+  font-weight: 600;
+}
+.hero-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.btn-play {
+  flex: 1.2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 18px;
+  border-radius: 8px;
+  border: 0;
+  background: var(--steam-green-bg);
+  color: #fff;
+  font-weight: 700;
+  font-size: 14.5px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 4px 14px rgba(117, 176, 34, 0.35);
+  transition: transform 0.1s, filter 0.14s;
+}
+.btn-play:hover {
+  background: var(--steam-green-hi);
+  transform: translateY(-1px);
+}
+.btn-friend {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(102, 192, 244, 0.45);
+  background: rgba(26, 159, 255, 0.16);
+  color: #e0f2fe;
+  font-weight: 600;
+  font-size: 13.5px;
+  transition: all 0.14s;
+}
+.btn-friend:hover {
+  background: rgba(26, 159, 255, 0.3);
+  border-color: var(--steam-blue);
+  color: #fff;
+}
+
+.hero-thumbs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.hero-thumb {
+  flex: 1;
+  min-width: 135px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: rgba(22, 32, 45, 0.85);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.14s;
+}
+.hero-thumb:hover {
+  border-color: #4b6b8a;
+  color: #fff;
+}
+.hero-thumb.active {
+  background: linear-gradient(135deg, #243b55 0%, #1a2c40 100%);
+  border-color: var(--steam-blue);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(26, 159, 255, 0.22);
+}
+
+/* ── Filter Tabs & View Toggle ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cat-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cat-btn {
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.14s;
+}
+.cat-btn:hover {
+  background: rgba(102, 192, 244, 0.12);
+  color: #fff;
+}
+.cat-btn.active {
+  background: var(--steam-blue-d);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(26, 159, 255, 0.35);
+}
+.view-switch {
+  display: flex;
+  gap: 4px;
+  background: #101822;
+  padding: 3px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.view-btn {
+  padding: 5px 11px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.view-btn.active {
+  background: #243b55;
+  color: #fff;
+}
+
+/* ── Store Capsule Grid ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  gap: 18px;
+}
+.capsule {
+  background: var(--panel-card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.34);
+}
+.capsule:hover {
+  transform: translateY(-4px);
+  border-color: var(--steam-blue);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(102, 192, 244, 0.35);
+}
+.cap-art {
+  position: relative;
+  height: 165px;
+  background: #0f1722;
+  overflow: hidden;
+  cursor: pointer;
+  display: block;
+}
+.cap-art svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transition: transform 0.28s ease;
+}
+.capsule:hover .cap-art svg {
+  transform: scale(1.03);
+}
+.cap-top-badges {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.cap-badge {
+  background: rgba(15, 23, 34, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #e2e8f0;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+.cap-badge.stat {
+  color: var(--gold);
+  border-color: rgba(251, 191, 36, 0.4);
+}
+.cap-body {
+  padding: 15px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1;
+}
+.cap-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.cap-title {
+  font-size: 18.5px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.cap-sub {
+  margin: -4px 0 0;
+  font-size: 12.5px;
+  color: var(--steam-blue);
+  font-weight: 500;
+}
+.cap-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #9fb1c1;
+  line-height: 1.5;
+  flex: 1;
+}
+.cap-ai {
+  font-size: 11.5px;
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 6px;
+  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.cap-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.cap-tags i {
+  font: 500 11px/1 var(--mono);
+  font-style: normal;
+  color: #8ab4f8;
+  background: rgba(102, 192, 244, 0.1);
+  border: 1px solid rgba(102, 192, 244, 0.18);
+  border-radius: 5px;
+  padding: 4px 7px;
+}
+.cap-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.cap-foot .btn-play {
+  padding: 8px 12px;
+  font-size: 13.5px;
+}
+.cap-foot .btn-friend {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+/* ── Steam Library Sidebar View ── */
+.library-view {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 18px;
+  min-height: 520px;
+}
+.lib-list {
+  background: #121b26;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lib-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  transition: all 0.12s;
+}
+.lib-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.lib-item.active {
+  background: linear-gradient(90deg, #25415d 0%, #1b3047 100%);
+  color: #fff;
+  border-left: 3px solid var(--steam-blue);
+}
+.lib-item .em { font-size: 20px; }
+.lib-item .nm { font-weight: 600; font-size: 14px; flex: 1; }
+.lib-item .pl { font-size: 11px; color: var(--muted); }
+.lib-detail {
+  background: #141f2c;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.lib-hero {
+  height: 240px;
+  position: relative;
+  background: #0d1520;
+}
+.lib-hero svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.lib-bar {
+  background: rgba(16, 24, 34, 0.92);
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.lib-body {
+  padding: 20px 22px;
+  display: grid;
+  gap: 14px;
+}
+
+/* ── Host / Architecture Info Banner ── */
+.info-strip {
+  margin-top: 34px;
+  background: linear-gradient(135deg, rgba(26, 42, 58, 0.85), rgba(18, 28, 40, 0.9));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+.info-box h4 {
+  margin: 0 0 6px;
+  color: var(--ink-bright);
+  font-size: 14.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.info-box p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+/* ── Modal ── */
+.modal-bg {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 12, 18, 0.78);
+  backdrop-filter: blur(5px);
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.modal-bg[hidden] { display: none !important; }
+.modal-card {
+  width: min(460px, 100%);
+  background: #182433;
+  border: 1px solid #355070;
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+  display: grid;
+  gap: 14px;
+}
+.modal-card h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 19px;
+}
+.modal-card label {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.modal-card input {
+  background: #0e1620;
+  border: 1px solid #2e4763;
+  border-radius: 8px;
+  padding: 9px 12px;
+  color: #fff;
+  font: inherit;
+}
+.modal-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 860px) {
+  .hero { grid-template-columns: 1fr; }
+  .hero-art { min-height: 200px; }
+  .library-view { grid-template-columns: 1fr; }
+  .search-box input { width: 160px; }
+  .search-box input:focus { width: 190px; }
+}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <p class="crumb"><a href="https://benny3s.github.io/">← Benny</a></p>
-  <h1>Benny 게임</h1>
-  <p class="lede">직접 만들고, 직접 학습시킨 AI와 겨루는 게임 모음.</p>
-  <div class="grid" id="grid"><p class="help">불러오는 중…</p></div>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <div class="brand-logo">🎮</div>
+      <div class="brand-txt">
+        <b>BENNY ARCADE</b>
+        <span>AI · RL · FAMILY MULTIPLAYER HUB</span>
+      </div>
+    </div>
+    <nav class="nav-links" id="navLinks">
+      <a class="nav-pill" href="https://benny3s.github.io/">← Benny 홈</a>
+    </nav>
+    <div class="top-right">
+      <div class="search-box">
+        <span class="ic">🔍</span>
+        <input type="search" id="searchInput" placeholder="게임, 태그, AI 검색..." aria-label="게임 검색">
+      </div>
+      <button class="host-badge" id="hostBtn" type="button">🔑 방장·프로필</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+  <div class="section-head">
+    <h2>🔥 추천 & 대표 게임 (FEATURED & RECOMMENDED)</h2>
+    <span id="featuredHint">카드를 눌러 미리보기 · 모든 게임 혼자 & 친구랑 지원</span>
+  </div>
+
+  <section class="hero" id="heroBox"></section>
+  <div class="hero-thumbs" id="heroThumbs"></div>
+
+  <div class="toolbar">
+    <div class="cat-tabs" id="catTabs">
+      <button class="cat-btn active" data-cat="all">전체</button>
+      <button class="cat-btn" data-cat="board">🀄 전통 · 보드</button>
+      <button class="cat-btn" data-cat="action">⚡ 액션 · 아케이드</button>
+      <button class="cat-btn" data-cat="puzzle">🧩 두뇌 · 퍼즐</button>
+      <button class="cat-btn" data-cat="friend">👥 친구랑 멀티</button>
+      <button class="cat-btn" data-cat="ai">🧠 신경망 · 강화학습 AI</button>
+    </div>
+    <div class="view-switch">
+      <button class="view-btn active" id="viewGridBtn" type="button">▦ 캡슐 그리드</button>
+      <button class="view-btn" id="viewLibBtn" type="button">☰ 라이브러리 뷰</button>
+    </div>
+  </div>
+
+  <section class="grid" id="grid"><p style="color:var(--muted)">게임 목록을 불러오는 중…</p></section>
+  <section class="library-view" id="libView" hidden></section>
+
+  <section class="info-strip">
+    <div class="info-box">
+      <h4>👑 가족 전용 방장 초대 구조</h4>
+      <p>방 만들기(초대)는 <b>관리자(베니 님 · 와이프분)</b>만 할 수 있고, 초대 링크나 4자리 방 코드를 받은 친구는 별도 가입이나 권한 없이 바로 참가해 함께 즐길 수 있습니다.</p>
+    </div>
+    <div class="info-box">
+      <h4>🧠 직접 학습한 신경망 & 규칙 엔진</h4>
+      <p>KataGo 소형 신경망(바둑), Quintet 위협 탐색(오목), PPO 1,000만 스텝 셀프플레이(지렁이), 기댓값 화투 AI(고스톱) 등 각 게임마다 특화된 AI와 대결하거나 AI끼리 싸우는 모습을 구경할 수 있습니다.</p>
+    </div>
+    <div class="info-box">
+      <h4>📱 모바일 & PC 크로스 플레이</h4>
+      <p>휴대폰 세로·가로 화면과 데스크톱 키보드·마우스를 모두 지원합니다. 각 게임의 <b>👥 친구랑</b> 버튼을 누르면 즉시 대기실이 열립니다.</p>
+    </div>
+  </section>
+</main>
+
+<!-- 프로필 & 가족 방장 설정 모달 -->
+<div class="modal-bg" id="hostModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true">
+    <h3>👑 프로필 & 가족 방장 권한</h3>
+    <label>
+      <span>내 별명 (친구랑 대결할 때 표시)</span>
+      <input type="text" id="nickInput" maxlength="12" placeholder="예: 베니">
+    </label>
+    <div style="background:#101822;border:1px solid #2a3f5a;border-radius:10px;padding:12px;font-size:13px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="color:var(--muted)">현재 방 만들기 권한</span>
+        <b id="hostStatusTxt" style="color:var(--gold)">확인 중…</b>
+      </div>
+      <p style="margin:0;color:var(--muted);font-size:12px">
+        관리자(베니 님) 또는 가족 호스트(와이프분)만 방을 만들 수 있습니다. 초대받은 친구는 권한 없이도 방 코드/링크로 바로 들어올 수 있습니다.
+      </p>
+    </div>
+    <label id="familyCodeBox">
+      <span>가족 방장 인증 코드 (와이프분 폰/PC에서 1회 입력)</span>
+      <input type="password" id="familyCodeInput" placeholder="가족 코드 입력 (예: benny-family)">
+    </label>
+    <div class="modal-row">
+      <button class="nav-pill" id="hostCloseBtn" type="button">닫기</button>
+      <button class="btn-play" id="hostSaveBtn" type="button" style="flex:0 0 auto;padding:8px 18px">저장</button>
+    </div>
+  </div>
 </div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="common/me.js?v=1"></script>
+<script src="common/arena.js?v=1"></script>
 <script>
-// 관리자(포털·베니브릿지와 같은 로그인)일 때만 보이는 게임도 있음 (admin: true)
-const FB = { apiKey: "AIzaSyCSueePQfiHaRxUSZxoropiFjiq9arAaTs", authDomain: "benny-meeting.firebaseapp.com", projectId: "benny-meeting", appId: "1:925758544707:web:a0c55e596ae0b15e7fadf6" };
-const adminP = new Promise(ok => {
-  try {
-    const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FB);
-    const t = setTimeout(() => ok(false), 5000);
-    const off = app.auth().onAuthStateChanged(async u => { clearTimeout(t); off(); try { ok(!!u && (await u.getIdTokenResult()).claims.admin === 1); } catch (e) { ok(false); } });
-  } catch (e) { ok(false); }
-});
-Promise.all([fetch("games.json", { cache: "no-store" }).then(r => r.json()), adminP]).then(([list, isAdmin]) => {
-  const g = document.getElementById("grid"); g.innerHTML = "";
-  list.filter(x => !x.hidden && (!x.admin || isAdmin)).forEach(x => {
-    const a = document.createElement("a"); a.className = "card"; a.href = x.url;
-    a.innerHTML = '<span class="e"></span><b></b><p></p><span class="tags"></span>';
-    a.children[0].textContent = x.emoji || "🎮"; a.children[1].textContent = x.name; a.children[2].textContent = x.desc;
-    (x.tags || []).forEach(t => { const i = document.createElement("i"); i.textContent = t; a.children[3].appendChild(i); });
-    g.appendChild(a);
-  });
-  if (isAdmin) {                                                       // 관리자: 게임 기록 보기
-    const a = document.createElement("a"); a.className = "card"; a.href = "logs.html";
-    a.innerHTML = '<span class="e">📊</span><b>게임 기록</b><p>방마다 참가자·판 결과·연결 품질(핑·끊김)·채팅. CSV 내려받기</p><span class="tags"><i>관리자 전용</i></span>';
-    g.appendChild(a);
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // 각 게임 고유의 스팀 캡슐 SVG 아트워크
+  function capsuleSvg(id) {
+    switch (id) {
+      case "gostop":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="gsBg" cx="50%" cy="50%" r="70%">
+              <stop offset="0%" stop-color="#1b6b3a"/><stop offset="100%" stop-color="#092e17"/>
+            </radialGradient>
+          </defs>
+          <rect width="400" height="200" fill="url(#gsBg)"/>
+          <rect x="10" y="10" width="380" height="180" rx="10" fill="none" stroke="#eab308" stroke-opacity=".35" stroke-dasharray="6 4"/>
+          <!-- 화투패 3장 -->
+          <g transform="translate(88,28) rotate(-12)">
+            <rect width="74" height="112" rx="7" fill="#c81e1e" stroke="#450a0a" stroke-width="2"/>
+            <rect x="5" y="5" width="64" height="102" rx="4" fill="#fffdf7"/>
+            <circle cx="37" cy="42" r="22" fill="#dc2626"/>
+            <path d="M5 85 Q37 60 69 85 L69 107 L5 107 Z" fill="#111827"/>
+            <circle cx="20" cy="22" r="10" fill="#dc2626" stroke="#fde047" stroke-width="1.5"/>
+            <text x="20" y="26" font-size="11" font-weight="900" fill="#fff" text-anchor="middle">光</text>
+          </g>
+          <g transform="translate(164,22)">
+            <rect width="74" height="112" rx="7" fill="#c81e1e" stroke="#450a0a" stroke-width="2"/>
+            <rect x="5" y="5" width="64" height="102" rx="4" fill="#dc2626"/>
+            <circle cx="37" cy="40" r="21" fill="#fef9c3"/>
+            <path d="M5 82 Q37 52 69 82 L69 107 L5 107 Z" fill="#0f172a"/>
+            <circle cx="20" cy="22" r="10" fill="#b91c1c" stroke="#fde047" stroke-width="1.5"/>
+            <text x="20" y="26" font-size="11" font-weight="900" fill="#fff" text-anchor="middle">光</text>
+          </g>
+          <g transform="translate(240,30) rotate(11)">
+            <rect width="74" height="112" rx="7" fill="#c81e1e" stroke="#450a0a" stroke-width="2"/>
+            <rect x="5" y="5" width="64" height="102" rx="4" fill="#fffdf7"/>
+            <rect x="12" y="48" width="50" height="16" rx="2" fill="#2563eb"/>
+            <text x="37" y="60" font-size="10" font-weight="900" fill="#fff" text-anchor="middle">청단</text>
+            <circle cx="28" cy="30" r="9" fill="#e11d48"/><circle cx="46" cy="32" r="9" fill="#e11d48"/>
+          </g>
+          <circle cx="330" cy="155" r="18" fill="#fbbf24" stroke="#92400e" stroke-width="2"/>
+          <text x="330" y="160" font-size="13" font-weight="800" fill="#78350f" text-anchor="middle">냥</text>
+        </svg>`;
+      case "baduk":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#18261f"/>
+          <rect x="65" y="14" width="270" height="172" rx="10" fill="#deb878" stroke="#8a5a2b" stroke-width="4"/>
+          <g stroke="#4a3219" stroke-width="1.2" opacity=".75">
+            <line x1="95" y1="34" x2="305" y2="34"/><line x1="95" y1="67" x2="305" y2="67"/><line x1="95" y1="100" x2="305" y2="100"/><line x1="95" y1="133" x2="305" y2="133"/><line x1="95" y1="166" x2="305" y2="166"/>
+            <line x1="95" y1="34" x2="95" y2="166"/><line x1="147" y1="34" x2="147" y2="166"/><line x1="200" y1="34" x2="200" y2="166"/><line x1="252" y1="34" x2="252" y2="166"/><line x1="305" y1="34" x2="305" y2="166"/>
+          </g>
+          <!-- KataGo 신경망 추천 광채 -->
+          <circle cx="252" cy="67" r="20" fill="#10b981" opacity=".35"/>
+          <circle cx="252" cy="67" r="12" fill="none" stroke="#059669" stroke-width="2.5" stroke-dasharray="3 2"/>
+          <!-- 흑돌·백돌 -->
+          <circle cx="147" cy="67" r="14" fill="#18181b"/><circle cx="143" cy="62" r="4" fill="#52525b"/>
+          <circle cx="200" cy="67" r="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+          <circle cx="200" cy="100" r="14" fill="#18181b"/><circle cx="196" cy="95" r="4" fill="#52525b"/>
+          <circle cx="147" cy="100" r="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+          <circle cx="252" cy="100" r="14" fill="#18181b"/><circle cx="248" cy="95" r="4" fill="#52525b"/>
+          <circle cx="200" cy="133" r="14" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+        </svg>`;
+      case "omok":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#2b1d12"/>
+          <rect x="60" y="14" width="280" height="172" rx="10" fill="#e5be7e" stroke="#9a6836" stroke-width="4"/>
+          <g stroke="#5c3d1e" stroke-width="1" opacity=".65">
+            <line x1="85" y1="40" x2="315" y2="40"/><line x1="85" y1="70" x2="315" y2="70"/><line x1="85" y1="100" x2="315" y2="100"/><line x1="85" y1="130" x2="315" y2="130"/><line x1="85" y1="160" x2="315" y2="160"/>
+            <line x1="110" y1="25" x2="110" y2="175"/><line x1="155" y1="25" x2="155" y2="175"/><line x1="200" y1="25" x2="200" y2="175"/><line x1="245" y1="25" x2="245" y2="175"/><line x1="290" y1="25" x2="290" y2="175"/>
+          </g>
+          <line x1="110" y1="100" x2="290" y2="100" stroke="#f59e0b" stroke-width="6" stroke-linecap="round" opacity=".8"/>
+          <circle cx="110" cy="100" r="13" fill="#18181b"/>
+          <circle cx="155" cy="100" r="13" fill="#18181b"/>
+          <circle cx="200" cy="100" r="13" fill="#18181b"/>
+          <circle cx="245" cy="100" r="13" fill="#18181b"/>
+          <circle cx="290" cy="100" r="13" fill="#18181b" stroke="#fbbf24" stroke-width="3"/>
+          <circle cx="155" cy="70" r="13" fill="#fff" stroke="#94a3b8"/><circle cx="200" cy="70" r="13" fill="#fff" stroke="#94a3b8"/><circle cx="245" cy="130" r="13" fill="#fff" stroke="#94a3b8"/>
+        </svg>`;
+      case "cube":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#11423b"/>
+          <rect x="36" y="128" width="328" height="48" rx="10" fill="#9c6334" stroke="#5e3717" stroke-width="3"/>
+          <g transform="translate(58,48)">
+            <rect width="58" height="82" rx="9" fill="#fffdf8" stroke="#d4c4aa" stroke-width="2"/>
+            <text x="29" y="48" font-size="32" font-weight="800" fill="#e0533c" text-anchor="middle">7</text>
+            <circle cx="29" cy="66" r="5" fill="#e0533c"/>
+          </g>
+          <g transform="translate(126,48)">
+            <rect width="58" height="82" rx="9" fill="#fffdf8" stroke="#d4c4aa" stroke-width="2"/>
+            <text x="29" y="48" font-size="32" font-weight="800" fill="#2f7de1" text-anchor="middle">7</text>
+            <circle cx="29" cy="66" r="5" fill="#2f7de1"/>
+          </g>
+          <g transform="translate(194,48)">
+            <rect width="58" height="82" rx="9" fill="#fffdf8" stroke="#d4c4aa" stroke-width="2"/>
+            <text x="29" y="48" font-size="32" font-weight="800" fill="#d98a16" text-anchor="middle">7</text>
+            <circle cx="29" cy="66" r="5" fill="#d98a16"/>
+          </g>
+          <g transform="translate(274,40) rotate(6)">
+            <rect width="58" height="82" rx="9" fill="#fff8eb" stroke="#f59e0b" stroke-width="2.5"/>
+            <text x="29" y="52" font-size="30" text-anchor="middle">🐱</text>
+          </g>
+        </svg>`;
+      case "volley":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="vbSky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#ff9466"/><stop offset="65%" stop-color="#ffd8a8"/><stop offset="66%" stop-color="#f6c788"/><stop offset="100%" stop-color="#eab368"/>
+            </linearGradient>
+          </defs>
+          <rect width="400" height="200" fill="url(#vbSky)"/>
+          <rect x="196" y="88" width="8" height="75" rx="4" fill="#7c563c"/>
+          <!-- 왼쪽 고양이 -->
+          <ellipse cx="105" cy="138" rx="30" ry="26" fill="#f7a44c" stroke="#5b4636" stroke-width="3"/>
+          <polygon points="83,120 92,102 103,116" fill="#f7a44c" stroke="#5b4636" stroke-width="3"/>
+          <polygon points="127,120 118,102 107,116" fill="#f7a44c" stroke="#5b4636" stroke-width="3"/>
+          <!-- 오른쪽 고양이 -->
+          <ellipse cx="295" cy="144" rx="30" ry="26" fill="#7da7d8" stroke="#5b4636" stroke-width="3"/>
+          <!-- 배구공 스매시 -->
+          <circle cx="172" cy="54" r="22" fill="#fff6e8" stroke="#5b4636" stroke-width="3"/>
+          <path d="M152 54 Q172 38 192 54 M156 68 Q172 52 188 68" fill="none" stroke="#ff6b35" stroke-width="3"/>
+        </svg>`;
+      case "land":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#f7ead9"/>
+          <g stroke="#e5d3bd" stroke-width="1">
+            <line x1="0" y1="40" x2="400" y2="40"/><line x1="0" y1="80" x2="400" y2="80"/><line x1="0" y1="120" x2="400" y2="120"/><line x1="0" y1="160" x2="400" y2="160"/>
+            <line x1="80" y1="0" x2="80" y2="200"/><line x1="160" y1="0" x2="160" y2="200"/><line x1="240" y1="0" x2="240" y2="200"/><line x1="320" y1="0" x2="320" y2="200"/>
+          </g>
+          <rect x="40" y="35" width="130" height="105" rx="16" fill="#ff9472" opacity=".82"/>
+          <rect x="220" y="60" width="135" height="110" rx="16" fill="#63b3ed" opacity=".82"/>
+          <path d="M170 70 L255 70 L255 130 L170 130" fill="none" stroke="#e0533c" stroke-width="8" stroke-dasharray="10 6" stroke-linecap="round"/>
+          <circle cx="255" cy="100" r="20" fill="#fff" stroke="#e0533c" stroke-width="4"/>
+          <text x="255" y="107" font-size="22" text-anchor="middle">🦊</text>
+          <circle cx="110" cy="88" r="20" fill="#fff" stroke="#c05621" stroke-width="4"/>
+          <text x="110" y="95" font-size="22" text-anchor="middle">🐶</text>
+        </svg>`;
+      case "nyang":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#2e1a36"/>
+          <g transform="translate(110,16)">
+            <rect width="180" height="168" rx="12" fill="#fff6ea" stroke="#f472b6" stroke-width="3"/>
+            <rect x="12" y="12" width="74" height="70" rx="8" fill="#fbcfe8"/>
+            <rect x="94" y="12" width="74" height="70" rx="8" fill="#bfdbfe"/>
+            <rect x="12" y="90" width="74" height="66" rx="8" fill="#bbf7d0"/>
+            <rect x="94" y="90" width="74" height="66" rx="8" fill="#fde68a"/>
+            <text x="49" y="56" font-size="30" text-anchor="middle">🐱</text>
+            <text x="131" y="132" font-size="30" text-anchor="middle">🐱</text>
+          </g>
+        </svg>`;
+      case "snake":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#0b1320"/>
+          <g stroke="#1e293b" stroke-width="1">
+            <line x1="0" y1="50" x2="400" y2="50"/><line x1="0" y1="100" x2="400" y2="100"/><line x1="0" y1="150" x2="400" y2="150"/>
+            <line x1="100" y1="0" x2="100" y2="200"/><line x1="200" y1="0" x2="200" y2="200"/><line x1="300" y1="0" x2="300" y2="200"/>
+          </g>
+          <!-- 센서 광선 -->
+          <g stroke="#38bdf8" stroke-width="1.2" opacity=".45">
+            <line x1="180" y1="90" x2="280" y2="40"/><line x1="180" y1="90" x2="300" y2="90"/><line x1="180" y1="90" x2="270" y2="145"/>
+          </g>
+          <path d="M60 140 L120 140 L120 90 L180 90" fill="none" stroke="#22c55e" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M330 60 L270 60 L270 120 L220 120" fill="none" stroke="#f43f5e" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="240" cy="70" r="8" fill="#fbbf24"/>
+        </svg>`;
+      default:
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#18122b"/>
+          <circle cx="140" cy="100" r="42" fill="#7e22ce" opacity=".35"/>
+          <circle cx="260" cy="100" r="42" fill="#dc2626" opacity=".35"/>
+          <text x="200" y="112" font-size="44" text-anchor="middle">⚔️</text>
+        </svg>`;
+    }
   }
-});
+
+  // 각 게임의 로컬 전적/기록 요약 읽기
+  function readLocalStat(id) {
+    try {
+      if (id === "gostop") {
+        const d = JSON.parse(localStorage.getItem("gostop_v1") || "null");
+        if (d && d.wallet != null) return `💰 ${Number(d.wallet).toLocaleString()}냥 · ${d.wins || 0}승`;
+      } else if (id === "baduk") {
+        const d = JSON.parse(localStorage.getItem("baduk.rec.v1") || "null");
+        if (d) {
+          let w = 0, l = 0;
+          Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); });
+          if (w || l) return `🏆 ${w}승 ${l}패`;
+        }
+      } else if (id === "omok") {
+        const d = JSON.parse(localStorage.getItem("omok_stats_v1") || "null");
+        if (d) {
+          let w = 0, l = 0;
+          Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); });
+          if (w || l) return `🏆 ${w}승 ${l}패`;
+        }
+      } else if (id === "cube") {
+        const d = JSON.parse(localStorage.getItem("cube_stats_v1") || "null");
+        if (d && (d.wins || d.games)) return `⭐ ${d.wins || 0}승 / ${d.games || 0}판`;
+      } else if (id === "volley") {
+        const d = JSON.parse(localStorage.getItem("volley.rec") || "null");
+        if (d) {
+          let w = 0, l = 0;
+          Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); });
+          if (w || l) return `🏐 ${w}승 ${l}패`;
+        }
+      } else if (id === "land") {
+        const d = JSON.parse(localStorage.getItem("land.best") || "null");
+        if (d) {
+          const vals = Object.values(d);
+          if (vals.length) {
+            const best = vals.sort((a, b) => (b.pct || 0) - (a.pct || 0))[0];
+            if (best) return `🏅 최고 ${best.rank}등 (${Number(best.pct).toFixed(1)}%)`;
+          }
+        }
+      }
+    } catch (e) {}
+    return "";
+  }
+
+  let games = [];
+  let isAdmin = false;
+  let canHost = false;
+  let activeCat = "all";
+  let viewMode = "grid"; // "grid" | "lib"
+  let searchQ = "";
+  let featuredId = "gostop";
+  let selectedLibId = "gostop";
+
+  async function checkPermissions() {
+    try {
+      if (window.Arena) {
+        if (Arena.init) await Promise.race([Arena.init(), new Promise(r => setTimeout(r, 2500))]);
+        canHost = typeof Arena.canHost === "function" ? await Arena.canHost() : !!Arena.canHost;
+        isAdmin = typeof Arena.isAdmin === "function" ? await Arena.isAdmin() : !!Arena.isAdmin;
+      }
+    } catch (e) {}
+    updateHostBadge();
+  }
+
+  function getSavedName() {
+    try {
+      if (window.GME && GME.me && GME.me.name) return GME.me.name;
+      return localStorage.getItem("game.arena.name") || "베니 게이머";
+    } catch (e) { return "베니 게이머"; }
+  }
+
+  function updateHostBadge() {
+    const name = getSavedName();
+    const btn = $("hostBtn");
+    if (isAdmin) {
+      btn.classList.add("active");
+      btn.textContent = `👑 ${name} (관리자 방장)`;
+    } else if (canHost) {
+      btn.classList.add("active");
+      btn.textContent = `💑 ${name} (가족 방장)`;
+    } else {
+      btn.classList.remove("active");
+      btn.textContent = `👤 ${name} · 방장 등록`;
+    }
+  }
+
+  function renderFeatured() {
+    const featuredList = games.filter(g => g.featured || g.id === "gostop");
+    if (!featuredList.length) return;
+    const cur = featuredList.find(g => g.id === featuredId) || featuredList[0];
+    featuredId = cur.id;
+    const stat = readLocalStat(cur.id);
+    const hasFriend = (cur.tags || []).includes("친구랑");
+
+    $("heroBox").innerHTML = `
+      <a class="hero-art" href="${cur.url}">
+        ${capsuleSvg(cur.id)}
+        <span class="hero-art-badge">FEATURED · ${cur.players || "1~4명"}</span>
+      </a>
+      <div class="hero-info">
+        <div>
+          <div class="hero-title">
+            <span class="em">${cur.emoji || "🎮"}</span>
+            <h3>${cur.name}</h3>
+          </div>
+          <p class="hero-sub">${cur.subtitle || ""}</p>
+        </div>
+        <p class="hero-desc">${cur.desc}</p>
+        <div class="hero-meta">
+          <div><span>지원 모드</span><b>${(cur.modes || ["혼자", "친구랑"]).join(" · ")}</b></div>
+          <div><span>탑재 AI / 기록</span><b>${stat || cur.aiTech || "규칙 + 탐색 AI"}</b></div>
+        </div>
+        <div class="hero-actions">
+          <a class="btn-play" href="${cur.url}">▶ 지금 플레이</a>
+          ${hasFriend ? `<a class="btn-friend" href="${cur.url}?room=host">👥 친구랑 방 만들기</a>` : ""}
+        </div>
+      </div>
+    `;
+
+    $("heroThumbs").innerHTML = featuredList.map(g => `
+      <button class="hero-thumb ${g.id === featuredId ? "active" : ""}" data-id="${g.id}" type="button">
+        <span>${g.emoji || "🎮"}</span>
+        <span>${g.name}</span>
+      </button>
+    `).join("");
+
+    $("heroThumbs").querySelectorAll(".hero-thumb").forEach(b => {
+      b.onclick = () => {
+        featuredId = b.dataset.id;
+        renderFeatured();
+      };
+    });
+  }
+
+  function filteredGames() {
+    return games.filter(g => {
+      if (activeCat === "board" && g.category !== "board") return false;
+      if (activeCat === "action" && g.category !== "action") return false;
+      if (activeCat === "puzzle" && g.category !== "puzzle" && g.id !== "cube") return false;
+      if (activeCat === "friend" && !(g.tags || []).includes("친구랑")) return false;
+      if (activeCat === "ai" && !(g.tags || []).some(t => t.includes("AI"))) return false;
+      if (searchQ) {
+        const hay = `${g.name} ${g.subtitle || ""} ${g.desc} ${(g.tags || []).join(" ")} ${g.aiTech || ""}`.toLowerCase();
+        if (!hay.includes(searchQ)) return false;
+      }
+      return true;
+    });
+  }
+
+  function renderCatalog() {
+    const list = filteredGames();
+    const grid = $("grid");
+    const lib = $("libView");
+
+    if (viewMode === "grid") {
+      grid.hidden = false;
+      lib.hidden = true;
+      if (!list.length) {
+        grid.innerHTML = `<p style="color:var(--muted);grid-column:1/-1;text-align:center;padding:32px">조건에 맞는 게임이 없습니다.</p>`;
+        return;
+      }
+      grid.innerHTML = list.map(g => {
+        const stat = readLocalStat(g.id);
+        const hasFriend = (g.tags || []).includes("친구랑");
+        return `
+          <article class="capsule">
+            <a class="cap-art" href="${g.url}">
+              ${capsuleSvg(g.id)}
+              <div class="cap-top-badges">
+                <span class="cap-badge">${g.players || "1~2명"}</span>
+                ${stat ? `<span class="cap-badge stat">${stat}</span>` : ""}
+              </div>
+            </a>
+            <div class="cap-body">
+              <div class="cap-head">
+                <h3 class="cap-title"><span>${g.emoji || "🎮"}</span><span>${g.name}</span></h3>
+              </div>
+              ${g.subtitle ? `<p class="cap-sub">${g.subtitle}</p>` : ""}
+              <p class="cap-desc">${g.desc}</p>
+              ${g.aiTech ? `<div class="cap-ai">🧠 <span>${g.aiTech}</span></div>` : ""}
+              <div class="cap-tags">${(g.tags || []).map(t => `<i>${t}</i>`).join("")}</div>
+              <div class="cap-foot">
+                <a class="btn-play" href="${g.url}">▶ 플레이</a>
+                ${hasFriend ? `<a class="btn-friend" href="${g.url}?room=host">👥 친구랑</a>` : ""}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join("");
+    } else {
+      grid.hidden = true;
+      lib.hidden = false;
+      if (!list.length) {
+        lib.innerHTML = `<p style="color:var(--muted);padding:24px">조건에 맞는 게임이 없습니다.</p>`;
+        return;
+      }
+      const cur = list.find(g => g.id === selectedLibId) || list[0];
+      selectedLibId = cur.id;
+      const stat = readLocalStat(cur.id);
+      const hasFriend = (cur.tags || []).includes("친구랑");
+      lib.innerHTML = `
+        <div class="lib-list">
+          ${list.map(g => `
+            <button class="lib-item ${g.id === cur.id ? "active" : ""}" data-id="${g.id}" type="button">
+              <span class="em">${g.emoji || "🎮"}</span>
+              <span class="nm">${g.name}</span>
+              <span class="pl">${g.players || ""}</span>
+            </button>
+          `).join("")}
+        </div>
+        <div class="lib-detail">
+          <div class="lib-hero">${capsuleSvg(cur.id)}</div>
+          <div class="lib-bar">
+            <div>
+              <h3 style="margin:0;color:#fff;font-size:22px">${cur.emoji || "🎮"} ${cur.name}</h3>
+              <span style="font-size:13px;color:var(--steam-blue)">${cur.subtitle || ""}</span>
+            </div>
+            <div style="display:flex;gap:10px">
+              <a class="btn-play" href="${cur.url}" style="flex:0 0 auto">▶ 게임 시작</a>
+              ${hasFriend ? `<a class="btn-friend" href="${cur.url}?room=host" style="flex:0 0 auto">👥 친구랑 방 만들기</a>` : ""}
+            </div>
+          </div>
+          <div class="lib-body">
+            <p style="margin:0;font-size:14.5px;color:var(--ink)">${cur.desc}</p>
+            <div class="hero-meta">
+              <div><span>플레이 인원 & 모드</span><b>${cur.players || "1~2명"} · ${(cur.modes || []).join(", ")}</b></div>
+              <div><span>AI 아키텍처 & 내 기록</span><b>${stat ? stat + " · " : ""}${cur.aiTech || ""}</b></div>
+            </div>
+            <div class="cap-tags">${(cur.tags || []).map(t => `<i>${t}</i>`).join("")}</div>
+          </div>
+        </div>
+      `;
+      lib.querySelectorAll(".lib-item").forEach(b => {
+        b.onclick = () => {
+          selectedLibId = b.dataset.id;
+          renderCatalog();
+        };
+      });
+    }
+  }
+
+  // 탭/검색/뷰 전환 이벤트
+  $("catTabs").addEventListener("click", e => {
+    const b = e.target.closest(".cat-btn");
+    if (!b) return;
+    $("catTabs").querySelectorAll(".cat-btn").forEach(x => x.classList.toggle("active", x === b));
+    activeCat = b.dataset.cat;
+    renderCatalog();
+  });
+  $("viewGridBtn").onclick = () => {
+    viewMode = "grid";
+    $("viewGridBtn").classList.add("active");
+    $("viewLibBtn").classList.remove("active");
+    renderCatalog();
+  };
+  $("viewLibBtn").onclick = () => {
+    viewMode = "lib";
+    $("viewLibBtn").classList.add("active");
+    $("viewGridBtn").classList.remove("active");
+    renderCatalog();
+  };
+  $("searchInput").addEventListener("input", e => {
+    searchQ = e.target.value.trim().toLowerCase();
+    renderCatalog();
+  });
+
+  // 방장 & 프로필 모달
+  $("hostBtn").onclick = async () => {
+    $("nickInput").value = getSavedName();
+    $("familyCodeInput").value = "";
+    await checkPermissions();
+    $("hostStatusTxt").textContent = isAdmin
+      ? "👑 관리자 방장 (모든 권한 활성)"
+      : canHost
+        ? "💑 가족 방장 (방 만들기 가능)"
+        : "🔒 일반 손님 (초대받은 방 참가만 가능)";
+    $("hostModal").hidden = false;
+  };
+  $("hostCloseBtn").onclick = () => { $("hostModal").hidden = true; };
+  $("hostSaveBtn").onclick = async () => {
+    const nick = $("nickInput").value.trim();
+    if (nick) {
+      try { localStorage.setItem("game.arena.name", nick); } catch (e) {}
+    }
+    const code = $("familyCodeInput").value.trim();
+    if (code && window.Arena && Arena.claimHostInvite) {
+      try { await Arena.claimHostInvite(code, nick || getSavedName()); } catch (e) { alert(e.message); return; }
+    }
+    await checkPermissions();
+    $("hostModal").hidden = true;
+  };
+
+  // 초기 로드
+  fetch("games.json", { cache: "no-store" })
+    .then(r => r.json())
+    .then(async list => {
+      await checkPermissions();
+      games = list.filter(x => !x.hidden && (!x.admin || isAdmin));
+      if (isAdmin) {
+        const logLink = document.createElement("a");
+        logLink.className = "nav-pill";
+        logLink.href = "logs.html";
+        logLink.textContent = "📊 게임 로그";
+        $("navLinks").appendChild(logLink);
+      }
+      renderFeatured();
+      renderCatalog();
+    });
+})();
 </script>
 </body>
 </html>

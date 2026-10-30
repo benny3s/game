@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ea">
+<title>베니큐브</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=1">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>🐾 베니큐브</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section class="card">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <div class="pane" id="soloBox">
+      <div class="field">
+        <span class="small">함께할 AI</span>
+        <div class="seg" id="aiCount"></div>
+      </div>
+      <div class="tiers three" id="tiers"></div>
+      <div class="field">
+        <span class="small">규칙</span>
+        <div class="seg" id="rules"></div>
+      </div>
+      <p class="lede rulelede" id="ruleDesc"></p>
+      <button class="btn primary big" id="startBtn">시작!</button>
+      <ul class="howto">
+        <li>받침대 14장을 모두 묶음으로 맞추면 이겨요</li>
+        <li>묶음 = 같은 숫자 다른 색 3장 / 같은 색 이어진 숫자 3장</li>
+        <li>차례마다 한 장 뽑고 한 장을 버려요</li>
+        <li>끝낼 수 있으면 <b>베니!</b> 단추가 반짝여요</li>
+        <li>고양이 타일은 만능 — 전통 규칙은 표시 타일 다음 숫자가 만능</li>
+      </ul>
+      <button class="btn ghost rulesbtn" id="rulesBtn">📖 규칙 다시 보기</button>
+    </div>
+
+    <div class="pane" id="watchBox" hidden>
+      <p class="lede">네 명이 타일을 다 보여 주며 두는 걸 구경해요. 누가 먼저 묶음을 다 맞추나요?</p>
+      <div class="tiers three" id="wTiers"></div>
+      <div class="field">
+        <span class="small">규칙</span>
+        <div class="seg" id="wRules"></div>
+      </div>
+      <p class="lede rulelede" id="wRuleDesc"></p>
+      <button class="btn mint big" id="watchBtn">구경하기</button>
+      <ul class="howto">
+        <li>AI 네 명이 한 판을 둬요. 타일이 모두 보여요</li>
+        <li>차례인 사람에게 불이 들어와요</li>
+        <li>⏸ 멈추기와 ⏩ 빠르게로 천천히 볼 수 있어요</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<!-- 게임 화면 (한 장, 스크롤 없음) -->
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="back" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="turnLabel">내 차례</span><span class="t" id="turnSub"></span></div>
+    <span class="pill" id="scorePill">⭐ 0</span>
+  </div>
+
+  <div class="stage" id="stage">
+    <div class="opps" id="opps"></div>
+    <div class="center" id="center">
+      <button class="pile deck" id="deckBtn" aria-label="더미에서 뽑기">
+        <span class="stack"><b id="deckCount">0</b></span>
+        <span class="cap">더미</span>
+      </button>
+      <button class="pile prev" id="prevBtn" aria-label="앞사람이 버린 타일 가져오기">
+        <span class="slot" id="prevSlot"></span>
+        <span class="cap">앞사람 버림</span>
+      </button>
+      <button class="pile drop" id="dropTray" aria-label="내 버림 자리">
+        <span class="slot" id="mySlot"></span>
+        <span class="cap">내 버림</span>
+      </button>
+      <div class="ind" id="indicator" hidden></div>
+    </div>
+
+    <div class="me" id="meLine"><span class="small" id="meCount"></span><span class="small" id="meGroups"></span></div>
+    <div class="rackwrap"><div class="rack" id="rack"></div></div>
+
+    <div class="wstage" id="wstage" hidden></div>
+  </div>
+
+  <div class="actbar" id="actbar"><span class="msg" id="actMsg"></span></div>
+
+  <div class="dock" id="dock">
+    <button id="arrangeBtn" aria-label="자동으로 묶음 정리"><span class="ic">🪄</span><span>정리</span></button>
+    <button id="sortBtn" aria-label="숫자 순서로 정리"><span class="ic">🔢</span><span>숫자순</span></button>
+    <button id="hintBtn" aria-label="버릴 타일 추천"><span class="ic">💡</span><span>힌트</span></button>
+    <button id="sndBtn"><span class="ic">🔊</span><span>소리</span></button>
+  </div>
+  <div class="dock wdock" id="wdock" hidden>
+    <button id="pauseBtn" aria-label="멈추기"><span class="ic">⏸</span><span>멈춤</span></button>
+    <button id="speedBtn" aria-label="빠르게"><span class="ic">⏩</span><span>1배속</span></button>
+    <button id="sndBtn2"><span class="ic">🔊</span><span>소리</span></button>
+    <button id="menuBtn"><span class="ic">🏠</span><span>메뉴</span></button>
+  </div>
+</section>
+
+<script src="../common/cozy.js?v=2"></script>
+<script src="../common/me.js?v=2"></script>
+<script src="../common/arena-mock.js?v=2"></script>
+<script src="../common/arena.js?v=2"></script>
+<script src="../common/arena-ui.js?v=2"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script src="core.js?v=2"></script>
+<script src="ai.js?v=2"></script>
+<script src="main.js?v=2"></script>
+</body>
+</html>

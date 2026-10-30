@@ -73,7 +73,50 @@
     el.onclick = e => { const b = e.target.closest('.btn'); if (!b) return; Cozy.sfx.play('tap'); const v = b.dataset.v; onPick(/^\d+$/.test(v) ? +v : v); };
   }
   $('tabSolo').onclick = () => { cfg.tab = 'solo'; saveCfg(); Cozy.sfx.play('tap'); drawMenu(); };
+  if ($('tabFriend')) $('tabFriend').onclick = () => { Cozy.sfx.play('tap'); openFriendModal(); };
   $('tabWatch').onclick = () => { cfg.tab = 'watch'; saveCfg(); Cozy.sfx.play('tap'); drawMenu(); };
+
+  function openFriendModal() {
+    if (!window.ArenaUI) { Cozy.toast('친구 대전 모듈을 불러오지 못했어요'); return; }
+    ArenaUI.open({
+      game: 'volley',
+      title: '🏐 냥냥 배구 · 친구랑',
+      minPlayers: 2,
+      maxPlayers: 2,
+      extraOptionsHtml: `
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px">
+          <span class="small" style="align-self:center">내기 점수: <b>${cfg.target}점</b> · 내 고양이: <b>${FURS[cfg.fur].name}</b></span>
+        </div>`,
+      buildConfig: () => ({
+        target: cfg.target,
+        hostFur: cfg.fur,
+        seed: (Math.random() * 4294967296) >>> 0,
+      }),
+      renderConfig: c => `🏖 ${(c && c.target) || 11}점 내기`,
+      onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
+    });
+  }
+
+  function startOnline({ net, role, cfg: c, players }) {
+    const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p)).sort((a, b) => (a.slot ?? 9) - (b.slot ?? 9));
+    const mySide = role === 'host' ? 0 : 1;
+    const f0 = (c && FURS[c.hostFur]) ? c.hostFur : 'cheese';
+    const f1 = FUR_IDS.find(f => f !== f0) || 'mackerel';
+    const names = [
+      plist[0] ? plist[0].name : '방장',
+      plist[1] ? plist[1].name : '친구',
+    ];
+    start({
+      kind: 'online',
+      role,
+      net,
+      mySide,
+      names,
+      furs: [f0, f1],
+      target: (c && c.target) || 11,
+      seed: (c && c.seed) || 12345,
+    });
+  }
   $('startBtn').onclick = () => {
     if (cfg.mode === 'duo') start({ kind: 'duo', furs: [cfg.fur, cfg.fur2], target: cfg.target });
     else start({ kind: 'ai', tier: cfg.mode, furs: [cfg.fur, AI_FUR[cfg.mode].find(f => f !== cfg.fur)], target: cfg.target });
@@ -176,25 +219,72 @@
     for (const ov of document.querySelectorAll('body > .overlay:not(#pauseBox)')) ov.remove();
     const seed = o.seed != null ? o.seed >>> 0 : (Math.random() * 4294967296) >>> 0;   // 시험 때만 씨앗을 정해 줌
     const s = V.create({ target: o.target }, seed);
-    const human = [o.kind !== 'watch', o.kind === 'duo'];
-    const ctl = [
-      o.kind === 'watch' ? botCtl(o.tiers[0], 0, seed ^ 0x51ed) : humanCtl(0),
-      o.kind === 'duo' ? humanCtl(1) : botCtl(o.kind === 'watch' ? o.tiers[1] : o.tier, 1, seed ^ 0x9e37),
-    ];
+    let human, ctl, remoteIn = 0, lastSentIn = -1;
+    if (o.kind === 'online') {
+      const mySide = o.mySide || 0;
+      human = [mySide === 0, mySide === 1];
+      const myCtl = {
+        kind: 'human',
+        input: () => {
+          const v = readInput(0);
+          if (v !== lastSentIn && o.net) {
+            lastSentIn = v;
+            const msg = { t: 'in', b: v };
+            if (o.role === 'host') o.net.broadcast(msg);
+            else o.net.send(msg);
+          }
+          return v;
+        },
+      };
+      const remCtl = { kind: 'remote', input: () => remoteIn };
+      ctl = mySide === 0 ? [myCtl, remCtl] : [remCtl, myCtl];
+      const onNetMsg = m => {
+        if (!m || !G || G.o.kind !== 'online') return;
+        if (m.t === 'in') {
+          remoteIn = m.b | 0;
+        } else if (m.t === 'st' && o.role !== 'host') {
+          const gs = G.s;
+          gs.cats[0] = Object.assign(gs.cats[0], m.c[0]);
+          gs.cats[1] = Object.assign(gs.cats[1], m.c[1]);
+          gs.ball = Object.assign(gs.ball, m.b);
+          gs.phase = m.ph; gs.timer = m.tm; gs.server = m.sv;
+          gs.touches = m.tc; gs.score = m.sc; gs.rally = m.rl; gs.heat = m.ht;
+          if (m.st) gs.stats = m.st;
+          if (m.evs && m.evs.length) onEvents(m.evs, true);
+          drawHud();
+        } else if (m.t === 'rematch') {
+          if (o.role === 'host') o.net.broadcast(m);
+          start(Object.assign({}, o, { seed: m.seed }));
+        }
+      };
+      if (o.net && !o._boundNet) {
+        o._boundNet = true;
+        if (o.role === 'host') o.net.on('msg', (_uid, m) => onNetMsg(m));
+        else o.net.on('msg', m => onNetMsg(m));
+      }
+      o._setRemoteIn = v => { remoteIn = v; };
+    } else {
+      human = [o.kind !== 'watch', o.kind === 'duo'];
+      ctl = [
+        o.kind === 'watch' ? botCtl(o.tiers[0], 0, seed ^ 0x51ed) : humanCtl(0),
+        o.kind === 'duo' ? humanCtl(1) : botCtl(o.kind === 'watch' ? o.tiers[1] : o.tier, 1, seed ^ 0x9e37),
+      ];
+    }
     G = { o, s, seed, ctl, human, prev: { c: [[0, 0], [0, 0]], b: [0, 0] }, acc: 0, speed: 1, paused: false, stop: 0, wait: 0, held: false, over: false, gen: ++gen, lastHit: null };
     snap();
     $('pauseBox').hidden = true;
     clearInput();
-    R.setFurs(o.furs, o.kind === 'duo' ? ['1P', '2P'] : o.kind === 'ai' ? ['나', ''] : [Cozy.TIERS[o.tiers[0]].name, Cozy.TIERS[o.tiers[1]].name]);
+    const labels = o.kind === 'online' ? (o.names || ['1P', '2P']) : o.kind === 'duo' ? ['1P', '2P'] : o.kind === 'ai' ? ['나', ''] : [Cozy.TIERS[o.tiers[0]].name, Cozy.TIERS[o.tiers[1]].name];
+    R.setFurs(o.furs, labels);
     R.reset();
     drawFast();
     show('play');
     drawHud(true);
     hideBanner(true);
-    banner(o.kind === 'watch' ? 'AI 구경' : '준비~', `${FURS[o.furs[0]].name} vs ${FURS[o.furs[1]].name}`, 1300);
+    banner(o.kind === 'watch' ? 'AI 구경' : o.kind === 'online' ? '친구랑 대결!' : '준비~', `${FURS[o.furs[0]].name} vs ${FURS[o.furs[1]].name}`, 1300);
     SND.play('start');
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-    if (o.kind !== 'watch') Cozy.howto('volley', '냥냥 배구 하는 법', howtoItems());
+    if (o.kind !== 'watch' && o.kind !== 'online') Cozy.howto('volley', '냥냥 배구 하는 법', howtoItems());
     // 폰 세로로 둘이서: 한 번만 '가로로 돌리면 더 편해요'
     if (o.kind === 'duo' && touchUI && innerHeight > innerWidth && !Cozy.store('volley.duoTip', false)) {
       Cozy.save('volley.duoTip', true); later(() => Cozy.toast('가로로 돌리면 둘이서 하기 더 편해요 📱', 2800), 600);
@@ -208,9 +298,25 @@
     const s = G.s;
     const a = G.ctl[0].input(s) | 0, b = G.ctl[1].input(s) | 0;
     snap();
-    onEvents(V.step(s, a, b));                                     // 일이 없는 틱도 그림 쪽(공 회전·꼬리)은 매 틱 갱신
+    const evs = V.step(s, a, b);
+    if (G.o.kind === 'online' && G.o.role === 'host' && G.o.net) {
+      if (evs.length || (s.tick & 1) === 0) {
+        G.o.net.broadcast({
+          t: 'st',
+          c: s.cats, b: s.ball, ph: s.phase, tm: s.timer, sv: s.server,
+          tc: s.touches, sc: s.score, rl: s.rally, ht: s.heat,
+          st: evs.length ? s.stats : undefined,
+          evs: evs.length ? evs : undefined,
+        });
+      }
+    }
+    if (!(G.o.kind === 'online' && G.o.role !== 'host')) {
+      onEvents(evs);                                                 // 일이 없는 틱도 그림 쪽(공 회전·꼬리)은 매 틱 갱신
+    } else {
+      R.events([], G.s);
+    }
   }
-  function onEvents(evs) {
+  function onEvents(evs, fromNet) {
     const stop = R.events(evs, G.s);
     if (!evs.length) return;
     if (stop && G.speed === 1) G.stop = Math.max(G.stop, stop);
@@ -285,11 +391,31 @@
       body = `<div class="big">${sc[0]} : ${sc[1]}</div>${stats}`;
     }
     keyGuardUntil = performance.now() + 900;
-    Cozy.modal({ title, html: body, buttons: [{ label: o.kind === 'watch' ? '한 판 더' : '다시 하기', primary: true, onClick: () => start(o) }, { label: '메뉴', onClick: goMenu }] });
+    Cozy.modal({
+      title,
+      html: body,
+      buttons: [
+        {
+          label: o.kind === 'watch' ? '한 판 더' : '다시 하기',
+          primary: true,
+          onClick: () => {
+            if (o.kind === 'online' && o.net) {
+              const msg = { t: 'rematch', seed: (Math.random() * 4294967296) >>> 0 };
+              if (o.role === 'host') { o.net.broadcast(msg); start(Object.assign({}, o, { seed: msg.seed })); }
+              else o.net.send(msg);
+            } else {
+              start(o);
+            }
+          },
+        },
+        { label: '메뉴', onClick: goMenu },
+      ],
+    });
   }
   function goMenu() {
     clearLater(); hideBanner(true);
     document.body.classList.remove('vb-pad');
+    if (G && G.o && G.o.net) { try { G.o.net.close(); } catch (e) {} }
     G = null; clearInput();
     $('pauseBox').hidden = true;
     show('menu'); drawMenu();
@@ -310,7 +436,7 @@
     if (first) {
       for (let i = 0; i < 2; i++) { const w = $('who' + i); w.innerHTML = ''; w.appendChild(ART.portrait(G.o.furs[i], 44)); }
       const o = G.o;
-      $('sub').textContent = o.kind === 'ai' ? `${tierName(o.tier)} · ${s.target}점 내기` : o.kind === 'duo' ? `👫 둘이서 · ${s.target}점 내기` : `${tierName(o.tiers[0])} vs ${tierName(o.tiers[1])}`;
+      $('sub').textContent = o.kind === 'ai' ? `${tierName(o.tier)} · ${s.target}점 내기` : o.kind === 'online' ? `🌐 친구랑 · ${s.target}점 내기` : o.kind === 'duo' ? `👫 둘이서 · ${s.target}점 내기` : `${tierName(o.tiers[0])} vs ${tierName(o.tiers[1])}`;
     }
     for (let i = 0; i < 2; i++) {
       const el = $('sc' + i), v = String(s.score[i]);
@@ -472,4 +598,5 @@
   };
 
   drawMenu();
+  if (window.ArenaUI) ArenaUI.checkUrl(() => openFriendModal());
 })();

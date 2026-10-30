@@ -78,12 +78,61 @@
   }
   $("tabSolo").onclick = () => { sfx("tap"); setTab("solo"); saveCfg(); };
   $("tabWatch").onclick = () => { sfx("tap"); setTab("watch"); saveCfg(); };
+  if ($("tabFriend")) $("tabFriend").onclick = () => { sfx("tap"); openFriendModal(); };
   $("atariTog").onclick = () => { cfg.atari = !cfg.atari; saveCfg(); sfx("toggle", { on: cfg.atari }); drawMenu(); };
   $("helpBtn").onclick = () => howto(true);
   $("startBtn").onclick = () => startSolo();
   $("duoBtn").onclick = () => startDuo();
   $("watchBtn").onclick = () => startWatch();
   $("recBtn").onclick = () => showRecords();
+
+  function openFriendModal() {
+    if (!window.ArenaUI) return Z.toast("온라인 모듈을 불러오지 못했어요");
+    ArenaUI.open({
+      game: "baduk", title: "바둑", max: 2, min: 2,
+      buildConfig: (hostEl) => {
+        const state = { size: cfg.size || 9, hostColor: 1 };
+        hostEl.innerHTML = `<div style="display:grid;gap:8px;margin-top:4px">
+          <div class="opt"><span class="small">판 크기</span><div class="seg" id="fSizeSeg"></div></div>
+          <div class="opt"><span class="small">방장 돌</span><div class="seg" id="fColSeg"></div></div>
+        </div>`;
+        const drawF = () => {
+          seg(hostEl.querySelector("#fSizeSeg"), [[9, "9줄"], [13, "13줄"], [19, "19줄"]], state.size, v => { state.size = +v; drawF(); });
+          seg(hostEl.querySelector("#fColSeg"), [[1, "⚫ 흑 (선)"], [2, "⚪ 백 (덤 6.5)"]], state.hostColor, v => { state.hostColor = +v; drawF(); });
+        };
+        drawF();
+        return () => ({ size: state.size, hostColor: state.hostColor, komi: 6.5 });
+      },
+      renderConfig: (c) => `${(c && c.size) || 9}줄 · 덤 6.5 · 방장 ${(c && c.hostColor) === 2 ? "백" : "흑"}`,
+      onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
+    });
+  }
+  function startOnline({ net, role, cfg: c, players }) {
+    const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p)).sort((a, b) => (a.slot ?? 9) - (b.slot ?? 9));
+    const hostCol = (c && c.hostColor) === 2 ? WHITE : BLACK;
+    const human = role === "host" ? hostCol : (3 - hostCol);
+    const myPl = plist.find(p => p.uid === net.uid) || { name: "나" };
+    const oppPl = plist.find(p => p.uid !== net.uid) || { name: "친구" };
+    newGame({
+      mode: "online", size: (c && c.size) || 9, komi: (c && c.komi) || 6.5, handicap: 0,
+      human, players: { [human]: "human", [3 - human]: "remote" },
+      names: { [human]: myPl.name || "나", [3 - human]: oppPl.name || "친구" },
+      tiers: {}, net, role,
+    });
+    const onMsg = (m) => {
+      if (!m || !G || G.mode !== "online") return;
+      if (m.t === "move") play(m.a, "remote");
+      else if (m.t === "resign") resign(m.who, true);
+      else if (m.t === "dead") toggleDead(m.p, true);
+      else if (m.t === "confirm") finish(true);
+      else if (m.t === "again") {
+        const nh = 3 - G.human;
+        newGame({ mode: "online", size: G.st.size, komi: G.st.komi, handicap: 0, human: nh, players: { [nh]: "human", [3 - nh]: "remote" }, names: { [nh]: G.names[G.human], [3 - nh]: G.names[3 - G.human] }, tiers: {}, net: G.net, role: G.role });
+      }
+    };
+    if (role === "host") net.on("msg", (_uid, m) => onMsg(m));
+    else net.on("msg", m => onMsg(m));
+  }
 
   function komiHandi() {
     if (cfg.handi[0] === "h" && cfg.size >= 13) return { handicap: +cfg.handi.slice(1), komi: 0.5 };
@@ -112,7 +161,7 @@
     $("resumeGo").onclick = () => { sfx("tap"); resumeGame(cur); };
   }
   function autosave() {
-    if (!G || G.mode === "watch") return;
+    if (!G || G.mode === "watch" || G.mode === "online") return;
     if (G.st.over && G.phase === "done") { save("cur", null); return; }
     save("cur", { mode: G.mode, human: G.human, players: G.players, tiers: G.tiers, hints: G.hints, st: B.toJSON(G.st) });
   }
@@ -189,14 +238,15 @@
   }
   function enterPlay() {
     show("play");
-    for (const id of ["passBtn", "undoBtn", "resignBtn"]) $(id).hidden = G.mode === "watch";
+    for (const id of ["passBtn", "resignBtn"]) $(id).hidden = G.mode === "watch";
+    $("undoBtn").hidden = G.mode === "watch" || G.mode === "online";
     $("hintBtn").hidden = G.mode !== "solo";
     $("pauseBtn").hidden = $("fastBtn").hidden = G.mode !== "watch";
     $("pauseBtn").setAttribute("aria-pressed", "false"); $("fastBtn").setAttribute("aria-pressed", String(G.speed === "fast"));
     $("estBtn").setAttribute("aria-pressed", "false");
     $("scoreBox").hidden = true; $("dock").hidden = false;
     // 내 칩은 판 아래, 상대 칩은 판 위 (둘이서·구경은 흑이 아래)
-    const meBottom = G.mode === "solo" ? G.human : BLACK;
+    const meBottom = (G.mode === "solo" || G.mode === "online") ? G.human : BLACK;
     $("rowBot").appendChild(meBottom === BLACK ? $("sideB") : $("sideW"));
     $("rowTop").appendChild(meBottom === BLACK ? $("sideW") : $("sideB"));
     R.key = ""; requestAnimationFrame(() => fit(true));
@@ -211,7 +261,11 @@
     if (G) G.gen++;
     G = null; touch = null;
   }
-  function exitToMenu() { if (G && G.phase !== "done") autosave(); leaveGame(); show("home"); drawMenu(); }
+  function exitToMenu() {
+    if (G && G.net) { try { G.net.leave(); } catch (e) {} }
+    if (G && G.phase !== "done") autosave();
+    leaveGame(); show("home"); drawMenu();
+  }
   Z.backGuard($("backBtn"), exitToMenu);
 
   const canHumanMove = () => !!(G && G.phase === "play" && !G.st.over && G.players[G.st.toPlay] === "human" && !G.thinking);
@@ -250,6 +304,10 @@
   function play(a, who) {
     const r = B.play(G.st, a);
     if (r.state === G.st) { if (who === "human") illegal(r.events[0]); return false; }
+    if (G.mode === "online" && G.net && who === "human") {
+      const m = { t: "move", a };
+      if (G.role === "host") G.net.broadcast(m); else G.net.send(m);
+    }
     G.st = r.state; G.est = null; G.hintP = -1; G.pending = -1;
     $("estBtn").setAttribute("aria-pressed", "false");
     effects(r.events);
@@ -277,9 +335,10 @@
     }
     kick();
   }
-  const passTip = c => (G.players[3 - c] === "human" && G.mode === "solo" ? " 더 둘 곳이 없으면 나도 패스해요" : "");
+  const passTip = c => (G.players[3 - c] === "human" && (G.mode === "solo" || G.mode === "online") ? " 더 둘 곳이 없으면 나도 패스해요" : "");
   function sideName(c) {
     if (!G) return colorName(c);
+    if (G.mode === "online") return (G.names && G.names[c]) || colorName(c);
     if (G.mode === "solo") return G.players[c] === "human" ? "나" : `${TIERS[G.tiers[c]].em} ${TIERS[G.tiers[c]].name}`;
     if (G.mode === "watch") return `${TIERS[G.tiers[c]].em} ${TIERS[G.tiers[c]].name}`;
     return colorName(c);
@@ -343,6 +402,7 @@
   /* ── 상태줄 · 칩 · 단추 ───────────────────────────────────── */
   function label() {
     const N = G.st.size;
+    if (G.mode === "online") return `👥 친구랑 (${G.net ? G.net.code : ""}) · ${N}줄`;
     if (G.mode === "solo") { const T = TIERS[G.tiers[3 - G.human]]; return `${T.em} ${T.name} · ${N}줄`; }
     if (G.mode === "watch") return `${TIERS[G.tiers[1]].em} vs ${TIERS[G.tiers[2]].em} · ${N}줄`;
     return `👫 둘이서 · ${N}줄`;
@@ -359,7 +419,7 @@
       const head = lead == null ? "" : Math.abs(lead) < 1.5 ? "팽팽 · " : `${colorName(lead > 0 ? BLACK : WHITE)} ${Math.round(Math.abs(lead))}집 앞섬 · `;
       return `${head}${sideName(st.toPlay)} 생각 중`;
     }
-    if (G.mode === "solo") {
+    if ((G.mode === "solo" || G.mode === "online") && st.toPlay === G.human) {
       if (G.pending >= 0) return "같은 곳을 한 번 더 누르면 놓아요";
       return st.passes ? "상대가 패스했어요 · 내 차례" : `내 차례예요 (${stoneEm(G.human)})`;
     }
@@ -453,11 +513,15 @@
   }
   $("resignBtn").onclick = () => {
     if (!G || G.phase !== "play" || G.st.over) return;
-    const who = G.mode === "solo" ? G.human : G.st.toPlay;
-    Z.modal({ title: "기권할까요?", html: `<p style='margin:0'>${G.mode === "solo" ? "이번 판을 여기서 마쳐요." : `${stoneEm(who)} ${colorName(who)}이 기권해요.`}</p>`, buttons: [{ label: "계속 두기" }, { label: "기권", primary: true, onClick: () => resign(who) }], dismiss: true });
+    const who = (G.mode === "solo" || G.mode === "online") ? G.human : G.st.toPlay;
+    Z.modal({ title: "기권할까요?", html: `<p style='margin:0'>${(G.mode === "solo" || G.mode === "online") ? "이번 판을 여기서 마쳐요." : `${stoneEm(who)} ${colorName(who)}이 기권해요.`}</p>`, buttons: [{ label: "계속 두기" }, { label: "기권", primary: true, onClick: () => resign(who) }], dismiss: true });
   };
-  function resign(who) {
+  function resign(who, remote) {
     if (!G || G.phase !== "play" || G.st.over) return;
+    if (G.mode === "online" && G.net && !remote) {
+      const m = { t: "resign", who };
+      if (G.role === "host") G.net.broadcast(m); else G.net.send(m);
+    }
     G.gen++; G.thinking = false;
     const s = { ...G.st, toPlay: who };
     const r = B.play(s, -1); G.st = r.state; effects(r.events); autosave(); afterMove();
@@ -497,8 +561,12 @@
     $("scoreSub").innerHTML = `흑: 집 ${sc.terrB} + 따낸 돌 ${sc.capsB} · 백: 집 ${sc.terrW} + 따낸 돌 ${sc.capsW} → <b>${res}</b>`;
     kick();
   }
-  function toggleDead(p) {
+  function toggleDead(p, remote) {
     if (!G || G.phase !== "score" || !G.st.board[p] || !G.score) return;
+    if (G.mode === "online" && G.net && !remote) {
+      const m = { t: "dead", p };
+      if (G.role === "host") G.net.broadcast(m); else G.net.send(m);
+    }
     const reg = B.region(G.st, p), v = G.dead[p] ? 0 : 1;
     for (const q of reg) G.dead[q] = v;
     sfx("toggle", { on: !v }); rescore();
@@ -512,8 +580,12 @@
   }
 
   /* ── 결과 ─────────────────────────────────────────────────── */
-  function finish() {
+  function finish(remote) {
     if (!G || G.phase === "done") return;
+    if (G.mode === "online" && G.net && !remote && !(G.st.end && G.st.end.reason === "resign")) {
+      const m = { t: "confirm" };
+      if (G.role === "host") G.net.broadcast(m); else G.net.send(m);
+    }
     const st = G.st, game = G;
     let winner = 0, big, detail = "", sc = null;
     if (st.end && st.end.reason === "resign") { winner = st.end.winner; big = `${colorName(winner)} 불계승`; detail = `${colorName(st.end.loser)}(${sideName(st.end.loser)}) 기권`; }
@@ -551,7 +623,12 @@
   function again(game) {
     if (game.mode === "watch") startWatch();
     else if (game.mode === "duo") startDuo();
-    else {
+    else if (game.mode === "online" && game.net) {
+      const m = { t: "again" };
+      if (game.role === "host") game.net.broadcast(m); else game.net.send(m);
+      const nh = 3 - game.human;
+      newGame({ mode: "online", size: game.st.size, komi: game.st.komi, handicap: 0, human: nh, players: { [nh]: "human", [3 - nh]: "remote" }, names: { [nh]: game.names[game.human], [3 - nh]: game.names[3 - game.human] }, tiers: {}, net: game.net, role: game.role });
+    } else {
       const human = cfg.color === "random" ? (Math.random() < 0.5 ? BLACK : WHITE) : game.human, tier = game.tiers[3 - game.human];
       newGame({ mode: "solo", size: game.st.size, komi: game.st.komi, handicap: game.st.handicap, human, players: { [human]: "human", [3 - human]: "ai" }, tiers: { [3 - human]: tier } });
     }
@@ -974,4 +1051,9 @@
 
   // 시작
   startWorker(); noteAI(); drawMenu(); show("home");
+  if (window.ArenaUI) ArenaUI.checkUrl({
+    game: "baduk", title: "바둑", max: 2, min: 2,
+    renderConfig: (c) => `${(c && c.size) || 9}줄 · 덤 6.5 · 방장 ${(c && c.hostColor) === 2 ? "백" : "흑"}`,
+    onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
+  });
 })();

@@ -24,10 +24,26 @@ const Arena = (() => {
   const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
   const ICE = { iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }] };
   const GUEST = new URLSearchParams(location.search).has("guest");
+  const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.protocol === "file:";
   const ROOT = GUEST ? "test/arena/" : "arena/";
-  let app = null, loading = null, user = null, offset = 0;
+  let app = null, loading = null, user = null, offset = 0, adminFlag = false, hostFlag = GUEST || LOCAL;
   const load = src => new Promise((ok, bad) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
   const watchOffset = () => app.database().ref(".info/serverTimeOffset").on("value", s => { offset = s.val() || 0; });
+
+  async function refreshPerms() {
+    if (!user) return;
+    try {
+      const tr = await user.getIdTokenResult();
+      adminFlag = !!(tr && tr.claims && tr.claims.admin === 1);
+    } catch (e) { adminFlag = false; }
+    if (adminFlag || GUEST || LOCAL) { hostFlag = true; return; }
+    try {
+      const snap = await app.database().ref("arena_hosts/" + user.uid + "/ok").get();
+      hostFlag = snap.val() === true;
+    } catch (e) {
+      hostFlag = localStorage.getItem("game.arena.host_ok") === user.uid;
+    }
+  }
 
   async function init() {
     if (app) return app;
@@ -43,9 +59,35 @@ const Arena = (() => {
       user = await new Promise(ok => { const t = setTimeout(() => ok(null), 8000); const off = app.auth().onAuthStateChanged(u => { clearTimeout(t); off(); ok(u); }); });
       if (!user) user = (await app.auth().signInAnonymously()).user;
       watchOffset();
+      const inv = new URLSearchParams(location.search).get("host_invite");
+      if (inv) { try { await claimHostInvite(inv); } catch (e) {} }
+      await refreshPerms();
       return app;
     })();
     try { return await loading; } catch (e) { loading = null; throw e; }
+  }
+
+  // 관리자(베니 님)가 가족(와이프)에게 방 만들기(호스트) 권한을 줄 초대 코드 6자리 발급
+  async function createHostInvite() {
+    await init();
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    await db().ref("arena_invites/" + code).set({ by: user.uid, t: TS() });
+    const u = new URL(location.href);
+    u.searchParams.delete("room");
+    u.searchParams.set("host_invite", code);
+    return { code, url: u.toString() };
+  }
+
+  // 가족(와이프)이 6자리 초대 코드로 방장(Host) 권한 등록
+  async function claimHostInvite(rawCode, name) {
+    if (!app) await init();
+    const code = String(rawCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    if (code.length !== 6) throw new Error("호스트 등록 코드 6자리를 입력해 주세요");
+    await db().ref("arena_hosts/" + user.uid).set({ ok: true, token: code, name: String(name || "가족").slice(0, 12), t: TS() });
+    try { localStorage.setItem("game.arena.host_ok", user.uid); } catch (e) {}
+    hostFlag = true;
+    return true;
   }
   // 같은 계정으로 같은 방에 또 들어오면(관리자로 PC·휴대폰 둘 다 등) 한 사람으로 겹치므로, 이 탭만 임시 계정
   async function separateIdentity() {
@@ -332,10 +374,65 @@ const Arena = (() => {
     return base.child(`index/${code}`).remove();
   }
   const inviteUrl = code => location.origin + location.pathname + "?room=" + code + (GUEST ? "&guest" : "") + (MOCK ? "&mock" : "");
-  const roomFromUrl = () => cleanCode(new URLSearchParams(location.search).get("room")) || null;
+  const roomFromUrl = () => {
+    const r = new URLSearchParams(location.search).get("room");
+    if (!r || r.toLowerCase() === "host") return null;
+    return cleanCode(r) || null;
+  };
 
-  // ?mock (시험 전용): Firebase 대신 같은 브라우저 탭끼리 BroadcastChannel 로 (common/arena-mock.js 를 먼저 넣었을 때만)
-  const MOCK = new URLSearchParams(location.search).has("mock");
-  if (MOCK && window.ArenaMock) return window.ArenaMock({ inviteUrl, roomFromUrl, cleanCode });
-  return { init, host, join, listRooms, deleteRoom, inviteUrl, roomFromUrl, cleanCode, now, GUEST, ROOT, mock: false, db: () => app && app.database(), get uid() { return user && user.uid; }, get ready() { return !!app; } };
+  // ?mock 또는 ?arena=mock (시험 전용): Firebase 대신 같은 브라우저 탭끼리 BroadcastChannel/메모리로 동작
+  const sp0 = new URLSearchParams(location.search);
+  const MOCK = sp0.has("mock") || sp0.get("arena") === "mock";
+  if (MOCK) {
+    if (window.ArenaMock) return window.ArenaMock({ inviteUrl, roomFromUrl, cleanCode });
+    const mockUid = "mock_" + Math.random().toString(36).slice(2, 8);
+    const mockRooms = {};
+    return {
+      mock: true, canHost: true, isAdmin: true, uid: mockUid, ready: true,
+      init: async () => true,
+      db: () => null,
+      now: () => Date.now(),
+      inviteUrl, roomFromUrl, cleanCode,
+      listRooms: async (g) => Object.values(mockRooms[g] || {}),
+      deleteRoom: async (g, c) => { if (mockRooms[g]) delete mockRooms[g][c]; },
+      host: async (game, settings = {}) => {
+        const c = code4();
+        const E = emitter(["players", "meta"]);
+        const meta = { host: mockUid, created: Date.now(), phase: "lobby", cfg: settings.cfg || null, max: settings.max || 2, v: 1 };
+        const players = { [mockUid]: { name: settings.name || "방장", slot: 0, t: Date.now() } };
+        (mockRooms[game] = mockRooms[game] || {})[c] = { code: c, h: settings.name || "방장", n: 1, max: meta.max, ph: "lobby", m: "" };
+        setTimeout(() => { E.emit("meta", meta); E.emit("players", players); }, 0);
+        return {
+          code: c, isHost: true, uid: mockUid, meta, players, connected: true,
+          on: E.on,
+          broadcast: () => {},
+          send: () => {},
+          peers: () => [],
+          setPhase(ph, cfg) { meta.phase = ph; if (cfg !== undefined) meta.cfg = cfg; E.emit("meta", meta); },
+          setMeta(p) { Object.assign(meta, p); E.emit("meta", meta); },
+          setMe(p) { Object.assign(players[mockUid], p); E.emit("players", players); },
+          setShared: () => {},
+          watchShared: () => {},
+          leave() { if (mockRooms[game]) delete mockRooms[game][c]; E.clear(); },
+          close() { if (mockRooms[game]) delete mockRooms[game][c]; E.clear(); },
+        };
+      },
+      join: async (game, c, settings = {}) => {
+        const E = emitter(["players", "meta"]);
+        const meta = { host: "host_mock", phase: "lobby", cfg: {}, max: 2 };
+        const players = { host_mock: { name: "방장", slot: 0 }, [mockUid]: { name: settings.name || "친구", slot: 1 } };
+        setTimeout(() => { E.emit("meta", meta); E.emit("players", players); }, 0);
+        return {
+          code: c, isHost: false, uid: mockUid, meta, players, connected: true,
+          on: E.on, send: () => {}, watchShared: () => {}, setMe: () => {}, leave: () => E.clear(), close: () => E.clear(),
+        };
+      },
+    };
+  }
+  return {
+    init, host, join, listRooms, deleteRoom, inviteUrl, roomFromUrl, cleanCode, now, GUEST, ROOT, mock: false,
+    db: () => app && app.database(), get uid() { return user && user.uid; }, get ready() { return !!app; },
+    get canHost() { return hostFlag; }, get isAdmin() { return adminFlag; },
+    createHostInvite, claimHostInvite, refreshPerms,
+  };
 })();

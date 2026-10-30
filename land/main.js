@@ -60,16 +60,94 @@
     $('bestLine').textContent = solo && best ? `🏅 최고 기록 · ${best.rank}등 · ${pctStr(best.pct)}%` : '';
   }
   $('tabSolo').onclick = () => { if (opts.tab !== 'solo') sfx('tap'); opts.tab = 'solo'; saveOpts(); drawMenu(); };
+  if ($('tabFriend')) $('tabFriend').onclick = () => { sfx('tap'); openFriendModal(); };
   $('tabWatch').onclick = () => { if (opts.tab !== 'watch') sfx('tap'); opts.tab = 'watch'; saveOpts(); drawMenu(); };
   $('startBtn').onclick = () => start(opts.tab);
   $('helpBtn').onclick = () => howto(true);
+
+  function openFriendModal() {
+    if (!window.ArenaUI) { Cozy.toast('친구 대전 모듈을 불러오지 못했어요'); return; }
+    ArenaUI.open({
+      game: 'land',
+      title: '🖍️ 땅따먹기 · 친구랑',
+      minPlayers: 2,
+      maxPlayers: 8,
+      extraOptionsHtml: `
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px">
+          <span class="small" style="align-self:center">모드: <b>${opts.mode === 'life' ? '❤️ 한 목숨' : '🖍 클래식 3분'}</b> · 남은 자리는 AI 동물</span>
+        </div>`,
+      buildConfig: () => ({
+        mode: opts.mode,
+        tier: opts.tier,
+        seed: (Math.random() * 4294967296) >>> 0,
+      }),
+      renderConfig: c => `${(c && c.mode) === 'life' ? '❤️ 한 목숨' : '🖍 클래식 3분'} · 8마리 대결`,
+      onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
+    });
+  }
+
+  function startOnline({ net, role, cfg: c, players }, overrideSeed) {
+    endSession(true);
+    const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p)).sort((a, b) => (a.slot ?? 9) - (b.slot ?? 9));
+    const seed = overrideSeed != null ? overrideSeed >>> 0 : ((c && c.seed) || 12345) >>> 0;
+    const mode = (c && c.mode) || 'classic';
+    const tier = (c && c.tier) || 'normal';
+    const st = L.create({ n: 8, mode }, seed);
+    const me = Math.max(0, plist.findIndex(p => p.uid === net.uid));
+    const animals = Array.from({ length: st.n }, (_, i) => (i + (seed % A.ANIMALS.length)) % A.ANIMALS.length);
+    const names = st.players.map((_, i) => {
+      if (i < plist.length) return i === me ? '나' : (plist[i].name || `친구${i + 1}`);
+      return A.ANIMALS[animals[i]].name;
+    });
+    const humanSeats = plist.map((_, i) => i);
+    const ctrls = st.players.map((_, i) => {
+      if (i < plist.length) return humanCtrl();
+      return botCtrl(st, i, tier, seed, humanSeats);
+    });
+    S = {
+      kind: 'online', role, net, onlineArgs: { net, role, cfg: c, players },
+      mode, tier, seed, st, me, animals, names,
+      ctrls, acts: new Array(st.n), netQ: [], acc: 0, speed: 1, ff: false,
+      running: false, counting: false, paused: false, ended: false, out: false,
+      timers: [], cdTimers: [], modals: [], danger: false, dangerTick: -99, followAuto: true, followTick: 0, lastSec: -1, crashKey: '',
+    };
+    if (!net._landBound) {
+      net._landBound = true;
+      const onMsg = m => {
+        if (!m || !S || S.kind !== 'online') return;
+        if (m.t === 'steer' && S.role === 'host') {
+          const p = S.st.players[m.p];
+          const q = S.ctrls[m.p] && S.ctrls[m.p].q;
+          if (p && p.alive && q) {
+            const lastD = q.length ? q[q.length - 1] : p.dir;
+            if (m.d !== lastD && m.d !== ((lastD + 2) & 3)) {
+              if (q.length >= 3) q.pop();
+              q.push(m.d);
+            }
+          }
+        } else if (m.t === 'tk' && S.role !== 'host') {
+          S.netQ.push(m.a);
+        } else if (m.t === 'rematch') {
+          if (S.role === 'host') S.net.broadcast(m);
+          startOnline(S.onlineArgs, m.seed);
+        }
+      };
+      if (role === 'host') net.on('msg', (_uid, m) => onMsg(m));
+      else net.on('msg', m => onMsg(m));
+    }
+    show(true);
+    R.reset(st, { me, follow: me, animals, names });
+    $('feed').innerHTML = ''; hideMsg();
+    dockFor(); syncPad(); hud(); drawRank(true);
+    countdown(() => { if (S) S.running = true; });
+  }
 
   // ══ 판 (세션) ══════════════════════════════════════════════
   const R = window.LandRender.create($('cv'), $('mini'));
   let S = null;
 
   const ANIM = i => A.ANIMALS[S.animals[i]];
-  const nameOf = i => i === S.me ? '나' : ANIM(i).name;
+  const nameOf = i => (S && S.names && S.names[i]) ? S.names[i] : (i === S.me ? '나' : ANIM(i).name);
   const who = i => `${ANIM(i).em} ${nameOf(i)}`;
   function later(fn, ms) { const s = S, id = setTimeout(() => { if (S === s) fn(); }, ms); if (s) s.timers.push(id); return id; }
   function modal(title, html, buttons, dismiss, cls) {
@@ -118,8 +196,9 @@
     dockFor(); syncPad(); hud(); drawRank(true);
     countdown(() => { S.running = true; });
   }
-  function endSession() {
+  function endSession(keepNet) {
     if (!S) return;
+    if (!keepNet && S.net) { try { S.net.close(); } catch (e) {} }
     for (const t of S.timers) clearTimeout(t);
     for (const c of S.modals) c();
     S = null;
@@ -127,7 +206,15 @@
     $('feed').innerHTML = ''; $('rankBox').innerHTML = '';
   }
   function goMenu() { endSession(); show(false); drawMenu(); }
-  function restart() { start(S ? S.kind : opts.tab); }
+  function restart() {
+    if (S && S.kind === 'online' && S.net) {
+      const msg = { t: 'rematch', seed: (Math.random() * 4294967296) >>> 0 };
+      if (S.role === 'host') { S.net.broadcast(msg); startOnline(S.onlineArgs, msg.seed); }
+      else S.net.send(msg);
+      return;
+    }
+    start(S ? S.kind : opts.tab);
+  }
 
   // 화면 바꾸기 (게임 화면에서만 그리기 고리를 돌림)
   let raf = 0, last = 0;
@@ -175,7 +262,18 @@
   }
   function tick() {
     const st = S.st, acts = S.acts;
-    for (let i = 0; i < st.n; i++) acts[i] = S.ctrls[i].decide(st, i);
+    if (S.kind === 'online') {
+      if (S.role === 'host') {
+        for (let i = 0; i < st.n; i++) acts[i] = S.ctrls[i].decide(st, i);
+        if (S.net) S.net.broadcast({ t: 'tk', a: acts.slice() });
+      } else {
+        if (!S.netQ.length) return;
+        const nextActs = S.netQ.shift();
+        for (let i = 0; i < st.n; i++) acts[i] = nextActs[i];
+      }
+    } else {
+      for (let i = 0; i < st.n; i++) acts[i] = S.ctrls[i].decide(st, i);
+    }
     R.beforeTick();
     const evs = L.step(st, acts);
     R.afterTick(evs);
@@ -431,6 +529,9 @@
     if (d === lastD || d === ((lastD + 2) & 3)) return false;
     if (q.length >= 3) q.pop();
     q.push(d);
+    if (S.kind === 'online' && S.role !== 'host' && S.net) {
+      S.net.send({ t: 'steer', p: S.me, d });
+    }
     return true;
   }
   const KEYS = { ArrowUp: 0, KeyW: 0, ArrowRight: 1, KeyD: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 3, KeyA: 3 };
@@ -553,7 +654,7 @@
   // ── 시작
   if (document.fonts && document.fonts.load) document.fonts.load('20px Jua').catch(() => {});
   drawMenu();
-  howto(false);
+  if (window.ArenaUI) ArenaUI.checkUrl(() => openFriendModal());
   window.__land = {                                                     // 점검용
     get S() { return S; }, get st() { return S && S.st; }, R, opts,
     ff(n) { R.setFast(true); for (let i = 0; i < n && S && !S.ended; i++) tick(); if (S) R.setFast(S.ff); },
