@@ -446,3 +446,13 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .seon span{font-size:12px;opacity:.85}
 .seon.win{opacity:1;background:rgba(253,224,71,.22);box-shadow:0 0 0 2px #facc15 inset}
 .seon.win svg{transform:translateY(-4px) scale(1.06)}
+/* 🎞️ 다시 보기 */
+#replayBtn{width:100%;margin-top:10px}
+.rpbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:40;display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:99px;background:rgba(10,18,14,.86);border:1px solid rgba(255,255,255,.18);box-shadow:0 6px 20px rgba(0,0,0,.45);max-width:calc(100vw - 16px)}
+.rpbar button{width:40px;height:38px;border-radius:12px;border:0;background:rgba(255,255,255,.1);color:#fff;font-size:17px;cursor:pointer;flex:none}
+.rpbar button.pp{background:#16a34a}
+.rpbar .rpn{font:700 13px/1 var(--round,inherit);color:#fde68a;padding:0 6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rpbar .rpx{width:auto;padding:0 12px;font:700 13.5px var(--round,inherit)}
+.rplist{display:grid;gap:6px;max-height:52vh;overflow:auto;text-align:left}
+.rplist .btn{display:grid;gap:2px;justify-items:start;text-align:left;padding:10px 12px}
+.rplist .small{opacity:.8}

@@ -317,6 +317,7 @@
     $('goBox').hidden = true; $('resBox').hidden = true; $('pop').hidden = true;
     $('loanBtn').hidden = true; $('bankBtn').hidden = true;
     $('layer').innerHTML = '';
+    const rb = $('rpBar'); if (rb) rb.remove();
     $('stage').querySelectorAll('.hud').forEach(e => e.remove());
     show('home'); drawMenu();
   }
@@ -535,7 +536,12 @@
       for (;;) {
         await playRound(ses, s);
         if (!ses.isDrill) reportChips(ses); else ses.lastDeltas = null;
-        const next = await showResult(ses);
+        let next;
+        for (;;) {                                           // 🎞️ 다시 보기를 보고 오면 결과 창을 다시
+          next = await showResult(ses);
+          if (next && typeof next === 'object' && next.replay) { await runReplay(ses, next.replay, true); continue; }
+          break;
+        }
         if (next && typeof next === 'object' && next.drillState) {
           s = G.fastClone(next.drillState);
           ses.isDrill = true;
@@ -996,7 +1002,9 @@
   // ── 한 판 진행 ───────────────────────────────────────────
   async function playRound(ses, s) {
     ses.S = s; ses.sel = -1; ses.pre = -1; ses.hover = -1;
-    ses.turnLog = []; ses.coachCache = null; ses.coachHtml = null; ses.hotLast = -1;
+    ses.turnLog = []; ses.coachCache = null; ses.coachHtml = null; ses.hotLast = -1; ses.resCounted = false;
+    // 🎞️ 복기용 기록: 처음 상태 + 수 차례 (같은 규칙 엔진으로 그대로 다시 둠)
+    ses.rec = ses.isDrill ? null : { at: Date.now(), start: G.fastClone(s), acts: [], seats: ses.seats.map((x, i) => ({ name: i === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, em: x.em })) };
     ses.who = s.who.slice(); ses.bench = s.bench.slice();
     ses.spec = !ses.cfg.watch && ses.who.indexOf(ses.cfg.me) < 0;       // 쉬는 중이면 구경
     if (ses.hot) ses.hide = true;
@@ -1066,6 +1074,7 @@
       ses.check();
       const { state, events } = G.step(ses.S, a);
       ses.S = state;
+      if (ses.rec) ses.rec.acts.push(a);
       ses.actor = p;
       try { await playEvents(ses, events); } finally { ses.actor = null; }
       ses.check();
@@ -1078,6 +1087,96 @@
       }
     }
     drawHud(ses);
+    if (ses.rec) saveReplay(ses.rec, ses.S);
+  }
+
+  // ── 🎞️ 복기 (다시 보기): 이 기기에 지난 판 10개까지 ─────────────
+  const RKEY = KEY + 'replays';
+  function saveReplay(rec, end) {
+    const r = end && end.result;
+    const wname = r && r.winner >= 0 ? (rec.seats[end.who[r.winner]] || {}).name || '?' : '';
+    rec.title = !r ? '' : r.kind === 'nagari' ? '나가리' : `${wname === '나' ? '내가' : iga(wname)} ${fmtN(r.points)}점 났어요`;
+    rec.mode = G.modeOf(end.N).name;
+    try { const list = C.store(RKEY, []).filter(x => x && x.at !== rec.at); list.unshift(rec); C.save(RKEY, list.slice(0, 10)); } catch (e) {}
+    drawReplayBtn();
+  }
+  function drawReplayBtn() { const b = $('replayBtn'); if (b) b.hidden = !C.store(RKEY, []).length; }
+  const fmtAt = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  function openReplayList() {
+    const list = C.store(RKEY, []);
+    if (!list.length) return C.toast('아직 저장된 판이 없어요');
+    const close = C.modal({
+      title: '🎞️ 지난 판 다시 보기',
+      html: `<p class="small" style="margin:0 0 8px">이 기기에서 친 판 ${list.length}개 (최근 10개까지). 다시 보기에서는 모두의 패가 보여요.</p><div class="rplist">${list.map((x, i) => `<button class="btn" data-i="${i}"><b>${esc(x.title || '판')}</b><span class="small">${fmtAt(x.at)} · ${esc(x.mode || '')} · ${x.seats.slice(0, 5).map(q => esc(q.name)).join(', ')}</span></button>`).join('')}</div>`,
+      buttons: [{ label: '닫기' }], dismiss: true,
+    });
+    document.querySelectorAll('.rplist [data-i]').forEach(b => b.onclick = () => { sfx('tap'); close(); startReplay(list[+b.dataset.i]); });
+  }
+  function startReplay(rec) {
+    if (SES) SES.dispose();
+    const ses = SES = newSession({ watch: true, replay: true, N: rec.start.N, rules: rec.start.rules, bonus: rec.start.bonus, me: -1 });
+    show('play'); drawDock();
+    runReplay(ses, rec, false).then(() => { if (SES === ses) goHome(); }, e => { if (!(e instanceof Cancel)) { console.error(e); if (SES === ses) goHome(); } });
+  }
+  // 다시 두기: 처음 ⏮ · 한 수 ◀ ▶ · 재생/멈춤. inline = 결과 창에서 (끝나면 결과로 돌아감)
+  async function runReplay(ses, rec, inline) {
+    const keep = { watch: ses.cfg.watch, S: ses.S, seats: ses.seats, hide: ses.hide, spec: ses.spec, who: ses.who, bench: ses.bench };
+    const acts = rec.acts || [];
+    const setS = st => { ses.S = st; ses.who = st.who.slice(); ses.bench = st.bench.slice(); ses.spec = true; };
+    const at = k => { let st = G.fastClone(rec.start); for (let j = 0; j < k; j++) st = G.step(st, acts[j]).state; return st; };
+    ses.cfg.watch = true; ses.hide = false; ses.replaying = true;
+    ses.seats = rec.seats.map(x => ({ ctrl: 'remote', tier: null, name: x.name, em: x.em }));
+    setS(G.fastClone(rec.start));
+    $('resBox').hidden = true; $('goBox').hidden = true; $('pop').hidden = true;
+    buildHud(ses); buildCards(ses); layout(ses); $('lbl').textContent = '🎞️ 다시 보기'; drawDock();
+    vmFromState(ses.S); await syncAll(ses, 0);
+    let i = 0;
+    const rp = { cmd: null, play: true };
+    const bar = document.createElement('div'); bar.className = 'rpbar'; bar.id = 'rpBar';
+    bar.innerHTML = `<button data-rp="start" aria-label="처음으로">⏮</button><button data-rp="prev" aria-label="한 수 뒤로">◀</button><button data-rp="play" class="pp" aria-label="재생 · 멈춤"></button><button data-rp="next" aria-label="한 수 앞으로">▶</button><span class="rpn"></span><button data-rp="exit" class="rpx">${inline ? '결과로' : '닫기'}</button>`;
+    $('play').appendChild(bar);
+    const draw = () => { bar.querySelector('.pp').textContent = rp.play ? '⏸' : '⏵'; bar.querySelector('.rpn').textContent = `${i} / ${acts.length}수`; };
+    bar.onclick = e => {
+      const b = e.target.closest('[data-rp]'); if (!b) return;
+      sfx('tap');
+      const k = b.dataset.rp;
+      if (k === 'play') { rp.play = !rp.play; if (rp.play && i >= acts.length) rp.cmd = 'start'; }
+      else { rp.cmd = k; rp.play = false; }
+      draw(); ses.wake();
+    };
+    draw();
+    try {
+      for (;;) {
+        ses.check();
+        let cmd = rp.cmd; rp.cmd = null;
+        if (!cmd && rp.play && i < acts.length) cmd = 'next';
+        if (!cmd) { await new Promise(res => ses.waiters.push(res)); continue; }
+        if (cmd === 'exit') break;
+        if (cmd === 'next') {
+          if (i >= acts.length) continue;
+          const p = ses.S.turn, { state, events } = G.step(ses.S, acts[i]);
+          ses.S = state; i++; draw();
+          ses.actor = p;
+          try { await playEvents(ses, events); } finally { ses.actor = null; }
+          ses.check();
+          vmFromState(ses.S); await syncAll(ses, D(220));
+          if (i >= acts.length) { rp.play = false; draw(); C.toast(rec.title ? '끝 — ' + rec.title : '끝까지 봤어요', 2200); }
+          else if (rp.play) await ses.wait(D(260));
+        } else {
+          const k = cmd === 'start' ? 0 : Math.max(0, i - 1);
+          setS(at(k)); i = k; draw(); $('pop').hidden = true;
+          vmFromState(ses.S); await syncAll(ses, D(160));
+        }
+      }
+    } finally {
+      bar.remove(); ses.replaying = false;
+    }
+    if (inline && ses.alive) {                                // 결과 창으로 돌아감 (판 상태 그대로)
+      ses.cfg.watch = keep.watch; ses.seats = keep.seats; ses.hide = keep.hide;
+      ses.S = keep.S; ses.who = keep.who; ses.bench = keep.bench; ses.spec = keep.spec;
+      buildHud(ses); buildCards(ses); layout(ses); drawDock();
+      vmFromState(ses.S); await syncAll(ses, 0);
+    }
   }
 
   // 친구 수 기다리기: 지금 차례 번호(seq)의 수가 오면 (먼저 와 있으면 바로)
@@ -1586,7 +1685,7 @@
         title = r.kind === 'chongtong' ? '🎴 총통으로 이겼어요!' : r.kind === 'ppeok3' ? '💥 쓰리뻑으로 이겼어요!' : '🎉 이겼어요!';
         big = '+' + fmtN(r.points) + '점';
         const gain = r.points * 10;
-        coins += gain; C.save(KEY + 'coins', coins);
+        if (!ses.resCounted) { coins += gain; C.save(KEY + 'coins', coins); }
         coinLine = `<p class="rescoin">🪙 판돈 획득 +${fmtN(gain)}냥</p>`;
         sfx('win');
         if (r.points >= 10) setTimeout(() => C.confetti(), 150); else setTimeout(() => C.confetti({ particleCount: 60, spread: 60 }), 150);
@@ -1596,7 +1695,7 @@
         big = mine ? '-' + fmtN(mine.pay) + '점' : '';
         bigCls = 'lose'; sfx('lose');
       }
-      if (!spec && r.kind !== 'nagari') {
+      if (!spec && r.kind !== 'nagari' && !ses.resCounted) {
         stats.played++; if (r.winner === me) { stats.won++; stats.best = Math.max(stats.best, r.points); }
         C.save(KEY + 'stats', stats); drawCoinPill();
       }
@@ -1649,7 +1748,9 @@
         $('drillBtn').onclick = () => { sfx('pop'); done({ drillState: worstTurn.stateBefore }); };
       }
       const mk = (label, cls, v) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = () => { sfx('tap'); done(v); }; $('resBtns').appendChild(b); return b; };
+      ses.resCounted = true;
       const nb = mk(watch ? '다음 판 ▶' : '다음 판 ▶', 'primary', 'next');
+      if (ses.rec && ses.rec.acts.length && !ses.isDrill) mk('🎞️ 다시 보기', '', { replay: ses.rec });
       mk(watch ? '그만 보기' : '메뉴', '', 'menu');
       if (ses.bank) {                                          // 결과 창이 아래 단추를 가리므로 여기에도
         const lb = document.createElement('button'); lb.className = 'btn'; lb.textContent = '💰 빌리기'; lb.onclick = () => $('loanBtn').click(); $('resBtns').appendChild(lb);
@@ -1672,7 +1773,7 @@
     cb.hidden = !coachAvail(ses);
     cb.setAttribute('aria-pressed', String(coachOn(ses)));
     cb.innerHTML = `<span class="ic">🧑‍🏫</span><span>AI 선생님</span>`;
-    $('pauseBtn').hidden = !watch;
+    $('pauseBtn').hidden = !watch || !!(ses && (ses.cfg.replay || ses.replaying));
     $('loanBtn').hidden = !(ses && ses.bank); $('bankBtn').hidden = !(ses && ses.bank);
     if (ses) $('pauseBtn').innerHTML = `<span class="ic">${ses.paused ? '▶' : '⏸'}</span><span>${ses.paused ? '계속' : '멈춤'}</span>`;
     const sp = SPEEDS[opt[speedKey()]] || SPEEDS.normal;
@@ -1716,6 +1817,8 @@
 
   // ── 시작 ────────────────────────────────────────────────
   ART.install();
+  $('replayBtn').onclick = () => { sfx('tap'); openReplayList(); };
+  drawReplayBtn();
   drawMenu();
   show('home');
   if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
