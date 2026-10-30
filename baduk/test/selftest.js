@@ -188,6 +188,71 @@ section("강화학습 입력 · 대칭");
   ok(sp[0 * NN + B.symPoint(3, 41, 9)] === 1, "평면 대칭 변환");
 }
 
+section("친구랑 — 자리 · 구경꾼 · 늦게 온 사람 (room.js)");
+{
+  const RM = require(path.join(__dirname, "..", "room.js"));
+  // 방장 H, 친구들은 들어온 시각 순서: A(10) → B(20) → C(30). 객체 순서는 뒤죽박죽
+  const P = { C: { name: "철수", t: 30 }, H: { name: "방장", t: 50 }, B: { name: "영희", t: 20 }, A: { name: "민수", t: 10 } };
+  let seats = RM.seatsFrom(P, "H", 1);
+  ok(seats[1] === "H" && seats[2] === "A", "자리: 방장 흑 + 가장 먼저 온 친구 백");
+  const sw = RM.seatsFrom(P, "H", 2);
+  ok(sw[2] === "H" && sw[1] === "A", "방장이 백을 고르면 친구가 흑");
+  ok(RM.seatsFrom({ ...P, A: { name: "민수", t: 10, watch: 1 } }, "H", 1)[2] === "B", "구경만 원한 사람(watch)은 건너뜀");
+  const spec = RM.spectators(P, seats, "H");
+  ok(spec.length === 2 && spec[0].uid === "B" && spec[1].uid === "C", "구경꾼 = 나머지 (들어온 순)");
+  ok(RM.seatOf(seats, "H") === 1 && RM.seatOf(seats, "A") === 2 && RM.seatOf(seats, "B") === 0, "seatOf");
+  ok(RM.seatsFrom({ H: { name: "방장", t: 1 } }, "H", 1)[2] === null && !RM.full(RM.seatsFrom({ H: { t: 1 } }, "H")), "혼자면 빈자리");
+  // 구경꾼은 못 둠 · 차례 아닌 사람도 못 둠 · 수 번호가 어긋나면 버림
+  let s = B.create({ size: 9 });
+  ok(RM.validMove(B, seats, "H", s, { a: 40, n: 0 }), "흑 차례: 방장(흑) 수 받음");
+  ok(!RM.validMove(B, seats, "A", s, { a: 40, n: 0 }), "흑 차례에 백은 못 둠");
+  ok(!RM.validMove(B, seats, "B", s, { a: 40, n: 0 }), "구경꾼은 못 둠");
+  ok(!RM.validMove(B, seats, "H", s, { a: 40, n: 3 }), "수 번호가 다르면 버림 (중복·늦은 메시지)");
+  s = run(s, [40]);
+  ok(RM.validMove(B, seats, "A", s, { a: 81, n: 1 }) && !RM.validMove(B, seats, "A", s, { a: 40, n: 1 }), "백 패스 OK · 이미 돌 있는 곳 X");
+  // 늦게 온 사람: 묶음 → 되살리기 → 같은 판 해시, 이어서 둬도 같음
+  s = run(s, [30, 50, 81]);
+  const g = { g: 3, st: s, phase: "score", dead: new Uint8Array(81).fill(0), seats, names: RM.names(P, seats) };
+  g.dead[30] = 1;
+  const wire = JSON.parse(JSON.stringify(RM.snap(B, g)));
+  const back = RM.restore(B, wire);
+  ok(back.g === 3 && back.phase === "score" && B.hash(back.st) === B.hash(s) && back.st.moves.length === 4, "묶음 되살리기: 같은 판 · 같은 수");
+  ok(back.dead[30] === 1 && back.dead.length === 81 && back.seats[2] === "A" && back.names[1] === "방장" && back.names[2] === "민수", "죽은 돌 · 자리 · 이름도 그대로");
+  ok(B.hash(run(back.st, [20])) === B.hash(run(s, [20])), "되살린 판에서 이어 두기 = 원래 판");
+  // 한 판 더: 색 바꿈, 나간 사람 자리는 먼저 온 구경꾼이
+  let nx = RM.nextSeats(seats, P, "H");
+  ok(nx[1] === "A" && nx[2] === "H", "한 판 더: 색 바꿈");
+  const P2 = { ...P }; delete P2.A;
+  nx = RM.nextSeats(seats, P2, "H");
+  ok(nx[2] === "H" && nx[1] === "B", "두던 친구가 나가면 첫 구경꾼(영희)이 들어옴");
+  ok(!RM.full(RM.nextSeats(seats, { H: P.H }, "H")), "아무도 없으면 시작 못 함");
+  // AI 선생님 까닭 한 줄
+  const W = RM.coachWhy;
+  ok(/따낼/.test(W(B, fromPic([".X...", "XOX..", ".....", ".....", "....."], B.BLACK), xy(5, 1, 2))), "까닭: 백 한 점 따냄");
+  ok(/살리는/.test(W(B, fromPic(["..O..", ".OX..", "..O..", ".....", "....."], B.BLACK), xy(5, 3, 1))), "까닭: 단수 돌 살리기");
+  ok(/단수로/.test(W(B, fromPic([".....", ".XO..", "..X..", ".....", "....."], B.BLACK), xy(5, 2, 0))), "까닭: 단수로 몰기");
+  ok(/초반/.test(W(B, B.create({ size: 9 }), 40)) && /패스/.test(W(B, B.create({ size: 9 }), 81)), "까닭: 초반 · 패스");
+}
+
+section("7줄 빠른 바둑 (덤 9)");
+{
+  const s7 = B.create({ size: 7, komi: 9 });
+  ok(s7.size === 7 && s7.komi === 9 && B.actionCount(7) === 50 && B.legal(s7).length === 50, "7줄 판 · 행동 50개");
+  ok(B.starPoints(7).length === 5 && B.starPoints(7).includes(24), "7줄 화점 5개 (천원 24)");
+  // 무작위 대국 끝까지 · 같은 수 → 같은 해시 · 집 계산 (흑 + 백 + 덤 = 맞는 차)
+  let okAll = true, okDet = true, games = 0;
+  for (let gi = 0; gi < 30; gi++) {
+    const r = B.mulberry32(700 + gi); let s = s7;
+    while (!s.over) { const m = B.legal(s), c = []; for (let p = 0; p <= 49; p++) if (m[p]) c.push(p); s = B.play(s, c.length > 1 && r() < 0.95 ? c[Math.floor(r() * (c.length - 1))] : 49).state; }
+    games++;
+    if (B.hash(B.replay(s7, s.moves)) !== B.hash(s)) okDet = false;
+    const sc = B.scoreKorean(s, []);
+    if (Math.abs(sc.margin - (sc.black - sc.white - 9)) > 1e-9) okAll = false;
+  }
+  ok(okDet && games === 30, "7줄 무작위 30판: 다시 둬도 같은 해시");
+  ok(okAll, "7줄 집 계산: 차 = 흑 − 백 − 덤 9");
+}
+
 module.exports = { ok, section, fromPic, run };
 if (require.main === module) {
   const extra = path.join(__dirname, "selftest_ai.js");

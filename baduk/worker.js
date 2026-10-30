@@ -1,6 +1,6 @@
 /* 바둑 AI 워커: 신경망(KataGo b6c96)·수읽기를 화면과 따로 돌려 화면이 멈추지 않게
    받는 것: { id, kind: "move"|"hint"|"analyze"|"dead", state(toJSON), opt }  →  보냄: { id, ok, res } · 처음 { type:"ready", nn } */
-importScripts("vendor/goscorer.js?v=1", "core.js?v=1", "nn.js?v=1", "ai.js?v=1");
+importScripts("vendor/goscorer.js?v=1", "core.js?v=2", "nn.js?v=2", "ai.js?v=1");
 let wasm = false;
 const ready = (async () => {
   try {

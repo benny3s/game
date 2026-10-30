@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=4">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <div class="wrap">
@@ -36,7 +36,7 @@
       <div class="startrow">
         <button class="btn primary big" id="startBtn">시작!</button>
         <div class="row">
-          <button class="btn grow" id="duoBtn">👫 둘이서 한 화면</button>
+          <button class="btn grow" id="duoBtn">👥 한 기기 둘이서</button>
           <button class="btn ghost" id="recBtn">📜 지난 대국</button>
         </div>
       </div>
@@ -69,12 +69,13 @@
   <div class="bar">
     <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
     <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="status"></span></div>
-    <span class="pill" id="movePill">0수</span>
+    <span class="pills"><span class="pill spec" id="specPill" hidden>👀 구경</span><span class="pill" id="movePill">0수</span></span>
   </div>
   <div class="spring"></div>
   <div class="scorebar" id="rowTop"><div class="side" id="sideW"><span class="av st w"></span><b id="nameW">백</b><span class="cap"><i>따냄</i><span class="n" id="capW">0</span></span></div></div>
   <div class="stage" id="stage"><canvas id="board" aria-label="바둑판"></canvas></div>
   <div class="scorebar" id="rowBot"><div class="side" id="sideB"><span class="av st b"></span><b id="nameB">흑</b><span class="cap"><i>따냄</i><span class="n" id="capB">0</span></span></div></div>
+  <div class="watchers" id="watchers" hidden></div>
   <div class="spring"></div>
   <div class="scorebox" id="scoreBox" hidden>
     <div class="big" id="scoreLine">집을 세는 중…</div>
@@ -84,7 +85,7 @@
   <div class="dock" id="dock">
     <button id="passBtn"><span class="ic">🙌</span><span class="lab">패스</span></button>
     <button id="undoBtn"><span class="ic">↶</span><span class="lab">되돌리기</span></button>
-    <button id="hintBtn"><span class="ic">💡<span class="badge" id="hintBadge">3</span></span><span class="lab">힌트</span></button>
+    <button id="coachBtn" hidden><span class="ic">🧑‍🏫</span><span class="lab">AI 선생님</span></button>
     <button id="estBtn" aria-pressed="false"><span class="ic">⚖️</span><span class="lab">형세</span></button>
     <button id="resignBtn"><span class="ic">🏳️</span><span class="lab">기권</span></button>
     <button id="pauseBtn" hidden aria-pressed="false"><span class="ic">⏸</span><span class="lab">멈춤</span></button>
@@ -103,9 +104,11 @@
 <script src="../common/arena-mock.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
+<script src="../common/coach.js?v=1"></script>
 <script src="vendor/goscorer.js?v=4"></script>
-<script src="core.js?v=4"></script>
+<script src="core.js?v=5"></script>
 <script src="ai.js?v=4"></script>
-<script src="main.js?v=4"></script>
+<script src="room.js?v=2"></script>
+<script src="main.js?v=7"></script>
 </body>
 </html>

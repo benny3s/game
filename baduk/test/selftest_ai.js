@@ -32,6 +32,11 @@ module.exports = async function ({ ok, section, B }) {
     const [p9, e9] = top(B.create({ size: 9, komi: 7 }));
     ok(p9 === 40, `9줄 빈 판 첫 수 = 천원 (${name(9, p9)})`);
     ok(e9.winrate > 0.3 && e9.winrate < 0.7, `9줄 빈 판 승률 반반 근처 (${e9.winrate.toFixed(2)})`);
+    // 7줄 빠른 바둑 (덤 9): 빈 판 첫 수 = 천원, 승률 반반 근처, wasm 경로도 7줄 작업 공간이 있음
+    const [p7, e7] = top(B.create({ size: 7, komi: 9 }));
+    ok(p7 === 24, `7줄 빈 판 첫 수 = 천원 (${name(7, p7)})`);
+    ok(e7.winrate > 0.2 && e7.winrate < 0.8, `7줄 덤 9 승률 반반 근처 (${e7.winrate.toFixed(2)})`);
+    ok(!mw.wasm || NN.scratch(mw, 7).wasm === true, "7줄 wasm 작업 공간");
     const [p19] = top(B.create({ size: 19, komi: 7.5 }));
     const x = p19 % 19, y = Math.floor(p19 / 19), lo = Math.min(x, 18 - x), hi = Math.min(y, 18 - y);
     ok([2, 3].includes(lo) && [2, 3].includes(hi), `19줄 첫 수 = 귀 화점·소목 (${name(19, p19)})`);

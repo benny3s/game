@@ -117,3 +117,9 @@ header.top h1{display:flex;align-items:center;gap:10px}
   .play .dock{flex-wrap:wrap;row-gap:6px;justify-content:flex-start}
   .play .scorebox .big{font-size:18px}
 }
+
+/* ── 친구랑: 구경꾼 목록 · 구경 중 배지 ── */
+.watchers{margin:6px auto 0;max-width:min(560px,100%);padding:5px 12px;border-radius:12px;background:rgba(20,32,26,.75);border:1px solid rgba(212,175,55,.25);color:#d1fae5;font-size:12.5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}
+.watchers span{color:#fde68a}
+.bar .pills{display:flex;gap:6px;align-items:center}
+body.playing .bar .pill.spec{background:#3b2f12;border-color:rgba(245,158,11,.6);color:#fde68a;white-space:nowrap}

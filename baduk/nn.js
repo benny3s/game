@@ -76,7 +76,7 @@
       ...sec(10, [1, ...uleb(body.length), ...body]),
     ]);
   }
-  // 무게·작업 공간을 wasm 메모리 한 덩어리에 (9·13·19줄 미리)
+  // 무게·작업 공간을 wasm 메모리 한 덩어리에 (7·9·13·19줄 미리)
   function setupWasm(m) {
     if (typeof WebAssembly !== "object") return null;
     const bytes = wasmBytes();
@@ -84,7 +84,7 @@
     const convs = [m.conv1, ...m.blocks.flatMap(k => [k.c1, k.c2, k.gc].filter(Boolean)), m.p1, m.g1, m.v1].filter(cv => cv.r);
     let floats = 0;
     for (const cv of convs) floats += cv.r.length + 16;
-    for (const N of [9, 13, 19]) floats += scratchFloats(m, N);
+    for (const N of [7, 9, 13, 19]) floats += scratchFloats(m, N);
     const pages = Math.ceil((floats * 4 + 65536) / 65536) + 2;
     try {
       const mem = new WebAssembly.Memory({ initial: pages });
