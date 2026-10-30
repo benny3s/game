@@ -761,7 +761,7 @@
   // 친구랑은 내 칩(방장이 알려 주는 장부 값), 나머지는 냥코인
   function drawCoinPill() {
     const ses = SES, i = ses && ses.cfg.online ? ses.cfg.me : -1;
-    $('coinPill').textContent = i >= 0 && ses.chips && ses.chips[i] != null ? (ses.chipWon ? '💰 ' + fmtN(Math.round(ses.chips[i] * ses.chipWon)) + '원' : '🪙 ' + fmtN(ses.chips[i]) + '칩') : '🪙 ' + fmtN(coins);
+    $('coinPill').textContent = i >= 0 && ses.chips && ses.chips[i] != null ? (ses.chipWon ? '💰 내 돈 ' + fmtN(Math.round(ses.chips[i] * ses.chipWon)) + '원' : '🪙 내 칩 ' + fmtN(ses.chips[i])) : '🪙 모은 ' + fmtN(coins) + '냥';
   }
   function drawHud(ses) {
     const s = ses.S; if (!s || !ses.hud) return;

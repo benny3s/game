@@ -24,6 +24,10 @@ td.n{text-align:right;font-family:var(--mono)}
 .bad{color:var(--danger)}.ok{color:var(--good)}
 .chat{font-size:13px;display:grid;gap:2px;max-height:180px;overflow-y:auto}
 .sum{display:flex;flex-wrap:wrap;gap:8px}
+.bar button.on{background:var(--accent,#2b6);color:#fff}
+#gView[hidden],#pView[hidden]{display:none!important}
+tr.pr{cursor:pointer}tr.pr:hover td{background:rgba(255,255,255,.04)}
+.gm{display:inline-block;margin-right:6px;white-space:nowrap}
 .sum span{background:#0f1716;border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:12.5px}
 </style>
 </head>
@@ -31,7 +35,10 @@ td.n{text-align:right;font-family:var(--mono)}
 <div class="wrap">
   <p class="crumb"><a href="./">← 게임 목록</a></p>
   <h1>게임 기록</h1>
-  <p class="lede">관리자만 볼 수 있어요. 친구랑 방마다 누가 언제 들어오고 나갔는지, 판을 시작한 때, 채팅이 남아요 (지렁이·냥도쿠는 판 결과·연결 품질까지).</p>
+  <p class="lede">관리자만 볼 수 있어요. 사람별로 누가 언제 어떤 게임을 누구와 했는지 모아 보여요. 친구랑 방마다 누가 언제 들어오고 나갔는지, 판을 시작한 때, 채팅이 남아요 (지렁이·냥도쿠는 판 결과·연결 품질까지).</p>
+  <div class="bar"><button id="tabP" class="on">👤 사람별</button><button id="tabG">🎮 게임별</button></div>
+  <div id="pView" style="display:grid;gap:12px"><p class="help" id="pMsg">불러오는 중…</p><div class="tw" id="pTable"></div><div id="pDetail" style="display:grid;gap:10px"></div></div>
+  <div id="gView" hidden style="display:grid;gap:12px">
   <div class="bar">
     <select id="game"><option value="gostop">🎴 고스톱</option><option value="seotda">🀄 섯다</option><option value="poker">♠️ 홀덤</option><option value="baduk">⚫ 바둑</option><option value="omok">⚪ 오목</option><option value="cube">🀫 베니큐브</option><option value="chess">♟️ 체스</option><option value="yut">🪵 윷놀이</option><option value="billiards">🎱 당구</option><option value="volley">🏐 냥냥 배구</option><option value="land">🟩 땅따먹기</option><option value="nyang">🐱 냥도쿠</option><option value="snake">🐍 지렁이</option><option value="sc">⚔️ 스타 대결</option></select>
     <select id="date"></select>
@@ -40,6 +47,7 @@ td.n{text-align:right;font-family:var(--mono)}
   </div>
   <div class="sum" id="sum"></div>
   <div id="list" style="display:grid;gap:12px"></div>
+  </div>
 </div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -56,8 +64,47 @@ let data = {};
 
 app.auth().onAuthStateChanged(async u => {
   if (!u || (await u.getIdTokenResult()).claims.admin !== 1) { $("msg").innerHTML = '관리자 로그인이 필요해요. <a href="https://benny3s.github.io/">포털</a>에서 Benny 를 3번 눌러 로그인한 뒤 다시 열어 주세요.'; return; }
-  loadGame();
+  loadGame(); loadPeople();
 });
+$("tabP").onclick = () => { $("pView").hidden = false; $("gView").hidden = true; $("tabP").classList.add("on"); $("tabG").classList.remove("on"); };
+$("tabG").onclick = () => { $("pView").hidden = true; $("gView").hidden = false; $("tabG").classList.add("on"); $("tabP").classList.remove("on"); };
+// ── 👤 사람별: 모든 게임의 친구랑 방 기록을 사람(이름) 기준으로 모음 (혼자 하기는 기록이 없어요)
+const GNAME = {}; for (const o of document.querySelectorAll("#game option")) GNAME[o.value] = o.textContent;
+let people = {};
+async function loadPeople() {
+  let all = {};
+  try { all = (await app.database().ref("logs").get()).val() || {}; }
+  catch (e) { $("pMsg").textContent = "읽기 실패: " + e.message; return; }
+  people = {};
+  for (const [game, days] of Object.entries(all)) for (const [date, ss] of Object.entries(days || {})) for (const [sid, s] of Object.entries(ss || {})) {
+    const ps = s.players || {}, names = Object.values(ps).map(p => p && p.name).filter(Boolean), info = s.info || {};
+    const nMatch = Object.keys(s.matches || {}).length, nChat = Object.keys(s.chat || {}).length;
+    for (const p of Object.values(ps)) {
+      if (!p || !p.name) continue;
+      const P = people[p.name] = people[p.name] || { name: p.name, rooms: [], games: {}, with: {}, last: 0, host: 0 };
+      P.rooms.push({ game, date, sid, room: info.room || "", host: info.hostName || "", role: p.role || "", joined: p.joined || info.created || 0, left: p.left || 0, nMatch, nChat, others: names.filter(n => n !== p.name) });
+      P.games[game] = (P.games[game] || 0) + 1;
+      for (const n of names) if (n !== p.name) P.with[n] = (P.with[n] || 0) + 1;
+      P.last = Math.max(P.last, p.joined || info.created || 0);
+      if (p.role === "방장") P.host++;
+    }
+  }
+  const list = Object.values(people).sort((a, b) => b.last - a.last);
+  const day = t => t ? new Date(t).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "-";
+  $("pMsg").textContent = list.length ? `친구랑 방에 들어온 사람 ${list.length}명 · 줄을 누르면 그 사람의 방 기록` : "아직 친구랑 기록이 없어요 (혼자 하기는 기록하지 않아요)";
+  $("pTable").innerHTML = list.length ? `<table><tr><th>이름</th><th>마지막</th><th>방</th><th>방장</th><th>게임</th><th>자주 같이 한 사람</th></tr>${list.map(P => {
+    const gs = Object.entries(P.games).sort((a, b) => b[1] - a[1]).map(([g, n]) => `<span class="gm">${esc(GNAME[g] || g)} ${n}</span>`).join("");
+    const w = Object.entries(P.with).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([n, k]) => `${esc(n)}(${k})`).join(", ");
+    return `<tr class="pr" data-n="${esc(P.name)}"><td><b>${esc(P.name)}</b></td><td>${day(P.last)}</td><td class="n">${P.rooms.length}</td><td class="n">${P.host}</td><td style="white-space:normal">${gs}</td><td style="white-space:normal">${w || "-"}</td></tr>`;
+  }).join("")}</table>` : "";
+  $("pTable").querySelectorAll("tr.pr").forEach(tr => tr.onclick = () => showPerson(tr.dataset.n));
+}
+function showPerson(name) {
+  const P = people[name]; if (!P) return;
+  const rows = P.rooms.slice().sort((a, b) => b.joined - a.joined).map(r => `<tr><td>${esc(r.date)}</td><td>${tm(r.joined)}</td><td>${dur(r.joined, r.left)}</td><td>${esc(GNAME[r.game] || r.game)}</td><td>${esc(r.room)}</td><td>${esc(r.role)}</td><td style="white-space:normal">${esc(r.others.join(", ")) || "-"}</td><td class="n">${r.nMatch}</td><td class="n">${r.nChat}</td></tr>`).join("");
+  $("pDetail").innerHTML = `<div class="sess"><h3>👤 ${esc(P.name)} <span class="help">방 ${P.rooms.length}개</span></h3><div class="tw"><table><tr><th>날짜</th><th>들어옴</th><th>머문 시간</th><th>게임</th><th>방</th><th>역할</th><th>같이 한 사람</th><th>판</th><th>채팅</th></tr>${rows}</table></div></div>`;
+  $("pDetail").scrollIntoView({ behavior: "smooth", block: "start" });
+}
 $("game").onchange = loadGame;
 $("date").onchange = render;
 async function loadGame() {

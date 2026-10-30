@@ -333,7 +333,7 @@
     const mi = spect ? 0 : me;
     const watch = ses.mode === 'watch';
     $('lbl').textContent = watch ? '🍿 AI 섯다 구경' : ses.net ? `👥 친구랑 섯다 (${ses.net.code})` : ses.mode === 'hot' ? '📱 한 기기 섯다' : `🔥 정통 섯다 · ${TIER[opt.tier].name}`;
-    $('coinPill').textContent = spect ? '🪙 —' : ses.chipWon ? `💰 ${fmtN(Math.round(s.coins[mi] * ses.chipWon))}원` : `🪙 ${fmtN(s.coins[mi])}냥`;
+    $('coinPill').textContent = spect ? '🪙 —' : ses.chipWon ? `💰 내 돈 ${fmtN(Math.round(s.coins[mi] * ses.chipWon))}원` : `🪙 내 칩 ${fmtN(s.coins[mi])}냥`;   // 냥 = 게임 안 연습 칩 (은행 방이면 원)
     $('potVal').textContent = fmtN(s.pot);
     const toCall = spect ? 0 : Math.max(0, s.curBet - s.bets[mi]);
     $('potSub').innerHTML = s.phase === 'end' ? '판이 끝났어요' : `${s.street === 1 ? '첫 장 공개 후 탐색전' : '두 장 완성 후 승부'}${watch || spect ? '' : `<br>내 콜 ${fmtN(toCall)}냥`}`;
