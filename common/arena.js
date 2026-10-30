@@ -249,7 +249,7 @@ const Arena = (() => {
       const p = peers.get(uid);
       if (p && p.send(m, rel)) return;
       if (rel) pushQ(m, uid);
-      else { downPending = m; if (!downT) downT = setTimeout(flushDown, Math.max(0, 100 - (performance.now() - downAt))); }
+      else { downPending = m; if (!downT) downT = setTimeout(flushDown, Math.max(0, 50 - (performance.now() - downAt))); }
     }
     return {
       code, isHost: true, get uid() { return user.uid; }, get meta() { return meta; }, get players() { return players; }, get connected() { return conn; },
@@ -259,7 +259,7 @@ const Arena = (() => {
         if (rel) m = { ...m, _q: ++qseq };
         let relay = false;
         for (const uid of Object.keys(players)) { if (uid === user.uid) continue; const p = peers.get(uid); if (!(p && p.send(m, rel))) relay = true; }
-        if (relay) { if (rel) pushQ(m); else { downPending = m; if (!downT) downT = setTimeout(flushDown, Math.max(0, 100 - (performance.now() - downAt))); } }
+        if (relay) { if (rel) pushQ(m); else { downPending = m; if (!downT) downT = setTimeout(flushDown, Math.max(0, 50 - (performance.now() - downAt))); } }   // 서버 경유: 초당 20번까지
       },
       send(uid, m, rel = false) { if (rel) m = { ...m, _q: ++qseq }; sendTo(uid, m, rel); },
       peers: () => [...peers].map(([uid, p]) => [uid, p.open()]),

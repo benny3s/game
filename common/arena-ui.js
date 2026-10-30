@@ -149,7 +149,21 @@
   function logChat(c) { if (log && c && c.m) logSafe(log.child("chat").push({ u: c.u || "", n: c.n || "", m: String(c.m).slice(0, 120), t: c.t || logTS() })); }
   function logEnd() { if (log) logSafe(log.child("info").update({ closed: logTS(), updated: logTS() })); log = null; }
 
-  function chatOff() { if (!chat) return; chat.tab.hidden = true; chat.pan.hidden = true; chat.bub.innerHTML = ""; }
+  // 🐢 서버 경유 표시: 직접 연결(WebRTC)이 안 되면 모든 움직임이 서버를 거쳐 느려짐 (실시간 게임에서 화면 끊김·입력 늦음)
+  let badge = null, badgeT = null;
+  function connBadge() {
+    clearTimeout(badgeT);
+    badgeT = setTimeout(() => {
+      if (!net || !playing) { if (badge) badge.hidden = true; return; }
+      let slow = false;
+      if (net.isHost) { const pl = net.players || {}; slow = (net.peers ? net.peers() : []).some(([u, o]) => !o && pl[u] && !pl[u].watch); }
+      else slow = net.p2p === false;
+      if (!badge) { style(); badge = document.createElement("div"); badge.style.cssText = "position:fixed;right:6px;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:56;font:700 11.5px/1 system-ui,sans-serif;padding:5px 8px;border-radius:99px;background:rgba(120,53,15,.85);color:#fde68a;border:1px solid rgba(253,230,138,.4);pointer-events:none"; badge.textContent = "🐢 서버 경유 · 느릴 수 있어요"; document.body.appendChild(badge); }
+      badge.hidden = !slow;
+    }, 4000);   // 처음 연결은 몇 초 걸리니 조금 기다렸다가
+  }
+
+  function chatOff() { if (badge) badge.hidden = true; if (!chat) return; chat.tab.hidden = true; chat.pan.hidden = true; chat.bub.innerHTML = ""; }
   function onChat(c) {
     if (!chat || !c || !c.m) return;
     const mine = net && c.u === net.uid;
@@ -313,12 +327,16 @@
   function wire() {
     offs.forEach(f => f()); offs = [];
     chatOn(); offs.push(net.on("chat", onChat));
-    if (net.isHost) { logStart(); offs.push(net.on("players", logPlayers)); offs.push(net.on("chat", logChat)); }
+    if (net.isHost) {
+      logStart(); offs.push(net.on("players", logPlayers)); offs.push(net.on("chat", logChat));
+      offs.push(net.on("p2p", (uid, o) => { if (log && uid) logSafe(log.child(`players/${uid}`).update({ p2p: o ? 1 : 0 })); connBadge(); }));
+    } else offs.push(net.on("p2p", () => connBadge()));
+    connBadge();
     offs.push(net.on("players", () => { if (!playing) drawPlayers(); }));
     if (net.isHost) offs.push(net.on("p2p", () => { if (!playing) drawPlayers(); }));
     offs.push(net.on("meta", m => {
       if (!m) return;
-      if (m.phase === "play" && !playing) { playing = true; hide(); logMatch(); opt.onStart && opt.onStart(ctx()); }
+      if (m.phase === "play" && !playing) { playing = true; hide(); logMatch(); connBadge(); opt.onStart && opt.onStart(ctx()); }
       else if (m.phase === "lobby" && playing) { playing = false; opt.onLobby && opt.onLobby(ctx()); lobby(); }
       else if (!playing) { drawSettings(); drawCoach(); }
     }));
@@ -376,7 +394,7 @@
     try {
       net = await Arena.join(opt.game, code, { name: me.name });
       playing = false; wire(); setUrlRoom(net.code);
-      if (net.meta && net.meta.phase === "play") { playing = true; hide(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
+      if (net.meta && net.meta.phase === "play") { playing = true; hide(); connBadge(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
       else lobby();
     } catch (e) {
       net = null; setUrlRoom(null);
