@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2a170d">
+<title>윷놀이 — 베니 게임 포털</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=4">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap" id="home">
+  <header class="top">
+    <h1><span class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i></span>윷놀이</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section class="card" id="menuCard">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabLocal" aria-pressed="true">한 기기에서 여럿</button>
+      <button class="btn" id="tabAi" aria-pressed="false">AI와 대결</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+    </div>
+
+    <!-- 한 기기에서 여럿 (TV·태블릿 하나로 돌아가며) -->
+    <div id="localBox" class="box">
+      <p class="lede">TV나 태블릿 하나로 온 가족이 돌아가며 던져요. 팀마다 사람이나 AI를 고르세요.</p>
+      <div class="optrow"><span class="small">팀 수</span><div class="seg" id="teamSeg"></div></div>
+      <div class="teamrows" id="teamRows"></div>
+    </div>
+
+    <!-- AI와 대결 -->
+    <div id="aiBox" class="box" hidden>
+      <div class="optrow"><span class="small">내 이름</span><input type="text" id="myName" maxlength="10" placeholder="나"></div>
+      <div class="optrow"><span class="small">상대 수</span><div class="seg" id="aiCountSeg"></div></div>
+      <div class="tiers three" id="tiers"></div>
+    </div>
+
+    <div class="optrows" id="optRows">
+      <div class="optrow"><span class="small">말 개수</span><div class="seg" id="pieceSeg"></div></div>
+      <div class="optrow"><span class="small">빽도</span><div class="seg" id="backdoSeg"></div></div>
+      <div class="optrow"><span class="small">빠르기</span><div class="seg" id="speedSeg"></div></div>
+    </div>
+    <ul class="howto">
+      <li><b>던지기</b>(스페이스) → 나온 만큼 말을 옮겨요. 도 1 · 개 2 · 걸 3 · 윷 4 · 모 5칸, 빽도는 한 칸 뒤로</li>
+      <li><b>윷·모</b>가 나오거나 상대 말을 <b>잡으면</b> 한 번 더! 내 말끼리 만나면 <b>업고</b> 같이 가요</li>
+      <li>모서리나 가운데(방)에 <b>멈추면</b> 지름길로 가요. 말이 모두 먼저 나오는 팀이 이겨요</li>
+    </ul>
+    <button class="btn primary big" id="startBtn">윷 놀러 가기</button>
+    <button class="btn ghost" id="rulesBtn">📖 규칙 · 확률 자세히 보기</button>
+  </section>
+</div>
+
+<!-- 게임 화면 (화면 한 장) -->
+<section class="play wide" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl">윷놀이</span><span class="t" id="sub"></span></div>
+    <div class="barbtns">
+      <button class="iconbtn sm" id="ruleBtn" aria-label="규칙">📖</button>
+      <button class="iconbtn sm" id="sndBtn" aria-label="소리">🔊</button>
+    </div>
+  </div>
+  <div class="stage" id="stage">
+    <div class="boardwrap" id="boardWrap">
+      <div class="board" id="board">
+        <svg class="lines" id="boardSvg" viewBox="0 0 100 100" aria-hidden="true"></svg>
+        <div class="marks" id="tips"></div>
+        <div class="marks" id="marks"></div>
+        <div class="toks" id="toks"></div>
+      </div>
+    </div>
+    <div class="yside" id="side">
+      <div class="teams" id="teams"></div>
+      <div class="mat" id="mat">
+        <div class="sticks" id="sticks"></div>
+        <div class="call" id="call" hidden></div>
+      </div>
+      <div class="prow">
+        <div class="pool" id="pool"></div>
+        <div class="coach" id="coach" hidden><button class="btn coachbtn" id="coachBtn" aria-pressed="false">🧑‍🏫 AI 선생님</button></div>
+      </div>
+      <div class="ctip" id="coachTxt" hidden></div>
+      <div class="act" id="act">
+        <button class="btn primary throw" id="throwBtn"><span class="tw">윷 던지기</span><span class="key">스페이스</span></button>
+        <div class="confirm" id="confirm" hidden>
+          <span class="ctext" id="ctext"></span>
+          <div class="cbtns"><button class="btn" id="cancelBtn">다른 수</button><button class="btn primary" id="goBtn">옮기기</button></div>
+        </div>
+        <div class="waitmsg" id="waitMsg" hidden></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="combo" id="pop" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=4"></script>
+<script src="../common/me.js?v=4"></script>
+<script src="../common/arena-mock.js?v=4"></script>
+<script src="../common/arena.js?v=4"></script>
+<script src="../common/arena-ui.js?v=4"></script>
+<script src="../common/coach.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="ai.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>
