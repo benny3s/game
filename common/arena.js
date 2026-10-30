@@ -22,7 +22,30 @@ const Arena = (() => {
     databaseURL: "https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app",
   };
   const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
-  const ICE = { iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }] };
+  const STUN = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+  let ICE = { iceServers: STUN };
+  // 🔁 TURN 중계 (Cloudflare Worker infra/turn-worker): 폰끼리 직접 연결이 막혀도 실시간으로. 비어 있으면 STUN 만 (막히면 서버 경유)
+  const TURN_URL = "";
+  async function loadIce() {
+    if (!TURN_URL) return;
+    try { const c = JSON.parse(sessionStorage.getItem("arena.ice") || "null"); if (c && c.exp > Date.now() && Array.isArray(c.s)) { ICE = { iceServers: STUN.concat(c.s) }; return; } } catch (e) {}
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 2500);
+      const j = await (await fetch(TURN_URL, { signal: ctl.signal })).json(); clearTimeout(t);
+      if (j && Array.isArray(j.iceServers) && j.iceServers.length) {
+        ICE = { iceServers: STUN.concat(j.iceServers) };
+        try { sessionStorage.setItem("arena.ice", JSON.stringify({ s: j.iceServers, exp: Date.now() + (j.ttl || 3600) * 800 })); } catch (e) {}
+      }
+    } catch (e) {}
+  }
+  // 🛡️ App Check: 우리 사이트에서 온 요청만 Firebase 가 받게 (reCAPTCHA v3 '사이트 키'는 공개용). 비어 있으면 안 씀
+  const APPCHECK_KEY = "";
+  async function appCheck(a, load) {
+    if (!APPCHECK_KEY || !a || a.__appCheck || /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) return;
+    a.__appCheck = 1;
+    try { if (!firebase.appCheck) await load(SDK + "firebase-app-check-compat.js"); firebase.appCheck(a).activate(new firebase.appCheck.ReCaptchaV3Provider(APPCHECK_KEY), true); } catch (e) { console.warn("[appcheck]", e); }
+  }
+
   const GUEST = new URLSearchParams(location.search).has("guest");
   const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.protocol === "file:";
   const ROOT = GUEST ? "test/arena/" : "arena/";
@@ -75,6 +98,8 @@ const Arena = (() => {
         await app.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
       } else if (firebase.apps.length) { app = firebase.app(); if (!app.options.databaseURL) app = firebase.apps.find(a => a.name === "arena") || firebase.initializeApp(FB, "arena"); }
       else app = firebase.initializeApp(FB);
+      await appCheck(app, load);
+      loadIce();                                                              // 방에 들어가기 전에 끝나 있으면 TURN 도 씀
       user = await new Promise(ok => { const t = setTimeout(() => ok(null), 8000); const off = app.auth().onAuthStateChanged(u => { clearTimeout(t); off(); ok(u); }); });
       if (!user) user = (await app.auth().signInAnonymously()).user;
       watchOffset();

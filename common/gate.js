@@ -113,6 +113,13 @@ const Gate = (() => {
     } catch (e) {}
   }
 
+  // 🛡️ App Check: 우리 사이트에서 온 요청만 Firebase 가 받게 (reCAPTCHA v3 '사이트 키'는 공개용). 비어 있으면 안 씀
+  const APPCHECK_KEY = "";
+  async function appCheck(a, load) {
+    if (!APPCHECK_KEY || !a || a.__appCheck || /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) return;
+    a.__appCheck = 1;
+    try { if (!firebase.appCheck) await load(SDK + "firebase-app-check-compat.js"); firebase.appCheck(a).activate(new firebase.appCheck.ReCaptchaV3Provider(APPCHECK_KEY), true); } catch (e) { console.warn("[appcheck]", e); }
+  }
   async function ensureFirebase() {
     if (app && user) return app;
     if (loading) return loading;
@@ -131,6 +138,7 @@ const Gate = (() => {
       } else {
         app = firebase.initializeApp(FB);
       }
+      await appCheck(app, loadScript);
       user = await new Promise(ok => {
         const t = setTimeout(() => ok(null), 7000);
         const off = app.auth().onAuthStateChanged(u => { clearTimeout(t); off(); ok(u); });

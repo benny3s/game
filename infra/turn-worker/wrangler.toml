@@ -1,0 +1,5 @@
+name = "benny-turn"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+# 비밀값(TURN_KEY_ID, TURN_KEY_TOKEN)은 여기에 쓰지 않음 → npx wrangler secret put 으로만
