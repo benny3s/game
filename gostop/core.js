@@ -101,7 +101,7 @@
     { k: 'salePrice', g: 'sale', t: 'num', d: 1, min: 0, max: 5, unit: '점', zero: '공짜', label: '광 한 장 값' },
     { k: 'saleWho', g: 'sale', t: 'enum', d: 'all', label: '살 수 있는 사람', opts: [['all', '모두', '치는 사람이 선부터 차례로'], ['dealer', '선만'], ['others', '선 빼고']] },
     { k: 'maxPts', g: 'pay', t: 'num', d: 0, min: 0, max: 200, unit: '점', zero: '없음', steps: [0, 5, 10, 15, 20, 30, 50, 100, 200], label: '최대 점수 상한', note: '한 사람이 한 판에 낼 수 있는 점수의 끝' },
-    { k: 'chipPer', g: 'pay', t: 'num', d: 10, min: 1, max: 1000, unit: '칩', steps: [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000], label: '점당 칩', note: '친구랑 정산에 쓰는 점수 1점의 칩' },
+    { k: 'chipPer', g: 'pay', t: 'num', d: 1, min: 1, max: 1000, unit: '칩', steps: [1, 2, 3, 5, 10, 20, 50, 100, 200, 500, 1000], label: '점당 칩', note: '점수 1점에 주고받는 칩 (🏦 기본 은행은 1칩 = 100원 → 1칩이면 점당 100원)' },
   ];
   const RULE_BY = {}; for (const d of RULE_DEFS) RULE_BY[d.k] = d;
   function defaultRules() { const r = {}; for (const d of RULE_DEFS) r[d.k] = d.d; return r; }

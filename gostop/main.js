@@ -28,6 +28,7 @@
 
   // ── 우리 집 규칙: 이 기기에 저장해 둔 규칙 (옛 '보너스 피' 설정은 처음 한 번 이어받음) ──
   let houseRules = G.normRules(C.store(KEY + 'rules', null) || { bonus: opt.bonus });
+  if (!C.store(KEY + 'chipPer1', 0)) { if (houseRules.chipPer === 10) houseRules.chipPer = 1; C.save(KEY + 'rules', houseRules); C.save(KEY + 'chipPer1', 1); }   // 10-31: 점당 기본 100원
   const setRules = r => { houseRules = G.normRules(r); C.save(KEY + 'rules', houseRules); };
   const presetName = r => { const p = G.RULE_PRESETS.find(q => q.id === G.matchPreset(r)); return p ? p.name : '직접 고침'; };
   // 규칙 한 줄 요약: 바뀐 것만 (넷까지)
@@ -640,12 +641,13 @@
       for (const u of add) { const i = ses.seats.length; ses.seats.push({ ctrl: 'remote', tier: null, name: (pl[u] && pl[u].name) || `친구${i + 1}`, em: AVS[i % AVS.length], uid: u }); ses.chips.push(CHIPS.start('host', 1)[0]); delete ses.joinPick[u]; }
       const N = ses.seats.length, plan = G.tablePlan(N, prev.round);
       const fi = Math.max(0, ses.seats.findIndex(x => x.uid === prevUid));
-      s = G.create({ players: N, rules: prev.rules, bonus: prev.bonus, seed: rSeed, first: Math.max(0, plan.who.indexOf(fi)), carry: r && r.kind === 'nagari' ? Math.min(prev.rules.nagariMax, prev.carry + 1) : 0, round: prev.round + 1 });
+      s = G.create({ players: N, rules: ses.nextRules || prev.rules, bonus: ses.nextRules ? ses.nextRules.bonus : prev.bonus, seed: rSeed, first: Math.max(0, plan.who.indexOf(fi)), carry: r && r.kind === 'nagari' ? Math.min(prev.rules.nagariMax, prev.carry + 1) : 0, round: prev.round + 1 });
       ses.cfg.N = N; ses.cfg.me = ses.seats.findIndex(x => x.uid === ses.net.uid);
       const msg = [add.length ? `${add.map(u => (pl[u] && pl[u].name) || '친구').join(', ')} 님 합류` : '', gone.length ? `${gone.join(', ')} 님 빠짐` : ''].filter(Boolean).join(' · ');
       C.toast(`${msg} → ${N}명 ${G.modeOf(N).name}`, 2600);
       try { ses.net.chat(`📣 ${msg} → 이번 판부터 ${N}명 ${G.modeOf(N).name}`); } catch (e) {}
-    } else s = G.nextRound(ses.S, { seed: rSeed });
+    } else s = G.nextRound(ses.S, { seed: rSeed, rules: ses.nextRules || undefined, bonus: ses.nextRules ? ses.nextRules.bonus : undefined });
+    if (ses.nextRules) { try { ses.net.chat(`🛠️ 방장이 규칙을 바꿨어요: ${ruleSummary(ses.nextRules)}`); } catch (e) {} ses.cfg.rules = ses.nextRules; ses.nextRules = null; }
     ses.S = s;                                             // 이제 들어오는 사람도 새 판을 받게
     ses.net.broadcast({ t: '_round', j: JSON.stringify(roundPack(ses, s)) }, true);
     return s;
@@ -676,6 +678,19 @@
       aiTurn(ses, p).then(a => { ses.subThinking = false; if (!ses.alive || ses.seq !== seq || ses.acts.has(seq)) return; ses.net.sendAct(a); wakeActs(ses); }, () => { ses.subThinking = false; });
     }
     if (ses.drawReady) ses.drawReady();
+  }
+
+  // 친구랑 방장: 판 사이에 규칙(점당 포함) 바꾸기 → 다음 판부터 모두에게 (방을 닫지 않음)
+  function openRoundRules(ses) {
+    sfx('tap');
+    let cur = G.normRules(ses.nextRules || (ses.S && ses.S.rules) || houseRules);
+    C.modal({
+      title: '🛠️ 다음 판부터 쓸 규칙',
+      html: '<p class="small hr-intro">바꾸면 다음 판부터 모두에게 적용돼요. 점당은 맨 아래 \'🪙 점수 · 칩\'에 있어요 (기본 은행 1칩 = 100원)</p><div id="hrBox2"></div>',
+      buttons: [{ label: '그대로', onClick: () => { ses.nextRules = null; } }, { label: '다음 판부터 적용', primary: true, onClick: () => { ses.nextRules = cur; setRules(cur); C.toast(`다음 판부터: ${ruleSummary(cur)}`, 2200); } }],
+      dismiss: true, cls: 'rulesov hrov',
+    });
+    ruleSheet($('hrBox2'), cur, true, nr => { cur = G.normRules(nr); });
   }
 
   // 첫 판 선 뽑기 방식 (밤일낮장은 지금 시각으로: 낮 6~18시 높은 월, 밤 낮은 월). 안 뽑으면 null
@@ -1913,7 +1928,11 @@
         paint(); $('resBtns').appendChild(nb);
       } else nb = mk(host ? '다음 판 시작 ▶' : '다음 판 ▶', 'primary', 'next');
       let fb = null;
-      if (host) { fb = mk('안 기다리고 시작', '', 'next'); }
+      if (host) {
+        fb = mk('안 기다리고 시작', '', 'next');
+        const rb2 = document.createElement('button'); rb2.className = 'btn'; rb2.textContent = '🛠️ 규칙·점당 바꾸기';
+        rb2.onclick = () => openRoundRules(ses); $('resBtns').appendChild(rb2);
+      }
       // 준비 · 구경 · 끊긴 사람 (방장은 고르고, 손님은 보기만)
       if (online) {
         const rb = document.createElement('div'); rb.className = 'rdy'; $('resBody').appendChild(rb);
