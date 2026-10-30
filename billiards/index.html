@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08160f">
+<title>당구 — 베니 게임 포털</title>
+<link rel="stylesheet" href="../common/cozy.css?v=4">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap" id="home">
+  <header class="top">
+    <h1>🎱 당구</h1>
+    <button class="mechip" id="meChip" type="button">👤 나</button>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section class="card" id="menuCard">
+    <div class="games" id="gameCards"></div>
+
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabPractice" data-tab="practice">혼자 연습</button>
+      <button class="btn" id="tabAi" data-tab="ai">AI와 대결</button>
+      <button class="btn" id="tabHot" data-tab="hot">한 기기에서 여럿</button>
+      <button class="btn" id="tabFriend" data-tab="friend">친구랑</button>
+    </div>
+
+    <div class="box" id="optBox">
+      <div class="tiers three" id="tiers"></div>
+      <div class="hot" id="hotBox" hidden>
+        <div class="optrow"><span class="small">사람 수</span><div class="seg" id="hotN"></div></div>
+        <div class="names" id="hotNames"></div>
+      </div>
+      <div class="optrows">
+        <div class="optrow" id="targetRow"><span class="small" id="targetLbl">목표</span><div class="seg" id="targetSeg"></div></div>
+        <div class="optrow" id="finishRow"><span class="small">마무리</span><div class="seg" id="finishSeg"></div></div>
+        <div class="optrow"><span class="small">겨냥 선</span><div class="seg" id="guideSeg"></div></div>
+        <div class="optrow"><span class="small">천 색</span><div class="seg" id="clothSeg"></div></div>
+      </div>
+      <ul class="howto" id="howto"></ul>
+      <button class="btn primary big" id="startBtn">시작하기</button>
+      <button class="btn ghost" id="rulesBtn">📖 규칙 보기</button>
+    </div>
+  </section>
+</div>
+
+<!-- 게임 화면 -->
+<section class="play wide" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl">당구</span><span class="t" id="sub"></span></div>
+    <span class="pill" id="pill"></span>
+  </div>
+  <div class="board" id="board"></div>
+  <div class="arena" id="arena">
+    <div class="stage" id="stage">
+      <canvas id="cv" aria-label="당구대"></canvas>
+      <div class="msgline" id="msgline" hidden></div>
+    </div>
+    <div class="ctl" id="ctl">
+      <div class="spinbox">
+        <canvas id="spin" width="80" height="80" aria-label="당점 고르기"></canvas>
+        <span class="spinlbl" id="spinLbl">중앙</span>
+      </div>
+      <div class="powbox">
+        <div class="fine">
+          <button class="finebtn" id="fineL" aria-label="왼쪽으로 조금">◀</button>
+          <span class="anglbl" id="angLbl">0.0°</span>
+          <button class="finebtn" id="fineR" aria-label="오른쪽으로 조금">▶</button>
+        </div>
+        <div class="power" id="power" role="slider" aria-label="힘" aria-valuemin="0" aria-valuemax="100" tabindex="0">
+          <div class="pfill" id="pfill"></div>
+          <div class="pthumb" id="pthumb"></div>
+          <span class="plbl" id="plbl">힘 40%</span>
+        </div>
+      </div>
+      <button class="shoot" id="shootBtn">샷!</button>
+      <div class="tools">
+        <button id="replayBtn" title="방금 샷 다시 보기"><span class="ic">🔁</span><span>다시 보기</span></button>
+        <button id="undoBtn" title="되돌리기"><span class="ic">↩️</span><span>되돌리기</span></button>
+        <button id="rackBtn" title="처음 배치"><span class="ic">🔄</span><span>처음 배치</span></button>
+        <button id="moveBtn" title="공 옮기기" aria-pressed="false"><span class="ic">✋</span><span>공 옮기기</span></button>
+        <button id="coachBtn" aria-pressed="false"><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
+        <button id="guideBtn" aria-pressed="true"><span class="ic">📐</span><span>겨냥 선</span></button>
+        <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+        <button id="ruleBtn"><span class="ic">📖</span><span>규칙</span></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="combo" id="pop" hidden></div>
+<div class="overlay" id="resBox" hidden><div><h2 id="resTitle"></h2><div id="resBody"></div><div class="row" id="resBtns"></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=4"></script>
+<script src="../common/me.js?v=4"></script>
+<script src="../common/arena-mock.js?v=4"></script>
+<script src="../common/arena.js?v=4"></script>
+<script src="../common/arena-ui.js?v=4"></script>
+<script src="../common/coach.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="ai.js?v=1"></script>
+<script src="draw.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>
