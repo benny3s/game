@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ea">
+<meta name="description" content="통통한 고양이 두 마리의 해변 배구. AI 고양이와 한 판, 둘이서 한 화면, AI 구경">
+<title>냥냥 배구</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=1">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap" id="menu">
+  <header class="top">
+    <h1>🏐 냥냥 배구</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section class="card" id="home">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <div id="soloBox" class="box">
+      <div class="tiers" id="tiers"></div>
+      <div class="opt">
+        <span class="small" id="furLbl">내 고양이</span>
+        <div class="furs" id="fur1"></div>
+      </div>
+      <div class="opt" id="fur2Row" hidden>
+        <span class="small">오른쪽 고양이</span>
+        <div class="furs" id="fur2"></div>
+      </div>
+      <div class="opt">
+        <span class="small">몇 점 내기</span>
+        <div class="seg" id="target"></div>
+      </div>
+      <button class="btn primary big" id="startBtn">▶ 시작!</button>
+      <p class="keys small" id="keys"></p>
+      <ul class="howto">
+        <li>공이 머리에 닿으면 통 하고 넘어가요. 떨어질 곳에 먼저 가 있어요</li>
+        <li>공 가까이 뛰어올라 <b>스매시</b>! 앞을 같이 누르면 강타, 뒤를 누르면 살짝 넘기기</li>
+        <li>공이 앞발에 닿기 직전에 누르면 <b>퍼펙트</b>! 그물 앞에서 높이 치면 받기 어려워요</li>
+        <li>땅에서 스매시를 누르면 몸을 날려 낮은 공을 받아요</li>
+        <li>상대 쪽 모래에 공이 떨어지면 1점, 먼저 정한 점수를 내면 이겨요</li>
+      </ul>
+    </div>
+
+    <div id="watchBox" class="box" hidden>
+      <p class="lede">AI 고양이끼리 겨루는 걸 구경해요. 강한 AI는 상대 빈자리를 노려 스매시해요.</p>
+      <div class="opt">
+        <span class="small">왼쪽 고양이</span>
+        <div class="seg" id="wl"></div>
+      </div>
+      <div class="opt">
+        <span class="small">오른쪽 고양이</span>
+        <div class="seg" id="wr"></div>
+      </div>
+      <div class="opt">
+        <span class="small">몇 점 내기</span>
+        <div class="seg" id="wtarget"></div>
+      </div>
+      <button class="btn primary big" id="watchBtn">▶ 구경하기</button>
+    </div>
+  </section>
+</div>
+
+<!-- 게임 화면 (한 장 · 스크롤 없음) -->
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid">
+      <div class="score" id="score">
+        <span class="who" id="who0"></span><b id="sc0">0</b><i>:</i><b id="sc1">0</b><span class="who" id="who1"></span>
+      </div>
+      <span class="t" id="sub"></span>
+    </div>
+    <div class="rt">
+      <button class="iconbtn" id="fastIc" aria-label="빠르게" aria-pressed="false">⏩</button>
+      <button class="iconbtn" id="pauseBtn" aria-label="잠깐 쉬기">⏸</button>
+    </div>
+  </div>
+  <div class="stage" id="stage">
+    <div class="court" id="court">
+      <canvas id="cv"></canvas>
+      <div class="banner" id="banner" hidden><b></b><span></span></div>
+      <div class="pops" id="pops"></div>
+    </div>
+  </div>
+  <div class="pad" id="pad">
+    <div class="cl" data-p="0">
+      <span class="ptag">1P</span>
+      <div class="dpad"><span class="pb mv" data-b="1">◀</span><span class="pb mv" data-b="2">▶</span></div>
+      <div class="acts"><span class="pb sm" data-b="8">스매시</span><span class="pb jp" data-b="4">점프</span></div>
+    </div>
+    <div class="cl" data-p="1">
+      <span class="ptag">2P</span>
+      <div class="dpad"><span class="pb mv" data-b="1">◀</span><span class="pb mv" data-b="2">▶</span></div>
+      <div class="acts"><span class="pb sm" data-b="8">스매시</span><span class="pb jp" data-b="4">점프</span></div>
+    </div>
+  </div>
+  <div class="dock" id="dock">
+    <button id="fastBtn" aria-pressed="false"><span class="ic">⏩</span><span>빠르게</span></button>
+    <button id="restartBtn"><span class="ic">↺</span><span>처음부터</span></button>
+    <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+    <button id="helpBtn"><span class="ic">❔</span><span>하는 법</span></button>
+  </div>
+  <p class="keyline" id="keyline"></p>
+</section>
+
+<div class="overlay" id="pauseBox" hidden>
+  <div role="dialog" aria-modal="true">
+    <h2>⏸ 잠깐 쉬어요</h2>
+    <p class="small" id="pauseInfo" style="margin:0"></p>
+    <div class="row"><button class="btn primary resume" id="resumeBtn">▶ 계속하기</button></div>
+    <div class="row"><button class="btn" id="pRestart">↺ 처음부터</button><button class="btn" id="pMenu">메뉴로</button></div>
+    <div class="row"><button class="btn ghost" id="pSound">🔊 소리 켬</button><button class="btn ghost" id="pHelp">❔ 하는 법</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.4/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="bots.js?v=1"></script>
+<script src="render.js?v=1"></script>
+<script src="sound.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

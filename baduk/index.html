@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ea">
+<title>바둑</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=1">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1><span class="logo"><span class="st b"></span><span class="st w"></span></span>바둑</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <!-- 시작 화면 (나중에 '친구랑' 탭이 들어갈 자리: .tabs 안) -->
+  <section id="home" class="card">
+    <div class="tabs" role="tablist" id="tabs">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <div id="soloBox" class="pane">
+      <div class="resume" id="resume" hidden></div>
+      <div class="opt"><span class="small">판 크기</span><div class="seg" id="sizeSeg"></div></div>
+      <div class="tiers three" id="tiers"></div>
+      <div class="opt"><span class="small">내 돌</span><div class="seg" id="colorSeg"></div></div>
+      <div class="opt"><span class="small">덤 · 접바둑</span><div class="seg" id="handiSeg"></div></div>
+      <button class="toggle" id="atariTog" aria-pressed="true"><span>🔔 단수(돌이 위험할 때) 알려 주기</span><span class="sw"></span></button>
+      <div class="startrow">
+        <button class="btn primary big" id="startBtn">시작!</button>
+        <div class="row">
+          <button class="btn grow" id="duoBtn">👫 둘이서 한 화면</button>
+          <button class="btn ghost" id="recBtn">📜 지난 대국</button>
+        </div>
+      </div>
+      <ul class="howto">
+        <li>흑부터 번갈아 한 수씩, 줄이 만나는 곳에 돌을 놓아요</li>
+        <li>상대 돌을 사방으로 꽉 둘러싸면 따내요</li>
+        <li>둘러싼 빈 곳이 내 집 · 집과 따낸 돌이 많으면 이겨요</li>
+        <li>둘 다 패스하면 끝나고 집을 세요</li>
+      </ul>
+      <button class="btn ghost more" id="helpBtn">❓ 더 자세한 규칙</button>
+    </div>
+
+    <div id="watchBox" class="pane" hidden>
+      <p class="lede">AI 둘이 두는 모습을 구경해요. 바둑이 어떻게 흘러가는지 보기 좋아요.</p>
+      <div class="opt"><span class="small">판 크기</span><div class="seg" id="wSizeSeg"></div></div>
+      <div class="vs">
+        <div><h4>⚫ 흑</h4><div class="seg" id="wBSeg"></div></div>
+        <span class="mid">vs</span>
+        <div><h4>⚪ 백</h4><div class="seg" id="wWSeg"></div></div>
+      </div>
+      <div class="opt"><span class="small">빠르기</span><div class="seg" id="wSpeedSeg"></div></div>
+      <button class="btn primary big" id="watchBtn">▶ 구경하기</button>
+    </div>
+  </section>
+  <p class="small foot" id="aiNote">AI 두뇌: KataGo 신경망(공개 가중치)을 브라우저에서 직접 돌려요</p>
+</div>
+
+<!-- 게임 (화면 한 장) -->
+<section id="play" class="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="status"></span></div>
+    <span class="pill" id="movePill">0수</span>
+  </div>
+  <div class="spring"></div>
+  <div class="scorebar" id="rowTop"><div class="side" id="sideW"><span class="av st w"></span><b id="nameW">백</b><span class="cap"><i>따냄</i><span class="n" id="capW">0</span></span></div></div>
+  <div class="stage" id="stage"><canvas id="board" aria-label="바둑판"></canvas></div>
+  <div class="scorebar" id="rowBot"><div class="side" id="sideB"><span class="av st b"></span><b id="nameB">흑</b><span class="cap"><i>따냄</i><span class="n" id="capB">0</span></span></div></div>
+  <div class="spring"></div>
+  <div class="scorebox" id="scoreBox" hidden>
+    <div class="big" id="scoreLine">집을 세는 중…</div>
+    <p class="small" id="scoreSub"></p>
+    <div class="row" id="scoreBtns"><button class="btn" id="resumeBtn">계속 두기</button><button class="btn primary" id="confirmBtn">이대로 확정 ✓</button></div>
+  </div>
+  <div class="dock" id="dock">
+    <button id="passBtn"><span class="ic">🙌</span><span class="lab">패스</span></button>
+    <button id="undoBtn"><span class="ic">↶</span><span class="lab">되돌리기</span></button>
+    <button id="hintBtn"><span class="ic">💡<span class="badge" id="hintBadge">3</span></span><span class="lab">힌트</span></button>
+    <button id="estBtn" aria-pressed="false"><span class="ic">⚖️</span><span class="lab">형세</span></button>
+    <button id="resignBtn"><span class="ic">🏳️</span><span class="lab">기권</span></button>
+    <button id="pauseBtn" hidden aria-pressed="false"><span class="ic">⏸</span><span class="lab">멈춤</span></button>
+    <button id="fastBtn" hidden aria-pressed="false"><span class="ic">⏩</span><span class="lab">빠르게</span></button>
+    <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+  </div>
+</section>
+<canvas id="loupe" hidden></canvas>
+<div class="bubble" id="bubble" hidden></div>
+<div class="combo" id="comboPop" hidden></div>
+<div class="overlay" id="resBox" hidden><div><h2 id="resTitle"></h2><div id="resBody" style="display:grid;gap:10px"></div><div class="row" id="resBtns"></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=1"></script>
+<script src="vendor/goscorer.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="ai.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

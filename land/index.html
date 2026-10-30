@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ea">
+<title>땅따먹기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=1">
+<style>
+/* 땅따먹기: 공통 포근한 모양(cozy.css) + 이 게임만의 것 (크레파스 산호색 · 모눈종이 무대) */
+:root{ --accent:#ff9472; --accent-d:#e0735a; }
+html:has(body.playing){overscroll-behavior:none}
+header.top h1{white-space:nowrap}
+
+/* ── 메뉴 */
+#lede{text-wrap:balance}
+.opt{display:grid;gap:7px}
+.opt>.small{padding-left:4px;font-family:var(--round);font-size:13.5px}
+.seg.center{justify-content:center}
+.modedesc{margin:-2px 0 0;font-size:13px;color:var(--soft);text-align:center;min-height:1.5em}
+.tier{padding:14px 12px}
+.tier .em{font-size:30px}
+.tier b{font-size:20px}
+.animals{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-bottom:6px}
+.animals button{border:0;background:var(--paper);border-radius:16px;padding:5px 2px 7px;display:grid;justify-items:center;gap:1px;cursor:pointer;font:13px var(--round);color:var(--ink);box-shadow:0 2px 0 var(--tint-d);transition:transform .08s;touch-action:manipulation}
+.animals button:active{transform:translateY(2px)}
+.animals button[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:-3px;background:#fff1e3}
+.animals button[aria-pressed="true"] canvas{animation:hop .5s cubic-bezier(.3,1.6,.5,1)}
+.animals canvas{display:block;pointer-events:none}
+/* 시작 단추: 작은 휴대폰에서도 늘 보이게 화면 아래에 붙음 */
+.startwrap{position:sticky;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);z-index:2;border-radius:99px;box-shadow:0 8px 22px rgba(224,115,90,.28),0 -14px 18px -6px var(--card)}
+#startBtn{width:100%}
+.best{margin:-4px 0 0;text-align:center}
+.best:empty{display:none}
+.helprow{display:flex;justify-content:center}
+
+/* ── 게임 화면 (화면 어디서나 확대·끌기 안 되게, 누르기는 그대로) */
+.play{touch-action:none}
+.play.wide{max-width:1180px}
+.bar .lbl{font-size:24px;line-height:1.05}
+.bar .t.hurry{color:var(--bad);animation:look 1s ease-in-out infinite}
+#rankPill{min-width:64px;text-align:center}
+.stage{background:#f4e3cf;border-radius:22px;box-shadow:var(--shadow);overflow:hidden;place-items:stretch;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+#cv{position:absolute;inset:0;width:100%;height:100%}
+.hud{position:absolute;pointer-events:none}
+.rankbox{left:8px;top:8px;background:rgba(255,255,255,.84);border-radius:14px;padding:4px 5px;box-shadow:0 3px 10px rgba(140,98,70,.16);display:grid;gap:1px;width:122px}
+.rankbox:empty{display:none}
+.rk{display:grid;grid-template-columns:11px 18px minmax(0,1fr) auto;align-items:center;gap:4px;font:12px/1 var(--round);height:19px;padding:0 3px;border-radius:8px}
+.rk i{font-style:normal;color:var(--soft);font-size:11px;text-align:center}
+.rk .dot{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;line-height:1}
+.rk b{font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rk em{font-style:normal;font-variant-numeric:tabular-nums}
+.rk.me{background:#ffe9dc}
+.rk.me b,.rk.me em{color:#d9654a}
+.rk.out{opacity:.42}
+.rk.sep{height:7px;background:radial-gradient(circle,#d9c4b0 1.2px,transparent 1.6px) center/8px 7px repeat-x}
+.rk.ghost{visibility:hidden}
+.watch .rankbox{pointer-events:auto}
+.watch .rk{cursor:pointer}
+.watch .rk.fol{box-shadow:inset 0 0 0 2px var(--accent2)}
+.minibox{right:8px;top:8px;width:96px;height:96px;background:#fff;border-radius:16px;padding:4px;box-shadow:0 3px 10px rgba(140,98,70,.16)}
+#mini{width:100%;height:100%;display:block;border-radius:12px}
+.feed{left:8px;bottom:8px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;max-width:calc(100% - 16px)}
+.feed div{background:rgba(255,255,255,.93);border-radius:99px;padding:4px 10px;font:12.5px/1.2 var(--round);box-shadow:0 2px 8px rgba(140,98,70,.16);white-space:nowrap;animation:feedin .28s cubic-bezier(.3,1.5,.5,1),feedout .5s ease-in 3.2s forwards}
+.feed b{font-weight:400;color:#d9654a}
+.feed .mine{background:#fff1e3;box-shadow:0 0 0 2px var(--accent),0 2px 8px rgba(140,98,70,.16)}
+@keyframes feedin{from{opacity:0;transform:translateX(-14px) scale(.9)}}
+@keyframes feedout{to{opacity:0;transform:translateY(4px)}}
+.padon .feed{max-width:calc(100% - 180px)}
+.msg{left:50%;top:30%;transform:translate(-50%,-50%);background:var(--note);border:2px solid var(--accent);border-radius:18px;padding:10px 16px;text-align:center;font:17px/1.35 var(--round);box-shadow:0 10px 28px rgba(140,98,70,.3);width:max-content;max-width:86%;animation:msgin .3s cubic-bezier(.3,1.5,.5,1)}
+.msg small{display:block;font:13.5px var(--text);color:var(--soft);margin-top:3px}
+@keyframes msgin{from{opacity:0;transform:translate(-50%,-40%) scale(.9)}}
+.dpad{position:absolute;right:10px;bottom:10px;width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.5);box-shadow:0 6px 18px rgba(140,98,70,.18);touch-action:none}
+.dpad button{position:absolute;width:54px;height:54px;border-radius:50%;border:0;background:#fff;box-shadow:0 3px 0 var(--tint-d);font:20px/1 var(--round);color:var(--ink);display:grid;place-items:center;touch-action:none;cursor:pointer;padding:0}
+.dpad .u{left:48px;top:5px}.dpad .d{left:48px;bottom:5px}.dpad .l{left:5px;top:48px}.dpad .r{right:5px;top:48px}
+.dpad button.on{transform:translateY(2px);box-shadow:none;background:var(--accent);color:#fff}
+.dpad::after{content:"";position:absolute;left:62px;top:62px;width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.8)}
+/* 카운트다운: 판이 보이게 옅게, 손가락은 판으로 지나감 (미리 방향 정하기)
+   숫자는 화면 위쪽에 (가운데의 내 동물·가는 쪽을 가리지 않게) */
+.overlay.soft{background:rgba(91,70,54,.1);pointer-events:none;animation:none;place-items:start center;padding-top:calc(env(safe-area-inset-top,0px) + 15vh)}
+.overlay.soft>div{background:none;box-shadow:none;animation:none;padding:0;overflow:visible}
+#count{font-size:76px}
+#count.go{font-size:60px}
+.cnthint{margin:8px auto 0;width:max-content;max-width:90vw;background:#fff;border-radius:99px;padding:8px 16px;font:16px var(--round);color:var(--ink);box-shadow:var(--shadow)}
+.count.pop{animation:pop .4s cubic-bezier(.3,1.6,.5,1)}
+/* 결과 */
+.land-modal .mbody{display:grid;gap:10px}
+.res-sub{margin:-6px 0 0;color:var(--soft)}
+.rstat{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-variant-numeric:tabular-nums}
+.rstat span{display:grid;background:var(--paper);border-radius:12px;padding:6px 8px;text-align:left}
+.rstat i{font-style:normal;font-size:11.5px;color:var(--soft)}
+.rstat b{font:19px/1.15 var(--round);font-weight:400}
+.rlist{list-style:none;margin:0;padding:0;display:grid;gap:3px;text-align:left}
+.rlist li{display:grid;grid-template-columns:26px 24px 1fr auto;align-items:center;gap:6px;padding:4px 8px;border-radius:12px;background:var(--paper);font:14.5px var(--round)}
+.rlist li .dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:14px}
+.rlist li.me{background:#ffe9dc;color:#c95b42}
+.rlist li em{font-style:normal;font-variant-numeric:tabular-nums}
+.rlist li i{font-style:normal;text-align:center;color:var(--soft)}
+.rlist li em small{font:12px var(--text);color:var(--soft);margin-right:5px}
+.rlist li.out{opacity:.55}
+.newbest{color:var(--good)}
+/* 결과 단추 줄은 늘 보이게 (긴 순위표를 내려도 아래에 붙음) */
+.land-modal>div>.row{position:sticky;bottom:-20px;background:var(--card);padding:8px 0 4px;margin-bottom:-4px;z-index:1}
+/* 가로 휴대폰: 단추 줄을 오른쪽 세로로 */
+@media (orientation:landscape) and (max-height:560px){
+  .play{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr);column-gap:12px;row-gap:8px;padding-top:calc(env(safe-area-inset-top,0px) + 8px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 8px);padding-left:calc(env(safe-area-inset-left,0px) + 12px);padding-right:calc(env(safe-area-inset-right,0px) + 12px)}
+  .play .bar{grid-column:1 / -1}
+  .play .stage{grid-column:1;grid-row:2}
+  .play .dock{grid-column:2;grid-row:2;flex-direction:column;justify-content:center;gap:6px}
+  .dock button{font-size:11px;gap:2px}
+  .dock button .ic{width:46px;height:46px;font-size:20px}
+  .minibox{width:84px;height:84px}
+  .rankbox{width:128px}
+  .rk{height:19px;font-size:12px}
+  /* 결과 창: 두 칸 (왼쪽 큰 % · 기록, 오른쪽 순위표) → 내리지 않아도 단추까지 보임 */
+  .land-res{padding:10px}
+  .land-res>div{width:min(760px,100%);padding:14px 18px;gap:8px;max-height:calc(100dvh - 20px)}
+  .land-res h2{font-size:22px}
+  .land-res .mbody{grid-template-columns:1fr 1fr;align-items:start;column-gap:14px;row-gap:6px}
+  .land-res .mbody>:not(.rlist){grid-column:1}
+  .land-res .mbody>.rlist{grid-column:2;grid-row:1 / span 4;gap:2px}
+  .land-res .big:not(.btn){font-size:36px}
+  .land-res .res-sub{margin:0;font-size:13.5px}
+  .land-res .rstat b{font-size:16px}
+  .land-res .rlist li{padding:2px 8px;font-size:13px;grid-template-columns:22px 20px 1fr auto}
+  .land-res .rlist li .dot{width:20px;height:20px;font-size:12px}
+  .land-res>div>.row{bottom:-14px}
+  .overlay:not(.soft):not(.land-modal)>div{width:min(640px,100%)}
+}
+@media (min-width:900px) and (min-height:600px){
+  .minibox{width:132px;height:132px}
+  .rankbox{width:156px;padding:7px 8px}
+  .rk{height:24px;font-size:14px;grid-template-columns:15px 22px minmax(0,1fr) auto}
+  .rk .dot{width:22px;height:22px}
+  .feed div{font-size:14px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>🖍️ 땅따먹기</h1>
+    <a href="../">게임 목록</a>
+  </header>
+  <section id="home" class="card">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+    <p class="lede" id="lede"></p>
+    <div class="opt"><div class="seg center" id="modeSeg"></div><p class="modedesc" id="modeDesc"></p></div>
+    <div class="opt"><span class="small" id="tierLbl">친구들 실력</span><div class="tiers three" id="tiers"></div></div>
+    <div class="opt" id="animalBox"><span class="small">내 동물 (내 색)</span><div class="animals" id="animals"></div></div>
+    <div class="startwrap"><button class="btn primary big" id="startBtn">시작!</button></div>
+    <p class="small best" id="bestLine"></p>
+    <ul class="howto" id="howtoList">
+      <li>밀면(스와이프) 그쪽으로 돌아요 · PC는 방향키나 WASD</li>
+      <li>내 땅 밖으로 나가면 선이 그려지고, 돌아오면 안쪽이 모두 내 땅</li>
+      <li>선을 긋는 중에 누가 내 선을 밟으면 아웃! 남의 선을 밟으면 그 친구가 아웃</li>
+      <li>종이 끝에 닿거나 내 선을 밟아도 아웃이에요</li>
+    </ul>
+    <div class="helprow"><button class="btn ghost" id="helpBtn">❓ 하는 법 다시 보기</button></div>
+  </section>
+</div>
+
+<section class="play wide" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="myPct">0.0%</span><span class="t" id="timer">⏱ 3:00</span></div>
+    <span class="pill" id="rankPill">-</span>
+  </div>
+  <div class="stage" id="stage">
+    <canvas id="cv" aria-label="땅따먹기 판"></canvas>
+    <div class="hud rankbox" id="rankBox"></div>
+    <div class="hud minibox"><canvas id="mini" aria-hidden="true"></canvas></div>
+    <div class="hud feed" id="feed"></div>
+    <div class="hud msg" id="msg" hidden></div>
+    <div class="dpad" id="dpad" hidden>
+      <button class="u" data-d="0" aria-label="위">▲</button>
+      <button class="r" data-d="1" aria-label="오른쪽">▶</button>
+      <button class="d" data-d="2" aria-label="아래">▼</button>
+      <button class="l" data-d="3" aria-label="왼쪽">◀</button>
+    </div>
+  </div>
+  <div class="dock" id="dock">
+    <button id="pauseBtn"><span class="ic">⏸</span><span>멈춤</span></button>
+    <button id="speedBtn" hidden><span class="ic">⏩</span><span>빠르게</span></button>
+    <button id="padBtn" aria-pressed="false"><span class="ic">🎮</span><span>방향키</span></button>
+    <button id="followBtn" hidden><span class="ic">🎥</span><span>1등 보기</span></button>
+    <button id="skipBtn" hidden><span class="ic">🏁</span><span>결과 보기</span></button>
+    <button id="restartBtn"><span class="ic">↺</span><span>처음부터</span></button>
+    <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+  </div>
+</section>
+<div class="overlay soft" id="countBox" hidden><div><div class="count" id="count">3</div><p class="cnthint" id="cntHint" hidden></p></div></div>
+<div class="combo" id="comboPop" hidden></div>
+
+<!-- 남의 좋은 코드 (THIRD_PARTY.md): simplex-noise(MIT, 크레파스 결 · 이 폴더에 담아 둠) · rough.js(MIT, 손그림) · canvas-confetti(ISC, 색종이). CDN 을 못 불러와도 게임은 됨 -->
+<script src="vendor/simplex-noise.js?v=1"></script>
+<script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="bots.js?v=1"></script>
+<script src="art.js?v=1"></script>
+<script src="render.js?v=1"></script>
+<script src="sound.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

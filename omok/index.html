@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ea">
+<title>오목</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=1">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1><span class="logo" aria-hidden="true"><i class="lb"></i><i class="lw"></i></span>오목</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section id="home" class="card">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <!-- 혼자: AI 대전 · 둘이서 -->
+    <div id="soloBox" class="box">
+      <div class="seg center" id="modeSeg"></div>
+      <div id="aiOpts" class="box">
+        <div class="tiers three" id="tiers"></div>
+        <div class="optrow"><span class="small">내 돌</span><div class="seg" id="colorSeg"></div></div>
+      </div>
+      <p class="lede center" id="twoDesc" hidden>한 화면에서 번갈아 둬요. 가족이나 친구랑 마주 앉아 한 판!</p>
+    </div>
+
+    <!-- AI 구경 -->
+    <div id="watchBox" class="box" hidden>
+      <p class="lede">AI끼리 두는 모습을 구경해요. 누가 이길까요?</p>
+      <div class="optrow"><span class="small"><i class="dot b"></i>흑</span><div class="seg" id="watchB"></div></div>
+      <div class="optrow"><span class="small"><i class="dot w"></i>백</span><div class="seg" id="watchW"></div></div>
+    </div>
+
+    <div class="optrow rulerow"><span class="small">규칙</span><div class="seg" id="ruleSeg"></div></div>
+    <p class="ruledesc" id="ruleDesc"></p>
+
+    <ul class="howto" id="howtoList">
+      <li>가로·세로·대각선으로 다섯 개를 먼저 이으면 이겨요</li>
+      <li>폰은 한 번 눌러 자리를 보고, 한 번 더 누르면 둬요</li>
+      <li>✕ 는 지금 둘 수 없는 금수 자리예요</li>
+    </ul>
+    <button class="btn primary big" id="startBtn">시작!</button>
+    <div class="row center minor">
+      <button class="btn ghost" id="helpBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="setBtn">⚙ 설정</button>
+      <button class="btn ghost" id="recBtn">📜 지난 대국</button>
+    </div>
+  </section>
+</div>
+
+<!-- 게임 화면 (한 장, 스크롤 없음) -->
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="stat"></span></div>
+    <button class="pill rulepill" id="rulePill" aria-label="규칙 보기"></button>
+  </div>
+  <div class="scorebar" id="scorebar">
+    <div class="side" id="sideB"><span class="av"><i class="st b"></i><b class="emo"></b></span><b class="nm"></b><span class="say"></span><span class="n"></span></div>
+    <span class="vs">vs</span>
+    <div class="side" id="sideW"><span class="av"><i class="st w"></i><b class="emo"></b></span><b class="nm"></b><span class="say"></span><span class="n"></span></div>
+  </div>
+  <div class="stage" id="stage">
+    <canvas id="board" role="img" aria-label="오목 판"></canvas>
+  </div>
+  <div class="dockwrap" id="dockwrap">
+    <div class="dock" id="dockPlay">
+      <button id="undoBtn"><span class="ic">↶</span><span>되돌리기</span></button>
+      <button id="hintBtn"><span class="ic">💡<span class="badge" id="hintBadge"></span></span><span>힌트</span></button>
+      <button id="resignBtn"><span class="ic">🏳️</span><span>기권</span></button>
+      <button id="restartBtn"><span class="ic">↺</span><span>처음부터</span></button>
+      <button class="snd"><span class="ic">🔊</span><span>소리 켬</span></button>
+    </div>
+    <div class="dock" id="dockWatch" hidden>
+      <button id="pauseBtn"><span class="ic">⏸</span><span>멈춤</span></button>
+      <button id="speedBtn"><span class="ic">🐢</span><span>천천히</span></button>
+      <button id="numBtn"><span class="ic">🔢</span><span>수 번호</span></button>
+      <button id="againBtn"><span class="ic">↺</span><span>새 판</span></button>
+      <button class="snd"><span class="ic">🔊</span><span>소리 켬</span></button>
+    </div>
+    <div class="dock" id="dockReview" hidden>
+      <button id="rvFirst"><span class="ic">⏮</span><span>처음</span></button>
+      <button id="rvPrev"><span class="ic">◀</span><span>이전</span></button>
+      <button id="rvNext"><span class="ic">▶</span><span>다음</span></button>
+      <button id="rvLast"><span class="ic">⏭</span><span>끝</span></button>
+      <button id="rvAgain" class="primary"><span class="ic">↺</span><span>다시 하기</span></button>
+    </div>
+    <div class="confirm" id="confirm" hidden>
+      <button class="btn" id="cancelBtn">취소</button>
+      <button class="btn primary" id="placeBtn"><i class="st b" id="placeSt"></i>착수</button>
+    </div>
+  </div>
+</section>
+
+<script src="../common/cozy.js?v=1"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/simplex-noise@2.4.0/simplex-noise.js"></script>
+<script src="core.js?v=1"></script>
+<script src="board.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

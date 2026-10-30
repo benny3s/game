@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#fff6ea">
+<title>고스톱</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=1">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap" id="home">
+  <header class="top">
+    <h1>🎴 고스톱</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section class="card" id="menuCard">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <div id="soloBox" class="box">
+      <div class="coinline" id="coinLine"></div>
+      <div class="seg center" id="modeSeg"></div>
+      <div class="tiers three" id="tiers"></div>
+      <div class="optrows">
+        <div class="optrow"><span class="small">보너스 피</span><div class="seg" id="bonusSeg"></div></div>
+        <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="speedSeg"></div></div>
+      </div>
+      <ul class="howto" id="howto">
+        <li>같은 달(같은 그림)끼리 짝을 맞춰 가져와요</li>
+        <li>손패를 누르면 짝이 되는 바닥 패가 반짝, 한 번 더 누르면 내요</li>
+        <li>광·열끗·띠·피를 모아 점수를 내요. 맞고는 7점, 셋이면 3점부터 고·스톱</li>
+      </ul>
+      <button class="btn primary big" id="startBtn">시작하기</button>
+      <button class="btn ghost" id="rulesBtn">📖 규칙 자세히 보기</button>
+    </div>
+
+    <div id="watchBox" class="box" hidden>
+      <p class="lede">AI 냥이들끼리 패를 다 펼쳐 놓고 둬요. 누가 더 잘할까요?</p>
+      <div class="seg center" id="wModeSeg"></div>
+      <div class="wseats" id="wSeats"></div>
+      <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="wSpeedSeg"></div></div>
+      <button class="btn primary big" id="watchBtn">구경 시작</button>
+    </div>
+  </section>
+</div>
+
+<!-- 게임 (화면 한 장) -->
+<section class="play wide" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="sub"></span></div>
+    <span class="pill" id="coinPill"></span>
+  </div>
+  <div class="stage" id="stage">
+    <div class="zone opp" id="zOpp"></div>
+    <div class="zone table" id="zTable"><span class="deckn" id="deckN"></span></div>
+    <div class="zone mine" id="zMine"></div>
+    <div class="zone hand" id="zHand"></div>
+    <div class="layer" id="layer"></div>
+  </div>
+  <div class="dock" id="dock">
+    <button id="passBtn" class="mintbtn" hidden><span class="ic">🃏<span class="badge" id="passN">2</span></span><span>뒤집기만</span></button>
+    <button id="hintBtn"><span class="ic">💡</span><span>힌트</span></button>
+    <button id="pauseBtn" hidden><span class="ic">⏸</span><span>멈춤</span></button>
+    <button id="speedBtn"><span class="ic">🐢</span><span>보통</span></button>
+    <button id="ruleBtn"><span class="ic">📖</span><span>규칙</span></button>
+    <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+  </div>
+</section>
+
+<div class="combo" id="pop" hidden></div>
+<div class="overlay" id="goBox" hidden><div><h2 id="goTitle">고? 스톱?</h2><div id="goBody"></div><div class="row" id="goBtns"></div></div></div>
+<div class="overlay" id="resBox" hidden><div><h2 id="resTitle"></h2><div id="resBig"></div><div id="resBody"></div><div class="row" id="resBtns"></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="ai.js?v=1"></script>
+<script src="cards.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

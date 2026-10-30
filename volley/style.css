@@ -1,0 +1,128 @@
+/* 냥냥 배구 — cozy.css 위에 이 게임만의 모양: 노을빛 주황 · 고양이 고르기 · 점수판 · 큰 엄지 단추 */
+:root{--accent:#ff9466;--accent-d:#e2724a}
+
+/* ── 메뉴 ── */
+.box{display:grid;gap:12px}
+.opt{display:grid;gap:6px}
+.tier{touch-action:manipulation;align-content:start}
+.tier span+span{color:var(--soft)}
+.furs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.fur{border:0;background:var(--paper);border-radius:16px;padding:6px 2px 7px;display:grid;justify-items:center;gap:1px;cursor:pointer;font:14.5px var(--round);color:var(--ink);box-shadow:0 2px 0 var(--tint-d);transition:transform .08s;touch-action:manipulation}
+.fur canvas{width:54px;height:54px;display:block}
+.fur:active{transform:translateY(2px)}
+.fur[aria-pressed="true"]{outline:3px solid var(--accent);outline-offset:-3px;background:var(--tint)}
+.fur:disabled{opacity:.35;cursor:default}
+.keys{margin:0;text-align:center;line-height:1.9}
+kbd{display:inline-block;min-width:1.7em;padding:1px 6px;border-radius:7px;background:var(--tint);box-shadow:0 2px 0 var(--tint-d);font:13px/1.5 var(--round);color:var(--ink);text-align:center}
+/* 둘이서: 고양이 고르기 두 줄 → 조금 작게 (시작 단추가 첫 화면에 보이게) */
+.duo-pick .fur{padding:4px 2px 5px;font-size:13.5px}
+.duo-pick .fur canvas{width:40px;height:40px}
+
+.btn.resume{padding:15px 34px;font-size:19px}
+
+/* ── 게임 화면 ── */
+.play{gap:8px;touch-action:none}
+.play.desk{max-width:1120px}
+.play .bar{position:relative;z-index:3}
+.bar .rt{display:flex;gap:8px}
+#fastIc{display:none}
+.play.land.watch #fastIc{display:grid}
+#fastIc[aria-pressed="true"]{background:var(--ink);color:#fff}
+/* 폰 세로 게임 중: 알림(나가기 확인 등)은 엄지 단추를 가리지 않게 위쪽에 */
+body.vb-pad .toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 66px)}
+.score{display:flex;align-items:center;gap:7px;font:27px/1 var(--round);font-variant-numeric:tabular-nums}
+.score b{font-weight:400;min-width:1.35em;text-align:center;display:inline-block}
+.score i{font-style:normal;color:var(--soft);font-size:22px}
+.score b.pop{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.who{position:relative;width:32px;height:32px;display:grid;place-items:center;flex:none}
+.who canvas{width:32px;height:32px;display:block}
+.who.srv::after{content:"";position:absolute;right:-5px;top:-4px;width:13px;height:13px;border-radius:50%;background:conic-gradient(from 20deg,#ffb194 0 33%,#fff6e8 0 66%,#a8dfcf 0);box-shadow:0 0 0 1.5px var(--ink),0 2px 4px rgba(140,98,70,.25)}
+.court{position:relative;border-radius:20px;box-shadow:var(--shadow);background:#fff1e3}
+#cv{border-radius:20px}
+.play.touch:not(.land) .stage{align-items:start}
+
+/* 점수 알림 (판 위 가운데) */
+.banner{position:absolute;left:50%;top:27%;transform:translate(-50%,-50%);display:grid;justify-items:center;gap:1px;background:rgba(255,255,255,.95);border-radius:22px;padding:9px 20px 8px;box-shadow:0 10px 26px rgba(140,98,70,.22);pointer-events:none;white-space:nowrap;z-index:2;max-width:94%}
+.banner b{font:28px/1.15 var(--round);font-weight:400;color:var(--accent)}
+.banner span{font:15px/1.3 var(--round);color:var(--soft)}
+.banner span:empty{display:none}
+.banner.go{animation:bannerIn .42s cubic-bezier(.3,1.5,.5,1) both}
+.banner.out{animation:bannerOut .3s ease-in forwards}
+@keyframes bannerIn{from{opacity:0;transform:translate(-50%,-25%) scale(.7)}}
+@keyframes bannerOut{to{opacity:0;transform:translate(-50%,-75%) scale(.92)}}
+.pops{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:2}
+.pops i{position:absolute;font:21px var(--round);font-style:normal;color:#ff7a3d;text-shadow:0 2px 0 #fff,0 0 12px rgba(255,255,255,.95);transform:translate(-50%,-50%);animation:popUp .85s ease-out forwards;white-space:nowrap}
+.pops i.hot{color:#f2647e;font-size:19px;animation-duration:1.3s}
+@keyframes popUp{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}20%{opacity:1;transform:translate(-50%,-70%) scale(1.15)}100%{opacity:0;transform:translate(-50%,-170%) scale(1)}}
+
+/* 엄지 단추 (폰): 왼쪽 ◀ ▶ · 오른쪽 스매시·점프 — 손가락 여러 개 같이 눌러도 됨 */
+.play.touch{max-width:1000px}
+.pad{flex:none;display:none;position:relative;touch-action:none;-webkit-user-select:none;user-select:none;padding:0 2px 2px;--pb:clamp(58px,20vw,78px)}
+.play.touch .pad{display:flex;gap:10px}
+.cl{flex:1;display:flex;justify-content:space-between;align-items:flex-end;min-width:0}
+.cl[data-p="1"],.ptag{display:none}
+.dpad{display:flex;gap:8px}
+.acts{display:flex;gap:12px;align-items:flex-end}
+.pb{width:var(--pb);height:var(--pb);border-radius:50%;background:var(--card);box-shadow:0 4px 0 var(--tint-d),var(--shadow);display:grid;place-items:center;font:28px/1 var(--round);color:var(--ink);transition:transform .06s,background-color .06s,box-shadow .06s;flex:none}
+.pb.sm{background:var(--accent);color:#fff;box-shadow:0 4px 0 var(--accent-d),var(--shadow);font-size:18px;margin-bottom:calc(var(--pb) * .42)}
+.pb.jp{background:var(--accent2);color:#fff;box-shadow:0 4px 0 var(--accent2-d),var(--shadow);font-size:19px}
+.pb.on{transform:translateY(3px) scale(.95);box-shadow:0 1px 0 var(--tint-d)}
+.pb.mv.on{background:var(--tint2)}
+.pb.sm.on{background:var(--accent-d);box-shadow:0 1px 0 var(--accent-d)}
+.pb.jp.on{background:var(--accent2-d);box-shadow:0 1px 0 var(--accent2-d)}
+
+/* 둘이서 (폰 세로): 아래를 반씩 나눠 2×2 */
+.play.duo .cl{display:grid;grid-template-columns:auto auto;gap:9px;justify-content:center;align-content:end}
+.play.duo .dpad,.play.duo .acts{display:contents}
+.play.duo .ptag{display:block;grid-column:1/-1;text-align:center;font:14px/1 var(--round);color:var(--soft)}
+.play.duo .pb{width:62px;height:62px;font-size:22px}
+.play.duo .pb.sm{margin:0;font-size:14px}
+.play.duo .pb.jp{font-size:15px}
+
+/* 폰 가로: 판이 화면을 다 쓰고, 단추는 반투명하게 아래 구석에 */
+.play.land{padding:0;max-width:none;gap:0}
+.play.land .bar{position:absolute;top:calc(env(safe-area-inset-top,0px) + 6px);left:calc(env(safe-area-inset-left,0px) + 10px);right:calc(env(safe-area-inset-right,0px) + 10px)}
+.play.land .bar .mid{background:rgba(255,255,255,.72);border-radius:99px;padding:3px 12px 2px;justify-self:center;box-shadow:0 3px 10px rgba(140,98,70,.12)}
+.play.land .bar .t{display:none}
+.play.land .iconbtn{width:40px;height:40px;background:rgba(255,255,255,.8)}
+.play.land .stage{position:absolute;inset:0}
+.play.land .court,.play.land #cv{border-radius:0;box-shadow:none}
+.play.land .banner{top:30%}
+.play.land .pad{position:absolute;inset:auto 0 0 0;padding:0 calc(env(safe-area-inset-right,0px) + 16px) calc(env(safe-area-inset-bottom,0px) + 12px) calc(env(safe-area-inset-left,0px) + 16px);pointer-events:none;z-index:2}
+.play.land .dpad{gap:8px}
+.play.land .acts{gap:10px}
+.play.land .pb{width:60px;height:60px;background:rgba(255,255,255,.6);box-shadow:0 3px 12px rgba(140,98,70,.2);font-size:22px}
+.play.land .pb.sm{background:rgba(255,148,102,.66);margin-bottom:26px;font-size:15px}
+.play.land .pb.jp{background:rgba(124,201,180,.62);font-size:17px}
+.play.land .pb.on{background:rgba(255,255,255,.8)}
+.play.land .pb.sm.on{background:rgba(226,114,74,.8)}
+.play.land .pb.jp.on{background:rgba(90,168,146,.8)}
+.play.land.duo .cl{justify-content:flex-start}
+.play.land.duo .cl[data-p="1"]{justify-content:flex-end}
+.play.land.duo .pb{width:54px;height:54px}
+.play.land.duo .cl{gap:8px}
+/* 작은 폰 가로: 단추를 조금 작게 → 코트가 단추 밑으로 덜 들어감 */
+@media (max-width:719px){
+  .play.land .pb{width:52px;height:52px;font-size:20px}
+  .play.land .dpad{gap:6px}
+  .play.land .acts{gap:8px}
+  .play.land .pb.sm{margin-bottom:22px;font-size:14px}
+  .play.land .pb.jp{font-size:15px}
+  .play.land .pad{padding-left:calc(env(safe-area-inset-left,0px) + 10px);padding-right:calc(env(safe-area-inset-right,0px) + 10px)}
+  .play.land.duo .pb{width:48px;height:48px}
+}
+/* PC: 판이 크니 점수도 크게 */
+.play.desk .score{font-size:34px;gap:10px}
+.play.desk .score i{font-size:26px}
+.play.desk .who,.play.desk .who canvas{width:42px;height:42px}
+.play.land .dock,.play.land .keyline{display:none!important}
+
+/* 아래 단추 줄 (PC · AI 구경) */
+.play .dock{display:none}
+.play.desk .dock,.play.watch .dock{display:flex}
+#fastBtn{display:none}
+.play.watch #fastBtn{display:grid}
+.play.watch #helpBtn{display:none}
+.play.watch .pad{display:none!important}
+.keyline{display:none;margin:0;text-align:center;font-size:13px;color:var(--soft);line-height:1.9}
+.play.desk:not(.watch) .keyline{display:block}

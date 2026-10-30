@@ -1,0 +1,100 @@
+/* 오목 — cozy.css(냥도쿠 가족 디자인) 위에 이 게임만의 것: 꿀빛 강조색 · 작은 바둑돌 그림 · 대국 줄 · 착수 확인 줄 · 가로 화면 */
+:root{ --accent:#f0a05a; --accent-d:#d27f3a; --wood:#efcf9a; --wood-d:#c99a5e; --stone:#2b2523; }
+
+/* 작은 돌 그림 (머리글 · 이름표 · 착수 단추) */
+.st{display:inline-block;width:1em;height:1em;border-radius:50%;vertical-align:-.12em;flex:none}
+.st.b{background:radial-gradient(circle at 34% 30%,#7d736d 0,#3a3330 38%,#151211 100%);box-shadow:0 1px 2px rgba(60,35,15,.35)}
+.st.w{background:radial-gradient(circle at 34% 30%,#fff 0,#f6f1e9 45%,#d9cfc1 100%);box-shadow:0 1px 2px rgba(60,35,15,.3),inset 0 0 0 1px rgba(120,90,60,.12)}
+.dot{display:inline-block;width:.85em;height:.85em;border-radius:50%;margin-right:4px;vertical-align:-.08em}
+.dot.b{background:radial-gradient(circle at 34% 30%,#7d736d 0,#2b2523 60%)}
+.dot.w{background:radial-gradient(circle at 34% 30%,#fff 0,#e6ddd0 80%);box-shadow:inset 0 0 0 1px rgba(120,90,60,.25)}
+
+/* ── 메뉴 ── */
+header.top h1{display:flex;align-items:center;gap:8px}
+.logo{position:relative;width:34px;height:28px;flex:none}
+.logo i{position:absolute;top:2px;width:24px;height:24px;border-radius:50%}
+.logo .lb{left:0;background:radial-gradient(circle at 34% 30%,#7d736d 0,#3a3330 38%,#151211 100%);box-shadow:0 2px 4px rgba(60,35,15,.3)}
+.logo .lw{left:11px;top:5px;background:radial-gradient(circle at 34% 30%,#fff 0,#f6f1e9 45%,#d9cfc1 100%);box-shadow:0 2px 4px rgba(60,35,15,.28)}
+.box{display:grid;gap:12px}
+.center{justify-content:center;text-align:center}
+.optrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.optrow>.small{min-width:40px;font-family:var(--round);font-size:14px;color:var(--soft);white-space:nowrap}
+.optrow .seg{flex:1}
+.ruledesc{margin:-4px 0 0;font-size:13px;line-height:1.45;color:var(--soft);min-height:2.9em}
+.tier .rec{font-size:12px;color:#9a7f6b;min-height:1.2em}
+.tier b{white-space:nowrap}
+.tiers.three .tier{padding:14px 10px;gap:3px}
+.tiers.three .tier .em{font-size:30px}
+.tiers.three .tier b{font-size:20px}
+.minor{gap:2px}
+.minor .btn{font-size:14px;padding:8px 9px}
+.seg .btn{white-space:nowrap}
+.reclist{list-style:none;margin:0;padding:0;display:grid;gap:8px;text-align:left;max-height:52dvh;overflow:auto}
+.reclist li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:16px;background:var(--paper);border:2px solid var(--line);cursor:pointer}
+.reclist li:active{transform:translateY(1px)}
+.reclist .res{font:16px var(--round);min-width:36px}
+.reclist .res.w{color:var(--good)}.reclist .res.l{color:var(--bad)}.reclist .res.d{color:var(--soft)}
+.reclist .inf{flex:1;min-width:0;display:grid;line-height:1.3}
+.reclist .inf b{font:15px var(--round);font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reclist .go{color:var(--soft);font-size:18px}
+.setlist{display:grid;gap:12px;text-align:left}
+.setlist .optrow>.small{min-width:86px}
+
+/* ── 게임 화면 ── */
+.play{gap:8px}
+.rulepill{border:0;cursor:pointer;color:var(--soft);font-size:14px;padding:7px 11px;touch-action:manipulation;max-width:96px;overflow:hidden;text-overflow:ellipsis}
+.scorebar{gap:8px;min-height:40px}
+.scorebar .vs{font:13px var(--round);color:var(--soft)}
+.side{flex:1 1 0;max-width:210px;padding:5px 12px 5px 5px;transition:box-shadow .2s}
+.side .av{position:relative;width:30px;height:30px;background:var(--tint)}
+.side .av .emo{font:17px/1 var(--text);font-weight:400}
+.side .av .st{position:absolute;right:-3px;bottom:-2px;width:13px;height:13px}
+.side .av.stoneav{background:none}
+.side .av.stoneav .st{position:static;width:26px;height:26px}
+.side .nm{flex:1 1 auto;min-width:0;max-width:none}
+.side .say{font-size:12px;color:var(--soft);white-space:nowrap;min-width:3.4em;text-align:right}
+.side .n:empty{display:none}
+.side.turn .say{color:var(--accent-d)}
+.side.mood .av{animation:hop .5s cubic-bezier(.3,1.6,.5,1)}
+.stage{margin:0 -8px;place-items:start center}
+.stage canvas{border-radius:16px;box-shadow:0 12px 26px rgba(140,98,70,.24),0 2px 0 rgba(150,105,60,.18);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.stage canvas.wait{cursor:default}
+.dockwrap{position:relative;flex:none;height:76px}
+.dockwrap>.dock,.dockwrap>.confirm{position:absolute;inset:0;align-items:flex-start}
+.dock button.primary .ic{background:var(--accent);color:#fff}
+.dock .badge:empty{display:none}
+.confirm{display:flex;justify-content:center;gap:12px;padding-top:6px;animation:fadein .14s ease-out}
+.confirm .btn{height:54px;padding:0 20px;font-size:18px}
+.confirm .btn.primary{flex:0 1 210px;font-size:21px;display:flex;align-items:center;justify-content:center;gap:10px}
+.confirm .btn.primary .st{width:24px;height:24px}
+body.playing .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 104px)}
+.bubble.say{bottom:calc(env(safe-area-inset-bottom,0px) + 152px);font-size:15.5px;pointer-events:none}
+.overlay .sub{margin:0;color:var(--soft);font-size:14px}
+.overlay .bigline{font:24px/1.25 var(--round);margin:0}
+.overlay .why{margin:0;font-size:12.5px;color:var(--soft)}
+.overlay .winst{display:flex;justify-content:center}.overlay .winst .st{width:52px;height:52px;animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.toast{width:max-content}
+.reclist .res .st{width:22px;height:22px}
+.overlay .stars{margin:-6px 0 10px;line-height:1.15}
+.bubble.say{z-index:19}
+/* 한글은 낱말 중간에서 줄을 바꾸지 않게 ('이겨 / 요' 같은 외톨이 글자 막기) */
+.card,.overlay>div,.howto,.ruledesc,.lede,.tier span,.toast,.bubble{word-break:keep-all;overflow-wrap:anywhere}
+.lede,.ruledesc,.howto li{text-wrap:pretty}
+/* 판 밖(이름표·단추 사이)도 두 번 눌러 확대되지 않게 (판은 none 그대로) */
+.play{touch-action:manipulation}
+
+/* 가로로 눕힌 휴대폰: 판은 왼쪽(높이 가득), 나머지는 오른쪽 */
+@media (orientation:landscape) and (max-height:560px){
+  .play{max-width:none;display:grid;grid-template-columns:auto minmax(260px,420px);grid-template-rows:auto auto 1fr auto;justify-content:center;column-gap:18px;row-gap:10px;padding-left:calc(env(safe-area-inset-left,0px) + 12px);padding-right:calc(env(safe-area-inset-right,0px) + 12px)}
+  .stage{grid-column:1;grid-row:1/-1;margin:0;width:calc(100dvh - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px) - 22px)}
+  .bar,.scorebar,.dockwrap{grid-column:2}
+  .scorebar{flex-direction:column;align-items:stretch;gap:6px}
+  .scorebar .vs{display:none}
+  .side{max-width:none;flex:none}
+  .dockwrap{grid-row:4;height:76px}
+  .dockwrap .dock{gap:8px}
+  body.playing .toast{left:auto;right:calc(env(safe-area-inset-right,0px) + 20px);transform:none;bottom:calc(env(safe-area-inset-bottom,0px) + 100px);max-width:400px;animation:fadein .2s ease-out}
+  .bubble.say{bottom:calc(env(safe-area-inset-bottom,0px) + 150px);left:auto;right:calc(env(safe-area-inset-right,0px) + 20px);transform:none;animation:fadein .2s ease-out}
+}
+/* 아주 좁은 폰: 단추 줄 간격 줄이기 */
+@media (max-width:360px){ .dock{gap:6px} .dock button{min-width:52px} .dock button .ic{width:50px;height:50px} .side{padding-right:8px} }
