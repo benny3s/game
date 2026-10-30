@@ -159,5 +159,125 @@ for (let g = 0; g < 25; g++) {
   ok(totalCoins === 1000, `게임 ${g} 코인 보존 법칙 (총합 ${totalCoins})`);
 }
 
+// 7) 6인 섯다: 20장 중 12장 사용, 패 중복 없음, 시점별 정보 가림
+{
+  const s6 = S.create({ players: 6, seed: 4242 });
+  ok(s6.n === 6 && s6.pot === 60, '6인 학교비 60냥');
+  const used = [].concat(...s6.hands);
+  ok(used.length === 12 && new Set(used).size === 12, '6인 12장 중복 없음');
+  ok(S.create({ players: 9 }).n === 6, '인원 상한 6명');
+  const v2 = S.view(s6, 2);
+  ok(v2.seed === undefined && v2.deck === undefined, '시점 상태에 덱·씨앗 없음');
+  ok(v2.hands.every((h, q) => h[0] === s6.hands[q][0] && h[1] === -1), '1차 배팅: 모두 첫 장만 공개');
+  // 2차 배팅 진입 후 내 둘째 장만 보임
+  let st = s6;
+  for (let i = 0; i < 6; i++) st = S.step(st, S.A_CALL).state;
+  ok(st.street === 2 && st.phase === 'bet', '6인 콜 일주 후 2차 배팅');
+  const vv = S.view(st, 3);
+  ok(vv.hands[3][1] >= 0 && vv.hands.every((h, q) => q === 3 || h[1] === -1), '2차 배팅: 내 둘째 장만 보임');
+}
+
+// 8) 여러 명 판정: 땡·광땡·암행어사·땡잡이·구사·동점
+{
+  const h = (a, b) => ({ c1: a, c2: b });
+  const mk = (list) => list.map((x, i) => Object.assign({ p: i }, h(x[0], x[1])));
+  const c6Y = findCard(6, 'Y');
+  // 6인 중 38광땡이 이김 (장땡·알리 등 섞여 있어도)
+  let j = S.judgeShowdown(mk([[c3G, c8G], [c10Y, c10T], [c1P, c2T], [c9Y, c9T], [c4T, c9T], [c2Y, c6Y]]));
+  ok(j.kind === 'win' && j.winner === 0, '구사가 있어도 38광땡이 있으면 파토 안 됨');
+  j = S.judgeShowdown(mk([[c3G, c8G], [c10Y, c10T], [c1P, c2T], [c9Y, c9T], [c2Y, c6Y]]));
+  ok(j.kind === 'win' && j.winner === 0, '다인: 38광땡 최강');
+  // 구사 파토: 알리 이하만 있으면 6명이어도 재경기
+  j = S.judgeShowdown(mk([[c4T, c9T], [c1P, c2T], [c1P, c4T], [c2Y, c6Y], [c7T, c8Y]]));
+  ok(j.kind === 'rematch', '다인: 구사(4·9) + 알리 이하 → 파토');
+  // 땡잡이: 9땡·3땡이 있어도 장땡 없으면 땡잡이가 이김
+  const c5Y = findCard(5, 'Y'), c5T = findCard(5, 'T');
+  j = S.judgeShowdown(mk([[c3G, c7Y], [c9Y, c9T], [c5Y, c5T], [c1P, c2T]]));
+  ok(j.kind === 'win' && j.winner === 0, '다인: 땡잡이가 9땡·5땡을 잡음');
+  j = S.judgeShowdown(mk([[c3G, c7Y], [c9Y, c9T], [c10Y, c10T]]));
+  ok(j.kind === 'win' && j.winner === 2, '다인: 장땡이 있으면 장땡 승');
+  // 암행어사 vs 13광땡·알리
+  j = S.judgeShowdown(mk([[c4Y, c7Y], [c1G, c3G], [c1P, c2T], [c9Y, c9T]]));
+  ok(j.kind === 'win' && j.winner === 0, '다인: 암행어사가 13광땡을 잡음 (9땡도 이김)');
+  // 동점 → 재경기 (같은 끗 두 명 + 약한 패)
+  const c2Y_ = findCard(2, 'Y'), c8Y_ = findCard(8, 'Y'), c1Pt = findCard(1, 'T'), c3Pt = findCard(3, 'T'), c6Pt = findCard(6, 'T');
+  j = S.judgeShowdown(mk([[c1Pt, c8Y_], [c3Pt, c6Pt], [c2Y_, c4T]]));      // 9끗, 9끗, 6끗
+  ok(j.kind === 'rematch' && j.winners.length === 2, '다인: 최고 끗 동점 → 재경기');
+}
+
+// 9) 사이드 팟 (buildPots)
+{
+  let pots = S.buildPots([100, 100, 100], [true, true, true]);
+  ok(pots.length === 1 && pots[0].amount === 300 && pots[0].elig.length === 3, '사이드 팟: 모두 같으면 한 팟');
+  pots = S.buildPots([50, 100, 100], [true, true, true]);
+  ok(pots.length === 2 && pots[0].amount === 150 && pots[0].elig.length === 3 && pots[1].amount === 100 && pots[1].elig.join() === '1,2', '사이드 팟: 50 올인 → 메인 150 + 사이드 100');
+  pots = S.buildPots([50, 100, 200], [true, true, true]);
+  ok(pots.length === 3 && pots[2].refund === true && pots[2].amount === 100, '아무도 안 받아 준 100은 돌려줌');
+  pots = S.buildPots([40, 100, 100, 100], [true, false, true, true]);          // 1번은 다이: 죽은 돈은 메인에 포함, 자격 없음
+  ok(pots[0].amount === 160 && pots[0].elig.join() === '0,2,3' && pots[1].elig.join() === '2,3', '다이한 사람 돈은 팟에 남고 자격은 없음');
+}
+
+// 10) 짧은 스택 올인: 코인이 모자란 사람이 이겨도 자기 몫까지만
+{
+  let s = S.create({ players: 3, seed: 31, stacks: [40, 500, 500] });
+  s.hands = [[c10Y, c10T], [c9Y, c9T], [c1P, c2T]];     // 0번 장땡, 1번 9땡, 2번 알리
+  s.turn = 1;                                          // 1번부터
+  let r = S.step(s, S.A_HALF); s = r.state;
+  s = S.step(s, S.A_CALL).state;                       // 2번 콜
+  s = S.step(s, S.A_CALL).state;                       // 0번 (40 코인뿐) 올인 콜
+  ok(s.street === 2 || s.phase === 'end', '짧은 스택 콜 후 진행');
+  let guard = 0;
+  while (s.phase === 'bet' && guard++ < 30) {
+    const L = S.legal(s);
+    s = S.step(s, L.includes(S.A_QUARTER) && s.turn !== 0 ? S.A_QUARTER : S.A_CALL).state;
+  }
+  ok(s.phase === 'end', '짧은 스택 판 종료');
+  const total = s.coins.reduce((a, b) => a + b, 0) + s.carryPot;
+  ok(total === 1040, `짧은 스택 판 코인 보존 (${total})`);
+  ok(s.result.kind === 'showdown' && s.result.winner === 0, '장땡이 메인 팟 승');
+  ok(s.result.payouts[0] <= s.bets[0] * 3, '짧은 스택 승자의 몫은 자기가 낸 만큼의 3배(3명)까지');
+  ok(s.result.payouts[1] > 0, '사이드 팟은 남은 사람 중 최고(9땡)에게');
+}
+
+// 11) 6인 AI 대국 60판 — 합법 행동, 정상 종료, 코인 보존, 시간
+{
+  let tTotal = 0, rematches = 0;
+  for (let g = 0; g < 60; g++) {
+    const n = 3 + (g % 4);                               // 3~6인
+    let s = S.create({ players: n, seed: 9000 + g });
+    const total = n * 500;
+    let guard = 0;
+    const t0 = Date.now();
+    while (s.phase !== 'end' && guard++ < 120) {
+      const v = S.view(s, s.turn);
+      const act = AI.choose(v, ['easy', 'normal', 'hard'][g % 3], { seed: 77 + guard });
+      ok(S.isLegal(s, act), `다인 게임 ${g} 합법 액션`);
+      s = S.step(s, act).state;
+    }
+    tTotal += Date.now() - t0;
+    ok(s.phase === 'end' && s.result, `다인 게임 ${g} (${n}인) 정상 종료`);
+    const sum = s.coins.reduce((a, b) => a + b, 0) + s.carryPot;
+    ok(sum === total, `다인 게임 ${g} 코인 보존 (${sum}/${total})`);
+    if (s.result.kind === 'rematch') {
+      rematches++;
+      const nx = S.nextRound(s, { seed: 1 });
+      ok(nx.pot >= s.carryPot, '재경기 판돈 이월');
+    }
+  }
+  ok(tTotal < 60000, `다인 AI 대국 시간 (${tTotal}ms)`);
+}
+
+// 12) 다인 AI 선생님(코치): 6인 1차·2차 배팅 모두 계산됨
+{
+  let s = S.create({ players: 6, seed: 808 });
+  const c1 = AI.coach(S.view(s, s.turn), s.turn);
+  ok(c1.winPct >= 0 && c1.winPct <= 100 && c1.headline.length > 5, '6인 1차 코치');
+  for (let i = 0; i < 6; i++) s = S.step(s, S.A_CALL).state;
+  const c2 = AI.coach(S.view(s, s.turn), s.turn);
+  ok(c2.winPct >= 0 && c2.winPct <= 100 && Object.keys(c2.byAction).length >= 2, '6인 2차 코치');
+  const t0 = Date.now(); AI.coach(S.view(s, s.turn), s.turn);
+  ok(Date.now() - t0 < 300, '6인 코치 계산 300ms 이내');
+}
+
 console.log(`seotda selftest: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

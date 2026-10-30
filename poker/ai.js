@@ -23,7 +23,8 @@
   function estimateEquity(v, p, opts) {
     opts = opts || {};
     const samples = opts.samples || 200;
-    const rng = P.makeRng(((v.seed || 777) + v.round * 131 + v.street * 97 + p * 31) >>> 0);
+    // 씨앗은 남의 카드를 알려 줄 수 있어 뷰에서 빠짐 → 판 번호·거리·내 자리로 정한 값 (화면이 깜빡이지 않게 늘 같은 결과)
+    const rng = P.makeRng((777 + (v.round || 1) * 131 + (v.street || 0) * 97 + p * 31 + (v.pot || 0) * 7 + (v.board ? v.board.length : 0) * 13) >>> 0);
     const myHole = v.hands[p] || [];
     if (myHole.length < 2 || myHole[0] < 0) {
       return { equity: 0.5, win: 0.5, tie: 0, handEval: P.eval7([]), draws: { outsCount: 0, tags: [], summary: '' } };
@@ -37,7 +38,7 @@
 
     let oppCount = 0;
     for (let i = 0; i < v.n; i++) {
-      if (i !== p && !v.folded[i]) oppCount++;
+      if (i !== p && !v.folded[i] && !(v.out && v.out[i])) oppCount++;
     }
     if (oppCount === 0) {
       const ev = P.eval7(myHole.concat(board));
@@ -49,6 +50,7 @@
     let totalWeight = 0;
     let winWeight = 0;
     let tieWeight = 0;
+    let tieShare = 0;   // 같은 점수로 비길 때 나눠 갖는 몫 (여럿이 비기면 1/n)
 
     for (let s = 0; s < samples; s++) {
       // 부분 Fisher-Yates 셔플로 needTotal 장만 추출
@@ -59,8 +61,9 @@
       const simBoard = board.slice();
       for (let b = 0; b < needBoard; b++) simBoard.push(remDeck[b]);
 
-      const myScore = P.eval7(myHole.concat(simBoard)).score;
+      const myScore = P.score7(myHole.concat(simBoard));
       let maxOppScore = -1;
+      let tiedOpp = 0;
       let rangeWeight = 1.0;
 
       for (let o = 0; o < oppCount; o++) {
@@ -71,22 +74,23 @@
           const pf = preflopStrength(oc1, oc2);
           rangeWeight *= (0.35 + pf * (0.8 + 0.4 * v.raises));
         }
-        const oScore = P.eval7([oc1, oc2].concat(simBoard)).score;
-        if (oScore > maxOppScore) maxOppScore = oScore;
+        const oScore = P.score7([oc1, oc2].concat(simBoard));
+        if (oScore > maxOppScore) { maxOppScore = oScore; tiedOpp = 1; }
+        else if (oScore === maxOppScore) tiedOpp++;
       }
 
       totalWeight += rangeWeight;
       if (myScore > maxOppScore) winWeight += rangeWeight;
-      else if (myScore === maxOppScore) tieWeight += rangeWeight;
+      else if (myScore === maxOppScore) { tieWeight += rangeWeight; tieShare += rangeWeight / (tiedOpp + 1); }
     }
 
     const win = totalWeight > 0 ? winWeight / totalWeight : 0.5;
     const tie = totalWeight > 0 ? tieWeight / totalWeight : 0;
-    const equity = win + tie * 0.5;
+    const equity = win + (totalWeight > 0 ? tieShare / totalWeight : 0);
     const handEval = P.eval7(myHole.concat(board));
     const draws = P.analyzeDraws(myHole, board);
 
-    return { equity, win, tie, handEval, draws };
+    return { equity, win, tie, handEval, draws, oppCount };
   }
 
   // 🧑‍🏫 홀덤 GTO 일타 강사 분석기
@@ -119,8 +123,10 @@
         const extra = Math.max(0, cost - callCost);
         // 폴드 에퀴티(상대가 죽을 확률): 베팅 크기가 팟 대비 클수록 증가하되 내 에퀴티가 낮을 때 과도한 블러프 억제
         const betRatio = extra / Math.max(20, pot);
-        const foldEquity = Math.min(0.52, 0.16 + betRatio * 0.18);
-        const matchPot = pot + cost + extra;
+        const foldOne = Math.min(0.52, 0.16 + betRatio * 0.18);
+        const kOpp = Math.max(1, eq.oppCount || 1);
+        const foldEquity = Math.pow(foldOne, 1 + 0.5 * (kOpp - 1));      // 상대가 많을수록 전원이 접기는 어려움
+        const matchPot = pot + cost + extra * Math.max(1, Math.min(kOpp, 3) * 0.7);
         ev = foldEquity * pot + (1 - foldEquity) * (eq.equity * matchPot - cost);
         if (eq.equity < 0.36) ev -= extra * 0.42;
         if (a === A_ALLIN && eq.equity < 0.62) ev -= extra * 0.25;

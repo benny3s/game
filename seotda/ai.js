@@ -33,7 +33,9 @@
     return Math.max(0.22, 1.0 - raises * 0.32);      // 낮은 끗은 레이즈 빈도 낮음 (블러프 빈도만 남김)
   }
 
-  // 정밀 승률 & 위협 패 분석 (20장 화투 완전 탐색)
+  // 정밀 승률 & 위협 패 분석 (20장 화투)
+  //  · 모르는 카드(내 둘째 장 + 상대 히든패)를 빈 카드 더미에서 모두 짝지어 보는 완전 탐색,
+  //    경우의 수가 너무 많으면(상대 3명 이상) 같은 씨앗으로 뽑아 보는 표본 추정 (화면이 깜빡이지 않게 늘 같은 결과)
   function analyzeEquity(v, p) {
     const meHand = v.hands[p] || [];
     const aliveOpps = [];
@@ -42,103 +44,92 @@
 
     if (!aliveOpps.length) {
       const myE = meHand[1] >= 0 ? S.evalHand(meHand[0], meHand[1]) : null;
-      return { rawWin: 1, adjWin: 1, rematch: 0, handEval: myE, threats: [], bestPotentials: [] };
+      return { rawWin: 1, adjWin: 1, rematch: 0, handEval: myE, threats: [], bestPotentials: [], oppCount: 0 };
     }
 
-    // 1차 배팅 (내 두 번째 패도 아직 모름)
-    if (v.street === 1 || meHand[1] < 0) {
-      let winW = 0, totW = 0, remW = 0;
-      const potentials = [];
-      for (let i = 0; i < unseen.length; i++) {
-        const myC2 = unseen[i];
-        const myE = S.evalHand(meHand[0], myC2);
-        potentials.push({ c2: myC2, cardName: S.cardName(myC2), eval: myE });
-        for (let j = 0; j < unseen.length; j++) {
-          if (i === j) continue;
-          const oppC2 = unseen[j];
-          const opp0 = aliveOpps[0];
-          const jRes = S.judgeShowdown([
-            { p, c1: meHand[0], c2: myC2 },
-            { p: opp0, c1: v.hands[opp0][0], c2: oppC2 },
-          ]);
-          totW += 1;
-          if (jRes.kind === 'rematch') remW += 1;
-          else if (jRes.winner === p) winW += 1;
-        }
+    const k = aliveOpps.length;
+    const street1 = v.street === 1 || meHand[1] < 0;
+    const free = (street1 ? 1 : 0) + k;                 // 새로 정해야 하는 카드 수
+    const U = unseen.length;
+    let perms = 1;
+    for (let i = 0; i < free; i++) perms *= Math.max(1, U - i);
+    const exact = perms <= 2500;
+    const rng = S.makeRng((((v.round || 1) * 2654435761) ^ (p * 97) ^ ((v.street || 1) * 13) ^ (k * 7919) ^ ((v.raises || 0) * 31) ^ (v.pot || 0)) >>> 0);
+
+    // 한 가지 경우(짝지은 카드 배열)를 평가해 합계에 누적
+    const acc = { tot: 0, win: 0, rem: 0, raw: 0, adj: 0, adjW: 0, adjR: 0, n: 0 };
+    const potentials = [];
+    const threats = [];
+    const potSeen = new Set();
+    const remVal = k === 1 ? 0.5 : 0.35;
+    const evalCase = (pick) => {
+      const myC2 = street1 ? pick[0] : meHand[1];
+      const off = street1 ? 1 : 0;
+      const hands = [{ p, c1: meHand[0], c2: myC2 }];
+      let w = 1;
+      for (let i = 0; i < k; i++) {
+        const o = aliveOpps[i];
+        const oc2 = pick[off + i];
+        hands.push({ p: o, c1: v.hands[o][0], c2: oc2 });
+        if (!street1) w *= oppWeight(S.evalHand(v.hands[o][0], oc2), v.raises);
       }
+      if (street1 && !potSeen.has(myC2)) { potSeen.add(myC2); potentials.push({ c2: myC2, cardName: S.cardName(myC2), eval: S.evalHand(meHand[0], myC2) }); }
+      const res = S.judgeShowdown(hands);
+      acc.n++; acc.tot += w;
+      if (res.kind === 'rematch') { acc.rem += w; acc.raw += street1 ? 0 : remVal; acc.adjR += w; }
+      else if (res.winner === p) { acc.win += w; acc.raw += 1; acc.adjW += w; }
+      else if (!street1 && k === 1) {
+        const oppFinal = res.evals.find(e => e.p === aliveOpps[0]);
+        threats.push({ c2: pick[0], name: oppFinal ? oppFinal.effName : S.evalHand(v.hands[aliveOpps[0]][0], pick[0]).name, cardName: S.cardName(pick[0]) });
+      }
+    };
+
+    if (exact) {
+      const pick = new Array(free), used = new Array(20).fill(false);
+      const rec = i => {
+        if (i === free) { evalCase(pick); return; }
+        for (let j = 0; j < U; j++) {
+          const c = unseen[j];
+          if (used[c]) continue;
+          used[c] = true; pick[i] = c; rec(i + 1); used[c] = false;
+        }
+      };
+      rec(0);
+    } else {
+      const pool = unseen.slice();
+      const N = 1400;
+      for (let t = 0; t < N; t++) {
+        for (let i = 0; i < free; i++) {
+          const j = i + Math.floor(rng() * (pool.length - i));
+          const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+        }
+        evalCase(pool.slice(0, free));
+      }
+      if (street1) {                                    // 내 둘째 장 후보는 표본과 상관없이 전부 나열
+        for (const c of unseen) if (!potSeen.has(c)) { potSeen.add(c); potentials.push({ c2: c, cardName: S.cardName(c), eval: S.evalHand(meHand[0], c) }); }
+      }
+    }
+
+    if (street1) {
       potentials.sort((a, b) => b.eval.rank - a.eval.rank);
       const topPot = potentials.slice(0, 3).map(x => `${x.eval.name}(${S.cardOf(x.c2).m}월)`);
-      const winRate = totW ? winW / totW : 0.5;
+      const winRate = acc.tot ? acc.win / acc.tot : 0.5;
       return {
         rawWin: winRate,
         adjWin: winRate,
-        rematch: totW ? remW / totW : 0,
+        rematch: acc.tot ? acc.rem / acc.tot : 0,
         handEval: { rank: 500, name: `${S.cardOf(meHand[0]).m}월 오픈`, desc: `2번째 장으로 가능한 상위 족보: ${topPot.join(', ')}` },
         threats: [],
         bestPotentials: topPot,
+        oppCount: k,
       };
     }
 
-    // 2차 본 배팅 (내 두 장 완성, 상대 오픈패 1장 공개 + 히든패 1장 미공개)
     const myEval = S.evalHand(meHand[0], meHand[1]);
-    let rawWins = 0, rawTotal = 0;
-    let adjWins = 0, adjRematch = 0, adjTotal = 0;
-    const threats = [];
-
-    if (aliveOpps.length === 1) {
-      const opp = aliveOpps[0], oppC1 = v.hands[opp][0];
-      for (const oppC2 of unseen) {
-        const oppE = S.evalHand(oppC1, oppC2);
-        const w = oppWeight(oppE, v.raises);
-        const res = S.judgeShowdown([
-          { p, c1: meHand[0], c2: meHand[1] },
-          { p: opp, c1: oppC1, c2: oppC2 },
-        ]);
-        rawTotal++;
-        adjTotal += w;
-        if (res.kind === 'rematch') {
-          rawWins += 0.5;
-          adjRematch += w;
-        } else if (res.winner === p) {
-          rawWins += 1;
-          adjWins += w;
-        } else {
-          const oppFinal = res.evals.find(e => e.p === opp);
-          threats.push({ c2: oppC2, name: oppFinal ? oppFinal.effName : oppE.name, cardName: S.cardName(oppC2) });
-        }
-      }
-    } else {
-      // 3인 생존 시 (상대 2명의 히든패 조합 완전 탐색)
-      const [o1, o2] = aliveOpps;
-      const c1_o1 = v.hands[o1][0], c1_o2 = v.hands[o2][0];
-      for (let i = 0; i < unseen.length; i++) {
-        for (let j = 0; j < unseen.length; j++) {
-          if (i === j) continue;
-          const u1 = unseen[i], u2 = unseen[j];
-          const e1 = S.evalHand(c1_o1, u1), e2 = S.evalHand(c1_o2, u2);
-          const w = oppWeight(e1, v.raises) * oppWeight(e2, v.raises);
-          const res = S.judgeShowdown([
-            { p, c1: meHand[0], c2: meHand[1] },
-            { p: o1, c1: c1_o1, c2: u1 },
-            { p: o2, c1: c1_o2, c2: u2 },
-          ]);
-          rawTotal++;
-          adjTotal += w;
-          if (res.kind === 'rematch') {
-            rawWins += 0.35;
-            adjRematch += w;
-          } else if (res.winner === p) {
-            rawWins += 1;
-            adjWins += w;
-          }
-        }
-      }
-    }
-
-    const rawWin = rawTotal ? rawWins / rawTotal : 0.5;
-    const adjWin = adjTotal ? (adjWins + adjRematch * 0.45) / adjTotal : rawWin;
-    const rematch = adjTotal ? adjRematch / adjTotal : 0;
-    return { rawWin, adjWin, rematch, handEval: myEval, threats, bestPotentials: [] };
+    const rawWin = acc.n ? acc.raw / acc.n : 0.5;
+    const adjWin = acc.tot ? (acc.adjW + acc.adjR * 0.45) / acc.tot : rawWin;
+    const rematch = acc.tot ? acc.adjR / acc.tot : 0;
+    return { rawWin, adjWin, rematch, handEval: myEval, threats, bestPotentials: [], oppCount: k };
   }
 
   // 🧑‍🏫 일타 강사 실시간 배팅 코칭
@@ -156,7 +147,9 @@
     // 각 행동의 기댓값(EV, 냥 단위) 계산
     const byAction = {};
     let bestAct = A_CALL, bestEv = -1e9;
-    const foldYield = v.raises === 0 ? 0.28 : 0.14; // 상대가 내 레이즈에 죽어줄 추정 확률
+    const kOpp = Math.max(1, eq.oppCount || 1);
+    // 상대가 내 레이즈에 (모두) 죽어줄 추정 확률 — 상대가 많을수록 다 죽기는 어려움
+    const foldYield = Math.pow(v.raises === 0 ? 0.28 : 0.14, 1 + 0.5 * (kOpp - 1));
 
     for (const a of L) {
       const cost = S.actionCost(v, p, a);
@@ -167,7 +160,7 @@
         ev = eq.adjWin * (pot + cost) - cost;
       } else {
         const extra = Math.max(0, cost - toCall);
-        const matchPot = pot + cost + extra;
+        const matchPot = pot + cost + extra * Math.max(1, Math.min(kOpp, 3) * 0.7); // 따라오는 사람 몫까지
         // 레이즈 기댓값 = 상대 폴드 시 현재 팟 획득 + 상대 콜 시 커진 팟에서 승률만큼 획득
         ev = foldYield * pot + (1 - foldYield) * (eq.adjWin * matchPot - cost);
         // 너무 약한 패로 무리한 레이즈는 역레이즈 위험 페널티
@@ -190,7 +183,7 @@
     const hName = eq.handEval ? eq.handEval.name : '내 패';
     const threatTxt = eq.threats.length
       ? `상대 오픈패 기준 내가 지는 히든패는 ${eq.threats.length}종(${eq.threats.slice(0, 3).map(t => t.name).join(', ')})뿐이에요.`
-      : v.street === 2 ? '상대가 어떤 히든패를 들고 있어도 이기는 무적 상태예요!' : eq.handEval.desc;
+      : v.street === 2 ? (eq.rawWin >= 0.995 ? '상대가 어떤 히든패를 들고 있어도 이기는 무적 상태예요!' : eq.oppCount > 1 ? `남은 ${eq.oppCount}명을 모두 이기려면 패가 더 세야 해요. 여럿이 남을수록 신중하게!` : '상대 히든패에 따라 갈려요.') : eq.handEval.desc;
 
     if (bestAct === A_FOLD) {
       headline = `🛑 [다이(기권) 추천] 승률 ${winPct}% < 팟 오즈 ${potOddsPct}%`;

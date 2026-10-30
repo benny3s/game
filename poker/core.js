@@ -1,7 +1,8 @@
 /* 텍사스 홀덤 포커 (Texas Hold'em) — 규칙 · 7장 족보 판정 · 드로(Outs) 분석 엔진 (core.js)
    · 52장 플레잉 카드 (♠ ♥ ♦ ♣ × 2..A)
    · 족보: 로열 플러시 > 스트레이트 플러시 > 포카드 > 풀하우스 > 플러시 > 스트레이트(A-2-3-4-5 백스트레이트 포함) > 트리플 > 투페어 > 원페어 > 하이카드
-   · 스트리트: 프리플랍(2장) → 플랍(공용 3장) → 턴(공용 4장) → 리버(공용 5장) → 쇼다운 */
+   · 스트리트: 프리플랍(2장) → 플랍(공용 3장) → 턴(공용 4장) → 리버(공용 5장) → 쇼다운
+   · 2~8명: 딜러 버튼·SB/BB 돌려가며, 올인은 사이드 팟, 칩이 바닥나면 탈락(마지막 한 명이 우승) */
 (function (root) {
   'use strict';
 
@@ -33,6 +34,8 @@
   const A_HALF = 2;  // 하프 팟 레이즈
   const A_POT = 3;   // 풀 팟 레이즈
   const A_ALLIN = 4; // 올인
+
+  const MAX_PLAYERS = 8;
 
   const STREET_NAMES = ['프리플랍 (Pre-Flop)', '플랍 (Flop)', '턴 (Turn)', '리버 (River)'];
 
@@ -305,10 +308,105 @@
     return { outsCount: totalOuts, hitPct, tags, summary };
   }
 
-  // 게임 생성
+  // ── 빠른 점수 계산 (시뮬레이션용): eval7(...).score 와 똑같은 값을 이름·배열 없이 계산
+  //    8명이 몬테카를로를 돌려도 느려지지 않게 (카드 id 배열 → 숫자)
+  const _rc = new Array(15).fill(0);
+  function score7(cards) {
+    const rc = _rc;
+    for (let r = 2; r <= 14; r++) rc[r] = 0;
+    const sc = [0, 0, 0, 0];
+    const suitRanks = [[], [], [], []];
+    let n = 0;
+    for (let i = 0; i < cards.length; i++) {
+      const id = cards[i];
+      if (id < 0) continue;
+      const suit = (id / 13) | 0, rank = (id % 13) + 2;
+      rc[rank]++; sc[suit]++; suitRanks[suit].push(rank); n++;
+    }
+    const B = 1000000;
+    const enc = arr => arr.reduce((a, v) => a * 15 + v, 0);
+    // 가장 높은 스트레이트 윗숫자 (ranks: 존재 여부 함수)
+    const straightHigh = has => {
+      for (let hi = 14; hi >= 6; hi--) {
+        if (has(hi) && has(hi - 1) && has(hi - 2) && has(hi - 3) && has(hi - 4)) return hi;
+      }
+      if (has(14) && has(2) && has(3) && has(4) && has(5)) return 5;
+      return 0;
+    };
+    // 플러시(+스트레이트 플러시)
+    let flushSuit = -1;
+    for (let s = 0; s < 4; s++) if (sc[s] >= 5) flushSuit = s;
+    if (flushSuit >= 0) {
+      const fr = suitRanks[flushSuit].slice().sort((a, b) => b - a);
+      const set = new Set(fr);
+      const sf = straightHigh(r => set.has(r));
+      if (sf === 14) return 9 * B + 14;
+      if (sf) return 8 * B + sf;
+    }
+    // 같은 숫자 묶음 (많은 순 → 높은 숫자 순)
+    const groups = [];
+    for (let r = 14; r >= 2; r--) if (rc[r]) groups.push({ r, c: rc[r] });
+    groups.sort((a, b) => (b.c - a.c) || (b.r - a.r));
+    if (groups[0].c === 4) {
+      let kick = 0;
+      for (let i = 1; i < groups.length; i++) if (groups[i].r > kick) kick = groups[i].r;
+      return 7 * B + groups[0].r * 15 + kick;
+    }
+    if (groups[0].c === 3 && groups.length > 1 && groups[1].c >= 2) return 6 * B + groups[0].r * 15 + groups[1].r;
+    if (flushSuit >= 0) {
+      const fr = suitRanks[flushSuit].slice().sort((a, b) => b - a).slice(0, 5);
+      return 5 * B + enc(fr);
+    }
+    const st = straightHigh(r => rc[r] > 0);
+    if (st) return 4 * B + st;
+    if (groups[0].c === 3) return 3 * B + enc([groups[0].r, groups[1].r, groups[2].r]);
+    if (groups[0].c === 2 && groups.length > 1 && groups[1].c === 2) {
+      // 투페어(페어가 3쌍이면 위 둘만, 남은 최고 카드가 키커)
+      let kick = 0;
+      for (let i = 2; i < groups.length; i++) if (groups[i].r > kick) kick = groups[i].r;
+      return 2 * B + enc([groups[0].r, groups[1].r, kick]);
+    }
+    if (groups[0].c === 2) return 1 * B + enc([groups[0].r, groups[1].r, groups[2].r, groups[3].r]);
+    const hr = groups.map(g => g.r).slice(0, 5);
+    return enc(hr);
+  }
+
+  // ── 사이드 팟 ─────────────────────────────────────────────
+  // contrib[p] = 이번 판에 낸 총 칩, live[p] = 패를 깔 자격(폴드 안 함)
+  // 반환 [{ amount, elig:[p…] }] — 맨 앞이 메인 팟, 뒤는 사이드 팟 (올인 금액이 낮은 순)
+  //  · 폴드한 사람의 칩(죽은 돈)은 그가 냈던 층에 들어감
+  //  · 낸 사람이 혼자뿐인 맨 위층(아무도 안 받아 준 칩)은 그 사람에게 돌려줌: refund 표시
+  function buildPots(contrib, live) {
+    const levels = Array.from(new Set(contrib.filter(c => c > 0))).sort((a, b) => a - b);
+    const pots = [];
+    let prev = 0;
+    for (const lv of levels) {
+      let amount = 0, cnt = 0;
+      const elig = [];
+      for (let q = 0; q < contrib.length; q++) {
+        if (contrib[q] >= lv) { amount += lv - prev; cnt++; if (live[q]) elig.push(q); }
+      }
+      prev = lv;
+      if (!amount) continue;
+      if (!elig.length) {                       // 이 층을 낸 사람이 전부 폴드 → 아래 층에 합침
+        if (pots.length) pots[pots.length - 1].amount += amount;
+        continue;
+      }
+      pots.push({ amount, elig, refund: cnt === 1 });
+    }
+    const merged = [];
+    for (const pt of pots) {
+      const last = merged[merged.length - 1];
+      if (last && !pt.refund && !last.refund && last.elig.join() === pt.elig.join()) last.amount += pt.amount;
+      else merged.push(pt);
+    }
+    return merged;
+  }
+
+  // 게임 생성 (2~8명)
   function create(opts) {
     opts = opts || {};
-    const n = Math.max(2, Math.min(4, opts.players || 2));
+    const n = Math.max(2, Math.min(MAX_PLAYERS, opts.players || 2));
     const sb = opts.sb || 10;
     const bb = opts.bb || 20;
     const startCoins = opts.coins || 1000;
@@ -319,8 +417,14 @@
       bb,
       seed,
       round: 0,
-      dealer: opts.dealer || 0,
-      coins: Array.from({ length: n }, () => startCoins),
+      dealer: (opts.dealer || 0) % n,
+      sbSeat: -1,
+      bbSeat: -1,
+      // 시작 칩: opts.stacks(자리별 배열)가 있으면 그대로, 없으면 모두 startCoins (나중에 은행이 꽂힐 자리)
+      coins: Array.from({ length: n }, (_, i) => (opts.stacks && opts.stacks[i] > 0 ? opts.stacks[i] : startCoins)),
+      out: Array.from({ length: n }, () => false),   // 칩이 바닥나 탈락한 자리
+      over: false,                                   // 한 명만 남아 게임 끝
+      champion: -1,
       hands: Array.from({ length: n }, () => []),
       board: [],
       deck: [],
@@ -343,6 +447,20 @@
     return s;
   }
 
+  // dealer 다음부터 시계 방향으로 탈락 안 한 첫 자리
+  function nextActive(s, from) {
+    for (let k = 1; k <= s.n; k++) {
+      const q = (from + k) % s.n;
+      if (!s.out[q]) return q;
+    }
+    return from;
+  }
+  function activeCount(s) {
+    let c = 0;
+    for (let q = 0; q < s.n; q++) if (!s.out[q]) c++;
+    return c;
+  }
+
   function startRound(s, seed) {
     const rng = makeRng(seed);
     const deck = Array.from({ length: 52 }, (_, i) => i);
@@ -360,26 +478,61 @@
     s.phase = 'bet';
     s.result = null;
 
+    // 칩이 없는 자리는 탈락 (다시 살리지 않음)
+    for (let p = 0; p < s.n; p++) if (s.coins[p] <= 0) s.out[p] = true;
+    if (activeCount(s) < 2) {
+      s.over = true;
+      s.champion = s.out.findIndex(o => !o);
+      s.phase = 'end';
+      s.result = { kind: 'over', winner: s.champion, winners: [s.champion], pot: 0, payouts: s.coins.map(() => 0), pots: [], evals: [], reason: '마지막 한 명이 남았어요! 우승!' };
+      return;
+    }
+    s.over = false;
+    s.champion = -1;
+    // 딜러가 탈락했으면 다음 살아있는 자리로
+    if (s.out[s.dealer]) s.dealer = nextActive(s, s.dealer);
+
     for (let p = 0; p < s.n; p++) {
-      if (s.coins[p] < s.bb * 2) s.coins[p] = 1000; // 파산 시 리바이
-      s.hands[p] = [deck.pop(), deck.pop()];
-      s.folded[p] = false;
+      if (s.out[p]) {
+        s.hands[p] = [];
+        s.folded[p] = true;
+      } else {
+        s.hands[p] = [deck.pop(), deck.pop()];
+        s.folded[p] = false;
+      }
       s.allIn[p] = false;
       s.bets[p] = 0;
       s.totalBets[p] = 0;
       s.acted[p] = false;
     }
 
-    // 블라인드 포스팅 (2인 헤즈업일 때는 딜러=SB, 상대=BB)
-    const sbSeat = s.n === 2 ? s.dealer : (s.dealer + 1) % s.n;
-    const bbSeat = s.n === 2 ? (s.dealer + 1) % 2 : (s.dealer + 2) % s.n;
-
+    // 블라인드: 2명(헤즈업)이면 딜러=SB·상대=BB, 3명 이상이면 딜러 왼쪽이 SB, 그 다음이 BB
+    let sbSeat, bbSeat;
+    if (activeCount(s) === 2) { sbSeat = s.dealer; bbSeat = nextActive(s, s.dealer); }
+    else { sbSeat = nextActive(s, s.dealer); bbSeat = nextActive(s, sbSeat); }
+    s.sbSeat = sbSeat;
+    s.bbSeat = bbSeat;
     postChips(s, sbSeat, s.sb);
     postChips(s, bbSeat, s.bb);
     s.curBet = s.bb;
     s.lastRaise = s.bb;
     // 프리플랍 첫 액션은 BB 다음 사람 (헤즈업이면 딜러/SB)
-    s.turn = (bbSeat + 1) % s.n;
+    s.turn = nextActive(s, bbSeat);
+    fixTurn(s);
+  }
+
+  // 지금 차례가 올인·폴드면 다음 사람으로, 아무도 더 할 수 없으면 바로 끝까지 진행
+  function fixTurn(s) {
+    const evs = [];
+    const can = canActPlayers(s);
+    if (can.length === 0 || (can.length === 1 && s.bets[can[0]] >= s.curBet)) {
+      while (s.phase === 'bet') advanceStreetOrShowdown(s, evs);
+      return;
+    }
+    for (let k = 0; k < s.n; k++) {
+      const q = (s.turn + k) % s.n;
+      if (!s.folded[q] && !s.allIn[q]) { s.turn = q; return; }
+    }
   }
 
   function postChips(s, p, amt) {
@@ -394,7 +547,10 @@
 
   function nextRound(s, seed) {
     const nxt = fastClone(s);
-    nxt.dealer = (s.dealer + 1) % s.n;
+    if (nxt.over) return nxt;
+    // 칩이 바닥난 자리는 탈락 처리 후, 딜러 버튼은 다음 살아있는 자리로
+    for (let p = 0; p < nxt.n; p++) if (nxt.coins[p] <= 0) nxt.out[p] = true;
+    nxt.dealer = nextActive(nxt, s.dealer);
     startRound(nxt, (seed >>> 0) || ((s.seed + 7919 * nxt.round) >>> 0));
     return nxt;
   }
@@ -409,9 +565,9 @@
     if (action === A_FOLD) return 0;
     if (action === A_CALL) return Math.min(myCoins, toCall);
     const basePot = s.pot + toCall;
-    let extra = s.bb;
-    if (action === A_HALF) extra = Math.max(s.bb, Math.round(basePot * 0.5));
-    else if (action === A_POT) extra = Math.max(s.bb, basePot);
+    let extra = Math.max(s.bb, s.lastRaise);          // 최소 레이즈 = 직전 레이즈 크기
+    if (action === A_HALF) extra = Math.max(extra, Math.round(basePot * 0.5));
+    else if (action === A_POT) extra = Math.max(extra, basePot);
     else if (action === A_ALLIN) return myCoins;
     return Math.min(myCoins, toCall + extra);
   }
@@ -473,14 +629,14 @@
     }
     s.curBet = 0;
     s.raises = 0;
+    s.lastRaise = s.bb;
     for (let i = 0; i < s.n; i++) {
       s.bets[i] = 0;
       s.acted[i] = s.folded[i] || s.allIn[i];
     }
-    // 포스트플랍 첫 순서는 딜러 다음 생존자 (헤즈업이면 BB가 먼저 액션)
-    const startIdx = s.n === 2 ? (s.dealer + 1) % 2 : (s.dealer + 1) % s.n;
-    for (let k = 0; k < s.n; k++) {
-      const idx = (startIdx + k) % s.n;
+    // 포스트플랍 첫 순서는 딜러 왼쪽부터 폴드·올인 아닌 첫 사람 (헤즈업이면 BB가 먼저)
+    for (let k = 1; k <= s.n; k++) {
+      const idx = (s.dealer + k) % s.n;
       if (!s.folded[idx] && !s.allIn[idx]) {
         s.turn = idx;
         break;
@@ -489,33 +645,56 @@
     evs.push({ t: 'street', street: s.street, board: s.board.slice() });
   }
 
+  // 쇼다운: 메인 팟 → 사이드 팟 순서로, 층마다 자격자 중 최고 족보가 가져감 (동점이면 나눔, 남는 칩은 딜러 왼쪽부터)
   function resolveShowdown(s, evs) {
     const alive = alivePlayers(s);
     const evals = s.hands.map((h, idx) => {
+      if (!h.length) return { p: idx, hole: [], folded: true, out: true, cat: 0, score: -1, name: '탈락', shortName: '탈락', best5: [] };
       const ev = eval7(h.concat(s.board));
       return Object.assign({ p: idx, hole: h.slice(), folded: s.folded[idx] }, ev);
     });
-    let bestScore = -1;
-    for (const p of alive) {
-      if (evals[p].score > bestScore) bestScore = evals[p].score;
+    const pots = buildPots(s.totalBets, s.folded.map(f => !f));
+    const payouts = Array.from({ length: s.n }, () => 0);
+    const potInfo = [];
+    for (const pt of pots) {
+      if (pt.refund) {                               // 아무도 안 받아 준 칩은 돌려줌
+        s.coins[pt.elig[0]] += pt.amount; payouts[pt.elig[0]] += pt.amount;
+        potInfo.push({ amount: pt.amount, elig: pt.elig, winners: [pt.elig[0]], refund: true });
+        continue;
+      }
+      let best = -1;
+      for (const q of pt.elig) if (evals[q].score > best) best = evals[q].score;
+      let ws = pt.elig.filter(q => evals[q].score === best);
+      // 딜러 왼쪽부터 순서대로 정렬 (남는 칩을 먼저 받는 순)
+      ws = ws.slice().sort((a, b) => ((a - s.dealer - 1 + s.n) % s.n) - ((b - s.dealer - 1 + s.n) % s.n));
+      const share = Math.floor(pt.amount / ws.length);
+      const rem = pt.amount - share * ws.length;
+      ws.forEach((w, i) => {
+        const got = share + (i < rem ? 1 : 0);
+        s.coins[w] += got; payouts[w] += got;
+      });
+      potInfo.push({ amount: pt.amount, elig: pt.elig, winners: ws });
     }
-    const winners = alive.filter(p => evals[p].score === bestScore);
-    const share = Math.floor(s.pot / winners.length);
-    const rem = s.pot - share * winners.length;
-    winners.forEach((w, i) => {
-      s.coins[w] += share + (i === 0 ? rem : 0);
-    });
-    const w0 = winners[0];
+    const winnersAll = [];
+    potInfo.forEach(pi => { if (!pi.refund) pi.winners.forEach(w => { if (winnersAll.indexOf(w) < 0) winnersAll.push(w); }); });
+    // 메인 팟 우승자 기준으로 설명
+    const main = potInfo.find(pi => !pi.refund) || potInfo[0];
+    const w0 = main.winners[0];
+    const top = payouts.reduce((a, b, i) => (b > payouts[a] ? i : a), 0);
     s.phase = 'end';
     s.result = {
       kind: 'showdown',
-      winner: winners.length === 1 ? w0 : null,
-      winners,
+      winner: winnersAll.length === 1 ? winnersAll[0] : null,
+      winners: winnersAll,
+      mainWinners: main.winners.slice(),
+      topPayout: top,
       pot: s.pot,
+      pots: potInfo,
+      payouts,
       winnerHand: evals[w0].name,
-      reason: winners.length > 1
+      reason: main.winners.length > 1
         ? `무승부 스플릿! (${evals[w0].name})`
-        : `${evals[w0].name}(으)로 승리!`,
+        : `${evals[w0].name}(으)로 승리!` + (potInfo.filter(pi => !pi.refund).length > 1 ? ' (올인 사이드 팟 있음)' : ''),
       evals,
     };
     evs.push({ t: 'showdown', result: s.result });
@@ -537,7 +716,7 @@
       postChips(s, p, cost);
       s.acted[p] = true;
       if (s.bets[p] > prevBet) {
-        s.lastRaise = s.bets[p] - prevBet;
+        s.lastRaise = Math.max(s.lastRaise, s.bets[p] - prevBet);
         s.curBet = s.bets[p];
         s.raises += 1;
         for (let i = 0; i < s.n; i++) {
@@ -555,14 +734,19 @@
       const winPot = s.pot;
       s.coins[w] += winPot;
       s.phase = 'end';
-      const evals = s.hands.map((h, idx) => Object.assign({ p: idx, hole: h.slice(), folded: s.folded[idx] }, eval7(h.concat(s.board))));
+      const evals = s.hands.map((h, idx) => (h.length
+        ? Object.assign({ p: idx, hole: h.slice(), folded: s.folded[idx] }, eval7(h.concat(s.board)))
+        : { p: idx, hole: [], folded: true, out: true, cat: 0, score: -1, name: '탈락', shortName: '탈락', best5: [] }));
+      const payouts = Array.from({ length: s.n }, (_, q) => (q === w ? winPot : 0));
       s.result = {
         kind: 'foldWin',
         winner: w,
         winners: [w],
         pot: winPot,
+        pots: [{ amount: winPot, elig: [w], winners: [w] }],
+        payouts,
         winnerHand: '상대 폴드',
-        reason: '상대 기권(Fold)으로 팟 획득!',
+        reason: s.n > 2 ? '모두 폴드! 팟을 가져가요' : '상대 기권(Fold)으로 팟 획득!',
         evals,
       };
       evs.push({ t: 'end', result: s.result });
@@ -585,20 +769,27 @@
     return { state: s, events: evs };
   }
 
+  // 플레이어 p 시점: 내 홀카드만 보임, 쇼다운까지 간 사람(폴드 안 한 사람)만 마지막에 공개
+  //  · 덱·씨앗(seed)은 빼서 남의 카드를 거꾸로 계산 못 하게 함
   function view(s, p) {
     const v = fastClone(s);
     v.me = p;
     const showAll = s.phase === 'end' && s.result && s.result.kind === 'showdown';
-    v.hands = s.hands.map((h, q) => (q === p || showAll ? h.slice() : [-1, -1]));
+    const open = q => q === p || (showAll && !s.folded[q]);
+    v.hands = s.hands.map((h, q) => (!h.length ? [] : open(q) ? h.slice() : [-1, -1]));
+    if (v.result && v.result.evals) {
+      v.result.evals = v.result.evals.map(e => (open(e.p) || !e.hole || !e.hole.length ? e : { p: e.p, folded: e.folded, hole: [], hidden: true, name: '비공개', shortName: '비공개', cat: 0, score: 0, best5: [] }));
+    }
     delete v.deck;
+    delete v.seed;
     return v;
   }
 
   const API = {
-    CARDS, SUITS, SUIT_NAMES, RANK_STR, STREET_NAMES,
+    CARDS, SUITS, SUIT_NAMES, RANK_STR, STREET_NAMES, MAX_PLAYERS,
     A_FOLD, A_CALL, A_HALF, A_POT, A_ALLIN,
     makeRng, cardOf, cardLabel, parseCard,
-    eval5, eval7, analyzeDraws,
+    eval5, eval7, score7, analyzeDraws, buildPots,
     create, nextRound, fastClone, legal, isLegal, actionCost, step, view,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

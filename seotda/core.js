@@ -6,7 +6,8 @@
      - 땡잡이 (3월 광 + 7월 열끗): 1땡~9땡을 잡음 (장땡은 못 잡음, 없으면 망통)
      - 멍텅구리 구사 (4월 열끗 + 9월 열끗): 장땡 미만(9땡 이하)의 판을 재경기(나가리/파토)로 만듦
      - 구사 (4월 + 9월): 땡 미만(알리 이하)의 판을 재경기(파토)로 만듦
-   · 진행: 학교(기본 판돈 Ante) → 1차 배팅(1장 받은 뒤) → 2차 배팅(2장 완성 뒤) → 쇼다운 */
+   · 진행: 학교(기본 판돈 Ante) → 1차 배팅(1장 받은 뒤) → 2차 배팅(2장 완성 뒤) → 쇼다운
+   · 2~6명: 20장을 2장씩 (6명이면 12장 사용). 올인(코인 부족)은 사이드 팟으로 나눠 계산 */
 (function (root) {
   'use strict';
 
@@ -40,6 +41,7 @@
   const A_QUARTER = 2; // 쿼터 (판돈 25%)
   const A_HALF = 3;   // 하프 (판돈 50%)
   const A_DDADANG = 4; // 따당 (앞사람 베팅의 2배)
+  const MAX_PLAYERS = 6; // 20장 ÷ 2장 = 10명이 한계지만 판이 너무 느려져 6명까지
 
   function makeRng(seed) {
     let s = (seed >>> 0) || 123456789;
@@ -170,7 +172,7 @@
   // 게임 상태 생성
   function create(opts) {
     opts = opts || {};
-    const n = Math.max(2, Math.min(3, opts.players || 2));
+    const n = Math.max(2, Math.min(MAX_PLAYERS, opts.players || 2));
     const ante = opts.ante || 10;
     const startCoins = opts.coins || 500;
     const seed = (opts.seed >>> 0) || 12345;
@@ -181,7 +183,8 @@
       round: 0,
       first: opts.first || 0,
       carryPot: 0,
-      coins: Array.from({ length: n }, () => startCoins),
+      // 시작 코인: opts.stacks(자리별 배열)가 있으면 그대로, 없으면 모두 startCoins (나중에 은행이 꽂힐 자리)
+      coins: Array.from({ length: n }, (_, i) => (opts.stacks && opts.stacks[i] > 0 ? opts.stacks[i] : startCoins)),
       hands: Array.from({ length: n }, () => []),
       folded: Array.from({ length: n }, () => false),
       bets: Array.from({ length: n }, () => 0),
@@ -227,6 +230,10 @@
     s.curBet = s.ante;
     s.lastRaise = s.ante;
     s.turn = s.first % s.n;
+    for (let k = 0; k < s.n; k++) {          // 학교비로 코인이 바닥난 사람은 건너뜀
+      const q = (s.first + k) % s.n;
+      if (s.coins[q] > 0) { s.turn = q; break; }
+    }
     s.phase = 'bet';
     s.result = null;
     return s;
@@ -267,6 +274,12 @@
     return Math.min(s.coins[p], toCall + raiseAmt);
   }
 
+  // 나 말고 아직 코인이 남은 생존자가 있어야 레이즈가 의미 있음 (상대가 전부 올인이면 콜만)
+  function someoneCanCover(s, p) {
+    for (let q = 0; q < s.n; q++) if (q !== p && !s.folded[q] && s.coins[q] > 0) return true;
+    return false;
+  }
+
   function legal(s) {
     if (s.phase !== 'bet') return [];
     const p = s.turn;
@@ -275,7 +288,7 @@
     if (toCall > 0 || s.street === 2) out.push(A_FOLD);
     out.push(A_CALL);
     const maxR = s.street === 1 ? 1 : s.maxRaises;
-    if (s.raises < maxR && s.coins[p] > toCall) {
+    if (s.raises < maxR && s.coins[p] > toCall && someoneCanCover(s, p)) {
       out.push(A_QUARTER, A_HALF);
       if (s.street === 2) out.push(A_DDADANG);
     }
@@ -311,7 +324,8 @@
         s.lastRaise = added;
         s.curBet = s.bets[p];
         s.raises++;
-        for (let q = 0; q < s.n; q++) if (q !== p && !s.folded[q]) s.acted[q] = false;
+        // 올인(코인 0)한 사람은 더 할 수 있는 게 없으니 다시 묻지 않음
+        for (let q = 0; q < s.n; q++) if (q !== p && !s.folded[q] && s.coins[q] > 0) s.acted[q] = false;
         const kind = a === A_QUARTER ? 'quarter' : a === A_HALF ? 'half' : 'ddadang';
         evs.push({ t: 'raise', kind, p, amount: cost });
       }
@@ -319,71 +333,50 @@
 
     const alive = alivePlayers(s);
     if (alive.length === 1) {
+      // 나머지가 전부 다이 → 남은 한 명이 판돈 전부 (패는 공개하지 않음)
       const w = alive[0];
       const winPot = s.pot;
       s.coins[w] += winPot;
       s.phase = 'end';
+      const payouts = Array.from({ length: s.n }, (_, q) => (q === w ? winPot : 0));
       s.result = {
         kind: 'foldWin',
         winner: w,
+        winners: [w],
         pot: winPot,
-        reason: '상대 기권(다이)으로 승리!',
+        payouts,
+        carry: 0,
+        reason: s.n > 2 ? '나머지가 모두 다이! 판돈을 가져가요' : '상대 기권(다이)으로 승리!',
         evals: s.hands.map((h, idx) => Object.assign({ p: idx, c1: h[0], c2: h[1], folded: s.folded[idx] }, evalHand(h[0], h[1]))),
       };
       evs.push({ t: 'end', result: s.result });
       return { state: s, events: evs };
     }
 
-    const allMatched = alive.every(q => s.acted[q] && (s.bets[q] === s.curBet || s.coins[q] === 0));
+    // 코인이 남아 더 걸 수 있는 생존자 (올인한 사람은 제외)
+    const allMatched = alive.every(q => s.coins[q] === 0 || (s.acted[q] && s.bets[q] === s.curBet));
     if (allMatched) {
       if (s.street === 1) {
         s.street = 2;
         s.raises = 0;
         s.acted = Array.from({ length: s.n }, (_, q) => s.folded[q]);
-        s.turn = alive[0];
         evs.push({ t: 'deal2' });
-        return { state: s, events: evs };
-      } else {
-        // 쇼다운!
-        const judge = judgeShowdown(alive.map(q => ({ p: q, c1: s.hands[q][0], c2: s.hands[q][1] })));
-        const allEvals = s.hands.map((h, idx) => {
-          const found = judge.evals.find(e => e.p === idx);
-          return found ? Object.assign({ folded: false }, found) : Object.assign({ p: idx, c1: h[0], c2: h[1], folded: true }, evalHand(h[0], h[1]));
-        });
-        if (judge.kind === 'rematch') {
-          s.carryPot = s.pot;
-          s.phase = 'end';
-          s.result = {
-            kind: 'rematch',
-            winner: null,
-            pot: s.pot,
-            reason: judge.reason,
-            evals: allEvals,
-          };
-        } else {
-          const w = judge.winner;
-          const winPot = s.pot;
-          s.coins[w] += winPot;
-          s.phase = 'end';
-          const wEval = allEvals[w];
-          s.result = {
-            kind: 'showdown',
-            winner: w,
-            pot: winPot,
-            winnerHand: wEval.effName || wEval.name,
-            reason: `${wEval.effName || wEval.name}(으)로 승리!`,
-            evals: allEvals,
-          };
+        const able = alive.filter(q => s.coins[q] > 0);
+        if (able.length <= 1) {            // 더 걸 사람이 없음 → 바로 패 공개
+          showdown(s, evs);
+          return { state: s, events: evs };
         }
-        evs.push({ t: 'showdown', result: s.result });
+        s.turn = able[0];
         return { state: s, events: evs };
       }
+      showdown(s, evs);
+      return { state: s, events: evs };
     }
 
-    // 다음 차례 찾기
+    // 다음 차례 찾기 (다이·올인한 사람은 건너뜀)
     for (let stepIdx = 1; stepIdx <= s.n; stepIdx++) {
       const nxt = (p + stepIdx) % s.n;
-      if (!s.folded[nxt]) {
+      if (!s.folded[nxt] && s.coins[nxt] > 0) {
         s.turn = nxt;
         break;
       }
@@ -391,17 +384,109 @@
     return { state: s, events: evs };
   }
 
-  // 플레이어 p 시점의 정보 (1차 배팅 때는 각자의 첫 장만 공개, 2차 배팅 때도 상대의 두 번째 장은 뒷면)
+  // 사이드 팟 나누기: contrib[p] = 각자 이번 판에 낸 돈, alive[p] = 패를 깔 자격이 있는지
+  // 반환 [{ amount, elig:[p…], refund:boolean }] — 낸 사람이 혼자인 맨 위층은 돌려받는 돈(refund)
+  function buildPots(contrib, alive) {
+    const levels = Array.from(new Set(contrib.filter(c => c > 0))).sort((a, b) => a - b);
+    const pots = [];
+    let prev = 0;
+    for (const lv of levels) {
+      let amount = 0, cnt = 0;
+      const elig = [];
+      for (let q = 0; q < contrib.length; q++) {
+        if (contrib[q] >= lv) { amount += lv - prev; cnt++; if (alive[q]) elig.push(q); }
+      }
+      prev = lv;
+      if (!amount) continue;
+      if (!elig.length) {                  // 낸 사람이 모두 다이 → 앞 층에 합침
+        if (pots.length) pots[pots.length - 1].amount += amount;
+        continue;
+      }
+      pots.push({ amount, elig, refund: cnt === 1 });
+    }
+    // 같은 자격자끼리 붙은 층은 하나로
+    const merged = [];
+    for (const pt of pots) {
+      const last = merged[merged.length - 1];
+      if (last && !pt.refund && !last.refund && last.elig.join() === pt.elig.join()) last.amount += pt.amount;
+      else merged.push(pt);
+    }
+    return merged;
+  }
+
+  // 쇼다운: 사이드 팟 층마다 승자 판정 (동점·구사파토인 층은 다음 판으로 이월)
+  function showdown(s, evs) {
+    const alive = alivePlayers(s);
+    const judge = judgeShowdown(alive.map(q => ({ p: q, c1: s.hands[q][0], c2: s.hands[q][1] })));
+    const allEvals = s.hands.map((h, idx) => {
+      const found = judge.evals.find(e => e.p === idx);
+      return found ? Object.assign({ folded: false }, found) : Object.assign({ p: idx, c1: h[0], c2: h[1], folded: true }, evalHand(h[0], h[1]));
+    });
+    const sumBets = s.bets.reduce((a, b) => a + b, 0);
+    const carryIn = Math.max(0, s.pot - sumBets);         // 앞 판에서 이월된 판돈
+    const layers = buildPots(s.bets, s.folded.map(f => !f));
+    const payouts = Array.from({ length: s.n }, () => 0);
+    let carry = 0, winnersAll = [];
+    // 안 받아 준 돈은 먼저 돌려줌
+    for (const L of layers) if (L.refund) { s.coins[L.elig[0]] += L.amount; payouts[L.elig[0]] += L.amount; L.done = true; }
+    const real = layers.filter(L => !L.done);
+    if (real.length) real[0].amount += carryIn; else carry += carryIn;
+    if (judge.kind === 'rematch') {
+      carry += real.reduce((a, L) => a + L.amount, 0);
+    } else {
+      for (const L of real) {
+        let w = null;
+        if (L.elig.length === 1) w = L.elig[0];
+        else {
+          const jr = L.elig.length === alive.length ? judge : judgeShowdown(L.elig.map(q => ({ p: q, c1: s.hands[q][0], c2: s.hands[q][1] })));
+          if (jr.kind === 'win') w = jr.winner;
+        }
+        if (w == null) { carry += L.amount; continue; }
+        s.coins[w] += L.amount; payouts[w] += L.amount;
+        L.winner = w;
+        if (winnersAll.indexOf(w) < 0) winnersAll.push(w);
+      }
+    }
+    s.carryPot = carry;
+    s.phase = 'end';
+    const got = payouts.reduce((a, b) => a + b, 0);
+    if (judge.kind === 'rematch') {
+      s.result = { kind: 'rematch', winner: null, winners: [], pot: s.pot, payouts, carry, reason: judge.reason, evals: allEvals };
+    } else {
+      const main = real.length ? real[0].winner : null;
+      const w = main != null ? main : winnersAll[0];
+      const wEval = allEvals[w];
+      s.result = {
+        kind: 'showdown',
+        winner: w,
+        winners: winnersAll,
+        pot: got,
+        payouts,
+        carry,
+        winnerHand: wEval.effName || wEval.name,
+        reason: `${wEval.effName || wEval.name}(으)로 승리!` + (winnersAll.length > 1 ? ' (사이드 팟은 다른 사람이 가져가요)' : '') + (carry ? ` 일부 ${carry}냥은 다음 판으로 이월` : ''),
+        evals: allEvals,
+      };
+    }
+    evs.push({ t: 'showdown', result: s.result });
+  }
+
+  // 플레이어 p 시점의 정보
+  //  · 오픈패(첫 장)는 모두에게 보임, 두 번째 장은 본인만 (2차 배팅부터)
+  //  · 판이 끝나면 쇼다운까지 간 사람의 패만 공개 (다이한 사람·기권승 승자는 비공개)
+  //  · 덱·씨앗(seed)은 빼서 남의 패를 거꾸로 계산 못 하게 함
   function view(s, p) {
     const v = fastClone(s);
     v.me = p;
-    v.hands = s.hands.map((h, q) => {
-      if (s.phase === 'end' || q === p) {
-        return s.street === 1 && s.phase !== 'end' ? [h[0], -1] : [h[0], h[1]];
-      }
-      return [h[0], -1]; // 상대의 첫 장(오픈패)은 보이고 두 번째 히든패는 가림
-    });
+    const ended = s.phase === 'end';
+    const showdownEnd = ended && s.result && s.result.kind !== 'foldWin';
+    const open2 = q => q === p ? (s.street === 2 || ended) : (showdownEnd && !s.folded[q]);
+    v.hands = s.hands.map((h, q) => (open2(q) ? [h[0], h[1]] : [h[0], -1]));
+    if (v.result && v.result.evals) {
+      v.result.evals = v.result.evals.map(e => (open2(e.p) ? e : { p: e.p, folded: e.folded, c1: e.c1, c2: -1, hidden: true, name: '비공개', effName: '비공개', rank: 0 }));
+    }
     delete v.deck;
+    delete v.seed;
     return v;
   }
 
@@ -410,7 +495,7 @@
     A_FOLD, A_CALL, A_QUARTER, A_HALF, A_DDADANG,
     makeRng, cardOf, cardName, gostopIdOf,
     evalHand, judgeShowdown,
-    create, nextRound, fastClone, legal, isLegal, actionCost, step, view,
+    create, nextRound, fastClone, legal, isLegal, actionCost, step, view, buildPots, MAX_PLAYERS,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.Seotda = API;

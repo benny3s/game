@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=4">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <div class="wrap" id="home">
@@ -22,28 +22,36 @@
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabHot" aria-pressed="false">한 기기</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
     <div id="soloBox" class="box">
       <div class="coinline" id="coinLine"></div>
-      <div class="seg center" id="modeSeg"></div>
+      <div class="optrow"><span class="small">인원 (나 + AI)</span><div class="seg" id="modeSeg"></div></div>
       <div class="tiers three" id="tiers"></div>
-      <div class="optrows">
-        <div class="optrow"><span class="small">일타 강사</span><div class="seg" id="coachSeg"></div></div>
-      </div>
       <ul class="howto" id="howto">
-        <li>1월~10월 화투 20장 중 <b>두 장</b>으로 족보 서열을 겨루는 정통 2장 섯다예요</li>
+        <li>1월~10월 화투 20장 중 <b>두 장</b>으로 족보 서열을 겨루는 정통 2장 섯다예요 (최대 6명)</li>
         <li>첫 장을 공개하고 1차 배팅 후, 두 번째 장을 받아 본 배팅(콜·쿼터·하프·따당·다이)을 해요</li>
-        <li><b>🧑‍🏫 일타 강사 모드</b>가 켜져 있으면 상대 오픈패를 바탕으로 <b>정확한 승률(%)과 기댓값(EV)</b>을 실시간 코칭해 드려요</li>
+        <li>게임 중 <b>🧑‍🏫 AI 선생님</b> 단추를 누르면 상대 오픈패를 바탕으로 <b>승률(%)과 기댓값(EV)</b>을 알려 줘요</li>
       </ul>
       <button class="btn primary big" id="startBtn">🔥 섯다 시작하기</button>
       <button class="btn ghost" id="jokboBtn">📜 섯다 족보 서열표 보기</button>
     </div>
 
+    <div id="hotBox" class="box" hidden>
+      <p class="lede">폰·TV 한 대를 돌려 가며 해요. 내 차례가 되면 가림 화면이 먼저 나오니, 다른 사람은 화면을 보지 말아 주세요</p>
+      <div id="hotSetup"></div>
+      <div id="hotFallback" class="box">
+        <div class="optrow"><span class="small">인원</span><div class="seg" id="hotCountSeg"></div></div>
+        <div class="optrow"><span class="small">자리 (눌러서 사람↔AI)</span><div class="seg" id="hotSeatSeg"></div></div>
+      </div>
+      <button class="btn primary big" id="hotBtn">📱 한 기기로 시작</button>
+    </div>
+
     <div id="watchBox" class="box" hidden>
       <p class="lede">AI 타짜들끼리 패를 모두 공개하고 수싸움하는 모습을 구경해요</p>
-      <div class="seg center" id="wModeSeg"></div>
+      <div class="optrow"><span class="small">AI 인원</span><div class="seg" id="wModeSeg"></div></div>
       <button class="btn primary big" id="watchBtn">🍿 AI 구경 시작</button>
     </div>
   </section>
@@ -58,32 +66,23 @@
   </div>
 
   <div class="stage" id="stage">
-    <!-- 상대 자리들 -->
-    <div class="opps-row" id="oppsRow"></div>
-
-    <!-- 가운데 판돈(Pot) & 화투 섯다판 -->
-    <div class="pot-zone" id="potZone">
-      <div class="pot-badge" id="potBadge">💰 판돈 <b id="potVal">20</b>냥</div>
-      <div class="pot-sub" id="potSub">1차 오픈 배팅 · 콜 비용 0냥</div>
-    </div>
-
-    <!-- 🧑‍🏫 일타 강사 실시간 확률 & 배팅 코칭 계기판 -->
-    <div class="coach-panel" id="coachPanel" hidden>
-      <div class="cp-top">
-        <span class="cp-title" id="cpTitle">🧑‍🏫 일타 강사 분석</span>
-        <div class="cp-meters">
-          <span class="cp-chip win" id="cpWin">승률 --%</span>
-          <span class="cp-chip odds" id="cpOdds">팟오즈 --%</span>
-        </div>
+    <!-- 원형(타원) 테이블: 상대 자리들이 테이블 가장자리에 둘러앉음 -->
+    <div class="tbl" id="tbl">
+      <div class="felt" id="felt"></div>
+      <div class="seats" id="seats"></div>
+      <div class="t-center" id="potZone">
+        <div class="pot-badge" id="potBadge">💰 판돈 <b id="potVal">20</b>냥</div>
+        <div class="pot-sub" id="potSub">1차 오픈 배팅</div>
       </div>
-      <div class="cp-bar"><div class="cp-fill" id="cpFill" style="width:50%"></div></div>
-      <p class="cp-desc" id="cpDesc"></p>
     </div>
 
-    <!-- 내 자리 & 손패 2장 & 내 족보 배지 -->
+    <!-- 쓰는 AI 선생님 패널이 없을 때(대체): 한 줄 요약 -->
+    <div class="coach-panel" id="coachPanel" hidden></div>
+
+    <!-- 내 자리: 큰 패 + 배팅 버튼 -->
     <div class="me-zone" id="meZone">
       <div class="me-head">
-        <span class="me-name" id="meName">🎴 나 (500냥)</span>
+        <span class="me-name" id="meName">🎴 나</span>
         <span class="jokbo-pill" id="myJokbo">족보 확인 중</span>
       </div>
       <div class="my-cards" id="myCards"></div>
@@ -92,9 +91,9 @@
   </div>
 
   <div class="dock" id="dock">
-    <button id="coachBtn" aria-pressed="true"><span class="ic">🧑‍🏫</span><span>코치 켬</span></button>
-    <button id="rankBtn"><span class="ic">📜</span><span>족보표</span></button>
-    <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+    <button id="coachBtn" aria-pressed="true" aria-label="AI 선생님"><span class="ic">🧑‍🏫</span><span>선생님 켬</span></button>
+    <button id="rankBtn" aria-label="족보표"><span class="ic">📜</span><span>족보표</span></button>
+    <button id="sndBtn" aria-label="소리"><span class="ic">🔊</span><span>소리 켬</span></button>
   </div>
 </section>
 
@@ -113,10 +112,12 @@
 <script src="../common/arena-mock.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
+<script src="../common/coach.js?v=1"></script>
+<script src="../common/hotseat.js?v=1"></script>
 <script src="../gostop/core.js?v=4"></script>
 <script src="../gostop/cards.js?v=4"></script>
-<script src="core.js?v=4"></script>
-<script src="ai.js?v=4"></script>
-<script src="main.js?v=4"></script>
+<script src="core.js?v=5"></script>
+<script src="ai.js?v=5"></script>
+<script src="main.js?v=5"></script>
 </body>
 </html>

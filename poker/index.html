@@ -5,54 +5,46 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#071e18">
 <title>♠️ 텍사스 홀덤 포커 · 놀이터</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <div class="app">
   <header class="top">
     <a class="back" href="../" aria-label="놀이터로">‹ 놀이터</a>
-    <h1 class="title">♠️ 텍사스 홀덤 <span id="subTitle">노리밋 헤즈업</span></h1>
-    <button id="jokboBtn" class="pill-btn" type="button">📖 족보 표</button>
-    <button id="coachBtn" class="pill-btn coach-on" type="button" title="실시간 에퀴티·팟오즈·아웃츠 일타 강사">🧑‍🏫 코치 켜짐</button>
+    <h1 class="title">♠️ 텍사스 홀덤 <span id="subTitle">노리밋 2인</span></h1>
+    <button id="jokboBtn" class="pill-btn" type="button">📖 족보</button>
+    <button id="coachBtn" class="pill-btn coach-on" type="button" title="AI 선생님 켜고 끄기" aria-pressed="true">🧑‍🏫 AI 선생님</button>
     <button id="menuBtn" class="icon-btn" type="button" aria-label="설정">⚙</button>
   </header>
 
   <main class="board" id="board">
-    <!-- 상대 영역 -->
-    <section class="seat opp" id="oppSeat">
-      <div class="who">
-        <span class="avatar" id="oppAvatar">♠️</span>
-        <div class="meta">
-          <div class="name" id="oppName">레귤러 프로 <span class="dealer-chip" id="oppDealer" hidden>D</span></div>
-          <div class="coins">칩 <b id="oppCoins">1000</b> · 이번 거리 <b id="oppBet">0</b></div>
-        </div>
-        <span class="action-tag" id="oppTag">대기</span>
-      </div>
-      <div class="hole-cards" id="oppHand"></div>
-    </section>
-
-    <!-- 중앙 VIP 홀덤 펠트 & 커뮤니티 보드 5장 -->
-    <section class="center-felt">
-      <div class="pot-banner">
+    <!-- 둥근 테이블: 상대 자리들이 가장자리에 둘러앉고, 가운데에 공용 카드 -->
+    <section class="tbl" id="tbl">
+      <div class="felt" id="felt"></div>
+      <div class="seats" id="seats"></div>
+      <div class="t-center" id="tCenter">
         <div class="street-badge" id="streetBadge">프리플랍 (Pre-Flop)</div>
         <div class="pot-main">
-          <span class="pot-label">TOTAL POT</span>
+          <span class="pot-label">POT</span>
           <strong class="pot-val" id="potVal">30</strong>
           <span class="pot-unit">칩</span>
         </div>
+        <div class="side-info" id="sideInfo" hidden></div>
+        <div class="community-row" id="commRow"></div>
         <div class="call-info" id="callInfo">블라인드 10 / 20</div>
       </div>
-
-      <div class="community-row" id="commRow"></div>
       <div class="toast" id="toast" hidden></div>
     </section>
 
-    <!-- 내 영역 -->
+    <!-- 쓰는 AI 선생님 패널이 없을 때(대체): 한 줄 요약 -->
+    <div class="coach-panel" id="coachPanel" hidden></div>
+
+    <!-- 내 자리: 큰 카드 + 베팅 버튼 -->
     <section class="seat me" id="mySeat">
       <div class="who">
         <span class="avatar" id="myAvatar">🧑</span>
         <div class="meta">
-          <div class="name" id="myName">나 <span class="dealer-chip" id="myDealer" hidden>D</span></div>
+          <div class="name" id="myName">나</div>
           <div class="coins">칩 <b id="myCoins">1000</b> · 이번 거리 <b id="myBet">0</b></div>
         </div>
         <span class="jokbo-pill" id="myHandBadge">대기 중</span>
@@ -60,53 +52,26 @@
 
       <div class="hole-cards my-cards" id="myHand"></div>
 
-      <!-- 🧑‍🏫 실시간 홀덤 GTO 일타 강사 패널 -->
-      <div class="coach-panel" id="coachPanel">
-        <div class="coach-meters">
-          <div class="meter-box">
-            <span class="m-lbl">내 에퀴티(승률 지분)</span>
-            <strong class="m-val" id="coachEquity">50%</strong>
-          </div>
-          <div class="meter-vs">VS</div>
-          <div class="meter-box">
-            <span class="m-lbl">팟 오즈(콜 손익분기)</span>
-            <strong class="m-val" id="coachOdds">0%</strong>
-          </div>
-          <div class="meter-box outs">
-            <span class="m-lbl">드로 아웃츠</span>
-            <strong class="m-val" id="coachOuts">-</strong>
-          </div>
-        </div>
-        <div class="coach-headline" id="coachHeadline">🧑‍🏫 패를 배분하고 있습니다...</div>
-        <div class="coach-detail" id="coachDetail"></div>
-      </div>
-
-      <!-- 베팅 액션 바 -->
       <div class="bet-bar" id="betBar">
         <button type="button" class="bet-btn fold" data-act="0" id="btnFold">
-          <span class="b-title">폴드 (Fold)</span>
+          <span class="b-title">폴드</span>
           <span class="b-cost" id="costFold">기권</span>
-          <span class="b-ev" id="evFold"></span>
         </button>
         <button type="button" class="bet-btn call" data-act="1" id="btnCall">
           <span class="b-title" id="lblCall">콜</span>
           <span class="b-cost" id="costCall">0</span>
-          <span class="b-ev" id="evCall"></span>
         </button>
         <button type="button" class="bet-btn half" data-act="2" id="btnHalf">
           <span class="b-title">하프 벳</span>
           <span class="b-cost" id="costHalf">0</span>
-          <span class="b-ev" id="evHalf"></span>
         </button>
         <button type="button" class="bet-btn pot" data-act="3" id="btnPot">
           <span class="b-title">팟 벳</span>
           <span class="b-cost" id="costPot">0</span>
-          <span class="b-ev" id="evPot"></span>
         </button>
         <button type="button" class="bet-btn allin" data-act="4" id="btnAllin">
           <span class="b-title">올인</span>
           <span class="b-cost" id="costAllin">0</span>
-          <span class="b-ev" id="evAllin"></span>
         </button>
       </div>
     </section>
@@ -116,15 +81,27 @@
   <div class="modal" id="startModal">
     <div class="modal-box">
       <h2>♠️ 텍사스 홀덤 포커</h2>
-      <p class="sub">내 손패 2장과 공용 보드 5장으로 최고의 5장 족보를 만드는 마인드 스포츠! 🧑‍🏫 GTO 일타 강사가 실시간 에퀴티·팟오즈·아웃츠(4-2 법칙)를 코칭해 드립니다.</p>
+      <p class="sub">내 손패 2장과 공용 보드 5장으로 최고의 5장 족보를 만드는 마인드 스포츠! 최대 8명까지 한 테이블에서 겨뤄요. 칩이 바닥나면 탈락, 마지막 한 명이 우승! 게임 중 🧑‍🏫 AI 선생님 단추로 에퀴티·팟오즈·아웃츠를 볼 수 있어요.</p>
 
       <div class="field">
         <label>모드</label>
         <div class="seg" data-seg="mode">
           <button type="button" data-val="1p" class="on">혼자</button>
           <button type="button" data-val="online">친구랑</button>
+          <button type="button" data-val="hot">한 기기</button>
           <button type="button" data-val="watch">AI 구경</button>
         </div>
+      </div>
+
+      <div class="field" id="countField">
+        <label id="countLabel">인원 (나 + AI)</label>
+        <div class="seg wrap" data-seg="count" id="countSeg"></div>
+        <div class="seat-pick" id="hotSeats" hidden style="margin-top:8px"></div>
+      </div>
+
+      <div class="field" id="hotField" hidden>
+        <label>사람·AI 자리 (한 기기를 돌려 가며)</label>
+        <div id="hotSetup"></div>
       </div>
 
       <div class="field" id="tierField">
@@ -133,14 +110,6 @@
           <button type="button" data-val="easy">🌱 루키</button>
           <button type="button" data-val="normal" class="on">♠️ 레귤러</button>
           <button type="button" data-val="hard">👑 GTO 프로</button>
-        </div>
-      </div>
-
-      <div class="field">
-        <label>🧑‍🏫 GTO 일타 강사 (실시간 승률 · 아웃츠 · EV 코칭)</label>
-        <div class="seg" data-seg="coach">
-          <button type="button" data-val="on" class="on">켜기 (추천)</button>
-          <button type="button" data-val="off">끄기 (실전)</button>
         </div>
       </div>
 
@@ -153,12 +122,10 @@
     <div class="modal-box">
       <h2 id="endTitle">쇼다운 결과</h2>
       <p class="sub" id="endSub"></p>
+      <div id="endPots" class="end-pots" hidden></div>
       <div id="endShowdown" class="end-showdown"></div>
       <div id="endCoachBox" class="end-coach-box" hidden></div>
-      <div class="row-btns">
-        <button id="againBtn" class="primary" type="button">다음 핸드 진행</button>
-        <button id="changeBtn" class="ghost" type="button">설정 바꾸기</button>
-      </div>
+      <div class="row-btns" id="endBtns"></div>
     </div>
   </div>
 
@@ -177,7 +144,8 @@
         <div class="j-card"><b>8. 투페어 (Two Pair)</b><span>페어 2쌍</span></div>
         <div class="j-card"><b>9. 원페어 (One Pair)</b><span>같은 숫자 1쌍</span></div>
         <div class="j-card"><b>10. 하이카드 (High Card)</b><span>메이드 없음 (가장 높은 숫자 비교)</span></div>
-        <div class="j-card sp"><b>🎯 일타 강사의 4-2 법칙 (Outs)</b><span>플랍에서 내 패를 완성해 줄 카드(아웃츠) 개수 × <b>4</b> = 리버까지 메이드 확률(%)! (예: 플러시 드로 9장 × 4 = 약 36%, 양차 스트레이트 드로 8장 × 4 = 약 32%)</span></div>
+        <div class="j-card sp"><b>💰 사이드 팟</b><span>누군가 칩이 모자라 올인하면, 그 사람은 자기가 낸 만큼의 팟(메인 팟)만 노릴 수 있어요. 나머지는 남은 사람끼리 겨루는 사이드 팟이 따로 생겨요.</span></div>
+        <div class="j-card sp"><b>🎯 4-2 법칙 (Outs)</b><span>플랍에서 내 패를 완성해 줄 카드(아웃츠) 개수 × <b>4</b> = 리버까지 메이드 확률(%)! (예: 플러시 드로 9장 × 4 = 약 36%, 양차 스트레이트 드로 8장 × 4 = 약 32%)</span></div>
       </div>
       <button id="closeJokboBtn" class="primary" type="button">닫기</button>
     </div>
@@ -189,8 +157,10 @@
 <script src="../common/me.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
-<script src="core.js"></script>
-<script src="ai.js"></script>
-<script src="main.js"></script>
+<script src="../common/coach.js?v=1"></script>
+<script src="../common/hotseat.js?v=1"></script>
+<script src="core.js?v=2"></script>
+<script src="ai.js?v=2"></script>
+<script src="main.js?v=2"></script>
 </body>
 </html>
