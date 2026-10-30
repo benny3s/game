@@ -454,3 +454,4 @@ const Arena = (() => {
     createHostInvite, claimHostInvite, refreshPerms,
   };
 })();
+window.Arena = Arena;   // 은행(bank.js)·포털이 window.Arena 로 찾음 (const 는 window 에 안 붙음)
