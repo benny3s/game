@@ -929,6 +929,76 @@ button { font: inherit; cursor: pointer; }
           <path d="M330 60 L270 60 L270 120 L220 120" fill="none" stroke="#f43f5e" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
           <circle cx="240" cy="70" r="8" fill="#fbbf24"/>
         </svg>`;
+      case "chess":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="chBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e293b"/><stop offset="1" stop-color="#0b1220"/></linearGradient></defs>
+          <rect width="400" height="200" fill="url(#chBg)"/>
+          <g transform="translate(80 44) skewX(-18) scale(1 .62)">
+            ${Array.from({ length: 36 }, (_, i) => { const r = Math.floor(i / 6), c = i % 6; return `<rect x="${c * 46}" y="${r * 46}" width="46" height="46" fill="${(r + c) % 2 ? '#7c5a3a' : '#e8d3b0'}"/>`; }).join("")}
+          </g>
+          <!-- 킹 (흰) -->
+          <g transform="translate(150 40)">
+            <ellipse cx="22" cy="118" rx="30" ry="8" fill="#000" opacity=".35"/>
+            <path d="M2 112 h40 l-4 -10 h-32 z" fill="#f8fafc" stroke="#475569" stroke-width="2"/>
+            <path d="M8 102 q14 -46 4 -62 h20 q-10 16 4 62 z" fill="#f1f5f9" stroke="#475569" stroke-width="2"/>
+            <path d="M10 40 h24 l-3 -10 h-18 z" fill="#f8fafc" stroke="#475569" stroke-width="2"/>
+            <path d="M22 4 v22 M14 12 h16" stroke="#475569" stroke-width="4" stroke-linecap="round"/>
+          </g>
+          <!-- 나이트 (검) -->
+          <g transform="translate(232 62)">
+            <ellipse cx="24" cy="98" rx="28" ry="7" fill="#000" opacity=".35"/>
+            <path d="M4 92 h40 l-4 -9 h-32 z" fill="#1f2937" stroke="#f59e0b" stroke-width="1.6"/>
+            <path d="M10 83 q-4 -26 12 -40 l-12 -6 q2 -14 18 -22 q20 2 22 30 q2 20 -6 38 z" fill="#111827" stroke="#f59e0b" stroke-width="1.6"/>
+            <circle cx="30" cy="22" r="2.6" fill="#fbbf24"/>
+          </g>
+          <text x="318" y="168" font-size="30" fill="#fbbf24" font-weight="800" font-family="serif" opacity=".9">♛</text>
+        </svg>`;
+      case "yut":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#3b1d10"/>
+          <rect x="18" y="16" width="168" height="168" rx="12" fill="#f5e6c8" stroke="#8b5a2b" stroke-width="4"/>
+          <g fill="#8b5a2b">
+            ${[0, 1, 2, 3, 4, 5].map(i => { const t = 30 + i * 28.8; return `<circle cx="${t}" cy="30" r="5"/><circle cx="${t}" cy="170" r="5"/><circle cx="30" cy="${t}" r="5"/><circle cx="170" cy="${t}" r="5"/>`; }).join("")}
+            <circle cx="100" cy="100" r="8"/><circle cx="65" cy="65" r="5"/><circle cx="135" cy="65" r="5"/><circle cx="65" cy="135" r="5"/><circle cx="135" cy="135" r="5"/>
+          </g>
+          <path d="M30 30 L170 170 M170 30 L30 170" stroke="#8b5a2b" stroke-width="2" opacity=".5"/>
+          <circle cx="30" cy="30" r="10" fill="none" stroke="#b91c1c" stroke-width="3"/>
+          <circle cx="170" cy="170" r="11" fill="#dc2626"/><circle cx="135" cy="135" r="11" fill="#2563eb"/>
+          <!-- 윷가락 넷 -->
+          <g transform="translate(222 34)">
+            ${[[0, -12, 1], [36, 8, 0], [74, -4, 1], [112, 14, 1]].map(([x, r, flat]) => `<g transform="translate(${x} ${r < 0 ? 0 : 6}) rotate(${r} 14 64)"><rect x="0" y="0" width="28" height="128" rx="14" fill="${flat ? '#fef3c7' : '#b45309'}" stroke="#78350f" stroke-width="3"/>${flat ? '<path d="M8 28 l12 10 m-12 22 l12 10 m-12 22 l12 10" stroke="#78350f" stroke-width="2.5" fill="none"/>' : ''}</g>`).join("")}
+          </g>
+          <text x="300" y="190" font-size="20" fill="#fde68a" font-weight="800" text-anchor="middle" font-family="sans-serif">걸!</text>
+        </svg>`;
+      case "billiards":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#3a2414"/>
+          <rect x="14" y="14" width="372" height="172" rx="16" fill="#5b3a1f"/>
+          <rect x="30" y="30" width="340" height="140" rx="8" fill="#0f6b3a"/>
+          <rect x="30" y="30" width="340" height="140" rx="8" fill="url(#bdGl)"/>
+          <defs><radialGradient id="bdGl" cx="50%" cy="45%" r="65%"><stop offset="0" stop-color="#1ea25a" stop-opacity=".55"/><stop offset="1" stop-color="#0b4d2a" stop-opacity="0"/></radialGradient>
+            <radialGradient id="bW" cx="35%" cy="35%" r="70%"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#d4d4d8"/></radialGradient>
+            <radialGradient id="bY" cx="35%" cy="35%" r="70%"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/></radialGradient>
+            <radialGradient id="bR" cx="35%" cy="35%" r="70%"><stop offset="0" stop-color="#fca5a5"/><stop offset="1" stop-color="#dc2626"/></radialGradient></defs>
+          <g fill="#e8d3b0">${[70, 130, 200, 270, 330].map(x => `<circle cx="${x}" cy="22" r="2.5"/><circle cx="${x}" cy="178" r="2.5"/>`).join("")}</g>
+          <path d="M120 120 L232 78 L300 128" stroke="#fff" stroke-width="1.6" stroke-dasharray="5 5" fill="none" opacity=".75"/>
+          <circle cx="120" cy="120" r="13" fill="url(#bW)"/>
+          <circle cx="232" cy="78" r="13" fill="url(#bR)"/>
+          <circle cx="300" cy="128" r="13" fill="url(#bY)"/>
+          <circle cx="172" cy="62" r="13" fill="url(#bR)"/>
+          <line x1="20" y1="168" x2="104" y2="128" stroke="#d6b07a" stroke-width="7" stroke-linecap="round"/>
+          <line x1="96" y1="132" x2="106" y2="127" stroke="#e0f2fe" stroke-width="7" stroke-linecap="round"/>
+        </svg>`;
+      case "sc":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#070b1a"/>
+          <g fill="#fff">${Array.from({ length: 40 }, (_, i) => `<circle cx="${(i * 97) % 400}" cy="${(i * 53) % 200}" r="${i % 5 ? 0.8 : 1.6}" opacity="${0.4 + (i % 3) * 0.2}"/>`).join("")}</g>
+          <circle cx="330" cy="168" r="70" fill="#7c2d12" opacity=".55"/><circle cx="330" cy="168" r="70" fill="none" stroke="#fb923c" stroke-width="2" opacity=".5"/>
+          <g transform="translate(70 70)"><path d="M0 30 L60 18 L74 30 L60 42 Z" fill="#38bdf8"/><path d="M14 30 L-8 14 L-4 30 L-8 46 Z" fill="#0ea5e9"/><circle cx="58" cy="30" r="4" fill="#e0f2fe"/></g>
+          <g transform="translate(250 54) scale(-1 1)"><path d="M0 30 L56 16 L70 30 L56 44 Z" fill="#a855f7"/><path d="M14 30 L-8 12 L-4 30 L-8 48 Z" fill="#7e22ce"/><circle cx="54" cy="30" r="4" fill="#f3e8ff"/></g>
+          <path d="M146 100 L196 86" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/><path d="M178 86 L230 96" stroke="#d8b4fe" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 6"/>
+          <circle cx="196" cy="88" r="10" fill="#fde68a" opacity=".85"/>
+        </svg>`;
       default:
         return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
           <rect width="400" height="200" fill="#18122b"/>
