@@ -169,5 +169,114 @@ ok(Cube.checkWin(easy, good.slice(0, 13)) === null, "13장이면 끝내기 아�
   ok(over === 300, "무작위 판이 모두 끝남 (" + over + ")");
 }
 
+// ── 여럿이: 자리 정하기(table.js) · 4명 AI 판 · 친구랑 기록 맞추기 · 한 폰으로 가림막
+const Table = require(path.join(__dirname, "..", "table.js"));
+const AI = require(path.join(__dirname, "..", "ai.js"));
+{
+  // 방장 먼저, 그다음 들어온 순서 — 객체 키 순서가 달라도 같은 자리
+  const pl = { zz: { t: 30 }, host: { t: 50 }, aa: { t: 10 }, mm: { t: 30 } };
+  eq(Table.seatOrder(pl, "host"), ["host", "aa", "mm", "zz"], "자리 순서: 방장 → 들어온 순서 → uid");
+  eq(Table.seatOrder({ mm: pl.mm, aa: pl.aa, host: pl.host, zz: pl.zz }, "host"), ["host", "aa", "mm", "zz"], "자리 순서는 키 순서와 상관없음");
+  eq([Table.tableSize(2, 0), Table.tableSize(3, 0), Table.tableSize(4, 0), Table.tableSize(2, 4), Table.tableSize(3, 4), Table.tableSize(2, 3), Table.tableSize(4, 3), Table.tableSize(1, 0), Table.tableSize(6, 0)],
+    [2, 3, 4, 4, 4, 3, 4, 2, 4], "판 인원 = 사람 + AI 채우기, 2~4");
+  const L = Table.lineup([{ id: "h", name: "베니" }, { id: "g", name: "친구" }], 4, ["민수", "서연"]);
+  eq(L.map(x => x.kind + ":" + x.name), ["human:베니", "human:친구", "bot:민수", "bot:서연"], "AI 로 4명 채우기");
+  eq(Table.lineup([{ id: "a" }, { id: "b" }, { id: "c" }], 0).length, 3, "사람만이면 3명 그대로");
+  ok(/1:1/.test(Table.describe(2)) && /셋/.test(Table.describe(3)) && /넷/.test(Table.describe(4)), "대기실 안내 2·3·4명");
+  ok(/AI 2명/.test(Table.describe(2, 4)), "안내에 AI 채우기 표시");
+  ok(Table.describe(1).length > 0 && Table.describe(0).length > 0, "1명 이하 안내");
+}
+{
+  // 4명 AI 끝까지: 나눠 주기·차례 순서(0→1→2→3→0)·타일 보존·끝남
+  const lv = ["easy", "normal", "hard", "normal"];
+  let done = 0, wins = [0, 0, 0, 0], orderOk = true, conserve = true, errs = 0;
+  for (let g = 0; g < 40; g++) {
+    try {
+      let s = Cube.create({ players: 4, rule: g % 2 ? "classic" : "easy", seed: 500 + g });
+      if (g === 0) eq(s.hands.map(h => h.length), [15, 14, 14, 14], "4명 첫 손패 15·14·14·14");
+      const mems = [0, 1, 2, 3].map(i => AI.newMemory(g * 10 + i));
+      let guard = 0;
+      while (s.phase !== "over" && guard++ < 3000) {
+        const p = s.turn;
+        const r = Cube.step(s, AI.act(s, p, lv[p], mems[p]));
+        if (r.state.phase !== "over" && r.state.turn !== p && r.state.turn !== (p + 1) % 4) orderOk = false;
+        s = r.state;
+        const all = s.deck.length + s.hands.reduce((a, h) => a + h.length, 0) + s.discards.reduce((a, d) => a + d.length, 0) + (s.indicator != null ? 1 : 0);
+        if (all !== 106) conserve = false;
+      }
+      if (s.phase === "over") done++;
+      if (s.winner >= 0) wins[s.winner]++;
+    } catch (e) { errs++; if (errs < 3) console.log(e.stack); }
+  }
+  ok(errs === 0, "4명 AI 40판 예외 없음");
+  ok(done === 40, "4명 AI 40판 모두 끝남 (" + done + ")");
+  ok(orderOk, "4명 차례가 0→1→2→3 순서로 돎");
+  ok(conserve, "4명 판 내내 타일 106장 그대로");
+  ok(wins.reduce((a, b) => a + b, 0) > 0, "4명 판에서 이긴 사람이 나옴 " + wins.join("/"));
+}
+{
+  // 친구랑: 방장 기록(log)을 씨앗과 함께 받으면 친구 화면이 똑같아짐 (늦게 받아도)
+  const seed = 777, lv = ["normal", "hard", "easy", "normal"];
+  let s = Cube.create({ players: 4, rule: "classic", seed });
+  const mems = [0, 1, 2, 3].map(i => AI.newMemory(i)), log = [];
+  for (let i = 0; i < 37 && s.phase !== "over"; i++) { const a = AI.act(s, s.turn, lv[s.turn], mems[s.turn]); log.push(a); s = Cube.step(s, a).state; }
+  let r = Cube.create({ players: 4, rule: "classic", seed });
+  for (const a of JSON.parse(JSON.stringify(log))) r = Cube.step(r, a).state;
+  ok(Cube.hash(r) === Cube.hash(s), "씨앗 + 수 기록으로 판 다시 만들기 (" + log.length + "수)");
+  let threw = false; try { Cube.step(r, log[log.length - 1]); } catch (e) { threw = true; }
+  ok(threw, "같은 수를 두 번 받으면 거절됨 (메아리 막기)");
+}
+{
+  // 한 폰으로: 사람 3 + AI 1 — 사람 차례가 바뀔 때마다 가림막, AI 차례에도 가림
+  const levels = ["human", "human", "human", "normal"];
+  const mems = [0, 1, 2, 3].map(i => AI.newMemory(i));
+  let s = Cube.create({ players: 4, rule: "easy", seed: 31 });
+  let viewing = -1, cover = true, covers = 0, peeks = 0, guard = 0, reveals = [];
+  ok(Table.viewerFor(levels, s) === 0, "한 폰: 첫 차례는 1번 사람");
+  while (s.phase !== "over" && guard++ < 400) {
+    if (!cover && Table.needCover(levels, viewing, s)) { cover = true; viewing = -1; covers++; }
+    const v = Table.viewerFor(levels, s);
+    if (cover && v >= 0) { cover = false; viewing = v; reveals.push(v); }     // 손으로 '내 타일 보기'
+    if (!cover && viewing !== s.turn && levels[s.turn] === "human") peeks++;  // 남의 차례에 남의 손이 보이면 안 됨
+    const a = AI.act(s, s.turn, "normal", mems[s.turn]);
+    s = Cube.step(s, a).state;
+  }
+  ok(peeks === 0, "한 폰: 남의 차례에 손패가 보이지 않음");
+  ok(covers >= reveals.length - 1 && covers > 3, "한 폰: 차례마다 가림막 (" + covers + "번)");
+  ok(reveals.slice(0, 4).join() === "0,1,2,0", "한 폰: 1→2→3번 → (AI) → 1번 순서로 보여 줌 (" + reveals.slice(0, 4).join() + ")");
+  ok(!Table.needCover(["human", "normal"], 0, Cube.create({ players: 2, seed: 1 })), "사람 1명이면 가림막 없음");
+  ok(!Table.needCover(levels, 0, { phase: "over", turn: 1 }), "판이 끝나면 가림막 없음");
+}
+
+{
+  // AI 선생님: 추천 + 까닭 (뽑기·가져오기·버리기·끝내기), 남의 차례·끝난 판은 null
+  let kinds = {}, bad = 0, legalOk = true;
+  for (let g = 0; g < 12; g++) {
+    let s = Cube.create({ players: 2 + (g % 3), rule: g % 2 ? "classic" : "easy", seed: 900 + g });
+    const mem = AI.newMemory(g);
+    for (let i = 0; i < 400 && s.phase !== "over"; i++) {
+      const p = s.turn, a = AI.advise(s, p);
+      if (!a || !a.text || !a.why) bad++;
+      else {
+        kinds[a.kind + (a.take ? "+take" : "")] = 1;
+        const L = Cube.legal(s);
+        const want = a.kind === "draw" ? { t: a.take ? "take" : "deck" } : { t: a.kind === "win" ? "win" : "discard", id: a.id };
+        if (!L.some(x => x.t === want.t && (want.id == null || x.id === want.id))) legalOk = false;
+      }
+      if (AI.advise(s, (p + 1) % s.n) !== null) bad++;
+      s = Cube.step(s, AI.act(s, p, "normal", mem)).state;
+    }
+    if (AI.advise(s, 0) !== null) bad++;
+  }
+  ok(bad === 0, "선생님 추천에 글·까닭이 늘 있음 (남 차례·끝난 판은 null)");
+  ok(legalOk, "선생님 추천은 늘 둘 수 있는 수");
+  ok(kinds.draw && kinds.discard && kinds["draw+take"], "뽑기·가져오기·버리기 추천이 모두 나옴 " + Object.keys(kinds).join(","));
+  const T2 = (c, v, k = 0) => c * 26 + k * 13 + (v - 1);
+  const st = { n: 2, rule: "easy", wildFace: null, turn: 0, phase: "discard", deck: [1], discards: [[], []],
+    hands: [[T2(0, 1), T2(0, 2), T2(0, 3), T2(1, 5), T2(2, 5), T2(3, 5), T2(2, 7), T2(2, 8), T2(2, 9), T2(2, 10), T2(0, 12), T2(1, 12), T2(3, 12), T2(2, 12, 1), T2(3, 1)], []] };
+  const w = AI.advise(st, 0);
+  ok(w && w.kind === "win" && w.id === T2(3, 1) && /베니/.test(w.text), "끝낼 수 있으면 '베니' 추천: " + (w && w.text));
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -205,5 +205,54 @@
     return { kind: "discard", id: a.id };
   }
 
-  return { LEVEL: LEVEL, newMemory: newMemory, act: act, hint: hint, faceOf: faceOf, valueOf: valueOf };
+  // AI 선생님: 추천 + 짧은 까닭 (화면은 text 를 굵게, why 를 아래에)
+  const COLORS = ["빨강", "민트", "노랑", "보라"];
+  function tileName(st, id) {
+    if (Cube.isWild(st, id)) return "만능 타일";
+    const t = Cube.tile(id);
+    return t.cat ? "조커" : COLORS[t.c] + " " + t.v;
+  }
+  function usedInGroups(st, ids) {
+    let n = 0;
+    const a = Cube.arrange(st, ids);
+    for (let i = 0; i < a.groups.length; i++) n += a.groups[i].length;
+    return n;
+  }
+  // 묶음 밖 타일에 짝이 될 만한 이웃(같은 색 ±2 · 같은 숫자 다른 색)이 있나
+  function hasNeighbor(st, hand, id) {
+    const f = faceOf(st, id);
+    if (f < 0) return true;
+    const c = Math.floor(f / 13), v = f % 13;
+    for (let i = 0; i < hand.length; i++) {
+      if (hand[i] === id) continue;
+      const g = faceOf(st, hand[i]);
+      if (g < 0) return true;
+      const gc = Math.floor(g / 13), gv = g % 13;
+      if ((gc === c && gv !== v && Math.abs(gv - v) <= 2) || (gv === v && gc !== c)) return true;
+    }
+    return false;
+  }
+  function advise(st, p) {
+    if (!st || st.phase === "over" || st.turn !== p) return null;
+    const hand = st.hands[p];
+    const win = Cube.legal(st).find(function (a) { return a.t === "win"; });
+    if (win) return { kind: "win", id: win.id, text: "베니! 끝낼 수 있어요", why: tileName(st, win.id) + " 버리면 남은 14장이 모두 묶음이에요" };
+    const h = hint(st, p);
+    if (h.kind === "draw") {
+      const prev = st.discards[(p - 1 + st.n) % st.n], top = prev[prev.length - 1];
+      if (h.take && top != null) {
+        const gain = usedInGroups(st, hand.concat([top])) - usedInGroups(st, hand);
+        const why = winsIfTake(st, hand, top) ? "가져오면 바로 끝낼 수 있어요"
+          : gain > 0 ? "가져오면 묶음에 바로 들어가요 (+" + gain + "장)" : "내 타일과 짝이 맞아 묶음이 가까워져요";
+        return { kind: "draw", take: true, text: "앞사람이 버린 " + tileName(st, top) + " 가져오기", why: why };
+      }
+      return { kind: "draw", take: false, text: "더미에서 뽑기", why: top != null ? "앞사람이 버린 " + tileName(st, top) + " — 내 묶음에 잘 안 맞아요" : "앞사람 버림이 아직 없어요" };
+    }
+    const inGroup = Cube.arrange(st, hand).groups.some(function (g) { return g.indexOf(h.id) >= 0; });
+    const why = inGroup ? "묶음을 가장 덜 깨는 타일이에요"
+      : hasNeighbor(st, hand, h.id) ? "묶음에 안 들어간 타일 중 쓸모가 가장 적어요" : "묶음 밖에 있고 짝이 될 타일도 가까이 없어요";
+    return { kind: "discard", id: h.id, text: tileName(st, h.id) + " 버리기", why: why };
+  }
+
+  return { LEVEL: LEVEL, newMemory: newMemory, act: act, hint: hint, advise: advise, tileName: tileName, faceOf: faceOf, valueOf: valueOf };
 });

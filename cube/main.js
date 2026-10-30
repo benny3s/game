@@ -3,11 +3,12 @@
   "use strict";
   const { esc, store, save, toast, modal, confetti, sfx, backGuard, howto, tierCards, TIERS, vibrate } = window.Cozy;
   const $ = (id) => document.getElementById(id);
-  const Cube = window.Cube, AI = window.CubeAI;
+  const Cube = window.Cube, AI = window.CubeAI, Table = window.CubeTable;
 
   // ── 고르기 값 (저장해 둠) ───────────────────────────────
   const saved = store("cube.opt", {});
-  const O = Object.assign({ ai: 1, tier: "normal", rule: "easy", wtier: "hard", wrule: "classic" }, saved && typeof saved === "object" ? saved : {});
+  const O = Object.assign({ ai: 1, tier: "normal", rule: "easy", wtier: "hard", wrule: "classic", lh: 2, lai: 0, ltier: "normal", lnames: [] }, saved && typeof saved === "object" ? saved : {});
+  if (!Array.isArray(O.lnames)) O.lnames = [];
   const saveOpt = () => save("cube.opt", O);
 
   const TIER_ITEMS = [
@@ -34,7 +35,8 @@
     ["#b9a4e8", "#f3eefc"], ["#9ec9f5", "#eaf3fd"], ["#f7a9c4", "#fdeef4"],
   ];
 
-  let G = null, tab = "solo";
+  let G = null, tab = "solo", hsPick = null;
+  const hsClose = () => { if (window.HotSeat && HotSeat.isOpen) { try { HotSeat.close(); } catch (e) {} } };
   const ruleName = (r) => (r === "classic" ? "전통" : "쉬움");
 
   // ── 작은 도우미 ─────────────────────────────────────────
@@ -110,10 +112,14 @@
   function setTab(t) {
     tab = t;
     $("tabSolo").setAttribute("aria-pressed", String(t === "solo"));
-    $("tabWatch").setAttribute("aria-pressed", String(t !== "solo"));
+    $("tabLocal").setAttribute("aria-pressed", String(t === "local"));
+    $("tabWatch").setAttribute("aria-pressed", String(t === "watch"));
     $("soloBox").hidden = t !== "solo";
+    $("localBox").hidden = t !== "local";
     $("watchBox").hidden = t !== "watch";
   }
+  const LOCAL_AV = ["🐱", "🐶", "🐰", "🐻"];
+  const localName = (i) => (O.lnames[i] || "").trim() || `${i + 1}번`;
 
   function drawMenu() {
     setTab(tab);
@@ -126,7 +132,33 @@
     seg($("wRules"), [["easy", "★ 쉬움 (조커)"], ["classic", "🀄 전통"]], O.wrule, (v) => { O.wrule = v; saveOpt(); drawMenu(); });
     $("wRuleDesc").textContent = RULE_DESC[O.wrule] || "";
 
+    // 한 폰으로: 사람 2~4 + AI 채우기 (모두 합쳐 4명까지)
+    O.lh = Math.min(4, Math.max(2, +O.lh || 2));
+    O.lai = Math.max(0, Math.min(4 - O.lh, +O.lai || 0));
+    seg($("lHumans"), [["2", "2명"], ["3", "3명"], ["4", "4명"]], O.lh, (v) => { O.lh = +v; saveOpt(); drawMenu(); });
+    const aiOpts = [["0", "없음"]];
+    for (let k = 1; k <= 4 - O.lh; k++) aiOpts.push([String(k), "+AI " + k + "명"]);
+    seg($("lAi"), aiOpts, O.lai, (v) => { O.lai = +v; saveOpt(); drawMenu(); });
+    $("lAi").closest(".field").hidden = O.lh >= 4;
+    $("lTiers").hidden = !O.lai;
+    tierCards($("lTiers"), TIER_ITEMS, (id) => { O.ltier = id; saveOpt(); drawMenu(); }, { selected: O.ltier });
+    seg($("lRules"), [["easy", "★ 쉬움 (조커)"], ["classic", "🀄 전통"]], O.rule, (v) => { O.rule = v; saveOpt(); drawMenu(); });
+    $("lNames").innerHTML = Array.from({ length: O.lh }, (_, i) =>
+      `<label class="lname"><span>${LOCAL_AV[i]}</span><input type="text" maxlength="8" data-i="${i}" placeholder="${i + 1}번" value="${esc(O.lnames[i] || "")}"></label>`).join("");
+    $("lNames").oninput = (e) => { const i = +e.target.dataset.i; if (i >= 0) { O.lnames[i] = e.target.value.slice(0, 8); saveOpt(); } };
+    // 공용 자리 고르기(common/hotseat.js)가 있으면 그것으로 (자리마다 사람/AI) — 없으면 위의 기본 고르기
+    if (window.HotSeat && !hsPick) {
+      try { hsPick = HotSeat.setup($("lSeats"), { game: "cube", min: 2, max: 4, allowAI: true, tiers: ["easy", "normal", "hard"] }); } catch (e) { console.warn(e); hsPick = null; }
+    }
+    if (hsPick) {
+      $("lSeats").hidden = false;
+      for (const id of ["lHumansF", "lNames", "lTiers"]) $(id).hidden = true;
+      $("lAi").closest(".field").hidden = true;
+    }
+
     $("tabSolo").onclick = () => { setTab("solo"); sfx.play("tap"); };
+    $("tabLocal").onclick = () => { setTab("local"); sfx.play("tap"); };
+    $("localBtn").onclick = () => startGame("local");
     $("tabWatch").onclick = () => { setTab("watch"); sfx.play("tap"); };
     if ($("tabFriend")) $("tabFriend").onclick = () => { sfx.play("tap"); openFriendModal(); };
     $("startBtn").onclick = () => startGame("solo");
@@ -136,112 +168,46 @@
 
   const mySeat = () => (G && G.mySeat != null ? G.mySeat : 0);
 
+  // ── 친구랑 (2~4명, 모인 사람 수대로 · 빈 자리는 AI 채우기) ──
+  const hashStr = (s) => { let h = 2166136261; for (const ch of String(s || "")) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return h | 0; };
+  const FILL_ITEMS = [["0", "사람만"], ["3", "3명까지"], ["4", "4명까지"]];
+  const ruleLabel = (r) => (r === "classic" ? "🀄 전통" : "★ 쉬움 (조커)");
+  const curCfg = () => (window.ArenaUI && ArenaUI.net && ArenaUI.net.meta && ArenaUI.net.meta.cfg) || {};
+
   function openFriendModal() {
     if (!window.ArenaUI) return toast("온라인 모듈을 불러오지 못했어요");
     ArenaUI.open({
-      game: "cube", title: "베니큐브", max: 4, min: 2,
-      buildConfig: (hostEl) => {
-        const state = { rule: O.rule || "easy", bots: 0 };
-        hostEl.innerHTML = `<div style="display:grid;gap:8px;margin-top:4px">
-          <div class="field"><span class="small">규칙</span><div class="seg" id="fRuleSeg"></div></div>
-          <div class="field"><span class="small">AI 채우기</span><div class="seg" id="fBotSeg"></div></div>
-        </div>`;
-        const drawF = () => {
-          seg(hostEl.querySelector("#fRuleSeg"), [["easy", "★ 쉬움 (조커)"], ["classic", "🀄 전통"]], state.rule, v => { state.rule = v; drawF(); });
-          seg(hostEl.querySelector("#fBotSeg"), [[0, "사람만"], [1, "+AI 1명"], [2, "+AI 2명"]], state.bots, v => { state.bots = +v; drawF(); });
-        };
-        drawF();
-        return () => ({ rule: state.rule, bots: state.bots, seed: (Date.now() ^ ((Math.random() * 2147483647) | 0)) | 0 });
+      game: "cube", title: "베니큐브", max: 4, min: 2, coach: true,
+      describe: (n, c) => Table.describe(n, (c || curCfg()).fill),
+      settings: {
+        defaults: { rule: O.rule || "easy", fill: 0, tier: "normal", seed: (Date.now() ^ ((Math.random() * 2147483647) | 0)) | 0 },
+        label: (c) => `${ruleLabel(c && c.rule)}${c && +c.fill ? ` · AI로 ${c.fill}명까지` : ""}`,
+        render(el, c, canEdit, update) {
+          c = c || {};
+          el.innerHTML = `<div class="fset">
+            <div class="field"><span class="small">규칙</span><div class="seg" data-k="rule"></div></div>
+            <div class="field"><span class="small">빈 자리 AI 채우기</span><div class="seg" data-k="fill"></div></div>
+            <div class="field" data-tierf><span class="small">AI 실력</span><div class="seg" data-k="tier"></div></div>
+            ${canEdit ? "" : `<p class="small fnote">방장이 고르는 설정이에요</p>`}
+          </div>`;
+          const put = (k, items, cur) => {
+            const box = el.querySelector(`[data-k="${k}"]`);
+            box.innerHTML = items.map(([v, t]) => `<button class="btn" data-v="${v}" aria-pressed="${String(v) === String(cur)}"${canEdit ? "" : " disabled"}>${t}</button>`).join("");
+            box.onclick = (e) => { const b = e.target.closest("button"); if (!b || !canEdit) return; sfx.play("tap"); update({ [k]: k === "fill" ? +b.dataset.v : b.dataset.v }); };
+          };
+          put("rule", [["easy", "★ 쉬움 (조커)"], ["classic", "🀄 전통"]], c.rule || "easy");
+          put("fill", FILL_ITEMS, +c.fill || 0);
+          put("tier", TIER_ITEMS.map((t) => [t.id, t.em + " " + t.name]), c.tier || "normal");
+          el.querySelector("[data-tierf]").hidden = !+c.fill;
+        },
       },
-      renderConfig: (c) => `${(c && c.rule) === "classic" ? "🀄 전통" : "★ 쉬움 (조커)"} 규칙${c && c.bots ? ` · AI +${c.bots}` : ""}`,
-      onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
+      onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c || {}, players }),
+      onLeave: (why) => { if (G && G.mode === "online") { goMenu(); if (why) toast(why); } },
     });
   }
 
-  function startOnline({ net, role, cfg: c, players }) {
-    const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p)).sort((a, b) => (a.slot ?? 9) - (b.slot ?? 9));
-    const nHumans = Math.max(1, plist.length);
-    const n = Math.min(4, Math.max(2, nHumans + ((c && c.bots) || 0)));
-    const myIdx = Math.max(0, plist.findIndex(p => p.uid === net.uid));
-    const levels = [], names = [], avs = [];
-    const AV = ["🙋", "🦊", "🐼", "🐰"];
-    for (let i = 0; i < n; i++) {
-      const pl = plist[i];
-      if (pl) {
-        levels.push(i === myIdx ? "human" : "remote");
-        names.push(i === myIdx ? (pl.name || "나") : (pl.name || `친구${i + 1}`));
-        avs.push(AV[i % AV.length]);
-      } else {
-        levels.push(role === "host" ? "normal" : "remote");
-        names.push(BOT_NAMES[i % BOT_NAMES.length] + "(AI)");
-        avs.push("🀄");
-      }
-    }
-    const baseSeed = (c && c.seed) || 12345;
-    G = {
-      mode: "online", mySeat: myIdx, net, role, baseSeed,
-      n, levels, names, avs,
-      rule: (c && c.rule) || "easy",
-      totals: new Array(n).fill(0),
-      round: 0, st: null,
-      mems: [], rack: [],
-      sel: null, winMode: false, hintId: null, hintedPile: null,
-      over: false, finished: false, paused: false, speed: 1,
-      thinking: -1, flashSeat: -1, lastMsg: "", lastWin: null,
-      modalClose: null, drag: null, aiTimer: 0,
-    };
-    const onMsg = (m) => {
-      if (!m || !G || G.mode !== "online") return;
-      if (m.t === "act") {
-        if (role === "host") net.broadcast(m);
-        applyAction(m.a, false, false, true);
-      } else if (m.t === "next") {
-        if (role === "host") net.broadcast(m);
-        if (G.modalClose) { try { G.modalClose(); } catch (e) {} G.modalClose = null; }
-        startRound((baseSeed + m.round * 0x9e3779b9) | 0);
-      }
-    };
-    if (role === "host") net.on("msg", (_uid, m) => onMsg(m));
-    else net.on("msg", m => onMsg(m));
-
-    document.body.classList.add("playing");
-    const play = $("play");
-    play.hidden = false;
-    play.classList.remove("watch");
-    $("wstage").hidden = true;
-    $("actbar").hidden = false;
-    $("dock").hidden = false;
-    $("wdock").hidden = true;
-    window.scrollTo(0, 0);
-    startRound(baseSeed);
-  }
-
-  // ── 한 판 시작 ─────────────────────────────────────────
-  function startGame(mode, seed) {
-    const watch = mode === "watch";
-    const tier = watch ? O.wtier : O.tier;
-    const n = watch ? 4 : Math.min(4, Math.max(2, (+O.ai || 1) + 1));
-    const levels = [], names = [], avs = [];
-    if (!watch) { levels.push("human"); names.push("나"); avs.push("🙋"); }
-    const bots = watch ? 4 : n - 1;
-    for (let i = 0; i < bots; i++) {
-      levels.push(tier);
-      names.push(BOT_NAMES[i % BOT_NAMES.length]);
-      avs.push(TIERS[tier].em);
-    }
-
-    G = {
-      mode, mySeat: 0, n, levels, names, avs,
-      rule: watch ? O.wrule : O.rule,
-      totals: new Array(n).fill(0),
-      round: 0, st: null,
-      mems: [], rack: [],
-      sel: null, winMode: false, hintId: null, hintedPile: null,
-      over: false, finished: false, paused: false, speed: 1,
-      thinking: -1, flashSeat: -1, lastMsg: "", lastWin: null,
-      modalClose: null, drag: null, aiTimer: 0,
-    };
-
+  // 판을 화면에 띄움 (온라인·혼자 공통)
+  function showPlay(watch) {
     document.body.classList.add("playing");
     const play = $("play");
     play.hidden = false;
@@ -250,42 +216,361 @@
     $("actbar").hidden = watch;
     $("dock").hidden = watch;
     $("wdock").hidden = !watch;
+    $("coachBtn").hidden = true;   // 판이 시작되면 setupCoach 가 정함
+    $("coachFb").hidden = true;
+    window.scrollTo(0, 0);
+  }
+
+  function newG(o) {
+    return Object.assign({
+      mode: "solo", mySeat: 0, n: 2, levels: [], names: [], avs: [], rule: "easy",
+      totals: [], round: 0, st: null, log: [], mems: [], rack: [], racks: {},
+      sel: null, winMode: false, hintId: null, hintedPile: null,
+      over: false, finished: false, paused: false, speed: 1,
+      thinking: -1, flashSeat: -1, lastMsg: "", lastWin: null,
+      modalClose: null, drag: null, aiTimer: 0,
+      coachOn: false, coach: null, coachKey: "", viewing: 0, cover: false,
+    }, o);
+  }
+
+  // 방장이 친구에게 보내는 판 전체 (늦게 받은 사람도 이걸로 맞춤)
+  function goMsg() {
+    return {
+      t: "go", seats: G.seatUids, names: G.names, avs: G.avs,
+      kinds: G.levels.map((l) => (l === "human" || l === "remote" ? "p" : "bot")),
+      rule: G.rule, round: G.round, seed: G.roundSeed, log: G.log, totals: G.totals, coach: G.coachOn,
+    };
+  }
+
+  function startOnline({ net, role, cfg: c, players }) {
+    if (G) goMenuQuiet();
+    const coachOn = !!c.coach;
+    if (role !== "host") {
+      // 친구: 방장에게 판을 받아서 시작 (늦게 들어와도 지금 판에 맞춰짐)
+      G = newG({ mode: "online", net, role, waiting: true, coachOn });
+      showPlay(false);
+      $("actMsg").textContent = "방장과 맞추는 중…";
+      $("opps").innerHTML = ""; $("rack").innerHTML = "";
+      const hi = () => { if (G && G.net === net && G.waiting) net.send({ t: "hi" }, true); };
+      G.offs = [net.on("msg", (m) => onGuestMsg(net, m))];
+      hi(); G.hiTimer = setInterval(hi, 1500);
+      return;
+    }
+    const uids = Table.seatOrder(players, (net.meta && net.meta.host) || net.uid);
+    const seats = Table.lineup(uids.map((u) => ({ id: u, name: (players[u] && players[u].name) || "친구" })), +c.fill || 0, BOT_NAMES);
+    const tier = TIERS[c.tier] ? c.tier : "normal";
+    const AV = ["🙋", "🦊", "🐼", "🐰"];
+    const n = seats.length;
+    G = newG({
+      mode: "online", net, role, n, coachOn,
+      mySeat: Math.max(0, seats.findIndex((s) => s.id === net.uid)),
+      seatUids: seats.map((s) => s.id),
+      levels: seats.map((s) => (s.kind === "bot" ? tier : s.id === net.uid ? "human" : "remote")),
+      names: seats.map((s) => (s.kind === "bot" ? s.name + "(AI)" : s.name)),
+      avs: seats.map((s, i) => (s.kind === "bot" ? "🀄" : AV[i % AV.length])),
+      rule: c.rule === "classic" ? "classic" : "easy",
+      baseSeed: ((c.seed | 0) ^ hashStr(net.code)) | 0,
+      totals: new Array(n).fill(0),
+    });
+    G.offs = [
+      net.on("msg", (uid, m) => onHostMsg(net, uid, m)),
+      // 친구가 판 도중 나가면 그 자리는 AI 가 이어서
+      net.on("leave", (uid) => {
+        if (!G || G.net !== net) return;
+        const s = G.seatUids.indexOf(uid);
+        if (s < 0 || G.levels[s] !== "remote") return;
+        G.levels[s] = tier; G.names[s] += "(AI)";
+        net.broadcast({ t: "bot", seat: s, name: G.names[s] }, true);
+        toast(G.names[s].replace("(AI)", "") + "님이 나가서 AI 가 이어서 해요");
+        render(); schedule();
+      }),
+    ];
+    showPlay(false);
+    startRound(G.baseSeed);
+    net.broadcast(goMsg(), true);
+  }
+
+  function onHostMsg(net, uid, m) {
+    if (!m || !G || G.net !== net) return;
+    const seat = G.seatUids.indexOf(uid);
+    if (m.t === "hi") {
+      if (seat < 0) net.send(uid, { t: "full" }, true);
+      else net.send(uid, goMsg(), true);
+    } else if (m.t === "act") {
+      // 차례인 사람의 다음 수만 받음 — 어긋나면 그 친구에게 판 전체를 다시 보냄
+      const st = G.st;
+      if (st && seat >= 0 && seat === st.turn && G.levels[seat] === "remote" && m.k === G.log.length && applyAction(m.a, false, false, true)) return;
+      if (seat >= 0) net.send(uid, goMsg(), true);
+    } else if (m.t === "next") {
+      if (seat >= 0 && m.round === G.round && G.over) nextRound();
+    }
+  }
+
+  function onGuestMsg(net, m) {
+    if (!m || !G || G.net !== net) return;
+    if (m.t === "go") {
+      const me = (m.seats || []).indexOf(net.uid);
+      if (me < 0) { lateJoin(); return; }
+      clearInterval(G.hiTimer);
+      const keep = { net, role: G.role, offs: G.offs, coachOn: !!m.coach };
+      coachClose(G);
+      if (G.modalClose) { try { G.modalClose(); } catch (e) {} }
+      const n = m.seats.length;
+      G = newG(Object.assign(keep, {
+        mode: "online", n, mySeat: me, seatUids: m.seats, names: m.names.slice(), avs: m.avs.slice(),
+        levels: m.kinds.map((k, i) => (i === me ? "human" : "remote")), rule: m.rule, totals: (m.totals || []).slice(),
+      }));
+      if (G.totals.length !== n) G.totals = new Array(n).fill(0);
+      startRound(m.seed);
+      G.round = m.round;
+      for (const a of m.log || []) if (!applyAction(a, false, true, true)) break;
+      render(); schedule();
+    } else if (m.t === "act") {
+      if (!G.st || G.waiting) return;
+      if (m.k === G.log.length) applyAction(m.a, false, false, true);
+      else if (m.k > G.log.length) net.send({ t: "hi" }, true);   // 빠진 수가 있으면 다시 받기
+    } else if (m.t === "next") {
+      if (!G.st || G.waiting) return;
+      if (G.modalClose) { try { G.modalClose(); } catch (e) {} G.modalClose = null; }
+      startRound(m.seed);
+      G.round = m.round;
+    } else if (m.t === "bot") {
+      if (G.names) { G.names[m.seat] = m.name; render(); }
+    } else if (m.t === "full") {
+      lateJoin();
+    }
+  }
+
+  function lateJoin() {
+    if (!G || G.lateShown) return;
+    G.lateShown = true;
+    clearInterval(G.hiTimer);
+    modal({ title: "이미 시작한 판이에요", html: `<p class="resline">자리가 다 찼어요. 이번 판이 끝나고 방장이 새 방을 열면 같이 해요.</p>`, buttons: [{ label: "메뉴로", primary: true, onClick: () => goMenu() }] });
+  }
+
+  // 방장: 다음 판 (모두 같은 씨앗으로)
+  function nextRound() {
+    if (!G) return;
+    if (G.modalClose) { try { G.modalClose(); } catch (e) {} G.modalClose = null; }
+    if (G.mode !== "online" || !G.net) { startRound(); return; }
+    if (G.role !== "host") { G.net.send({ t: "next", round: G.round }, true); return; }
+    const seed = (G.baseSeed + G.round * 0x9e3779b9) | 0;
+    G.net.broadcast({ t: "next", round: G.round + 1, seed }, true);
+    startRound(seed);
+  }
+
+  // ── 한 판 시작 ─────────────────────────────────────────
+  function startGame(mode, seed) {
+    if (G) goMenuQuiet();
+    const watch = mode === "watch", local = mode === "local";
+    const levels = [], names = [], avs = [];
+    if (local && hsPick) {
+      // 공용 자리 고르기: 자리 순서 그대로 (사람/AI 섞임)
+      if (!hsPick.valid) { toast("2~4자리에 사람이 한 명 이상 있어야 해요"); return; }
+      let b = 0;
+      for (const s of hsPick.seats) {
+        if (s.kind === "ai") { const t = TIERS[s.tier] ? s.tier : "normal"; levels.push(t); names.push(BOT_NAMES[b++ % BOT_NAMES.length] + "(AI)"); avs.push(s.emoji || TIERS[t].em); }
+        else { levels.push("human"); names.push(String(s.name || "").slice(0, 8)); avs.push(s.emoji || "🙂"); }
+      }
+    } else if (local) {
+      // 한 폰으로: 사람 lh 명 + AI lai 명 (합쳐 4명까지)
+      const lh = Math.min(4, Math.max(2, +O.lh || 2)), lai = Math.max(0, Math.min(4 - lh, +O.lai || 0));
+      for (let i = 0; i < lh; i++) { levels.push("human"); names.push(localName(i)); avs.push(LOCAL_AV[i]); }
+      for (let i = 0; i < lai; i++) { levels.push(O.ltier); names.push(BOT_NAMES[i % BOT_NAMES.length] + "(AI)"); avs.push(TIERS[O.ltier].em); }
+    } else {
+      const tier = watch ? O.wtier : O.tier;
+      const n = watch ? 4 : Math.min(4, Math.max(2, (+O.ai || 1) + 1));
+      if (!watch) { levels.push("human"); names.push("나"); avs.push("🙋"); }
+      const bots = watch ? 4 : n - 1;
+      for (let i = 0; i < bots; i++) {
+        levels.push(tier);
+        names.push(BOT_NAMES[i % BOT_NAMES.length]);
+        avs.push(TIERS[tier].em);
+      }
+    }
+    const n = levels.length;
+    G = newG({ mode, n, levels, names, avs, rule: watch ? O.wrule : O.rule, totals: new Array(n).fill(0) });
+    showPlay(watch);
     $("pauseBtn").querySelector(".ic").textContent = "⏸";
     $("pauseBtn").querySelector(".ic + span").textContent = "멈춤";
     $("speedBtn").querySelector(".ic + span").textContent = "1배속";
-    window.scrollTo(0, 0);
     startRound(seed);
   }
 
   function startRound(seed) {
     if (!G) return;
     clearTimeout(G.aiTimer);
-    if (seed == null) seed = G.mode === "online" ? ((G.baseSeed + (G.round + 1) * 0x9e3779b9) | 0) : ((Date.now() ^ ((Math.random() * 2147483647) | 0)) | 0);
+    if (seed == null) seed = (Date.now() ^ ((Math.random() * 2147483647) | 0)) | 0;
     const st = Cube.create({ players: G.n, rule: G.rule, seed });
-    G.st = st;
+    G.st = st; G.roundSeed = seed; G.log = []; G.waiting = false;
     G.mems = Array.from({ length: G.n }, (_, i) => AI.newMemory(seed + i * 131 + 7));
     G.round++;
-    G.sel = null; G.winMode = false; G.hintId = null; G.hintedPile = null;
+    G.sel = null; G.winMode = false; G.hintId = null; G.hintedPile = null; G.coachKey = "";
     G.over = false; G.finished = false; G.paused = false; G.thinking = -1;
     G.flashSeat = -1; G.lastMsg = ""; G.lastWin = null; G.speed = 1;
+    G.racks = {};
+    if (G.mode === "local") { G.mySeat = Math.max(0, G.levels.indexOf("human")); G.viewing = -1; G.cover = true; }
     G.rack = G.mode !== "watch" ? tidyOrder(st, st.hands[mySeat()]) : [];
     $("speedBtn").querySelector(".ic + span").textContent = "1배속";
     $("pauseBtn").querySelector(".ic").textContent = "⏸";
     $("pauseBtn").querySelector(".ic + span").textContent = "멈춤";
     render();
+    if (!G.coachReady && coachAvail()) { setupCoach(); render(); }   // 받침대 자리가 정해진 뒤에 띄움
+    else setupCoach();
+    updateCover();
     schedule();
   }
 
+  // 판 정리 (방은 그대로) — 새 판을 열기 전에
+  function goMenuQuiet() {
+    const g = G; G = null;
+    if (!g) return g;
+    clearTimeout(g.aiTimer); clearInterval(g.hiTimer);
+    if (g.offs) g.offs.forEach((f) => { try { f(); } catch (e) {} });
+    if (g.modalClose) { try { g.modalClose(); } catch (e) {} }
+    coachClose(g);
+    $("cover").hidden = true;
+    hsClose();
+    return g;
+  }
+
   function goMenu() {
-    if (G && G.net) { try { G.net.leave(); } catch (e) {} }
-    if (G) clearTimeout(G.aiTimer);
-    if (G && G.modalClose) { try { G.modalClose(); } catch (e) {} G.modalClose = null; }
-    G = null;
+    const g = goMenuQuiet();
+    if (g && g.net) {
+      if (window.ArenaUI && ArenaUI.net === g.net) ArenaUI.leave();   // 대기실 상태도 같이 정리
+      else { try { g.net.leave(); } catch (e) {} }
+    }
     document.body.classList.remove("playing");
     $("play").hidden = true;
     $("play").classList.remove("watch");
     $("wstage").hidden = true;
     drawMenu();
+  }
+
+  // ── 한 폰으로: 차례가 바뀌면 화면 가리기 ─────────────────
+  function updateCover() {
+    if (!G || G.mode !== "local" || !G.st) { $("cover").hidden = true; return; }
+    const st = G.st;
+    if (st.phase === "over") { G.cover = false; G.hsFor = ""; $("cover").hidden = true; hsClose(); return; }
+    if (!G.cover && Table.needCover(G.levels, G.viewing, st)) { G.cover = true; G.viewing = -1; G.sel = null; G.winMode = false; }
+    if (!G.cover) { $("cover").hidden = true; return; }
+    const v = Table.viewerFor(G.levels, st);
+    $("cover").hidden = false;   // 공용 가림막 아래에도 늘 깔아 둠 (AI 차례엔 이것만)
+    if (v >= 0 && window.HotSeat) {
+      // 공용 '차례 넘기기' 가림막 — 누르면 그 사람 화면
+      const tag = G.round + ":" + G.log.length + ":" + v;
+      if (G.hsFor !== tag) {
+        G.hsFor = tag;
+        const g = G;
+        HotSeat.cover({ name: G.names[v], emoji: G.avs[v], button: "👀 내 타일 보기" }).then(() => { if (G === g && G.hsFor === tag) revealCover(); });
+      }
+    }
+    if (v >= 0) {
+      $("coverAv").textContent = G.avs[v];
+      $("coverTitle").textContent = `${G.names[v]} 차례예요`;
+      $("coverSub").textContent = "화면을 넘겨 주세요. 다른 사람은 보지 않기!";
+      $("coverBtn").disabled = false;
+      $("coverBtn").textContent = `${G.names[v]}, 내 타일 보기`;
+    } else {
+      $("coverAv").textContent = G.avs[st.turn];
+      $("coverTitle").textContent = `${G.names[st.turn]} 두는 중…`;
+      $("coverSub").textContent = "사람 차례가 오면 바로 알려 줄게요";
+      $("coverBtn").disabled = true;
+      $("coverBtn").textContent = "기다리는 중";
+    }
+  }
+  function revealCover() {
+    if (!G || G.mode !== "local" || !G.st) return;
+    const v = Table.viewerFor(G.levels, G.st);
+    if (v < 0) return;
+    if (G.mySeat !== v) {
+      G.racks[G.mySeat] = G.rack;
+      G.mySeat = v;
+      G.rack = G.racks[v] || tidyOrder(G.st, G.st.hands[v]);
+      syncRack();
+    }
+    G.viewing = v; G.cover = false; G.hsFor = "";
+    hsClose();
+    sfx.play("flip");
+    render();
+    updateCover();
+  }
+
+  // ── AI 선생님 — 버튼 하나 (혼자·한 폰으로는 늘, 친구랑은 방장이 켰을 때만) ──
+  const coachAvail = () => !!G && G.mode !== "watch" && (G.mode !== "online" || G.coachOn);
+  // 처음 자리: 받침대 바로 위 빈 곳 (받침대·버리기 단추를 가리지 않게, 15장이면 3줄이라 3줄 기준)
+  function coachBottom() {
+    const rw = document.querySelector(".rackwrap"), tiles = [...$("rack").querySelectorAll(".tile")];
+    const rows = new Set(tiles.map((t) => t.offsetTop)).size, th = tiles.length ? tiles[0].offsetHeight + 4 : 0;
+    const top = rw ? rw.getBoundingClientRect().top - Math.max(0, 3 - rows) * th : 0;
+    return top > 200 ? Math.round(window.innerHeight - top + 8) : 88;
+  }
+  function setupCoach() {
+    const btn = $("coachBtn");
+    btn.hidden = !coachAvail();
+    if (!coachAvail() || G.coachReady) return;
+    G.coachReady = true;
+    if (window.CoachPanel && typeof CoachPanel.create === "function") {
+      try {
+        G.coach = CoachPanel.create({ game: "cube", title: "AI 선생님", bottom: coachBottom(), startHidden: !!(CoachPanel.isOff && CoachPanel.isOff("cube")) });
+        G.coachBtn = CoachPanel.button(btn, G.coach);
+        G.coachOff = G.coach.onChange ? G.coach.onChange(() => { if (G) { G.coachKey = ""; render(); } }) : null;
+      } catch (e) { console.warn(e); G.coach = null; }
+    }
+    if (!G.coach) {
+      // 공용 창이 없을 때: 오른쪽 위 작은 카드
+      G.fbOn = store("cube.coachfb", 1) !== 0;
+      btn.onclick = () => { if (!G) return; G.fbOn = !G.fbOn; save("cube.coachfb", G.fbOn ? 1 : 0); G.coachKey = ""; sfx.play("tap"); render(); };
+    }
+    G.coachKey = "";
+  }
+  function coachClose(g) {
+    if (g) {
+      if (g.coachBtn) { try { g.coachBtn.destroy(); } catch (e) {} }
+      if (typeof g.coachOff === "function") { try { g.coachOff(); } catch (e) {} }
+      if (g.coach) { try { g.coach.destroy(); } catch (e) {} }
+      g.coach = g.coachBtn = g.coachOff = null; g.coachReady = false;
+    }
+    $("coachBtn").onclick = null;
+    $("coachBtn").classList.remove("on");
+    $("coachFb").hidden = true;
+  }
+  const coachOpen = () => (G.coach ? G.coach.visible && !G.coach.collapsed : !!G.fbOn && !$("coachFb").classList.contains("shut"));
+  function coachSet(html) {
+    if (G.coach) { G.coach.set(html); return; }
+    $("coachFbBody").innerHTML = html;
+  }
+  // 그리기 전마다: 차례·수가 바뀌었을 때만 생각하고, 창이 열려 있을 때만 추천 타일을 반짝임
+  function coachTick() {
+    G.hintId = null; G.hintedPile = null;
+    if (!G.coach) {
+      $("coachFb").hidden = !(coachAvail() && G.fbOn);
+      $("coachBtn").classList.toggle("on", !!G.fbOn);
+      $("coachBtn").setAttribute("aria-pressed", String(!!G.fbOn));
+    }
+    if (!coachAvail() || !G.st || !coachOpen()) { G.coachKey = ""; return; }
+    const st = G.st, me = mySeat();
+    const hidden = G.mode === "local" && (G.cover || G.viewing !== me);   // 한 폰으로: 가림막을 걷은 사람에게만
+    const key = [G.round, G.log.length, st.phase, me, hidden ? 1 : 0].join(":");
+    if (key !== G.coachKey) {
+      G.coachKey = key;
+      G.advice = null;
+      let html;
+      if (st.phase === "over") html = st.winner === me && G.mode !== "local" ? "잘했어요! 🎉 다음 판도 같이 봐요" : "다음 판엔 만능을 아끼고 묶음을 먼저 모아 봐요";
+      else if (hidden) html = "가림막을 걷으면 지금 차례인 사람을 도와줄게요";
+      else if (st.turn !== me) html = `${esc(G.names[st.turn])} 차례예요. 내 차례가 오면 도와줄게요`;
+      else {
+        const a = AI.advise(st, me);
+        G.advice = a;
+        html = a ? `<b>${esc(a.text)}</b><br>${esc(a.why)}${a.kind === "win" || a.kind === "discard" ? "<br><small>✨ 반짝이는 타일</small>" : ""}` : "";
+      }
+      coachSet(html);
+    }
+    const a = G.advice;
+    if (a && !hidden && st.turn === me) {
+      if (a.kind === "draw") G.hintedPile = a.take ? "take" : "deck";
+      else G.hintId = a.id;
+    }
   }
 
   // ── 상태 다루기 ─────────────────────────────────────────
@@ -353,9 +638,12 @@
       if (!instant) toast("지금은 그렇게 둘 수 없어요");
       return false;
     }
-    if (G.mode === "online" && G.net && !remote) {
-      const m = { t: "act", a };
-      if (G.role === "host") G.net.broadcast(m); else G.net.send(m);
+    // 수 기록 (k = 몇 번째 수) — 방장은 모두에게, 친구는 자기 수만 방장에게
+    const k = G.log.length;
+    G.log.push(a);
+    if (G.mode === "online" && G.net) {
+      const m = { t: "act", a, k };
+      if (G.role === "host") G.net.broadcast(m, true); else if (!remote && !instant) G.net.send(m, true);
     }
     G.st = res.state;
     G.sel = null; G.winMode = false; G.hintId = null; G.hintedPile = null; G.thinking = -1;
@@ -402,6 +690,7 @@
         }, 520);
       }
     }
+    if (G.mode === "local" && !instant) updateCover();
     if (G.st.phase === "over") { finishRound(); return true; }
     if (!instant) schedule();
     return true;
@@ -423,29 +712,6 @@
     applyAction({ t: from }, true);
   }
 
-  function doHint() {
-    const me = mySeat();
-    if (!G || !G.st || G.st.turn !== me || G.st.phase === "over") return;
-    const st = G.st;
-    const h = AI.hint(st, me);
-    if (h.kind === "draw") {
-      G.hintedPile = h.take ? "take" : "deck";
-      toast(h.take ? "앞사람이 버린 타일이 좋겠어요" : "더미에서 뽑아 보세요");
-    } else {
-      G.hintId = h.id;
-      G.hintedPile = null;
-      toast("이 타일은 어때요?");
-    }
-    render();
-    sfx.play("pop", { pitch: 1.3 });
-    setTimeout(() => {
-      if (!G) return;
-      if (G.hintId === h.id && G.hintedPile === (h.take ? "take" : h.kind === "draw" ? "deck" : null)) {
-        G.hintId = null; G.hintedPile = null; render();
-      }
-    }, 3600);
-  }
-
   // ── 끝났을 때 ──────────────────────────────────────────
   function finishRound() {
     if (!G || G.finished || !G.st) return;
@@ -455,7 +721,7 @@
     const st = G.st, me = mySeat();
     if (st.winner >= 0) G.totals[st.winner] += st.points;
     render();
-    if (G.mode === "watch") {
+    if (G.mode === "watch" || G.mode === "local") {
       if (st.winner >= 0) { confetti({ zIndex: 10 }); sfx.play("win"); } else sfx.play("bad");
     } else if (st.winner === me) {
       confetti({ zIndex: 10 }); sfx.play("win"); vibrate([20, 40, 20]);
@@ -470,11 +736,13 @@
   function showResult() {
     if (!G || !G.st) return;
     const st = G.st, winner = st.winner, me = mySeat();
-    const meWin = G.mode !== "watch" && winner === me;
+    const shared = G.mode === "watch" || G.mode === "local";   // 내 자리가 따로 없음
+    const meWin = !shared && winner === me;
     let title;
     if (winner < 0) title = "🌫 나가리";
     else if (meWin) title = "🎉 베니!";
     else title = "🏆 " + G.names[winner] + (G.mode === "watch" ? "" : " 승리");
+    if (G.mode === "local") $("cover").hidden = true;
 
     let html = "";
     if (winner < 0) {
@@ -496,13 +764,13 @@
     const order = Array.from({ length: st.n }, (_, p) => p)
       .sort((a, b) => (G.totals[b] - G.totals[a]) || (winner === a ? -1 : winner === b ? 1 : a - b));
     html += `<table class="rtable"><tbody>` + order.map((p) => {
-      const me = G.mode !== "watch" && p === meSeat;
+      const me = !shared && p === meSeat;
       return `<tr class="${me ? "mine" : ""}"><td class="medal">${p === winner ? "🏆" : ""}</td>` +
         `<td>${G.avs[p]} ${esc(G.names[p])}</td>` +
         `<td class="n">${p === winner ? "+" + st.points : "+0"}</td>` +
         `<td class="n">${G.totals[p]}점</td></tr>`;
     }).join("") + `</tbody></table>`;
-    if (G.mode !== "watch") html += `<p class="resnote">이번 판 ${st.points}점 · 모은 점수 ${G.totals[meSeat]}점</p>`;
+    if (!shared) html += `<p class="resnote">이번 판 ${st.points}점 · 모은 점수 ${G.totals[meSeat]}점</p>`;
 
     G.modalClose = modal({
       title: title,
@@ -512,19 +780,7 @@
         {
           label: "한 판 더",
           primary: true,
-          onClick: () => {
-            if (G && G.mode === "online" && G.net) {
-              const msg = { t: "next", round: G.round };
-              if (G.role === "host") {
-                G.net.broadcast(msg);
-                startRound((G.baseSeed + G.round * 0x9e3779b9) | 0);
-              } else {
-                G.net.send(msg);
-              }
-            } else {
-              startRound();
-            }
-          },
+          onClick: () => { if (G) nextRound(); },
         },
         { label: "메뉴", ghost: true, onClick: () => { goMenu(); } },
       ],
@@ -538,6 +794,7 @@
   // ── 그리기 ─────────────────────────────────────────────
   function render() {
     if (!G || !G.st) return;
+    coachTick();
     renderBar();
     if (G.mode === "watch") {
       renderWatch();
@@ -567,7 +824,7 @@
       lbl.textContent = G.names[st.turn] + " 차례";
       sub.textContent = "기다리는 중…";
     } else {
-      lbl.textContent = "내 차례";
+      lbl.textContent = G.mode === "local" ? G.names[me] + " 차례" : "내 차례";
       sub.textContent = st.phase === "draw" ? "한 장 뽑아요" : winIds().length ? "끝낼 수 있어요!" : "한 장 버려요";
     }
     pill.textContent = "⭐ " + G.totals[me];
@@ -946,8 +1203,8 @@
     clearTimeout(G.aiTimer);
     let n = 0;
     while (G && G.st && G.st.phase !== "over" && n < max) {
-      if (G.mode === "solo" && G.st.turn === 0) break;
       const p = G.st.turn;
+      if (G.levels[p] === "human" || G.levels[p] === "remote") break;   // 사람 차례에서 멈춤
       const a = AI.act(G.st, p, G.levels[p], G.mems[p]);
       if (!a) break;
       if (!applyAction(a, false, true)) break;
@@ -956,6 +1213,7 @@
     if (G) {
       G.paused = wasPaused;
       if (G.st) render();
+      updateCover();
       if (!G.paused && G.st && G.st.phase !== "over" && !G.over) schedule();
     }
     return n;
@@ -973,7 +1231,12 @@
     $("rack").addEventListener("pointerdown", onRackDown);
     $("arrangeBtn").onclick = arrangeRack;
     $("sortBtn").onclick = sortByNumber;
-    $("hintBtn").onclick = doHint;
+    $("coverBtn").onclick = revealCover;
+    $("coverMenu").onclick = () => goMenu();
+    $("coachFbHead").onclick = () => {   // 작은 선생님 카드 접기·펴기
+      const fb = $("coachFb"), shut = fb.classList.toggle("shut");
+      $("coachFbHead").querySelector("span").textContent = shut ? "펴기" : "접기";
+    };
     sfx.button($("sndBtn"));
     sfx.button($("sndBtn2"));
     $("pauseBtn").onclick = () => {
@@ -1012,6 +1275,7 @@
     Cube: Cube, AI: AI,
     startGame: startGame, goMenu: goMenu,
     winIds: winIds, tidyOrder: tidyOrder, fastFwd: fastFwd,
+    revealCover: revealCover, openFriend: openFriendModal, Table: Table,
   };
 
   init();

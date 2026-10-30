@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=4">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
 <div class="wrap">
@@ -21,6 +21,7 @@
   <section class="card">
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabLocal" aria-pressed="false">한 폰으로</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
@@ -42,9 +43,30 @@
         <li>묶음 = 같은 숫자 다른 색 3장 / 같은 색 이어진 숫자 3장</li>
         <li>차례마다 한 장 뽑고 한 장을 버려요</li>
         <li>끝낼 수 있으면 <b>베니!</b> 단추가 반짝여요</li>
+        <li>막히면 🧑‍🏫 <b>AI 선생님</b>이 추천과 까닭을 알려 줘요</li>
         <li>★ 조커 타일은 만능 — 전통 규칙은 표시 타일 다음 숫자가 만능</li>
       </ul>
       <button class="btn ghost rulesbtn" id="rulesBtn">📖 규칙 다시 보기</button>
+    </div>
+
+    <div class="pane" id="localBox" hidden>
+      <p class="lede">폰 하나를 돌려 가며 2~4명이 같이 해요. 차례가 바뀔 때마다 화면이 가려져서 서로 타일을 못 봐요.</p>
+      <div id="lSeats" hidden></div>
+      <div class="field" id="lHumansF">
+        <span class="small">사람</span>
+        <div class="seg" id="lHumans"></div>
+      </div>
+      <div class="lnames" id="lNames"></div>
+      <div class="field">
+        <span class="small">AI 채우기</span>
+        <div class="seg" id="lAi"></div>
+      </div>
+      <div class="tiers three" id="lTiers"></div>
+      <div class="field">
+        <span class="small">규칙</span>
+        <div class="seg" id="lRules"></div>
+      </div>
+      <button class="btn primary big" id="localBtn">돌려 가며 시작!</button>
     </div>
 
     <div class="pane" id="watchBox" hidden>
@@ -97,12 +119,14 @@
     <div class="wstage" id="wstage" hidden></div>
   </div>
 
+  <div class="coachfb" id="coachFb" hidden><button class="ch" id="coachFbHead">🧑‍🏫 AI 선생님 <span>접기</span></button><div class="cb" id="coachFbBody"></div></div>
+
   <div class="actbar" id="actbar"><span class="msg" id="actMsg"></span></div>
 
   <div class="dock" id="dock">
     <button id="arrangeBtn" aria-label="자동으로 묶음 정리"><span class="ic">🪄</span><span>정리</span></button>
     <button id="sortBtn" aria-label="숫자 순서로 정리"><span class="ic">🔢</span><span>숫자순</span></button>
-    <button id="hintBtn" aria-label="버릴 타일 추천"><span class="ic">💡</span><span>힌트</span></button>
+    <button id="coachBtn" aria-label="AI 선생님 켜기·끄기" hidden><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
     <button id="sndBtn"><span class="ic">🔊</span><span>소리</span></button>
   </div>
   <div class="dock wdock" id="wdock" hidden>
@@ -111,6 +135,15 @@
     <button id="sndBtn2"><span class="ic">🔊</span><span>소리</span></button>
     <button id="menuBtn"><span class="ic">🏠</span><span>메뉴</span></button>
   </div>
+  <div class="cover" id="cover" hidden>
+    <div class="cbox">
+      <div class="cav" id="coverAv">🙈</div>
+      <h2 id="coverTitle">차례가 바뀌었어요</h2>
+      <p id="coverSub">화면을 넘겨 주세요</p>
+      <button class="btn primary big" id="coverBtn">내 타일 보기</button>
+      <button class="btn ghost" id="coverMenu">메뉴로</button>
+    </div>
+  </div>
 </section>
 
 <script src="../common/cozy.js?v=4"></script>
@@ -118,9 +151,12 @@
 <script src="../common/arena-mock.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
+<script src="../common/coach.js?v=1"></script>
+<script src="../common/hotseat.js?v=1"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script src="core.js?v=4"></script>
-<script src="ai.js?v=4"></script>
-<script src="main.js?v=4"></script>
+<script src="ai.js?v=5"></script>
+<script src="table.js?v=5"></script>
+<script src="main.js?v=6"></script>
 </body>
 </html>

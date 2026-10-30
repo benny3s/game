@@ -58,3 +58,16 @@ st.points;   // 이긴 사람이 얻은 점수 (묶음 2 · 일곱 쌍 4 · 만�
 
 - 이긴 사람: `+st.points` (2 · 4 · ×2)
 - 나머지: 0, 나가리: 모두 0
+
+## 여럿이 (2~4명) — 화면 쪽 도우미 `table.js`
+
+`core.js` API 는 그대로예요. 인원은 `Cube.create({ players: 2|3|4 })` 하나로 정해요.
+화면이 쓰는 자리 정하기만 `table.js`(`CubeTable`, Node 에서도 `require`)로 따로 뺐어요.
+
+- `seatOrder(players, hostUid)` — 친구랑 자리 순서 (방장 → 들어온 순서 → uid)
+- `tableSize(사람 수, fill)` · `lineup(humans, fill)` — 빈 자리를 AI 로 채운 판 인원 (2~4)
+- `describe(n, fill)` — 대기실 안내 한 줄 ("3명이면 셋이서 한 판")
+- `viewerFor(levels, st)` · `needCover(levels, 보는 자리, st)` — 한 폰으로 돌려 할 때 가림막
+
+친구랑은 방장이 판의 주인이에요: 씨앗(`seed`) + 수 기록(`log`)을 보내면 친구 화면이
+`Cube.create` → `Cube.step` 다시 두기로 똑같아져요 (`test/selftest.js` 에서 확인).

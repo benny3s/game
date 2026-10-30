@@ -168,7 +168,7 @@ body.playing .wcenter,body.playing .wcenter .wmsg{color:#ccfbf1}
 .rtable{width:100%;border-collapse:collapse;font-size:13.5px}
 .rtable td{padding:5px 6px;border-bottom:2px solid #f6eadf}
 .rtable td.n{text-align:right;font-variant-numeric:tabular-nums}
-.rtable tr.mine td{background:#fff4e8;font-family:var(--round)}
+.rtable tr.mine td{background:rgba(45,212,191,.2);color:#fde68a;font-family:var(--round)}
 .rtable .medal{width:26px;text-align:center}
 .resnote{font-size:12.5px;color:var(--soft);margin:0}
 
@@ -206,3 +206,38 @@ body.playing .wcenter,body.playing .wcenter .wmsg{color:#ccfbf1}
 .actbar .btn{flex:none}
 body.playing .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 104px)}
 .tile.fly{font-size:calc(var(--tw,36px)*.52)}
+
+/* ── 한 폰으로 (돌려 가며) ─────────────────────────────── */
+.lnames{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.lname{display:flex;align-items:center;gap:6px}
+.lname span{font-size:20px;flex:none}
+.lname input{padding:8px 10px;font-size:14px}
+.cover{position:fixed;inset:0;z-index:58;display:grid;place-items:center;padding:24px;
+  background:radial-gradient(110% 90% at 50% 35%,#134e4a 0%,#0b2f2c 70%,#061a18 100%)}
+.cover[hidden]{display:none}
+.cover .cbox{display:grid;justify-items:center;gap:12px;text-align:center;max-width:340px;color:#f0fdfa}
+.cover .cav{width:92px;height:92px;border-radius:50%;display:grid;place-items:center;font-size:52px;background:rgba(45,212,191,.18);border:2px solid rgba(45,212,191,.5)}
+.cover h2{margin:0;font:28px/1.25 var(--round);color:#fde68a}
+.cover p{margin:0;color:#99f6e4;font-size:15px}
+.cover .btn{min-width:220px}
+
+/* ── AI 선생님 작은 카드 (공용 패널이 없을 때) ─────────── */
+.coachfb{position:fixed;z-index:14;right:10px;top:calc(env(safe-area-inset-top,0px) + 64px);max-width:min(260px,calc(100vw - 20px));
+  background:rgba(13,48,45,.95);border:1.5px solid rgba(251,191,36,.55);border-radius:14px;box-shadow:0 8px 20px rgba(0,0,0,.4);color:#f0fdfa;overflow:hidden}
+.coachfb[hidden]{display:none}
+.coachfb .ch{display:flex;width:100%;justify-content:space-between;gap:8px;align-items:center;border:0;background:rgba(251,191,36,.16);color:#fde68a;font:14px var(--round);padding:7px 10px;cursor:pointer}
+.coachfb .ch span{font:12px var(--text);color:#ccfbf1}
+.coachfb .cb{padding:8px 10px;font-size:13px;line-height:1.45}
+.coachfb.shut .cb{display:none}
+
+/* ── 친구랑 대기실 설정 ─────────────────────────────────── */
+.fset{display:grid;gap:8px}
+.fset .seg .btn:disabled{opacity:.75;cursor:default}
+.fset .seg .btn[aria-pressed="true"]:disabled{opacity:1}
+.fnote{margin:0;text-align:center}
+
+/* ── 🧑‍🏫 AI 선생님 버튼 (힌트 대신) ─────────────────────── */
+.dock button[hidden]{display:none}
+.dock button.cpn-dock.cpn-on{box-shadow:none}
+body.playing .dock button.cpn-on .ic,body.playing .dock button.on .ic{background:#0f766e;box-shadow:0 0 0 2px #34d399 inset,0 0 12px rgba(52,211,153,.5)}
+#lSeats .hs-setup{margin-top:2px}
