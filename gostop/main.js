@@ -606,6 +606,7 @@
     } catch (e) {
       if (e instanceof Cancel) return;
       console.error(e);
+      if (C.sendReport) C.sendReport('error', '(고스톱 진행 중 멈춤) ' + (e && e.message || e), { src: String((e && e.stack || '').split(/\n/)[1] || '').trim().slice(0, 200) });   // 🧯 베니비서로
       if (SES === ses) { C.toast('앗, 문제가 생겼어요. 메뉴로 돌아갈게요'); goHome(); }
     }
   }
