@@ -1,0 +1,135 @@
+/* 정통 섯다 — 호롱불 흑단 목재 테이블 · 황금 엽전 · 실시간 승률/기댓값 코칭 계기판 */
+:root{
+  --accent:#d97706;
+  --accent-d:#92400e;
+  --gold:#fbbf24;
+  --wood:#2b1508;
+  --wood-d:#170a03;
+}
+
+body:not(.playing){
+  background:radial-gradient(120% 90% at 50% 0%,#fff8ec 0%,#f3dfbe 65%,#e4c79c 100%);
+}
+.top h1{color:#7c2d12;text-shadow:0 1px 0 #fff}
+.box{display:grid;gap:12px}
+.seg.center{justify-content:center}
+.coinline{
+  display:flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,#451a03 0%,#270e01 100%);
+  border:2px solid #f59e0b;border-radius:16px;padding:12px 14px;color:#fef3c7;
+}
+.coinline .ic{font-size:28px}
+.coinline b{font:22px/1.1 var(--round);color:#fbbf24}
+.coinline .small{color:#fde68a}
+.coinline .grow{flex:1;display:grid}
+.optrows{display:grid;gap:8px}
+.optrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+/* 대국실 화면 */
+body.playing{
+  background:radial-gradient(110% 90% at 50% 35%,#3b1d0b 0%,#1f0e04 65%,#0f0602 100%);
+  color:#fef3c7;
+}
+body.playing .play{max-width:760px}
+body.playing .bar{
+  background:rgba(39,18,6,.9);border:1.5px solid rgba(251,191,36,.35);
+  border-radius:16px;padding:5px 10px;
+}
+body.playing .bar .iconbtn{background:#451a03;border-color:#d97706;color:#fef3c7}
+body.playing .bar .lbl{color:#fbbf24;font-size:18px}
+body.playing .bar .t{color:#fde68a}
+body.playing .bar .pill{background:#451a03;border-color:#f59e0b;color:#fde68a}
+
+.stage{
+  display:flex;flex-direction:column;justify-content:space-between;gap:8px;
+  padding:4px 0;min-height:0;overflow-y:auto;
+}
+
+.opps-row{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;
+}
+.opp-card{
+  background:rgba(24,10,3,.78);border:1.5px solid rgba(251,191,36,.28);
+  border-radius:16px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+}
+.opp-card.turn{border-color:#fbbf24;box-shadow:0 0 14px rgba(251,191,36,.4)}
+.opp-card.folded{opacity:.48}
+.opp-info{display:grid;gap:2px}
+.opp-name{font:15px var(--round);color:#fef3c7}
+.opp-sub{font-size:12px;color:#fcd34d}
+.opp-cards{display:flex;gap:5px}
+.hw-mini{width:46px;height:73px;border-radius:6px;overflow:hidden;box-shadow:0 3px 8px rgba(0,0,0,.5)}
+.hw-mini svg{width:100%;height:100%;display:block}
+
+.pot-zone{
+  background:radial-gradient(circle at 50% 50%,rgba(120,53,15,.55),rgba(39,18,6,.85));
+  border:2px dashed rgba(251,191,36,.45);border-radius:18px;
+  padding:10px 14px;text-align:center;
+}
+.pot-badge{font:22px/1.2 var(--round);color:#fde68a}
+.pot-badge b{color:#fbbf24;font-size:26px}
+.pot-sub{font-size:12.5px;color:#fed7aa;margin-top:2px}
+
+/* 🧑‍🏫 일타 강사 패널 */
+.coach-panel{
+  background:linear-gradient(160deg,rgba(6,46,34,.94),rgba(4,28,20,.96));
+  border:1.5px solid #10b981;border-radius:16px;padding:9px 12px;
+  color:#ecfdf5;box-shadow:0 6px 18px rgba(0,0,0,.45);
+}
+.coach-panel[hidden]{display:none !important}
+.cp-top{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:5px}
+.cp-title{font:14px var(--round);color:#fde047}
+.cp-meters{display:flex;gap:5px}
+.cp-chip{font:700 11.5px/1.2 var(--text);padding:3px 8px;border-radius:99px}
+.cp-chip.win{background:rgba(16,185,129,.25);color:#6ee7b7;border:1px solid rgba(52,211,153,.4)}
+.cp-chip.odds{background:rgba(245,158,11,.22);color:#fde68a;border:1px solid rgba(251,191,36,.4)}
+.cp-bar{height:7px;background:rgba(255,255,255,.12);border-radius:99px;overflow:hidden;margin-bottom:6px}
+.cp-fill{height:100%;background:linear-gradient(90deg,#10b981,#fbbf24);transition:width .25s ease}
+.cp-desc{margin:0;font-size:12px;line-height:1.4;color:#d1fae5}
+
+/* 내 자리 & 카드 & 배팅 버튼 */
+.me-zone{
+  background:rgba(24,10,3,.82);border:1.5px solid rgba(251,191,36,.35);
+  border-radius:18px;padding:10px 12px;display:grid;gap:8px;
+}
+.me-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.me-name{font:16px var(--round);color:#fef3c7}
+.jokbo-pill{
+  background:linear-gradient(135deg,#f59e0b,#b45309);color:#fff;
+  font:13.5px/1 var(--round);padding:5px 11px;border-radius:99px;
+  box-shadow:0 2px 8px rgba(0,0,0,.4);
+}
+.my-cards{display:flex;justify-content:center;gap:14px;padding:2px 0}
+.hw-big{
+  width:76px;height:121px;border-radius:9px;overflow:hidden;
+  box-shadow:0 2px 0 #7f1d1d,0 8px 20px rgba(0,0,0,.6);
+  transition:transform .2s;
+}
+.hw-big svg{width:100%;height:100%;display:block}
+
+.bet-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:6px;
+}
+.bet-btn{
+  position:relative;border:1.5px solid rgba(251,191,36,.35);
+  border-radius:12px;padding:9px 6px;
+  background:#3b1d0b;color:#fef3c7;
+  font:14px/1.15 var(--round);cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+}
+.bet-btn:disabled{opacity:.38;cursor:not-allowed}
+.bet-btn small{font:11px var(--text);color:#fde68a}
+.bet-btn.fold{background:#450a0a;border-color:#f87171}
+.bet-btn.call{background:#14532d;border-color:#4ade80}
+.bet-btn.raise{background:#78350f;border-color:#fbbf24}
+.bet-btn .ev-tag{
+  font:700 10.5px/1 var(--text);padding:2px 6px;border-radius:99px;margin-top:2px;
+}
+.bet-btn .ev-tag.best{background:#10b981;color:#052e16}
+.bet-btn .ev-tag.good{background:#059669;color:#ecfdf5}
+.bet-btn .ev-tag.ok{background:#d97706;color:#fffbeb}
+.bet-btn .ev-tag.bad{background:#991b1b;color:#fee2e2}
+
+body.playing .dock button{color:#fde68a}
+body.playing .dock button .ic{background:#3b1d0b;border-color:rgba(251,191,36,.4);color:#fef3c7}
+body.playing .dock button[aria-pressed="true"] .ic{background:#047857;border-color:#6ee7b7;color:#fff}

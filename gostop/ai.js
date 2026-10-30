@@ -386,6 +386,186 @@
     return { action: a, why, card: v.phase === 'play' ? cardOf(a) : -1 };
   }
 
-  const API = { choose, hint, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
+  // ── 🧑‍🏫 일타 강사 코치: 손패 모든 카드의 기댓값(EV) 신호등 + 한국어 해설 ──
+  function explainCardPlay(v, info, U, c, a) {
+    const p = v.turn, me = info.P[p].t, n = v.n;
+    if (G.isBonus(c)) return { tag: '보너스', why: '보너스 피는 내자마자 내 피가 되고 더미에서 한 장을 새로 뽑아요 (공짜 이득!)' };
+    const m = monthOf(c), mLabel = (m + 1) + '월';
+    const T = v.table.filter(x => monthOf(x) === m);
+    let oppBirds = 0, oppG = 0, oppHong = 0, oppCheong = 0, oppCho = 0;
+    for (let q = 0; q < n; q++) if (q !== p) {
+      const ot = info.P[q].t;
+      oppBirds = Math.max(oppBirds, ot.birds);
+      oppG = Math.max(oppG, ot.g);
+      oppHong = Math.max(oppHong, ot.hong);
+      oppCheong = Math.max(oppCheong, ot.cheong);
+      oppCho = Math.max(oppCho, ot.cho);
+    }
+    let unseenSame = 0;
+    for (let i = 0; i < 4; i++) {
+      const cid = m * 4 + i;
+      if (cid !== c && U.m[cid]) unseenSame++;
+    }
+    if (isBomb(a)) {
+      return { tag: '💣 폭탄 찬스', why: `${mLabel} 네 장을 한꺼번에 쓸어담고 상대에게 피 1장씩 뺏으며 점수 ×2배를 걸어요!` };
+    }
+    if (T.length) {
+      const target = T.length === 2 ? bestOf(T) : T[0];
+      const capCards = T.length === 3 ? [c, ...T] : [c, target];
+      const reasons = [];
+      let tag = '짝 맞춤';
+      if (T.length === 3) {
+        tag = '🔥 뻑 먹기';
+        reasons.push(`${mLabel} 뻑 세 장을 통째로 가져오고 상대에게 피도 뺏어와요`);
+      }
+      if (capCards.some(x => KIND[x] === GW)) {
+        tag = me.g >= 2 ? '🌟 3광 완성!' : '🌟 광 확보';
+        reasons.push(me.g >= 2 ? '이번에 광을 먹으면 광 점수가 나요!' : oppG >= 2 ? '내 광을 모으면서 상대 광도 견제해요' : '귀한 광을 먼저 챙겨요');
+      }
+      if (capCards.some(x => BIRD[x])) {
+        if (me.birds >= 2) { tag = '🐦 고도리 완성!'; reasons.push('새 세 마리(고도리 5점)가 완성돼요!'); }
+        else if (oppBirds >= 2) { tag = '🛡 고도리 방어'; reasons.push('상대가 새 2장을 모아서 이 새를 꼭 먼저 끊어야 해요!'); }
+        else reasons.push('고도리(새) 발판을 챙겨요');
+      }
+      for (const [rType, rName, myCnt, opCnt] of [
+        [R_HONG, '홍단', me.hong, oppHong],
+        [R_CHEONG, '청단', me.cheong, oppCheong],
+        [R_CHO, '초단', me.cho, oppCho],
+      ]) {
+        if (capCards.some(x => RIB[x] === rType)) {
+          if (myCnt >= 2) { tag = `🎗 ${rName} 3점!`; reasons.push(`${rName} 세 장(3점)을 완성해요!`); }
+          else if (opCnt >= 2) { tag = `🛡 ${rName} 차단`; reasons.push(`상대의 ${rName} 3점 완성을 막아요!`); }
+          else reasons.push(`${rName} 띠를 모아요`);
+        }
+      }
+      if (capCards.some(x => PIV[x] >= 2 || x === KOOK)) {
+        if (tag === '짝 맞춤') tag = '💎 쌍피 확보';
+        reasons.push('쌍피(2장 몫)를 챙겨 피 싸움에서 앞서가요');
+      }
+      if (T.length === 1 && unseenSame === 2) {
+        reasons.push('아직 안 나온 같은 달 패가 2장이라 뒤집다 뻑이 날 작은 위험은 있어요');
+      } else if (T.length === 1 && unseenSame === 0) {
+        reasons.push('나머지 같은 달 패가 이미 다 나와 절대 뻑이 안 나는 100% 안전수예요');
+      }
+      if (isShake(a)) reasons.push('흔들기(×2배)까지 걸 수 있어요');
+      if (!reasons.length) reasons.push(`바닥의 ${G.cardName(target)}을(를) 안정적으로 가져와요`);
+      return { tag, why: reasons.join(' · ') };
+    } else {
+      if (unseenSame === 0) {
+        return { tag: '🛡 안전 버림', why: `${mLabel}의 나머지 패가 이미 모두 나와서 바닥에 버려도 상대가 절대 먹을 수 없는 안전패예요` };
+      }
+      if (KIND[c] === GW) {
+        return { tag: '⚠️ 광 버림 주의', why: `귀한 광(${G.cardName(c)})을 바닥에 깔면 상대에게 뺏길 위험이 커요` };
+      }
+      if (BIRD[c] && oppBirds >= 1) {
+        return { tag: '🚨 고도리 위험', why: `상대가 새를 모으고 있어서 ${G.cardName(c)}을(를) 깔아주면 고도리를 허용할 수 있어요` };
+      }
+      if (PIV[c] >= 2 || c === KOOK) {
+        return { tag: '⚠️ 쌍피 손실', why: '쌍피를 짝 없이 바닥에 버리면 상대에게 좋은 먹잇감이 돼요' };
+      }
+      return { tag: '버림패', why: `짝이 없을 때 비교적 덜 아까운 ${G.cardName(c)}을(를) 내어 간을 봐요 (남은 같은 달 패 ${unseenSame}장)` };
+    }
+  }
+
+  function coachHand(v, opts) {
+    opts = opts || {};
+    const rng = opts.rng || G.makeRng(909);
+    const L = G.legal(v), p = v.turn;
+    if (v.phase !== 'play' || !L.length) return null;
+    const ranked = rankPlays(v, L, p, rng);
+    const world = G.sampleWorld(v, rng);
+    const info = analyze(world), U = unseenMask(world, p);
+    const bestX = ranked[0] ? ranked[0].x : 0;
+
+    const byCard = {};
+    for (const r of ranked) {
+      let cards = [];
+      if (isBomb(r.a)) {
+        const m = r.a - A.BOMB;
+        cards = v.hands[p].filter(x => monthOf(x) === m);
+      } else {
+        const c = cardOf(r.a);
+        if (c >= 0) cards = [c];
+      }
+      for (const c of cards) {
+        if (!byCard[c] || r.x > byCard[c].ev) {
+          const delta = r.x - bestX;
+          const tier = delta >= -0.05 ? 'best' : delta >= -0.55 ? 'good' : delta >= -1.35 ? 'ok' : 'bad';
+          const ex = explainCardPlay(v, info, U, c, r.a);
+          const evSign = r.x >= 0 ? '+' + r.x.toFixed(1) : r.x.toFixed(1);
+          const dSign = delta >= -0.05 ? '최선' : (delta >= 0 ? '+' : '') + delta.toFixed(1);
+          byCard[c] = {
+            card: c,
+            name: G.cardName(c),
+            action: r.a,
+            ev: r.x,
+            delta,
+            tier,
+            evText: evSign,
+            deltaText: dSign,
+            tag: ex.tag,
+            why: ex.why,
+          };
+        }
+      }
+    }
+    for (const c of v.hands[p]) {
+      if (G.isBonus(c) && !byCard[c]) {
+        const ex = explainCardPlay(v, info, U, c, A.PLAY + c);
+        byCard[c] = {
+          card: c,
+          name: G.cardName(c),
+          action: A.PLAY + c,
+          ev: bestX + 1.5,
+          delta: 0,
+          tier: 'best',
+          evText: '+' + (bestX + 1.5).toFixed(1),
+          deltaText: '최선',
+          tag: ex.tag,
+          why: ex.why,
+        };
+      }
+    }
+    const list = Object.values(byCard).sort((a, b) => b.ev - a.ev);
+    const top = list[0] || null;
+    return {
+      byCard,
+      list,
+      bestCard: top ? top.card : -1,
+      bestAction: top ? top.action : ranked[0].a,
+      bestName: top ? top.name : '',
+      bestWhy: top ? top.why : '',
+      bestTag: top ? top.tag : '',
+    };
+  }
+
+  function coachGoStop(v, opts) {
+    opts = opts || {};
+    const rng = opts.rng || G.makeRng(2026);
+    const p = v.turn;
+    const stopPts = G.stopPreview(v, p).points;
+    const samples = opts.samples || 56;
+    let sum = 0, wins = 0, gobak = 0;
+    for (let k = 0; k < samples; k++) {
+      const w = G.sampleWorld(v, rng);
+      G.apply(w, A.GO, null);
+      rollout(w, rng);
+      const r = G.reward(w, p);
+      sum += r;
+      if (r > 0) wins++;
+      else if (r < 0) gobak++;
+    }
+    const goEv = sum / Math.max(1, samples);
+    const winRateGo = Math.round((wins / Math.max(1, samples)) * 100);
+    const gobakRisk = Math.round((gobak / Math.max(1, samples)) * 100);
+    const rec = goEv > stopPts ? A.GO : A.STOP;
+    const diff = Math.abs(goEv - stopPts).toFixed(1);
+    const why = rec === A.GO
+      ? `'고'를 외쳤을 때 평균 기댓값(+${goEv.toFixed(1)}점)이 지금 스톱(+${stopPts}점)보다 ${diff}점 더 높아요! (승리 유지 확률 ${winRateGo}%)`
+      : `지금 스톱 확정 점수(+${stopPts}점)가 '고' 기댓값(${goEv >= 0 ? '+' : ''}${goEv.toFixed(1)}점)보다 유리해요. 역고박 위험(${gobakRisk}%)을 피해 실속을 챙기세요!`;
+    return { stopPts, goEv, winRateGo, gobakRisk, rec, why };
+  }
+
+  const API = { choose, hint, coachHand, coachGoStop, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.GostopAI = API;
 })(this);

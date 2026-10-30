@@ -308,3 +308,61 @@ body.playing .dock button .ic{
 .seat.vert .tags{position:absolute;top:-6px;left:30px;flex-direction:column;align-items:flex-start;gap:2px;z-index:4}
 .seat.vert .tag{font-size:10.5px;padding:2px 5px}
 .seat.busy .nm{color:#fbbf24}
+
+/* ── 🧑‍🏫 AI 일타 강사 (실시간 기댓값 신호등 & 코칭 배너 & 복기 노트) ── */
+.hw .ev-badge{
+  position:absolute;left:50%;top:-24px;transform:translateX(-50%);
+  z-index:9;white-space:nowrap;pointer-events:none;
+  font:700 13px/1.15 var(--round);
+  padding:3px 8px;border-radius:99px;
+  box-shadow:0 3px 8px rgba(0,0,0,.55);
+  border:1.5px solid #fff;
+}
+.hw .ev-badge[hidden]{display:none !important}
+.hw .ev-badge.best{background:linear-gradient(135deg,#10b981,#047857);color:#fff;border-color:#fde047;box-shadow:0 0 12px rgba(16,185,129,.85)}
+.hw .ev-badge.good{background:#15803d;color:#dcfce7;border-color:#86efac}
+.hw .ev-badge.ok{background:#b45309;color:#fef3c7;border-color:#fcd34d}
+.hw .ev-badge.bad{background:#991b1b;color:#fee2e2;border-color:#fca5a5}
+
+.coach-bar{
+  position:absolute;left:8px;right:8px;z-index:15;
+  background:rgba(7,26,15,.94);
+  border:1.5px solid #34d399;
+  border-radius:14px;padding:7px 11px;
+  color:#ecfdf5;font-size:12.5px;line-height:1.38;
+  box-shadow:0 6px 20px rgba(0,0,0,.55);
+  display:flex;align-items:center;gap:8px;
+  pointer-events:none;
+}
+.coach-bar[hidden]{display:none !important}
+.coach-bar .cb-ic{font-size:20px;flex:none}
+.coach-bar .cb-txt{flex:1;min-width:0}
+.coach-bar .cb-txt b{color:#fde047;font-weight:700}
+.coach-bar .cb-tag{
+  display:inline-block;padding:1px 6px;border-radius:6px;
+  background:rgba(52,211,153,.2);color:#6ee7b7;font-size:11px;font-weight:700;margin-right:4px;
+}
+
+.go-coach{
+  background:linear-gradient(135deg,#ecfdf5,#d1fae5);
+  border:2px solid #10b981;border-radius:12px;
+  padding:9px 11px;margin-top:6px;text-align:left;font-size:13px;color:#064e3b;
+}
+.go-coach b{color:#047857}
+.go-coach .gc-row{display:flex;justify-content:space-between;gap:8px;font-weight:700;margin-bottom:4px}
+
+.review-card{
+  background:#fffbeb;border:2px solid #f59e0b;border-radius:14px;
+  padding:10px 12px;margin-top:8px;text-align:left;font-size:13px;color:#78350f;
+  display:grid;gap:6px;
+}
+.review-card h4{margin:0;font:15px var(--round);color:#92400e;display:flex;justify-content:space-between;align-items:center}
+.review-card .rv-grade{background:#f59e0b;color:#fff;padding:2px 8px;border-radius:99px;font-size:12px}
+.review-card .rv-drill{
+  border:0;border-radius:10px;padding:8px 12px;
+  background:linear-gradient(90deg,#d97706,#b45309);color:#fff;
+  font:14px var(--round);cursor:pointer;justify-self:stretch;text-align:center;
+}
+body.playing .dock button[aria-pressed="true"] .ic{
+  background:#047857;border-color:#6ee7b7;color:#fff;
+}

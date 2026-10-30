@@ -103,4 +103,11 @@
   }
 
   window.GME = { get me() { return me; }, P, ensure, pick, loadAll, onChange: f => listeners.push(f), nameKey };
+  if (typeof document !== "undefined" && !window.Gate) {
+    const cur = document.currentScript && document.currentScript.src;
+    const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=1") : "../common/gate.js?v=1";
+    const gs = document.createElement("script");
+    gs.src = base;
+    document.head.appendChild(gs);
+  }
 })();

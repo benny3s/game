@@ -32,6 +32,7 @@
       <div class="optrows">
         <div class="optrow"><span class="small">보너스 피</span><div class="seg" id="bonusSeg"></div></div>
         <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="speedSeg"></div></div>
+        <div class="optrow"><span class="small">일타 강사</span><div class="seg" id="coachSeg"></div></div>
       </div>
       <ul class="howto" id="howto">
         <li>같은 달(같은 그림)끼리 짝을 맞춰 가져와요</li>
@@ -65,9 +66,11 @@
     <div class="zone mine" id="zMine"></div>
     <div class="zone hand" id="zHand"></div>
     <div class="layer" id="layer"></div>
+    <div class="coach-bar" id="coachBar" hidden></div>
   </div>
   <div class="dock" id="dock">
     <button id="passBtn" class="mintbtn" hidden><span class="ic">🃏<span class="badge" id="passN">2</span></span><span>뒤집기만</span></button>
+    <button id="coachBtn" aria-pressed="true"><span class="ic">🧑‍🏫</span><span>코치 켬</span></button>
     <button id="hintBtn"><span class="ic">💡</span><span>힌트</span></button>
     <button id="pauseBtn" hidden><span class="ic">⏸</span><span>멈춤</span></button>
     <button id="speedBtn"><span class="ic">🐢</span><span>보통</span></button>

@@ -17,7 +17,7 @@
   const KEY = 'gostop.';
   const opt = {
     tab: C.store(KEY + 'tab', 'solo'), mode: C.store(KEY + 'mode', 2), tier: C.store(KEY + 'tier', 'normal'),
-    bonus: C.store(KEY + 'bonus', 0), speed: C.store(KEY + 'speed', 'normal'),
+    bonus: C.store(KEY + 'bonus', 0), speed: C.store(KEY + 'speed', 'normal'), coach: C.store(KEY + 'coach', 1),
     wMode: C.store(KEY + 'wMode', 2), wTiers: C.store(KEY + 'wTiers', ['hard', 'normal', 'easy']), wSpeed: C.store(KEY + 'wSpeed', 'normal'),
   };
   const saveOpt = k => C.save(KEY + k, opt[k]);
@@ -47,6 +47,7 @@
       id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
     segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], opt.bonus, v => { opt.bonus = +v; saveOpt('bonus'); drawMenu(); });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
+    if ($('coachSeg')) segBtns($('coachSeg'), [[1, '🧑‍🏫 실시간 코칭 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
     $('startBtn').textContent = `${TIER[opt.tier].em} ${opt.mode === 2 ? '맞고' : '고스톱'} 시작하기`;
     segBtns($('wModeSeg'), [[2, '둘이 (맞고)'], [3, '셋이 (고스톱)']], opt.wMode, v => { opt.wMode = +v; saveOpt('wMode'); drawMenu(); });
     const seatName = ['아래 냥이', opt.wMode === 2 ? '위 냥이' : '오른쪽 냥이', '왼쪽 냥이'];
@@ -265,6 +266,12 @@
       for (;;) {
         await playRound(ses, s);
         const next = await showResult(ses);
+        if (next && typeof next === 'object' && next.drillState) {
+          s = G.fastClone(next.drillState);
+          ses.isDrill = true;
+          continue;
+        }
+        ses.isDrill = false;
         if (next !== 'next') { goHome(); return; }
         const rSeed = ses.cfg.online ? ((baseSeed + (ses.S.round + 1) * 0x9e3779b9) >>> 0) : rand32();
         s = G.nextRound(ses.S, { seed: rSeed });
@@ -498,7 +505,7 @@
       const el = document.createElement('div');
       el.className = 'hw down';
       el.dataset.id = id;
-      el.innerHTML = `<div class="bob"><div class="in">${ART.use(id, 'f')}${ART.use(-1, 'b')}</div></div>`;
+      el.innerHTML = `<div class="bob"><span class="ev-badge" hidden></span><div class="in">${ART.use(id, 'f')}${ART.use(-1, 'b')}</div></div>`;
       layer.appendChild(el);
       els[id] = el;
     }
@@ -654,14 +661,22 @@
   // ── 한 판 진행 ───────────────────────────────────────────
   async function playRound(ses, s) {
     ses.S = s; ses.sel = -1; ses.pre = -1; ses.hover = -1;
+    ses.turnLog = []; ses.coachCache = null;
+    if ($('coachBar')) $('coachBar').hidden = true;
     $('resBox').hidden = true; $('goBox').hidden = true;
     buildCards(ses);
     layout(ses);
     lastWH = $('stage').clientWidth + 'x' + $('stage').clientHeight;
-    // 처음엔 모두 더미에
-    VM = { hand: s.hands.map(() => []), deck: G.gameCards(s.bonus).slice(), cap: s.hands.map(() => []), slots: new Array(GEO.slots.length).fill(null), fly: {} };
-    await syncAll(ses, 0);
-    await dealAnim(ses);
+    if (ses.isDrill) {
+      vmFromState(s);
+      await syncAll(ses, 0);
+      C.toast('🧑‍🏫 결정적 장면으로 돌아왔어요! 추천 수를 내 보세요', 2400);
+    } else {
+      // 처음엔 모두 더미에
+      VM = { hand: s.hands.map(() => []), deck: G.gameCards(s.bonus).slice(), cap: s.hands.map(() => []), slots: new Array(GEO.slots.length).fill(null), fly: {} };
+      await syncAll(ses, 0);
+      await dealAnim(ses);
+    }
     while (ses.S.phase !== 'end') {
       await ses.ready();
       const p = ses.S.turn;
@@ -669,7 +684,34 @@
       const ctrl = ses.seats[p].ctrl;
       let a;
       if (ctrl === 'me') {
+        const beforePlay = ses.S.phase === 'play' ? G.fastClone(ses.S) : null;
+        const coachSnap = beforePlay && AI.coachHand ? AI.coachHand(G.view(ses.S, p)) : null;
         a = await humanTurn(ses);
+        if (beforePlay && coachSnap && coachSnap.bestCard >= 0) {
+          let chosenCard = -1;
+          if (a < G.A_SHAKE) chosenCard = a - G.A_PLAY;
+          else if (a >= G.A_SHAKE && a < G.A_BOMB) chosenCard = a - G.A_SHAKE;
+          else if (a >= G.A_BOMB && a < G.A_PASS) {
+            const bm = a - G.A_BOMB;
+            chosenCard = beforePlay.hands[p].find(x => G.monthOf(x) === bm) ?? -1;
+          }
+          const chInfo = chosenCard >= 0 ? coachSnap.byCard[chosenCard] : null;
+          if (chInfo) {
+            ses.turnLog.push({
+              turnNo: ses.turnLog.length + 1,
+              stateBefore: beforePlay,
+              chosenCard,
+              chosenName: chInfo.name,
+              chosenTag: chInfo.tag,
+              chosenWhy: chInfo.why,
+              delta: chInfo.delta,
+              bestCard: coachSnap.bestCard,
+              bestName: coachSnap.bestName,
+              bestTag: coachSnap.bestTag,
+              bestWhy: coachSnap.bestWhy,
+            });
+          }
+        }
         if (ses.net && ses.net.sendAct) ses.net.sendAct(a);
       } else if (ctrl === 'remote') {
         a = await remoteTurn(ses, p);
@@ -885,11 +927,22 @@
     const a = AI.choose(G.view(ses.S, 0), 'easy', { seed: rand32() });
     finishHuman(ses, a);
   }
-  // 손패 표시: 내 차례면 누를 수 있게, 짝이 있는 패는 아래 금빛 막대
+  // 손패 표시: 내 차례면 누를 수 있게, 짝이 있는 패는 아래 금빛 막대 + 코치 모드면 기댓값 신호등
+  function getCoachForTurn(ses) {
+    const s = ses.S, me = meSeat(ses);
+    if (!s || me < 0 || s.phase !== 'play' || s.turn !== me || !AI.coachHand) return null;
+    if (!ses.coachCache || ses.coachCache.seq !== ses.seq) {
+      ses.coachCache = { seq: ses.seq, data: AI.coachHand(G.view(s, me)) };
+    }
+    return ses.coachCache.data;
+  }
+
   function markHand(ses) {
     const s = ses.S; if (!s || !VM) return;
     const me = meSeat(ses), mine = s.phase === 'play' && s.turn === me && !!ses.pending;
     const tm = new Set(s.table.map(G.monthOf));
+    const showCoach = mine && !!opt.coach && !ses.cfg.watch;
+    const coach = showCoach ? getCoachForTurn(ses) : null;
     for (const id in els) {
       const el = els[id], c = +id;
       const inHand = me >= 0 && VM.hand[me] && VM.hand[me].indexOf(c) >= 0;
@@ -900,6 +953,35 @@
       const onTable = s.table.indexOf(c) >= 0;
       el.classList.toggle('glow', onTable && mine && ses.sel >= 0 && !G.isBonus(ses.sel) && G.monthOf(c) === G.monthOf(ses.sel));
       el.classList.toggle('pick', onTable && mine && ses.sel >= 0 && G.monthOf(c) === G.monthOf(ses.sel));
+      const badge = el.querySelector('.ev-badge');
+      if (badge) {
+        const ci = coach && inHand ? coach.byCard[c] : null;
+        if (ci) {
+          badge.hidden = false;
+          badge.className = 'ev-badge ' + ci.tier;
+          const ic = ci.tier === 'best' ? '👑' : ci.tier === 'good' ? '🟢' : ci.tier === 'ok' ? '🟡' : '🔴';
+          badge.textContent = `${ic} ${ci.tier === 'best' ? '최선' : ci.deltaText}`;
+        } else {
+          badge.hidden = true;
+        }
+      }
+    }
+    const bar = $('coachBar');
+    if (bar) {
+      if (showCoach && coach && coach.bestCard >= 0 && GEO) {
+        bar.hidden = false;
+        bar.style.bottom = (GEO.H - GEO.hand.y + 6) + 'px';
+        const selInfo = ses.sel >= 0 ? coach.byCard[ses.sel] : null;
+        if (selInfo) {
+          const ic = selInfo.tier === 'best' ? '👑 최선 추천' : selInfo.tier === 'good' ? '🟢 좋은 수' : selInfo.tier === 'ok' ? '🟡 무난한 수' : '🔴 아쉬운 수';
+          const cmp = selInfo.tier !== 'best' ? ` (추천: <b>${esc(coach.bestName)}</b>)` : '';
+          bar.innerHTML = `<span class="cb-ic">🧑‍🏫</span><div class="cb-txt"><span class="cb-tag">${ic} · ${esc(selInfo.tag)}</span><b>[${esc(selInfo.name)}]</b> ${esc(selInfo.why)}${cmp}</div>`;
+        } else {
+          bar.innerHTML = `<span class="cb-ic">🧑‍🏫</span><div class="cb-txt"><span class="cb-tag">👑 추천 · ${esc(coach.bestTag)}</span><b>[${esc(coach.bestName)}]</b> — ${esc(coach.bestWhy)}</div>`;
+        }
+      } else {
+        bar.hidden = true;
+      }
     }
     $('hintBtn').disabled = !mine && !(s.phase === 'goStop' && s.turn === me && ses.pending);
   }
@@ -958,10 +1040,24 @@
     const per = pre.per.map(l => `${esc(ses.seats[l.p].name)}${l.mults.length ? ' (' + l.mults.map(m => m.k).join('·') + ')' : ''}`).join(', ');
     const nextGo = s.go[p] + 1;
     const goTxt = nextGo <= 2 ? `+${nextGo}점` : `점수 ×${Math.pow(2, nextGo - 2)}`;
+    const gc = (!ses.cfg.watch && AI.coachGoStop) ? AI.coachGoStop(G.view(s, p)) : null;
+    const coachHtml = gc ? `
+      <div class="go-coach">
+        <div class="gc-row">
+          <span>🧑‍🏫 일타 강사 수리 분석</span>
+          <b>추천: ${gc.rec === G.A_GO ? '🔥 고(Go)!' : '✋ 스톱(Stop)!'}</b>
+        </div>
+        <div style="font-size:12.5px;margin-bottom:3px">
+          • 스톱 확정: <b>+${gc.stopPts}점</b> vs 고 평균 기댓값: <b>${gc.goEv >= 0 ? '+' : ''}${gc.goEv.toFixed(1)}점</b> (승리 유지 ${gc.winRateGo}% · 역고박 위험 ${gc.gobakRisk}%)
+        </div>
+        <div style="font-size:12px;color:#065f46">💡 ${esc(gc.why)}</div>
+      </div>
+    ` : '';
     $('goTitle').textContent = `${t.base}점! 고? 스톱?`;
     $('goBody').innerHTML = `<table class="brk">${rows}<tr class="sum"><td>지금 스톱하면</td><td class="n">+${pre.points}점</td></tr></table>
       <p class="gonote">${per ? '진 사람: ' + per + '<br>' : ''}상대: ${opp} · 남은 손패 ${s.hands[p].length}장</p>
-      <p class="gonote">고 하면 ${nextGo}고(${goTxt}) — 대신 상대가 먼저 나면 <b>고박</b>이에요</p>`;
+      <p class="gonote">고 하면 ${nextGo}고(${goTxt}) — 대신 상대가 먼저 나면 <b>고박</b>이에요</p>
+      ${coachHtml}`;
     $('goBtns').innerHTML = '';
     $('goBtns').className = 'gobtns';
     const mk = (label, cls, a) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = () => { $('goBox').hidden = true; sfx('tap'); finishHuman(ses, a); }; $('goBtns').appendChild(b); return b; };
@@ -1083,11 +1179,34 @@
         rows += `<tr class="sum"><td>${esc(iga(nameOf(ses, r.winner)))} 받는 점</td><td class="n">+${fmtN(r.points)}</td></tr>`;
       }
       const sumLine = r.kind === 'nagari' ? `<p style="margin:0">아무도 못 났어요. 다음 판 점수는 <b>${Math.pow(2, r.carryNext)}배</b>!</p>` : `<table class="brk">${rows}</table>`;
+      // 🧑‍🏫 일타 강사 복기 노트 (가장 아쉬웠던 결정적 한 수 + 다시 쳐보기 Drill)
+      let reviewHtml = '', worstTurn = null;
+      if (!watch && ses.turnLog && ses.turnLog.length) {
+        const logs = ses.turnLog;
+        const avgLoss = logs.reduce((acc, x) => acc + Math.max(0, -x.delta), 0) / logs.length;
+        const grade = avgLoss < 0.18 ? 'S급 프로 타짜' : avgLoss < 0.45 ? 'A급 고수' : avgLoss < 0.85 ? 'B급 실전파' : 'C급 입문자';
+        const sorted = logs.slice().sort((a, b) => a.delta - b.delta);
+        if (sorted[0] && sorted[0].delta < -0.25) worstTurn = sorted[0];
+        reviewHtml = `
+          <div class="review-card">
+            <h4><span>🧑‍🏫 일타 강사 복기 노트</span><span class="rv-grade">정확도: ${grade}</span></h4>
+            ${worstTurn ? `
+              <div><b>📌 아쉬웠던 ${worstTurn.turnNo}번째 차례 (기댓값 ${worstTurn.delta.toFixed(1)}점 손실)</b><br>
+              내가 낸 패: <b>[${esc(worstTurn.chosenName)}]</b> (${esc(worstTurn.chosenTag)})<br>
+              강사 추천: <b>[${esc(worstTurn.bestName)}]</b> — ${esc(worstTurn.bestWhy)}</div>
+              ${!ses.cfg.online ? `<button class="rv-drill" id="drillBtn" type="button">👉 ${worstTurn.turnNo}번째 차례 그 장면으로 돌아가 다시 쳐보기</button>` : ''}
+            ` : `<div>👏 이번 판은 모든 차례에서 최선에 가까운 완벽한 수읽기를 보여주셨어요!</div>`}
+          </div>
+        `;
+      }
       $('resTitle').textContent = title;
       $('resBig').innerHTML = `${big ? `<div class="resbig ${bigCls}">${big}</div>` : ''}${coinLine}`;
-      $('resBody').innerHTML = sumLine;
+      $('resBody').innerHTML = sumLine + reviewHtml;
       $('resBtns').innerHTML = '';
       const done = v => { clearTimeout(autoT); $('resBox').hidden = true; resolve(v); };
+      if (worstTurn && $('drillBtn')) {
+        $('drillBtn').onclick = () => { sfx('pop'); done({ drillState: worstTurn.stateBefore }); };
+      }
       const mk = (label, cls, v) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = () => { sfx('tap'); done(v); }; $('resBtns').appendChild(b); return b; };
       const nb = mk(watch ? '다음 판 ▶' : '다음 판 ▶', 'primary', 'next');
       mk(watch ? '그만 보기' : '메뉴', '', 'menu');
@@ -1104,12 +1223,25 @@
   // ── 아래 단추 줄 ──────────────────────────────────────────
   function drawDock() {
     const ses = SES, watch = ses && ses.cfg.watch;
+    if ($('coachBtn')) {
+      $('coachBtn').hidden = !!watch;
+      $('coachBtn').setAttribute('aria-pressed', String(!!opt.coach));
+      $('coachBtn').innerHTML = `<span class="ic">🧑‍🏫</span><span>${opt.coach ? '코치 켬' : '코치 끔'}</span>`;
+    }
     $('hintBtn').hidden = !!watch;
     $('pauseBtn').hidden = !watch;
     if (ses) $('pauseBtn').innerHTML = `<span class="ic">${ses.paused ? '▶' : '⏸'}</span><span>${ses.paused ? '계속' : '멈춤'}</span>`;
     const sp = SPEEDS[opt[speedKey()]] || SPEEDS.normal;
     $('speedBtn').innerHTML = `<span class="ic">${sp.em}</span><span>${sp.label}</span>`;
   }
+  if ($('coachBtn')) $('coachBtn').onclick = () => {
+    opt.coach = opt.coach ? 0 : 1;
+    saveOpt('coach');
+    sfx('tap');
+    drawDock();
+    if (SES) markHand(SES);
+    C.toast(opt.coach ? '🧑‍🏫 일타 강사 실시간 코칭을 켰어요' : '일타 강사 코칭을 껐어요', 1200);
+  };
   $('speedBtn').onclick = () => { const k = speedKey(); opt[k] = SPEED_ORDER[(SPEED_ORDER.indexOf(opt[k]) + 1) % 3]; saveOpt(k); sfx('tap'); drawDock(); C.toast('진행 속도: ' + SPEEDS[opt[k]].label, 1000); };
   $('pauseBtn').onclick = () => { const ses = SES; if (!ses) return; ses.paused = !ses.paused; sfx('tap'); drawDock(); if (!ses.paused) ses.wake(); };
   $('ruleBtn').onclick = () => showRules();

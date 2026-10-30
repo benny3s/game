@@ -1,0 +1,302 @@
+/* 텍사스 홀덤 포커 — VIP 카지노 에메랄드·골드 테이블 테마 */
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: radial-gradient(circle at 50% 35%, #0c3b2e 0%, #07221b 65%, #04130f 100%);
+  color: #f2f8f5;
+  font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Noto Sans KR", sans-serif;
+  overflow: hidden;
+}
+.app {
+  display: flex; flex-direction: column;
+  height: 100dvh; max-width: 720px; margin: 0 auto;
+  position: relative;
+}
+.top {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  background: rgba(4, 20, 15, 0.9);
+  border-bottom: 1px solid rgba(246, 196, 83, 0.25);
+}
+.top .back {
+  color: #f6c453; text-decoration: none; font-weight: 800;
+  padding: 5px 8px; border-radius: 8px; font-size: 13px;
+  background: rgba(246, 196, 83, 0.12);
+}
+.top .title {
+  flex: 1; margin: 0; font-size: 15px; font-weight: 900; color: #fff4d6;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.top .title span {
+  font-size: 11px; color: #7ce2b8; font-weight: 700; margin-left: 4px;
+}
+.pill-btn {
+  border: 1px solid rgba(246, 196, 83, 0.35);
+  background: rgba(15, 56, 44, 0.9);
+  color: #ffe299; border-radius: 999px;
+  padding: 5px 10px; font-size: 11.5px; font-weight: 800; cursor: pointer;
+}
+.pill-btn.coach-on {
+  background: linear-gradient(135deg, #065f46, #047857);
+  border-color: #34d399; color: #ecfdf5;
+}
+.icon-btn {
+  background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff; border-radius: 8px; padding: 5px 9px; font-size: 14px; cursor: pointer;
+}
+
+.board {
+  flex: 1; display: flex; flex-direction: column; justify-content: space-between;
+  padding: 8px 10px 10px; gap: 6px; overflow-y: auto;
+}
+
+.seat {
+  background: rgba(5, 25, 19, 0.78);
+  border: 1px solid rgba(246, 196, 83, 0.22);
+  border-radius: 14px; padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.seat.opp {
+  flex-direction: row; align-items: center; justify-content: space-between;
+}
+.who {
+  display: flex; align-items: center; gap: 8px;
+}
+.avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(246, 196, 83, 0.16);
+  border: 1.5px solid rgba(246, 196, 83, 0.45);
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.meta .name {
+  font-size: 13px; font-weight: 800; color: #fff;
+  display: flex; align-items: center; gap: 5px;
+}
+.dealer-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24, #d97706);
+  color: #1c1002; font-size: 10px; font-weight: 900;
+}
+.meta .coins { font-size: 11.5px; color: #a7f3d0; }
+.meta .coins b { color: #fde68a; }
+.action-tag, .jokbo-pill {
+  margin-left: auto;
+  padding: 4px 9px; border-radius: 999px;
+  font-size: 11.5px; font-weight: 800;
+  background: rgba(246, 196, 83, 0.15);
+  border: 1px solid rgba(246, 196, 83, 0.4);
+  color: #fde68a;
+}
+
+/* 플레잉 카드 UI */
+.hole-cards {
+  display: flex; gap: 8px; align-items: center; justify-content: center;
+}
+.hole-cards.my-cards { margin: 2px 0; }
+.pcard {
+  width: 56px; height: 78px; border-radius: 9px;
+  background: linear-gradient(165deg, #ffffff 0%, #f3f4f6 100%);
+  border: 2px solid #d1d5db;
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.45);
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 5px 6px; position: relative;
+  color: #111827; font-weight: 900;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.pcard.red { color: #dc2626; }
+.pcard.black { color: #0f172a; }
+.pcard.lg { width: 64px; height: 88px; }
+.pcard.best-glow {
+  border-color: #fbbf24;
+  box-shadow: 0 0 0 2px #fbbf24, 0 6px 16px rgba(251, 191, 36, 0.45);
+  transform: translateY(-3px);
+}
+.pcard .corner {
+  display: flex; flex-direction: column; line-height: 1;
+  font-size: 13px; font-weight: 900;
+}
+.pcard .corner small { font-size: 11px; }
+.pcard .pip-center {
+  font-size: 24px; text-align: center; line-height: 1;
+}
+.pcard.lg .pip-center { font-size: 28px; }
+.pcard.back {
+  background: repeating-linear-gradient(
+    45deg,
+    #1e3a8a,
+    #1e3a8a 6px,
+    #172554 6px,
+    #172554 12px
+  );
+  border: 2px solid #93c5fd;
+  display: flex; align-items: center; justify-content: center;
+}
+.pcard.back::after {
+  content: "♠"; font-size: 22px; color: rgba(251, 191, 36, 0.75);
+}
+.pcard.empty-slot {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1.5px dashed rgba(246, 196, 83, 0.28);
+  box-shadow: none;
+}
+
+/* 중앙 VIP 펠트 & 커뮤니티 보드 */
+.center-felt {
+  background: radial-gradient(ellipse at center, rgba(16, 94, 72, 0.92) 0%, rgba(9, 54, 41, 0.95) 100%);
+  border: 2px solid rgba(246, 196, 83, 0.45);
+  border-radius: 20px; padding: 10px 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  position: relative;
+  box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.45), 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.pot-banner {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; gap: 6px; flex-wrap: wrap;
+}
+.street-badge {
+  font-size: 11px; font-weight: 800;
+  padding: 3px 9px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35); color: #6ee7b7;
+  border: 1px solid rgba(110, 231, 183, 0.3);
+}
+.pot-main {
+  display: flex; align-items: baseline; gap: 5px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px 12px; border-radius: 999px;
+  border: 1px solid rgba(251, 191, 36, 0.45);
+}
+.pot-label { font-size: 10px; font-weight: 900; color: #fcd34d; letter-spacing: 0.5px; }
+.pot-val { font-size: 18px; font-weight: 900; color: #fef08a; }
+.pot-unit { font-size: 11px; color: #fde68a; }
+.call-info { font-size: 11px; color: #d1fae5; font-weight: 700; }
+
+.community-row {
+  display: flex; gap: 6px; align-items: center; justify-content: center;
+  min-height: 82px;
+}
+
+.toast {
+  position: absolute; bottom: 8px;
+  background: rgba(4, 15, 12, 0.94); color: #fde68a;
+  border: 1px solid #fbbf24; border-radius: 999px;
+  padding: 5px 14px; font-size: 12px; font-weight: 800;
+  z-index: 10;
+}
+
+/* 🧑‍🏫 GTO 일타 강사 패널 */
+.coach-panel {
+  background: linear-gradient(145deg, rgba(6, 48, 37, 0.95), rgba(4, 31, 24, 0.95));
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  border-radius: 11px; padding: 7px 10px;
+}
+.coach-meters {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 4px;
+}
+.meter-box {
+  flex: 1; background: rgba(0, 0, 0, 0.32);
+  border-radius: 7px; padding: 3px 7px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.meter-box.outs { border: 1px solid rgba(251, 191, 36, 0.35); }
+.m-lbl { font-size: 10.5px; color: #a7f3d0; }
+.m-val { font-size: 12.5px; font-weight: 900; color: #34d399; }
+.meter-vs { font-size: 9.5px; font-weight: 900; color: #6ee7b7; }
+.coach-headline { font-size: 12px; font-weight: 800; color: #ecfdf5; margin-bottom: 2px; }
+.coach-detail { font-size: 11px; color: #a7f3d0; line-height: 1.35; }
+
+/* 베팅 버튼 바 */
+.bet-bar {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;
+}
+.bet-btn {
+  border-radius: 10px; border: 1.5px solid rgba(246, 196, 83, 0.3);
+  background: linear-gradient(180deg, #0f3d30 0%, #08241c 100%);
+  color: #f2f8f5; padding: 6px 3px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  position: relative;
+}
+.bet-btn:disabled { opacity: 0.32; cursor: not-allowed; }
+.bet-btn.fold { background: linear-gradient(180deg, #3f1d24 0%, #230f14 100%); border-color: rgba(248, 113, 113, 0.35); }
+.bet-btn.allin { background: linear-gradient(180deg, #6b21a8 0%, #3b0764 100%); border-color: rgba(216, 180, 254, 0.45); }
+.bet-btn.coach-best {
+  border: 2px solid #34d399 !important;
+  box-shadow: 0 0 12px rgba(52, 211, 153, 0.42);
+}
+.b-title { font-size: 12px; font-weight: 900; }
+.b-cost { font-size: 10.5px; color: #fde68a; font-weight: 700; }
+.b-ev {
+  font-size: 9.5px; font-weight: 800; padding: 1px 5px; border-radius: 99px;
+}
+.b-ev.best { background: #065f46; color: #6ee7b7; }
+.b-ev.good { background: #1e3a8a; color: #93c5fd; }
+.b-ev.ok { background: #78350f; color: #fcd34d; }
+.b-ev.bad { background: #7f1d1d; color: #fca5a5; }
+
+/* 모달 */
+.modal {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(2, 12, 9, 0.84);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal[hidden] { display: none !important; }
+.modal-box {
+  width: 100%; max-width: 430px; max-height: 90dvh; overflow-y: auto;
+  background: linear-gradient(165deg, #0b2e24, #051812);
+  border: 1.5px solid rgba(246, 196, 83, 0.45);
+  border-radius: 18px; padding: 18px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
+}
+.modal-box h2 { margin: 0 0 6px; font-size: 19px; color: #fde68a; }
+.modal-box .sub { margin: 0 0 14px; font-size: 12.5px; color: #a7f3d0; line-height: 1.45; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 12px; font-weight: 800; color: #fde68a; margin-bottom: 6px; }
+.seg { display: flex; gap: 6px; }
+.seg button {
+  flex: 1; padding: 8px 6px; border-radius: 10px;
+  border: 1px solid rgba(246, 196, 83, 0.28);
+  background: rgba(0, 0, 0, 0.35); color: #d1fae5;
+  font-size: 12.5px; font-weight: 800; cursor: pointer;
+}
+.seg button.on {
+  background: linear-gradient(135deg, #d97706, #b45309);
+  border-color: #fde68a; color: #fff;
+}
+.primary {
+  width: 100%; padding: 12px; border-radius: 12px; border: 0;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #1c1002; font-size: 14.5px; font-weight: 900; cursor: pointer;
+}
+.ghost {
+  padding: 12px 14px; border-radius: 12px;
+  border: 1px solid rgba(246, 196, 83, 0.35);
+  background: transparent; color: #fde68a; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.row-btns { display: flex; gap: 8px; margin-top: 12px; }
+.row-btns .primary { flex: 1; }
+
+.end-showdown {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px;
+}
+.sd-row {
+  display: flex; align-items: center; justify-content: space-between;
+  background: rgba(0, 0, 0, 0.35); border-radius: 10px; padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.sd-row.win { border-color: #fbbf24; background: rgba(251, 191, 36, 0.14); }
+.end-coach-box {
+  background: rgba(6, 78, 59, 0.45);
+  border: 1px solid rgba(52, 211, 153, 0.45);
+  border-radius: 10px; padding: 10px; font-size: 12px; line-height: 1.45; color: #ecfdf5;
+}
+
+.jokbo-grid { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.j-card {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  background: rgba(0, 0, 0, 0.32); padding: 7px 10px; border-radius: 8px;
+  font-size: 12px;
+}
+.j-card.hi { border-left: 3px solid #fbbf24; }
+.j-card.sp { border-left: 3px solid #34d399; flex-direction: column; align-items: flex-start; }
+.j-card b { color: #fde68a; }
+.j-card span { color: #d1fae5; font-size: 11.5px; }

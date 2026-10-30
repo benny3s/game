@@ -149,7 +149,8 @@
     "arena_invites": {
       ".read": "auth != null && auth.token.admin === 1",
       "$token": {
-        ".write": "auth != null && auth.token.admin === 1",
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
         ".validate": "$token.length === 6"
       }
     },
@@ -157,7 +158,31 @@
       ".read": "auth != null && auth.token.admin === 1",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1)",
-        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && newData.child('ok').val() === true && newData.child('token').isString() && root.child('arena_invites/' + newData.child('token').val()).exists()))"
+        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && newData.child('ok').val() === true && newData.child('token').isString() && (root.child('arena_invites/' + newData.child('token').val()).exists() || root.child('game_passes/' + newData.child('token').val() + '/role').val() === 'host')))"
+      }
+    },
+    "game_passes": {
+      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+        ".validate": "!newData.exists() || ($code.length === 6 && newData.child('role').isString())"
+      }
+    },
+    "game_devices": {
+      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (auth.uid === $uid && ((newData.child('passCode').isString() && (root.child('game_passes/' + newData.child('passCode').val()).exists() || root.child('arena_invites/' + newData.child('passCode').val()).exists()) && newData.child('status').val() === 'active') || (data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('role').val() === data.child('role').val()))))",
+        ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString())"
+      }
+    },
+    "game_requests": {
+      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+        ".write": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+        ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString())"
       }
     },
     "arena": {
