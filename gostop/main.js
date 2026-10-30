@@ -531,6 +531,7 @@
         ses.bank.ready.then(stacks => {
           if (!ses.alive || SES !== ses) return;
           ses.startChips = CHIPS.start('host', N).map((b, i) => (stacks && stacks[i] > 0 ? stacks[i] : b));   // 은행 쓰는 사람은 잔액, 나머지는 기본 칩
+          if (ses.bank.records) { const rec = ses.bank.records(); ses.score = { w: rec.map(x => (x ? x.w : 0)), l: rec.map(x => (x ? x.l : 0)) }; }   // 승패도 장부에서 (방을 다시 열어도 이어짐)
           net.broadcast({ t: '_chips', round: 0, coins: ses.startChips }, true);
           runMatch(ses);
         });
@@ -731,7 +732,8 @@
     if (!(ses.kind === 'guest' && (ses.chipSync || 0) >= s.round)) ses.chips = (ses.chips || CHIPS.start(ses.kind, ses.cfg.N)).map((c, i) => c + (deltas[i] || 0));
     drawCoinPill();
     if (ses.kind === 'guest') return;
-    CHIPS.report(ses.kind, { round: s.round, over: false, deltas, coins: ses.chips.slice(), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid })), me: ses.cfg.me });
+    const win = r.kind !== 'nagari' && r.winner >= 0 ? [s.who[r.winner]] : [], lose = win.length ? s.who.filter(rs => rs !== win[0]) : [];
+    CHIPS.report(ses.kind, { round: s.round, over: false, deltas, coins: ses.chips.slice(), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid })), me: ses.cfg.me, win, lose });
   }
 
   // ── 자리 · 이름표 (HUD) ───────────────────────────────────
@@ -813,7 +815,7 @@
     else if (s.phase === 'buy') sub = s.turn === me && !ses.hide ? '광을 살까요?' : `광 팔기 · ${seatAt(ses, s.turn).name}`;
     else if (ses.actor != null) sub = ses.actor === me && !ses.hot ? '내 차례' : `${seatAt(ses, ses.actor).name} 차례`;   // 움직이는 동안은 지금 두는 사람
     else if (s.turn === me) sub = s.phase === 'goStop' ? '고? 스톱?' : s.phase === 'kook' ? '국진을 어디에?' : s.phase.startsWith('pick') ? '가져올 패를 골라요' : '내 차례 · 패를 골라요';
-    else sub = `${seatAt(ses, s.turn).name} 차례`;
+    else sub = s.phase === 'goStop' ? `🤔 ${seatAt(ses, s.turn).name} 님이 고? 스톱? 고르는 중` : s.phase === 'kook' ? `🍶 ${seatAt(ses, s.turn).name} 님이 국진 고르는 중` : s.phase.startsWith('pick') ? `${seatAt(ses, s.turn).name} 님이 가져올 패 고르는 중` : s.phase === 'buy' ? `💰 ${seatAt(ses, s.turn).name} 님이 광 살지 고르는 중` : `${seatAt(ses, s.turn).name} 차례`;
     if (s.carry && G.carryMult(s) > 1) sub += ` · 나가리 ×${G.carryMult(s)}`;
     $('sub').textContent = `${s.round}판 · ${sub}${ses.turnLeft != null && s.turn === me ? ` · ⏱${ses.turnLeft}` : ''}`;
     $('passBtn').hidden = !(s.phase === 'play' && s.turn === me && me >= 0 && s.pass[me] > 0 && ses.pending && !ses.pending.isResult);
@@ -1329,6 +1331,8 @@
   // 친구 수 기다리기: 지금 차례 번호(seq)의 수가 오면 (먼저 와 있으면 바로)
   function remoteTurn(ses, p) {
     for (const k of ses.acts.keys()) if (k < ses.seq) ses.acts.delete(k);
+    const ph = ses.S && ses.S.phase, who = seatAt(ses, p).name;   // 친구가 고르는 중이면 크게 알림 (기다리는 사람이 뭘 기다리는지 알게)
+    if (!ses.acts.has(ses.seq)) { if (ph === 'goStop') popup('🤔 고? 스톱?', 'gold', `${who} 님이 고르는 중이에요`); else if (ph === 'kook') C.toast(`🍶 ${who} 님이 국진(열끗/쌍피) 고르는 중`, 1800); }
     if (ses.acts.has(ses.seq)) return Promise.resolve(ses.acts.get(ses.seq));
     setThinking(ses, p, true);
     return new Promise((resolve, reject) => {
@@ -1714,8 +1718,17 @@
     finishHuman(ses, G.A_PLAY + c);
   }
   function ask(ses, title, html, btns) {
-    const close = C.modal({ title, html, buttons: btns.map(b => ({ label: b.label, primary: b.primary, onClick: () => { ses.modals = ses.modals.filter(x => x !== close); finishHuman(ses, b.a); } })), dismiss: false });
+    const close = C.modal({ title, html, buttons: btns.map(b => ({ label: b.label, primary: b.primary, onClick: () => { ses.modals = ses.modals.filter(x => x !== close); finishHuman(ses, b.a); } })), dismiss: false, cls: 'peek' });
     ses.modals.push(close);
+    peekBtn(document.querySelector('.overlay.peek:last-of-type'));
+  }
+  // 판·내 패를 보면서 고르게: '👀 판 보기'를 누르는 동안(또는 한 번 누르면) 창을 접음
+  function peekBtn(ov) {
+    if (!ov || ov.querySelector('.peekbtn')) return;
+    const box = ov.firstElementChild, b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn peekbtn'; b.textContent = '👀 판 보기';
+    b.onclick = () => { const on = !ov.classList.contains('peeking'); ov.classList.toggle('peeking', on); b.textContent = on ? '↩️ 다시 고르기' : '👀 판 보기'; };
+    ov.appendChild(b);
   }
   function askPick(ses, o) {
     sfx('pop');
@@ -1723,10 +1736,11 @@
     const close = C.modal({
       title: '어느 패를 가져올까요?',
       html: `<div class="picks">${o.map((c, k) => `<button data-k="${k}">${ART.use(c)}<span>${esc(G.cardName(c))}</span></button>`).join('')}</div><p class="small" style="margin:6px 0 0">${s.phase === 'pickFlip' ? '뒤집은 패' : '낸 패'}와 같은 달이 바닥에 두 장이에요</p>`,
-      buttons: [], dismiss: false,
+      buttons: [], dismiss: false, cls: 'peek',
     });
     ses.modals.push(close);
     const ov = document.querySelector('.overlay:last-of-type');
+    peekBtn(ov);
     ov.querySelectorAll('.picks button').forEach(b => b.onclick = () => { sfx('tap'); ses.modals = ses.modals.filter(x => x !== close); close(); finishHuman(ses, G.A_PICK + +b.dataset.k); });
     if (matchMedia('(hover: hover)').matches) setTimeout(() => { const b = ov.querySelector('.picks button'); if (b) b.focus({ preventScroll: true }); }, 30);
   }
@@ -1739,6 +1753,7 @@
   }
   function askGoStop(ses) {
     const s = ses.S, p = s.turn, pre = G.stopPreview(s, p), t = G.tally(s, p);
+    $('goBox').classList.remove('peeking'); peekBtn($('goBox')); { const pb = $('goBox').querySelector('.peekbtn'); if (pb) pb.textContent = '👀 판 보기'; }
     sfx('good');
     const opp = Array.from({ length: s.n }, (_, q) => q).filter(q => q !== p).map(q => `${esc(seatAt(ses, q).name)} ${G.tally(s, q).base}점`).join(' · ');
     let rows = '';

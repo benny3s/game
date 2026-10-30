@@ -312,6 +312,11 @@ if (typeof window !== "undefined") (() => {
     await S.set(G(gid) + "/members/" + pid, { name, borrowed: 0, balance: 0, updated: S.now() });
     return { pid, existed: false };
   }
+  // 🏆 승패 (모임 장부에 같이: 방을 다시 열어도 이어짐, 새 회차면 0)
+  async function getRecords(gid) { return (await S.get(G(gid) + "/records")) || {}; }
+  async function addRecord(gid, pid, name, win) {
+    return S.txn(G(gid) + "/records/" + pid, cur => ({ name: clean(name || (cur && cur.name), 12) || "?", w: int(cur && cur.w) + (win ? 1 : 0), l: int(cur && cur.l) + (win ? 0 : 1), updated: S.now() }));
+  }
   async function removeMember(gid, pid) { return S.set(G(gid) + "/members/" + pid, null); }
   // 정산 저장 (+ 새 회차면 모두 0, 기록은 남김)
   async function loadPools(gid) { return C.poolsFromLedger(await S.last(G(gid) + "/ledger", 1000)); }
@@ -331,6 +336,7 @@ if (typeof window !== "undefined") (() => {
     if (reset) {
       for (const pid of Object.keys(members)) upd["members/" + pid] = { name: snapM[pid].name, borrowed: 0, balance: 0, updated: t };
       upd["ledger/" + S.key()] = ledgerLine("reset", "", 0, { note: "정산 후 새 회차" });
+      upd["records"] = null;                                  // 승패도 새 회차부터
     }
     await S.update(G(gid), upd);
     if (reset) try { window.dispatchEvent(new CustomEvent("bank:reset", { detail: { gid } })); } catch (e) {}   // 이 기기에서 돌고 있는 판은 다음 판에 새 잔액으로
@@ -465,6 +471,7 @@ if (typeof window !== "undefined") (() => {
       if (!gid) return;
       st.offs.push(S.on(G(gid) + "/meta", v => { st.meta = v; draw(); }));
       st.offs.push(S.on(G(gid) + "/members", v => { st.members = v || {}; draw(); refreshPools(); }));
+      st.offs.push(S.on(G(gid) + "/records", v => { st.records = v || {}; draw(); }));
     };
     const busy = () => box.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
 
@@ -491,7 +498,7 @@ if (typeof window !== "undefined") (() => {
             const ed = M && st.edit === r.pid;
             return `<div class="bk-m${r.pid === myPid ? " me" : ""}" data-pid="${esc(r.pid)}"><b>${esc(r.name)}${r.pid === myPid ? ' <span class="bk-soft">(나)</span>' : ""}</b>
               <span class="net ${cls}">${sfmt(r.chips)}칩<small>${sfmt(r.chips * m.chipWon)}원</small></span>
-              <span class="nums">칩 ${fmt(r.balance)} · 빌림 ${fmt(r.borrowed)}</span>
+              <span class="nums">${st.records && st.records[r.pid] ? `🏆 ${int(st.records[r.pid].w)}승 ${int(st.records[r.pid].l)}패 · ` : ""}칩 ${fmt(r.balance)} · 빌림 ${fmt(r.borrowed)}</span>
               ${M ? `<div class="acts">${ed
                 ? `<input class="bk-in bk-grow" data-adj type="number" inputmode="numeric" value="${r.balance}" aria-label="새 칩 수" style="max-width:150px"><button class="bk-btn sm pri" data-adjok="${esc(r.pid)}">저장</button><button class="bk-btn sm" data-adjno>취소</button>`
                 : `<button class="bk-btn sm" data-lend="${esc(r.pid)}">💰 ${fmt(m.loanUnit)} 빌려주기</button><button class="bk-btn sm" data-edit="${esc(r.pid)}">✎ 칩 조정</button>${!r.balance && !r.borrowed ? `<button class="bk-btn sm" data-del="${esc(r.pid)}">빼기</button>` : ""}`}</div>` : ""}
@@ -659,7 +666,7 @@ if (typeof window !== "undefined") (() => {
     async function load() {
       ses.meta = await getMeta(gid);
       ses.bankName = ses.meta.name;
-      const members = await getMembers(gid);
+      const [members, recs] = await Promise.all([getMembers(gid), getRecords(gid).catch(() => ({}))]);
       const seen = new Set();
       const pids = await Promise.all((seats || []).map(s => (s && s.ctrl !== "ai" && s.name ? pidFor(s.name) : null)));
       const stacks = [];
@@ -671,7 +678,7 @@ if (typeof window !== "undefined") (() => {
         let bal = members[pid] ? int(members[pid].balance) : 0, lent = 0;
         while (bal + lent < ses.minStack && lent < ses.meta.loanUnit * 20) lent += ses.meta.loanUnit;
         if (lent) { const m = await borrow(gid, pid, name, lent, info({ note: "시작 칩" })); bal = int(m.balance); emit({ op: "loan", seat: i, name, n: lent, auto: true }); }
-        ses.track[i] = { pid, name, last: bal };
+        ses.track[i] = { pid, name, last: bal, w: int(recs[pid] && recs[pid].w), l: int(recs[pid] && recs[pid].l) };
         stacks.push(bal);
       }
       return stacks;
@@ -688,6 +695,8 @@ if (typeof window !== "undefined") (() => {
         const rows = [];
         ses.track.forEach((t, i) => { if (!t || coins[i] == null) return; const c = int(coins[i]), dl = c - t.last; t.last = c; if (dl) rows.push({ pid: t.pid, name: t.name, delta: dl }); });
         if (rows.length) await applyDeltas(gid, rows, info({ round: d.round }), ses.track.filter(Boolean).map(t => t.pid));
+        const W = Array.isArray(d.win) ? d.win : [], L = Array.isArray(d.lose) ? d.lose : [];
+        for (const i of W.concat(L)) { const t = ses.track[i]; if (!t) continue; const win = W.includes(i); if (win) t.w++; else t.l++; await addRecord(gid, t.pid, t.name, win); }
         emit({ op: "saved", rows });
       });
     };
@@ -710,6 +719,7 @@ if (typeof window !== "undefined") (() => {
       });
     }));
     Object.assign(ses, {
+      records: () => ses.track.map(t => (t ? { w: t.w || 0, l: t.l || 0 } : null)),   // 자리별 모임 승패 (장부 기준)
       tracks: i => !!ses.track[i],
       pidOf: i => (ses.track[i] ? ses.track[i].pid : null),
       requestLoan(i) {

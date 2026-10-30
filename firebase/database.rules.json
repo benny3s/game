@@ -440,6 +440,29 @@
         },
         "$other": {
           ".validate": false
+        },
+        "records": {
+          ".read": "auth != null",
+          "$pid": {
+            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".validate": "!newData.exists() || ($pid.length <= 40 && newData.hasChildren(['name', 'w', 'l']))",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12"
+            },
+            "w": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+            },
+            "l": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+            },
+            "updated": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))"
         }
       }
     },
