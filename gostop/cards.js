@@ -27,11 +27,13 @@
     '#fffbeb', '#fff5f0', '#f7fee7', '#f0fdfa'
   ];
 
-  // 손패가 겹쳤을 때 왼쪽 위 모서리에서 월(1~12)만 깔끔하게 식별하는 초소형 배지 (원화를 가리지 않음)
+  // 왼쪽 위 월 배지: 달마다 다른 색 + 큰 숫자 (4월 흑싸리·7월 홍싸리처럼 그림이 닮은 달도 바로 구별)
   function cornerBadge(m) {
-    return `<rect x="3.5" y="3.5" width="19" height="16" rx="5" fill="rgba(17,24,39,0.82)" stroke="rgba(255,255,255,0.85)" stroke-width="1.2"/>` +
-      text(13, 11.8, String(m + 1), m >= 9 ? 10 : 11, '#fde047', ' font-weight="900"');
+    return `<rect x="3" y="3" width="25" height="21" rx="6" fill="${MONTH_COLOR[m]}" stroke="#fff" stroke-width="1.6"/>` +
+      text(15.5, 14, String(m + 1), m >= 9 ? 13 : 15, '#fff', ' font-weight="900"');
   }
+  // 4월 초단: 원본 그림에 흑싸리가 없어 7월 초단과 헷갈림 → 4월 피 그림 위에 띠를 얹음
+  const APR_RIBBON = 'm52.014 34.016c-19.335 25.583-24.943 52.393-28.463 82.484l-1.1504 11.6v1.0488c0 0.66666-0.0504 1.1512-0.15039 1.4512-0.13333 0.33333-0.0829 0.64922 0.15039 0.94922h0.0488c0.16667 0.26667 0.45156 0.40039 0.85156 0.40039l25.324-1.3477c0.0883-33.805 6.4104-61.377 27.752-94.07z';
 
   function bonusFace(id) {
     const G = root.Gostop;
@@ -50,9 +52,10 @@
     if (id >= 48) return bonusFace(id);
     const m = id >> 2;
     const k = (id & 3) + 1;
-    const fn = `m${String(m + 1).padStart(2, '0')}-${String(k).padStart(2, '0')}.svg`;
+    const fn = id === 13 ? 'm04-03.svg' : `m${String(m + 1).padStart(2, '0')}-${String(k).padStart(2, '0')}.svg`;
     return `<rect x="1" y="1" width="98" height="158" rx="9" fill="#c81e1e" stroke="#7f1d1d" stroke-width="2"/>` +
       `<image href="${SVG_BASE}${fn}" x="0" y="0" width="100" height="160" preserveAspectRatio="none"/>` +
+      (id === 13 ? `<path transform="scale(${f(100 / 103.2 * 1000) / 1000} ${f(160 / 168.2 * 1000) / 1000})" d="${APR_RIBBON}" fill="#ef1d1e" stroke="#111" stroke-width="1.2"/>` : '') +
       cornerBadge(m);
   }
 

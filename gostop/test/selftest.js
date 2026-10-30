@@ -98,6 +98,22 @@ section('패 구성');
 }
 
 // ── 나누기 ─────────────────────────────────────────────
+section('첫 판 선 정하기 (높은 월 · 낮은 월)');
+{
+  let bad = 0, n = 0;
+  for (let seed = 1; seed <= 300; seed++) for (const P of [2, 3, 5]) for (const mode of ['high', 'low']) {
+    const s = G.create({ players: P, seed, seon: mode }), d = s.seonDraw;
+    const ms = d.cards.map(c => G.monthOf(c));
+    const want = mode === 'high' ? ms.indexOf(Math.max(...ms)) : ms.indexOf(Math.min(...ms));
+    if (d.cards.length !== s.n || new Set(ms).size !== ms.length || d.first !== want || s.first !== want || (s.phase === 'play' && s.turn !== want)) bad++;
+    if (JSON.stringify(G.create({ players: P, seed, seon: mode }).seonDraw) !== JSON.stringify(d)) bad++;
+    n++;
+  }
+  eq(bad, 0, n + '판: 월이 겹치지 않고, 높은(낮은) 월이 선, 같은 씨앗이면 같은 결과');
+  eq(G.create({ players: 3, seed: 5 }).seonDraw, null, '선 뽑기를 안 하면 seonDraw 없음');
+  eq(G.nextRound(Object.assign(G.create({ players: 2, seed: 9, seon: 'high' }), { result: { kind: 'nagari' } })).seonDraw, null, '다음 판은 안 뽑음 (이긴 사람이 선)');
+}
+
 section('패 나누기 (맞고 10·8, 3인 7·6, 보너스 0·2·3)');
 {
   let bad = 0, chong = 0, tableBonus = 0, redeal = 0;

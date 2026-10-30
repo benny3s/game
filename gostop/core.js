@@ -67,8 +67,9 @@
   // ── 우리 집 규칙 (cfg.rules) ─────────────────────────────────
   // 집마다 달라서 하나하나 바꿀 수 있어요. 기본값 = 이 게임의 원래 규칙. normRules 가 모르는 값·범위 밖 값을 고쳐 줌
   // t: bool | num(min~max 정수, zero = 0일 때 보여 줄 말) | enum(opts = [[값, 이름, 설명?]])
-  const RULE_GROUPS = [['go', '🔥 고 · 스톱'], ['bak', '✋ 박 · 배수'], ['special', '🎴 특별한 일'], ['steal', '🤲 피 뺏기 장수'], ['nagari', '🤝 나가리'], ['sale', '💰 광 팔기 (4~5명)'], ['pay', '🪙 점수 · 칩']];
+  const RULE_GROUPS = [['seon', '👑 선 정하기'], ['go', '🔥 고 · 스톱'], ['bak', '✋ 박 · 배수'], ['special', '🎴 특별한 일'], ['steal', '🤲 피 뺏기 장수'], ['nagari', '🤝 나가리'], ['sale', '💰 광 팔기 (4~5명)'], ['pay', '🪙 점수 · 칩']];
   const RULE_DEFS = [
+    { k: 'seon', g: 'seon', t: 'enum', d: 'high', label: '첫 판 선', note: '첫 판에 한 장씩 뽑아 정해요. 다음 판부터는 이긴 사람이 선', opts: [['high', '높은 월', '월이 가장 높은 사람이 선'], ['low', '낮은 월', '월이 가장 낮은 사람이 선'], ['night', '밤일낮장', '낮(6~18시)엔 높은 월, 밤엔 낮은 월'], ['off', '안 뽑음', '첫 자리(방장)가 선']] },
     { k: 'goMatgo', g: 'go', t: 'num', d: 7, min: 1, max: 30, unit: '점', label: '맞고 고/스톱 기준', note: '2명이 칠 때 이 점수부터 고·스톱' },
     { k: 'go3', g: 'go', t: 'num', d: 3, min: 1, max: 30, unit: '점', label: '3인 고/스톱 기준', note: '3명(4~5명 포함)이 칠 때 이 점수부터' },
     { k: 'goBonus', g: 'go', t: 'enum', d: 'std', label: '고 보너스 방식', note: '고를 외칠 때마다 붙는 점수', opts: [['std', '기본', '1고 +1 · 2고 +2 · 3고부터 (점수+고)×2씩'], ['plus', '+1씩', '고마다 +1점'], ['double', '×2씩', '고마다 점수 두 배'], ['none', '없음', '고는 계속하기만']] },
@@ -161,7 +162,7 @@
     const o = {
       v: s.v, n: s.n, N: s.N, who: s.who, bench: s.bench,
       sale: s.sale ? { offers: s.sale.offers, hid: s.sale.hid.slice(), i: s.sale.i, k: s.sale.k, sold: s.sale.sold.slice() } : null,
-      rules: s.rules, bonus: s.bonus, seed: s.seed, rng: s.rng, round: s.round, carry: s.carry, first: s.first,
+      rules: s.rules, bonus: s.bonus, seed: s.seed, rng: s.rng, seonDraw: s.seonDraw, round: s.round, carry: s.carry, first: s.first,
       turn: s.turn, phase: s.phase, turnNo: s.turnNo,
       deck: s.deck.slice(), hands: sl2(s.hands), table: s.table.slice(), cap: sl2(s.cap),
       kook: s.kook, go: s.go.slice(), lastGo: s.lastGo.slice(), goSeq: s.goSeq.slice(),
@@ -204,7 +205,7 @@
     rules.bonus = bonus;
     const seed = (o.seed >>> 0) || 1;
     return {
-      v: 1, n, N: plan.N, who: plan.who, bench: plan.bench, sale: null, rules, bonus, seed, rng: seed | 0,
+      v: 1, n, N: plan.N, who: plan.who, bench: plan.bench, sale: null, rules, bonus, seed, rng: seed | 0, seonDraw: null,
       round: o.round || 1, carry: Math.max(0, Math.min(rules.nagariMax, o.carry | 0)), first: (o.first | 0) % n,
       turn: (o.first | 0) % n, phase: 'play', turnNo: 0,
       deck: [], hands: arr(n, () => []), table: [], cap: arr(n, () => []),
@@ -216,10 +217,26 @@
     };
   }
 
-  // 새 판: { players: 2|3, bonus: 0|2|3, seed, first, carry, round }
+  // 선 뽑기: 치는 사람마다 한 장씩 (월이 겹치지 않게). mode = 'high' | 'low' → { mode, cards: [자리별 패], first }
+  // 판 섞기와 따로인 rng (씨앗에서 나옴) 라서 같은 씨앗이면 어느 화면에서나 같음
+  function drawSeon(seed, n, mode) {
+    const t = { rng: ((seed >>> 0) ^ 0x5e0d1) | 0 };
+    const months = shuffle(Array.from({ length: 12 }, (_, i) => i), () => rnd(t)).slice(0, n);
+    const cards = months.map(m => m * 4 + Math.floor(rnd(t) * 4));
+    let first = 0;
+    for (let i = 1; i < n; i++) if (mode === 'low' ? months[i] < months[first] : months[i] > months[first]) first = i;
+    return { mode, cards, first };
+  }
+  // 새 판: { players: 2|3, bonus: 0|2|3, seed, first, carry, round, seon: 'high'|'low' (첫 판 선 뽑기) }
   function create(o) {
     o = o || {};
+    let seonDraw = null;
+    if (o.seon === 'high' || o.seon === 'low') {
+      seonDraw = drawSeon(o.seed, tablePlan(o.players, (o.round || 1) - 1).n, o.seon);
+      o = Object.assign({}, o, { first: seonDraw.first });
+    }
     const s = blank(o);
+    s.seonDraw = seonDraw;
     const H = s.n === 2 ? 10 : 7, TB = s.n === 2 ? 8 : 6;
     for (let tries = 0; ; tries++) {
       const d = shuffle(gameCards(s.bonus), () => rnd(s));
@@ -845,7 +862,7 @@
     tablePlan, modeOf, create, nextRound, setup, legal, legalMask, isLegal, step, apply, clone, fastClone,
     tally, goTotal, settle, stopPreview, view, debugFull, sampleWorld, obs, reward, hash, actionLabel,
     makeRng, shuffle, monthCount, hasTurns,
-    RULE_GROUPS, RULE_DEFS, RULE_PRESETS, defaultRules, normRules, ruleText, diffRules, presetRules, matchPreset, carryMult, askers, pointDeltas,
+    drawSeon, RULE_GROUPS, RULE_DEFS, RULE_PRESETS, defaultRules, normRules, ruleText, diffRules, presetRules, matchPreset, carryMult, askers, pointDeltas,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Gostop = API;
 })(this);

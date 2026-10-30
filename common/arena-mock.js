@@ -5,7 +5,9 @@
 window.ArenaMock = util => {
   const LAT = Number(new URLSearchParams(location.search).get("mock")) || 0;
   const bc = new BroadcastChannel("arena-mock");
-  const uid = "m" + Math.random().toString(36).slice(2, 9);
+  // 탭마다 같은 uid (다시 불러도 그대로 — 진짜 익명 로그인처럼, 다시 들어오기 시험용)
+  let uid = ""; try { uid = sessionStorage.getItem("arena.mock.uid") || ""; } catch (e) {}
+  if (!uid) { uid = "m" + Math.random().toString(36).slice(2, 9); try { sessionStorage.setItem("arena.mock.uid", uid); } catch (e) {} }
   const handlers = new Set();
   bc.onmessage = e => { for (const h of [...handlers]) try { h(e.data); } catch (err) { console.error(err); } };
   // 꼭 전할 것(rel)은 늘 같은 지연이라 순서가 지켜지고, 나머지는 흔들림(±40%)이 있어 순서가 바뀔 수도 있음 (진짜와 비슷하게)
@@ -57,6 +59,7 @@ window.ArenaMock = util => {
       setShared(key, v) { shared[key] = v === undefined ? null : v; post({ k: "sh", game, code, key, v: shared[key] }, true); for (const [k, cb] of shWatch) if (k === key) cb(shared[key]); return Promise.resolve(); },
       watchShared(key, cb) { shWatch.push([key, cb]); cb(key in shared ? shared[key] : null); },
       chat(text) { const c = { u: uid, n: players[uid].name, m: String(text).slice(0, 120), t: Date.now() }; E.emit("chat", c); post({ k: "chat", game, code, c }); return Promise.resolve(); },
+      get gone() { return closed; },
       leave() { if (closed) return; closed = true; handlers.delete(h); post({ k: "closed", game, code }, true); E.clear(); },
     };
   }
@@ -91,6 +94,7 @@ window.ArenaMock = util => {
       watchShared(key, cb) { shWatch.push([key, cb]); cb(key in shared ? shared[key] : null); },
       setMe(p) { post({ k: "me", game, code, from: uid, p }, true); return Promise.resolve(); },
       chat(text) { const c = { u: uid, n: me.name, m: String(text).slice(0, 120), t: Date.now() }; E.emit("chat", c); post({ k: "chat", game, code, c }); return Promise.resolve(); },
+      get gone() { return left; },
       leave() { if (left) return; left = true; handlers.delete(h); post({ k: "bye", game, code, from: uid }, true); E.clear(); },
     };
   }

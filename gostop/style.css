@@ -438,3 +438,11 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .hrov .row{position:sticky;bottom:-22px;margin:0 -20px -22px;padding:10px 20px 14px;background:linear-gradient(180deg,rgba(7,27,15,0),#071b0f 40%)}
 .chipline{margin:8px 0 0;text-align:center;line-height:1.5}
 .chipline .cp{color:#86efac}.chipline .cm{color:#fca5a5}
+/* 👑 선 정하기 */
+.seonrow{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.seon{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 6px 8px;border-radius:12px;min-width:76px;opacity:.82}
+.seon svg{width:52px;height:83px;border-radius:6px;box-shadow:0 2px 0 #7f1d1d,0 3px 8px rgba(0,0,0,.3)}
+.seon b{font-size:13px;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seon span{font-size:12px;opacity:.85}
+.seon.win{opacity:1;background:rgba(253,224,71,.22);box-shadow:0 0 0 2px #facc15 inset}
+.seon.win svg{transform:translateY(-4px) scale(1.06)}

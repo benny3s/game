@@ -10,6 +10,13 @@
      Cozy.tierCards(el, [{ id, em, name, desc, cls }], id => …)       — 🐣 초급 같은 고르기 카드
      Cozy.vibrate(15)                                                  — 진동 (되는 폰만) */
 (() => {
+  // 카톡 안 브라우저는 무거운 게임에서 카톡째 꺼질 때가 있음 → 폰 기본 브라우저(크롬·사파리)로 넘겨 열기 (한 번만)
+  try {
+    if (/KAKAOTALK/i.test(navigator.userAgent) && !sessionStorage.getItem("cozy.kakaoOut")) {
+      sessionStorage.setItem("cozy.kakaoOut", "1");
+      location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(location.href);
+    }
+  } catch (e) {}
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const store = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };

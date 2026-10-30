@@ -479,9 +479,11 @@ const Gate = (() => {
       .bgate-btn.sm { width: auto; padding: 6px 10px; font-size: 12px; border-radius: 7px; }
       .bgate-hint { margin: 8px 0 0; font-size: 12px; color: #94a3b8; text-align: center; }
       .bgate-alt {
-        margin-top: 16px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08);
+        margin: 2px 0 14px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,0.08);
         display: grid; gap: 8px; font-size: 12.5px; color: #94a3b8; text-align: center;
       }
+      .bgate-more { display: flex; justify-content: center; gap: 14px; margin-top: 12px; }
+      .bgate-more button { border: 0; background: none; color: #94a3b8; font: 600 12.5px inherit; text-decoration: underline; cursor: pointer; padding: 4px; }
       .bgate-wait {
         margin-top: 12px; padding: 14px; border-radius: 12px;
         background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35);
@@ -535,16 +537,17 @@ const Gate = (() => {
             ? `허용된 기기는 <b>혼자 하기</b>와 <b>친구 방 만들기</b>를 다 할 수 있어요.${title ? ` (${esc(title)})` : ""}`
             : `가족·지인 전용이에요. 한 번 허용받으면 이 기기에서 바로 열려요.`}</p>
           ${state.reason ? `<div class="bgate-warn">${esc(state.reason)}</div>` : ""}
-          <div class="bgate-tabs">
+          ${isHostMode ? `<div class="bgate-alt"><span>같이 하기만 할 거면 <b style="color:#e2e8f0">허용이 필요 없어요.</b><br>방장이 보낸 <b style="color:#e2e8f0">방 링크</b>를 누르거나 방 목록에서 들어가세요.</span><button class="bgate-btn ghost" data-close>👍 그냥 들어갈게요</button></div>` : ""}
+          ${isHostMode && curTab === "req" ? "" : `<div class="bgate-tabs">
             <button class="bgate-tab ${curTab === "req" ? "active" : ""}" data-tab="req">📲 허용 요청</button>
             <button class="bgate-tab ${curTab === "code" ? "active" : ""}" data-tab="code">🔑 허용 코드</button>
             <button class="bgate-tab ${curTab === "admin" ? "active" : ""}" data-tab="admin">👑 관리자</button>
-          </div>
+          </div>`}
           <div id="bgateTabBody"></div>
-          ${isHostMode ? `<div class="bgate-alt"><span>친구 방에 들어가기만 할 거면 허용이 필요 없어요.<br>방장에게 받은 <b style="color:#e2e8f0">방 링크</b>를 누르면 그 방에 바로 들어가요.</span><button class="bgate-btn ghost" data-close>🔗 방 링크 받을게요</button></div>` : ""}
+          ${isHostMode && curTab === "req" ? `<div class="bgate-more"><button type="button" data-tab="code">🔑 허용 코드가 있어요</button><button type="button" data-tab="admin">👑 관리자</button></div>` : ""}
         </div>
       `;
-      lockEl.querySelectorAll(".bgate-tab").forEach(b => {
+      lockEl.querySelectorAll(".bgate-tab, .bgate-more [data-tab]").forEach(b => {
         b.onclick = () => { curTab = b.dataset.tab; render(); };
       });
       lockEl.querySelectorAll("[data-close]").forEach(b => { b.onclick = () => hideLockOverlay(false); });

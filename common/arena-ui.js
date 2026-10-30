@@ -70,12 +70,71 @@
 .arn-coach input:focus-visible+.arn-sw{outline:2px solid var(--gold,#f59e0b);outline-offset:2px}
 .arn-coach .st{font-weight:800;font-size:13px}
 .arn-wait::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:arn-dots 1.2s steps(4) infinite}
-@keyframes arn-dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}`;
+@keyframes arn-dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+.arn-ctab{position:fixed;left:0;top:44%;z-index:55;width:38px;height:46px;border:1px solid rgba(255,255,255,.22);border-left:0;border-radius:0 14px 14px 0;background:rgba(15,23,42,.72);color:#fff;font-size:19px;cursor:pointer;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent}
+.arn-ctab i{position:absolute;top:-5px;right:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#ef4444;color:#fff;font:800 11px/18px system-ui,sans-serif;font-style:normal;text-align:center}
+.arn-cbub{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 54px);transform:translateX(-50%);z-index:56;max-width:min(86vw,420px);display:grid;gap:6px;pointer-events:none}
+.arn-cbub div{background:rgba(15,23,42,.9);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:7px 12px;font:600 14.5px/1.35 var(--text,system-ui,"Malgun Gothic",sans-serif);box-shadow:0 6px 18px rgba(0,0,0,.4);animation:arn-bub .25s ease-out;overflow-wrap:anywhere}
+.arn-cbub b{color:#fde68a;margin-right:6px}
+@keyframes arn-bub{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.arn-cpan{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:57;width:min(440px,100%);background:var(--card,#142030);color:var(--ink,#f1f5f9);border:1.5px solid rgba(255,255,255,.15);border-bottom:0;border-radius:20px 20px 0 0;padding:12px 12px calc(env(safe-area-inset-bottom,0px) + 12px);display:grid;gap:8px;box-shadow:0 -12px 40px rgba(0,0,0,.5);font:15px/1.45 var(--text,system-ui,"Malgun Gothic",sans-serif)}
+.arn-cpan .hd{display:flex;align-items:center;justify-content:space-between;font:800 16px var(--round,inherit)}
+.arn-cpan .hd button{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:inherit;cursor:pointer}
+.arn-clog{max-height:min(34vh,260px);overflow:auto;display:grid;gap:4px;align-content:start;background:rgba(0,0,0,.22);border-radius:12px;padding:8px 10px;font-size:14px}
+.arn-clog:empty::before{content:"아직 대화가 없어요";color:var(--soft,#94a3b8)}
+.arn-clog div{overflow-wrap:anywhere}.arn-clog b{color:#fde68a;margin-right:6px}.arn-clog .me b{color:#86efac}
+.arn-cq{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.arn-cq button{flex:none;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:inherit;border-radius:99px;padding:7px 11px;font:600 13.5px var(--text,inherit);cursor:pointer;white-space:nowrap}
+.arn-cin{flex:1;min-width:0;border:1.5px solid var(--line,rgba(255,255,255,.18));background:rgba(0,0,0,.28);color:inherit;border-radius:12px;padding:10px 12px;font:15px var(--text,inherit);outline:none}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
 
   let opt = null, net = null, ov = null, box = null, me = null, listT = null, offs = [], cfg = null, playing = false;
   const clearList = () => { clearInterval(listT); listT = null; };
+  // ── 💬 채팅 (방에 있는 동안 모든 게임 공통): 왼쪽 가장자리 손잡이 · 새 말은 위에 말풍선
+  const QUICK = ["👍 좋아요", "😂 ㅋㅋㅋ", "⏰ 빨리 해요~", "🤔 잠깐만요", "🔥 고!", "✋ 스톱!", "😭 아이고", "🎉 한 판 더!"];
+  let chat = null;
+  function chatOn() {
+    style();
+    if (!chat) {
+      const tab = document.createElement("button"); tab.className = "arn-ctab"; tab.type = "button"; tab.setAttribute("aria-label", "채팅"); tab.innerHTML = "💬";
+      const bub = document.createElement("div"); bub.className = "arn-cbub";
+      const pan = document.createElement("div"); pan.className = "arn-cpan"; pan.hidden = true;
+      pan.innerHTML = `<div class="hd"><span>💬 채팅</span><button type="button" data-cx aria-label="닫기">✕</button></div><div class="arn-clog"></div>
+        <div class="arn-cq">${QUICK.map(q => `<button type="button">${esc(q)}</button>`).join("")}</div>
+        <div class="arn-row"><input class="arn-cin" maxlength="120" placeholder="말 보내기" enterkeyhint="send"><button class="arn-btn pri" type="button" data-cs>보내기</button></div>`;
+      document.body.append(tab, bub, pan);
+      chat = { tab, bub, pan, log: pan.querySelector(".arn-clog"), inp: pan.querySelector(".arn-cin"), unread: 0, quietUntil: 0 };
+      const badge = () => { tab.innerHTML = "💬" + (chat.unread ? `<i>${chat.unread > 9 ? "9+" : chat.unread}</i>` : ""); };
+      chat.badge = badge;
+      const send = t => { t = String(t || "").trim().slice(0, 120); if (!t || !net || !net.chat) return; net.chat(t).catch(() => {}); };
+      tab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) { chat.unread = 0; badge(); chat.log.scrollTop = 1e9; } };
+      pan.addEventListener("click", e => {
+        const b = e.target.closest("button"); if (!b) return;
+        if (b.matches("[data-cx]")) pan.hidden = true;
+        else if (b.matches("[data-cs]")) { send(chat.inp.value); chat.inp.value = ""; }
+        else if (b.parentNode.classList.contains("arn-cq")) { send(b.textContent); pan.hidden = true; }
+      });
+      chat.inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) { send(chat.inp.value); chat.inp.value = ""; } });
+    }
+    chat.log.innerHTML = ""; chat.unread = 0; chat.badge(); chat.pan.hidden = true; chat.tab.hidden = false;
+    chat.quietUntil = Date.now() + 1500;                      // 들어올 때 받는 지난 대화는 말풍선 없이 기록에만
+  }
+  function chatOff() { if (!chat) return; chat.tab.hidden = true; chat.pan.hidden = true; chat.bub.innerHTML = ""; }
+  function onChat(c) {
+    if (!chat || !c || !c.m) return;
+    const mine = net && c.u === net.uid;
+    const d = document.createElement("div"); if (mine) d.className = "me";
+    d.innerHTML = `<b>${esc(c.n || "?")}</b>${esc(c.m)}`;
+    chat.log.appendChild(d); while (chat.log.children.length > 60) chat.log.firstChild.remove();
+    chat.log.scrollTop = 1e9;
+    if (mine || Date.now() < chat.quietUntil) return;
+    if (chat.pan.hidden) { chat.unread++; chat.badge(); }
+    const b = document.createElement("div"); b.innerHTML = `<b>${esc(c.n || "?")}</b>${esc(c.m)}`;
+    chat.bub.appendChild(b); while (chat.bub.children.length > 3) chat.bub.firstChild.remove();
+    setTimeout(() => b.remove(), 4500);
+  }
+
   const show = () => { style(); if (!ov) { ov = document.createElement("div"); ov.className = "arn-ov"; ov.innerHTML = '<div class="arn-box"></div>'; document.body.appendChild(ov); box = ov.firstChild; } ov.hidden = false; };
   const hide = () => { clearList(); if (ov) ov.hidden = true; };
   const setUrlRoom = code => { try { const u = new URL(location.href); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} };
@@ -100,7 +159,7 @@
     box.innerHTML = `<button class="arn-x" id="arLeave" data-x aria-label="닫기">✕</button>
       <h2>친구랑 ${esc(opt.title)}</h2>
       <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${canHost ? '<span style="font-size:12px;background:rgba(63,174,122,.16);color:#2d8a5e;padding:3px 8px;border-radius:99px;white-space:nowrap">✅ 방 만들기 가능</span>' : ''}${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
-      <button class="arn-btn pri" id="arCreate" data-host>🏠 방 만들기 (친구 초대)</button>
+      <button class="arn-btn${canHost ? " pri" : ""}" id="arCreate" data-host>🏠 방 만들기 (친구 초대)</button>
       ${canHost ? "" : `<p class="arn-soft" style="margin-top:-6px">방 만들기는 허용된 기기만 돼요. 친구가 보낸 <b>방 링크</b>나 <b>코드</b>로는 바로 들어갈 수 있어요.</p>`}
       <div class="arn-row"><input class="arn-code" maxlength="4" placeholder="방 코드" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
       <div class="arn-msg">${esc(msg)}</div>
@@ -224,6 +283,7 @@
 
   function wire() {
     offs.forEach(f => f()); offs = [];
+    chatOn(); offs.push(net.on("chat", onChat));
     offs.push(net.on("players", () => { if (!playing) drawPlayers(); }));
     if (net.isHost) offs.push(net.on("p2p", () => { if (!playing) drawPlayers(); }));
     offs.push(net.on("meta", m => {
@@ -239,7 +299,7 @@
     }
   }
   function end(why) {
-    const was = net; net = null; playing = false; offs.forEach(f => f()); offs = [];
+    const was = net; net = null; playing = false; offs.forEach(f => f()); offs = []; chatOff();
     if (was) was.leave();
     setUrlRoom(null);
     hide();
@@ -287,7 +347,11 @@
       playing = false; wire(); setUrlRoom(net.code);
       if (net.meta && net.meta.phase === "play") { playing = true; hide(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
       else lobby();
-    } catch (e) { setUrlRoom(null); home(e.message); }
+    } catch (e) {
+      net = null; setUrlRoom(null);
+      if (e && e.own) Arena.deleteRoom(opt.game, code).catch(() => {});   // 내가 만든 방 (방장이 새로 고침) → 닫고 처음 화면으로
+      home(e.message);
+    }
   }
   async function share() {
     const url = Arena.inviteUrl(net.code), m = box.querySelector("[data-msg]");
@@ -325,6 +389,7 @@
       box.innerHTML = `<button class="arn-x" data-x>✕</button><h2>연결하지 못했어요</h2><p class="arn-soft">인터넷 연결을 확인하고 다시 해 주세요. (${esc(e.message)})</p>`;
       return;
     }
+    if (net && net.gone) { offs.forEach(f => f()); offs = []; net = null; playing = false; chatOff(); }   // 게임 쪽에서 이미 나간 방이면 잊고 새로
     if (net) { playing ? hide() : lobby(); return; }
     const code = Arena.roomFromUrl();
     if (code) doJoin(code); else home();
