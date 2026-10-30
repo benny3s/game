@@ -661,8 +661,8 @@ button { font: inherit; cursor: pointer; }
 
   <section class="info-strip">
     <div class="info-box">
-      <h4>🏠 혼자는 누구나, 친구 방은 허용된 기기에서</h4>
-      <p>혼자 하기는 누구나 바로 할 수 있어요. 친구 방 만들기는 <b>허용된 기기</b>(오늘만 · 계속)에서 되고, 방 링크나 4자리 방 코드를 받은 친구는 등록 없이 그 방에 바로 들어와요.</p>
+      <h4>🔐 허용된 기기에서 혼자 · 친구랑</h4>
+      <p>가족·지인 기기만 열려요. 처음이면 이름과 기간(하루·1주·1달·계속)을 적어 허용을 요청하세요. 방 링크나 4자리 방 코드를 받은 친구는 허용 없이 그 방에 바로 들어와요.</p>
     </div>
     <div class="info-box">
       <h4>🧠 직접 학습한 신경망 & 규칙 엔진</h4>
@@ -1027,6 +1027,58 @@ button { font: inherit; cursor: pointer; }
           <circle cx="120" cy="60" r="27" fill="none" stroke="#10b981" stroke-width="3"/>
           <line x1="120" y1="113" x2="120" y2="93" stroke="#059669" stroke-width="5" stroke-linecap="round" marker-end="url(#jgHead)" opacity=".92"/>
         </svg>`;
+      case "onecard":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="ocCapBg" cx="50%" cy="45%" r="75%">
+      <stop offset="0%" stop-color="#1e4fa8"/><stop offset="100%" stop-color="#0b1a33"/>
+    </radialGradient>
+    <linearGradient id="ocCapJk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ef4444"/><stop offset=".35" stop-color="#f59e0b"/><stop offset=".65" stop-color="#22c55e"/><stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+    <linearGradient id="ocCapBtn" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#ea580c"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="200" fill="url(#ocCapBg)"/>
+  <ellipse cx="200" cy="104" rx="182" ry="84" fill="none" stroke="#f6c453" stroke-opacity=".32" stroke-dasharray="6 5"/>
+  <path d="M300 40 A110 70 0 0 1 330 120" fill="none" stroke="#fde68a" stroke-opacity=".45" stroke-width="5" stroke-linecap="round"/>
+  <path d="M322 108 L331 124 L340 108" fill="none" stroke="#fde68a" stroke-opacity=".45" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(58,50) rotate(-16)">
+    <rect width="70" height="104" rx="8" fill="#f8f3e8"/>
+    <rect x="5" y="5" width="60" height="94" rx="5" fill="#2649a8"/>
+    <rect x="9" y="9" width="52" height="86" rx="3" fill="none" stroke="#f6c453" stroke-opacity=".8" stroke-width="1.4"/>
+    <circle cx="35" cy="52" r="15" fill="#16285e" stroke="#f6c453" stroke-width="2"/>
+    <path d="M31 45l6-4v21" fill="none" stroke="#fde68a" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M30 62h13" stroke="#fde68a" stroke-width="3.2" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(118,30) rotate(-6)">
+    <rect width="72" height="108" rx="8" fill="#fffdf7" stroke="#cbc3b6" stroke-width="1.5"/>
+    <text x="12" y="21" font-family="sans-serif" font-size="17" font-weight="900" fill="#17202d" text-anchor="middle">A</text>
+    <g transform="translate(18,34) scale(.36)"><path d="M50 5C40 22 8 38 8 61c0 15 12 25 25 25 7 0 12-3 14-7l-5 17h16l-5-17c2 4 7 7 14 7 13 0 25-10 25-25C92 38 60 22 50 5z" fill="#17202d"/></g>
+    <rect x="4" y="27" width="22" height="12" rx="6" fill="#dc2626"/>
+    <text x="15" y="36" font-family="sans-serif" font-size="9" font-weight="900" fill="#fff" text-anchor="middle">+5</text>
+  </g>
+  <g transform="translate(180,28) rotate(4)">
+    <rect width="72" height="108" rx="8" fill="#fffdf7" stroke="#cbc3b6" stroke-width="1.5"/>
+    <text x="12" y="21" font-family="sans-serif" font-size="17" font-weight="900" fill="#d3213a" text-anchor="middle">7</text>
+    <g transform="translate(22,40) scale(.28)"><path d="M50 92C42 80 6 60 6 34 6 18 18 8 31 8c9 0 16 6 19 14 3-8 10-14 19-14 13 0 25 10 25 26 0 26-36 46-44 58z" fill="#d3213a"/></g>
+    <g transform="translate(22,66) scale(.28)"><path d="M50 92C42 80 6 60 6 34 6 18 18 8 31 8c9 0 16 6 19 14 3-8 10-14 19-14 13 0 25 10 25 26 0 26-36 46-44 58z" fill="#d3213a"/></g>
+  </g>
+  <g transform="translate(244,40) rotate(15)">
+    <rect width="72" height="108" rx="8" fill="#fffdf7" stroke="#cbc3b6" stroke-width="1.5"/>
+    <polygon points="36,30 42,46 59,46 45,56 50,73 36,63 22,73 27,56 13,46 30,46" fill="url(#ocCapJk)" stroke="#fde68a" stroke-width="1.2"/>
+    <text x="36" y="94" font-family="sans-serif" font-size="11" font-weight="900" fill="#d3213a" text-anchor="middle" letter-spacing="1">JOKER</text>
+    <rect x="4" y="6" width="24" height="13" rx="6.5" fill="#dc2626"/>
+    <text x="16" y="16" font-family="sans-serif" font-size="9.5" font-weight="900" fill="#fff" text-anchor="middle">+7</text>
+  </g>
+  <g transform="translate(118,150)">
+    <rect width="164" height="40" rx="20" fill="url(#ocCapBtn)" stroke="#fff7d6" stroke-width="2.5"/>
+    <circle cx="26" cy="20" r="11" fill="#fff7d6"/>
+    <text x="26" y="25.5" font-family="sans-serif" font-size="15" font-weight="900" fill="#c2410c" text-anchor="middle">1</text>
+    <text x="96" y="27" font-family="sans-serif" font-size="20" font-weight="900" fill="#fff" text-anchor="middle">원카드!</text>
+  </g>
+</svg>`;
       default:
         return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
           <rect width="400" height="200" fill="#18122b"/>

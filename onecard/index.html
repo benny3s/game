@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1a33">
+<title>원카드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=11">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap" id="home">
+  <header class="top">
+    <h1>☝️ 원카드</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section class="card" id="menuCard">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabLocal" aria-pressed="false">한 기기</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <div id="soloBox" class="box">
+      <div class="coinline" id="coinLine"></div>
+      <div class="optrow"><span class="small">AI 상대</span><div class="seg" id="nSeg"></div></div>
+      <div class="tiers three" id="tiers"></div>
+      <div class="optrows">
+        <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="speedSeg"></div></div>
+        <div class="optrow"><span class="small">AI 선생님</span><div class="seg" id="coachSeg"></div></div>
+      </div>
+      <ul class="howto" id="howto">
+        <li>맨 위 카드와 <b>무늬</b>나 <b>숫자</b>가 같은 카드를 내요. 없으면 한 장 먹어요</li>
+        <li>2·A·조커는 <b>공격</b> — 다음 사람이 여러 장 먹어요. 공격 카드로 받아치면 쌓여서 넘어가요</li>
+        <li>한 장 남으면 <b>☝️ 원카드!</b> 를 눌러요. 늦으면 벌칙! 다 털면 이겨요</li>
+      </ul>
+      <div class="ruleline" id="ruleLine1"></div>
+      <button class="btn primary big" id="startBtn">시작하기</button>
+      <button class="btn ghost" id="rulesBtn">📖 규칙 자세히 보기</button>
+    </div>
+
+    <div id="localBox" class="box" hidden>
+      <p class="lede">폰·TV 하나로 2~8명이 돌려 가며 해요. 사람 차례가 되면 가림 화면이 나와서 앞사람의 카드를 가려요.</p>
+      <div class="wseats" id="lSeats"></div>
+      <div class="optrows">
+        <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="lSpeedSeg"></div></div>
+      </div>
+      <div class="ruleline" id="ruleLine2"></div>
+      <p class="small center-note" id="lNote"></p>
+      <button class="btn primary big" id="localBtn">시작하기</button>
+    </div>
+
+    <div id="watchBox" class="box" hidden>
+      <p class="lede">AI 들끼리 카드를 모두 펼쳐 놓고 하는 판을 구경해요.</p>
+      <div class="optrow"><span class="small">AI 인원</span><div class="seg" id="wNSeg"></div></div>
+      <div class="wseats" id="wSeats"></div>
+      <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="wSpeedSeg"></div></div>
+      <div class="ruleline" id="ruleLine3"></div>
+      <button class="btn primary big" id="watchBtn">구경 시작</button>
+    </div>
+  </section>
+  <button class="btn ghost" id="replayBtn" hidden>🎞️ 지난 판 다시 보기</button>
+</div>
+
+<!-- 게임 (화면 한 장) -->
+<section class="play wide" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="sub"></span></div>
+    <span class="pill" id="coinPill"></span>
+  </div>
+  <div class="scorebar" id="scoreBar" hidden></div>
+  <div class="stage" id="stage">
+    <div class="felt" id="felt">
+      <svg class="ring" id="ring" viewBox="0 0 200 200" aria-hidden="true"><defs><marker id="oc-ah" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs><g class="spin"><path d="M100 14A86 86 0 0 1 186 100" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" marker-end="url(#oc-ah)"/><path d="M100 186A86 86 0 0 1 14 100" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" marker-end="url(#oc-ah)"/></g></svg>
+    </div>
+    <button class="pile drawpile" id="drawPile" type="button" aria-label="더미에서 한 장 먹기"><span class="deckn" id="deckN"></span></button>
+    <div class="pile discard" id="discard"></div>
+    <div class="tstate" id="tState"></div>
+    <div id="opps"></div>
+    <div class="myseat" id="mySeat"></div>
+    <div class="hand" id="hand"></div>
+    <div class="callzone" id="callZone" hidden></div>
+    <div class="flylayer" id="fly"></div>
+  </div>
+  <div class="dock" id="dock">
+    <button id="coachBtn" aria-pressed="false"><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
+    <button id="loanBtn" aria-label="은행에서 빌리기" hidden><span class="ic">💰</span><span>빌리기</span></button>
+    <button id="bankBtn" aria-label="은행 잔액·정산" hidden><span class="ic">🏦</span><span>은행</span></button>
+    <button id="pauseBtn" hidden><span class="ic">⏸</span><span>멈춤</span></button>
+    <button id="speedBtn"><span class="ic">⚡</span><span>보통</span></button>
+    <button id="ruleBtn"><span class="ic">📖</span><span>규칙</span></button>
+    <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+  </div>
+</section>
+
+<div class="combo" id="pop" hidden></div>
+<div class="overlay" id="resBox" hidden><div><h2 id="resTitle"></h2><div id="resBig"></div><div id="resBody"></div><div class="row" id="resBtns"></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=11"></script>
+<script src="../common/me.js?v=7"></script>
+<script src="../common/arena-mock.js?v=7"></script>
+<script src="../common/arena.js?v=9"></script>
+<script src="../common/arena-ui.js?v=9"></script>
+<script src="../common/bank.js?v=2"></script>
+<script src="../common/coach.js?v=2"></script>
+<script src="../common/hotseat.js?v=2"></script>
+<script src="core.js?v=1"></script>
+<script src="ai.js?v=1"></script>
+<script src="cards.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>
