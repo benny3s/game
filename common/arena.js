@@ -27,21 +27,35 @@ const Arena = (() => {
   const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.protocol === "file:";
   const ROOT = GUEST ? "test/arena/" : "arena/";
   let app = null, loading = null, user = null, offset = 0, adminFlag = false, hostFlag = GUEST || LOCAL;
-  const load = src => new Promise((ok, bad) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
+  const load = src => {
+    const map = (window.__fbScriptLoads = window.__fbScriptLoads || {});
+    if (map[src]) return map[src];
+    return (map[src] = new Promise((ok, bad) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = ok; s.onerror = e => { delete map[src]; bad(e); };
+      document.head.appendChild(s);
+    }));
+  };
   const watchOffset = () => app.database().ref(".info/serverTimeOffset").on("value", s => { offset = s.val() || 0; });
 
   async function refreshPerms() {
     if (!user) return;
     try {
-      const tr = await user.getIdTokenResult();
+      const tr = await Promise.race([user.getIdTokenResult(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000))]);
       adminFlag = !!(tr && tr.claims && tr.claims.admin === 1);
     } catch (e) { adminFlag = false; }
+    try {
+      if (localStorage.getItem("game.gate.admin") === "1") adminFlag = true;
+    } catch (e) {}
     if (adminFlag || GUEST || LOCAL) { hostFlag = true; return; }
     try {
-      const snap = await app.database().ref("arena_hosts/" + user.uid + "/ok").get();
+      const snap = await Promise.race([app.database().ref("arena_hosts/" + user.uid + "/ok").get(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000))]);
       hostFlag = snap.val() === true;
     } catch (e) {
       hostFlag = localStorage.getItem("game.arena.host_ok") === user.uid;
+    }
+    if (!hostFlag && window.Gate && Gate.state && (Gate.state.role === "admin" || Gate.state.role === "family")) {
+      hostFlag = true;
     }
   }
 

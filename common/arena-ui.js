@@ -62,7 +62,13 @@
   const setUrlRoom = code => { try { const u = new URL(location.href); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} };
 
   async function myName() {
-    if (window.GME && !Arena.mock) { me = await GME.ensure(Arena.db()); return me.name; }
+    if (window.GME && !Arena.mock) {
+      if (!GME.me && ov) ov.hidden = true;
+      me = await GME.ensure(Arena.db());
+      if (!me) return null;
+      if (ov) ov.hidden = false;
+      return me.name;
+    }
     let n = ""; try { n = localStorage.getItem("game.arena.name") || ""; } catch (e) {}
     me = { name: n || "친구" + Math.floor(Math.random() * 90 + 10) }; return me.name;
   }
@@ -216,7 +222,7 @@
   function onClick(e) {
     const t = e.target.closest("button"); if (!t || !ov || !ov.contains(t)) return;
     if (t.matches("[data-x]")) { hide(); opt.onLeave && opt.onLeave(""); }
-    else if (t.matches("[data-rename]")) { GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
+    else if (t.matches("[data-rename]")) { if (ov) ov.hidden = true; GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
     else if (t.matches("[data-host]")) doHost();
     else if (t.matches("[data-join]")) doJoin(box.querySelector(".arn-code").value);
     else if (t.matches("[data-mk-host-inv]")) {
@@ -241,10 +247,17 @@
 
   async function open(o) {
     opt = o; style(); show();
-    box.innerHTML = `<h2>친구랑 ${esc(o.title)}</h2><p class="arn-wait">연결하는 중</p>`;
+    box.innerHTML = `<button class="arn-x" data-x aria-label="닫기">✕</button><h2>친구랑 ${esc(o.title)}</h2><p class="arn-wait">연결하는 중</p>`;
     if (!ov.dataset.wired) { ov.addEventListener("click", onClick); ov.dataset.wired = "1"; }
-    try { await Arena.init(); await myName(); }
-    catch (e) { box.innerHTML = `<button class="arn-x" data-x>✕</button><h2>연결하지 못했어요</h2><p class="arn-soft">인터넷 연결을 확인하고 다시 해 주세요. (${esc(e.message)})</p>`; return; }
+    try {
+      await Arena.init();
+      const picked = await myName();
+      if (!picked) { hide(); opt.onLeave && opt.onLeave(""); return; }
+    } catch (e) {
+      show();
+      box.innerHTML = `<button class="arn-x" data-x>✕</button><h2>연결하지 못했어요</h2><p class="arn-soft">인터넷 연결을 확인하고 다시 해 주세요. (${esc(e.message)})</p>`;
+      return;
+    }
     if (net) { playing ? hide() : lobby(); return; }
     const code = Arena.roomFromUrl();
     if (code) doJoin(code); else home();

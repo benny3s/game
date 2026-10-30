@@ -48,11 +48,15 @@ const Gate = (() => {
   const notify = () => { for (const fn of listeners) { try { fn(state); } catch (e) {} } };
 
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const loadScript = src => new Promise((ok, bad) => {
-    const s = document.createElement("script");
-    s.src = src; s.onload = ok; s.onerror = bad;
-    document.head.appendChild(s);
-  });
+  const loadScript = src => {
+    const map = (window.__fbScriptLoads = window.__fbScriptLoads || {});
+    if (map[src]) return map[src];
+    return (map[src] = new Promise((ok, bad) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = ok; s.onerror = e => { delete map[src]; bad(e); };
+      document.head.appendChild(s);
+    }));
+  };
 
   function detectDeviceName() {
     const ua = navigator.userAgent || "";
@@ -134,12 +138,19 @@ const Gate = (() => {
       const tr = await user.getIdTokenResult();
       state.isAdmin = !!(tr && tr.claims && tr.claims.admin === 1);
     } catch (e) { state.isAdmin = false; }
+    try {
+      const cached = readCachedPass();
+      if (localStorage.getItem("game.gate.admin") === "1" || (cached && cached.role === "admin")) {
+        state.isAdmin = true;
+      }
+    } catch (e) {}
 
     if (state.isAdmin) {
       state.isHost = true;
       state.unlocked = true;
       state.role = "admin";
       state.status = "active";
+      try { localStorage.setItem("game.gate.admin", "1"); } catch (e) {}
       writeCachedPass({ uid: user.uid, role: "admin", status: "active", expiresAt: 0 });
       hideLockOverlay();
       notify();
@@ -308,6 +319,7 @@ const Gate = (() => {
     state.unlocked = true;
     state.role = "admin";
     state.status = "active";
+    try { localStorage.setItem("game.gate.admin", "1"); } catch (e) {}
     writeCachedPass({ uid: user.uid, role: "admin", status: "active", expiresAt: 0 });
     hideLockOverlay();
     notify();

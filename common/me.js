@@ -9,44 +9,59 @@
   const nameKey = n => n.trim().toLowerCase().replace(/\s+/g, "").replace(/[.#$\[\]\/]/g, "_");
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   let me = (() => { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { return null; } })();
-  const save = m => { me = m; try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} for (const f of listeners) try { f(me); } catch (e) {} };
+  const save = m => {
+    me = m;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(m));
+      if (m && m.name) localStorage.setItem("game.arena.name", m.name);
+    } catch (e) {}
+    for (const f of listeners) try { f(me); } catch (e) {}
+  };
   const listeners = [];
 
   const css = `
-.gme-ov{position:fixed;inset:0;z-index:50;background:rgba(60,45,35,.42);display:grid;place-items:center;padding:16px}
-.gme-box{background:var(--card,#fff);color:var(--ink,#333);border-radius:24px;padding:20px;width:min(420px,100%);display:grid;gap:12px;box-shadow:0 20px 50px rgba(0,0,0,.25);max-height:calc(100dvh - 32px);overflow:auto}
-.gme-box h2{margin:0;font:24px/1.2 var(--round,inherit)}
-.gme-box p{margin:0;font-size:14px;color:var(--soft,#888)}
-.gme-in{font:17px var(--text,inherit);background:#fffaf4;color:var(--ink,#333);border:2px solid var(--line,#eee);border-radius:14px;padding:11px 13px;width:100%;box-sizing:border-box;outline:none}
-.gme-in:focus{border-color:var(--accent,#f90)}
-.gme-list{display:grid;gap:6px}
-.gme-it{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:2px solid var(--line,#eee);background:#fffaf4;color:var(--ink,#333);border-radius:14px;padding:10px 12px;font:16px var(--text,inherit);cursor:pointer}
-.gme-it b{font-family:var(--round,inherit);font-weight:400;font-size:17px}
-.gme-it span{margin-left:auto;font-size:13px;color:var(--soft,#888)}
-.gme-it.new{border-style:dashed;border-color:var(--accent,#f90)}
+.gme-ov{position:fixed;inset:0;z-index:220;background:rgba(4,9,16,.82);backdrop-filter:blur(8px);display:grid;place-items:center;padding:16px;-webkit-tap-highlight-color:transparent}
+.gme-box{background:var(--card,#142030);border:1.5px solid var(--card-border,rgba(255,255,255,.16));color:var(--ink,#f1f5f9);border-radius:22px;padding:22px 20px;width:min(420px,100%);display:grid;gap:12px;box-shadow:0 24px 60px rgba(0,0,0,.7);max-height:calc(100dvh - 32px);overflow:auto;font:15px/1.5 var(--text,system-ui,"Malgun Gothic",sans-serif)}
+.gme-box h2{margin:0;font:800 22px/1.2 var(--round,inherit);color:#fde68a}
+.gme-box p{margin:0;font-size:13.5px;color:var(--soft,#94a3b8)}
+.gme-in{font:600 16px var(--text,inherit);background:rgba(0,0,0,.35);color:var(--ink,#f1f5f9);border:1.5px solid var(--line,rgba(255,255,255,.18));border-radius:12px;padding:11px 14px;width:100%;box-sizing:border-box;outline:none}
+.gme-in:focus{border-color:var(--gold,#f59e0b)}
+.gme-list{display:grid;gap:7px}
+.gme-it{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:1.5px solid var(--line,rgba(255,255,255,.14));background:rgba(255,255,255,.06);color:var(--ink,#f1f5f9);border-radius:13px;padding:11px 14px;font:600 15.5px var(--text,inherit);cursor:pointer;transition:background .15s,border-color .15s}
+.gme-it:hover{background:rgba(255,255,255,.12);border-color:var(--gold,#f59e0b)}
+.gme-it b{font-family:var(--round,inherit);font-weight:700;font-size:16.5px;color:#fff}
+.gme-it span{margin-left:auto;font-size:12.5px;color:#fde68a;font-weight:700}
+.gme-it.new{border-style:dashed;border-color:var(--accent,#10b981);background:rgba(16,185,129,.12)}
 .gme-it:active{transform:translateY(1px)}
-.gme-x{justify-self:end;border:0;background:none;color:var(--soft,#888);font-size:14px;cursor:pointer;padding:4px}
-.gme-msg{min-height:1.2em;font-size:13px;color:var(--bad,#e55)}`;
+.gme-x{justify-self:end;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:var(--ink,#f1f5f9);border-radius:8px;font-size:13px;cursor:pointer;padding:4px 10px}
+.gme-msg{min-height:1.2em;font-size:13px;color:var(--bad,#f87171)}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
 
-  async function loadAll(db, tries = 3) {
+  async function loadAll(db, tries = 2) {
     let v;
-    try { v = (await db.ref(P + "gp/players").get()).val() || {}; }
-    catch (e) { if (tries <= 1) throw e; await new Promise(r => setTimeout(r, 900)); return loadAll(db, tries - 1); }   // 막 로그인한 직후엔 권한이 늦게 붙기도 함
+    try {
+      const p = db.ref(P + "gp/players").get();
+      const res = await Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("시간 초과")), 3500))]);
+      v = res.val() || {};
+    } catch (e) {
+      if (tries <= 1) throw e;
+      await new Promise(r => setTimeout(r, 500));
+      return loadAll(db, tries - 1);
+    }
     return Object.entries(v).filter(([, p]) => p && p.n).map(([pid, p]) => ({ pid, n: p.n, l: p.l || 0 }));
   }
   function touch(db) { if (me && db) db.ref(P + "gp/players/" + me.pid + "/l").set(firebase.database.ServerValue.TIMESTAMP).catch(() => {}); }
 
-  function pick(db, { canClose = false, title = "이름을 알려 주세요" } = {}) {
+  function pick(db, { canClose = false, title = "플레이어 프로필 선택" } = {}) {
     style();
     return new Promise(resolve => {
       const ov = document.createElement("div"); ov.className = "gme-ov";
       ov.innerHTML = `<div class="gme-box">
         ${canClose ? '<button class="gme-x" data-x>닫기 ✕</button>' : ""}
-        <h2>${esc(title)}</h2>
-        <p>친구들에게 보이는 이름이에요. 다른 폰에서도 같은 이름을 고르면 기록이 이어져요.</p>
-        <input class="gme-in" maxlength="12" placeholder="이름 (12자까지)" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <h2>👤 ${esc(title)}</h2>
+        <p>친구들에게 보이는 이름이에요. 기존 이름을 누르면 전적과 기록이 그대로 이어집니다.</p>
+        <input class="gme-in" maxlength="12" placeholder="새 이름 입력 또는 아래에서 선택" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
         <div class="gme-list"></div><div class="gme-msg"></div></div>`;
       document.body.appendChild(ov);
       const inp = ov.querySelector("input"), list = ov.querySelector(".gme-list"), msg = ov.querySelector(".gme-msg");
@@ -58,10 +73,10 @@
         const hits = q ? all.filter(p => nameKey(p.n).includes(k)).sort((a, b) => (nameKey(b.n) === k) - (nameKey(a.n) === k) || b.l - a.l).slice(0, 8)
                        : all.slice().sort((a, b) => b.l - a.l).slice(0, 6);
         const exact = q && all.some(p => nameKey(p.n) === k);
-        list.innerHTML = hits.map(p => `<button class="gme-it" data-pid="${esc(p.pid)}">👤 <b>${esc(p.n)}</b><span>${me && me.pid === p.pid ? "지금 나" : "이어서 하기"}</span></button>`).join("")
-          + (q && !exact ? `<button class="gme-it new" data-new>✨ <b>${esc(q)}</b><span>새로 시작</span></button>` : "")
-          + (!q && !hits.length ? "<p>아직 아무도 없어요. 이름을 적어 주세요.</p>" : "")
-          + (!q && hits.length ? "<p style='font-size:12.5px'>최근에 온 사람들이에요. 내 이름을 적어서 찾거나 새로 시작하세요.</p>" : "");
+        list.innerHTML = hits.map(p => `<button class="gme-it" data-pid="${esc(p.pid)}">👤 <b>${esc(p.n)}</b><span>${me && me.pid === p.pid ? "지금 나" : "이어서 하기 →"}</span></button>`).join("")
+          + (q && !exact ? `<button class="gme-it new" data-new>✨ <b>${esc(q)}</b><span>새 프로필로 시작</span></button>` : "")
+          + (!q && !hits.length ? "<p>위 입력칸에 이름을 적고 시작해 주세요.</p>" : "")
+          + (!q && hits.length ? "<p style='font-size:12px;margin-top:2px'>위 목록에서 내 이름을 누르거나, 새 이름을 입력해 주세요.</p>" : "");
       };
       inp.addEventListener("input", () => { msg.textContent = ""; draw(); });
       inp.addEventListener("keydown", e => { if (e.key === "Enter") { const b = list.querySelector(".gme-it"); if (b && inp.value.trim()) b.click(); } });
@@ -74,7 +89,7 @@
         try {
           const pid = db.ref(P + "gp/players").push().key;
           const r = await db.ref(P + "gp/names/" + nameKey(n)).transaction(cur => cur == null ? pid : undefined);
-          if (!r.committed) {                                                // 그새 누가 같은 이름을 만들었으면 그 이름으로
+          if (!r.committed) {
             const other = r.snapshot.val(), p = (await db.ref(P + "gp/players/" + other).get()).val();
             save({ pid: other, name: (p && p.n) || n });
           } else {
@@ -90,22 +105,25 @@
     });
   }
 
-  let pending = null;                                                       // 이름 창이 두 번 뜨지 않게
+  let pending = null;
   function ensure(db) { return pending || (pending = ensure1(db).finally(() => { pending = null; })); }
   async function ensure1(db) {
-    if (me && me.pid) {                                                      // 관리자가 이름을 바꿨거나 지웠으면 따라감
+    if (me && me.pid) {
       try {
-        const p = (await db.ref(P + "gp/players/" + me.pid).get()).val();
+        const p = (await Promise.race([
+          db.ref(P + "gp/players/" + me.pid).get(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 2500))
+        ])).val();
         if (!p) { me = null; } else { if (p.n !== me.name) save({ pid: me.pid, name: p.n }); touch(db); return me; }
       } catch (e) { return me; }
     }
-    return pick(db);
+    return pick(db, { canClose: true });
   }
 
   window.GME = { get me() { return me; }, P, ensure, pick, loadAll, onChange: f => listeners.push(f), nameKey };
   if (typeof document !== "undefined" && !window.Gate) {
     const cur = document.currentScript && document.currentScript.src;
-    const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=1") : "../common/gate.js?v=1";
+    const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=4") : "../common/gate.js?v=4";
     const gs = document.createElement("script");
     gs.src = base;
     document.head.appendChild(gs);
