@@ -49,7 +49,9 @@
   const A_PICK = 112;        // +0/1: 바닥 두 장 중 고르기 (번호 작은 쪽이 0)
   const A_GO = 114, A_STOP = 115;
   const A_KOOK_Y = 116, A_KOOK_P = 117;                  // 국진을 열끗으로 / 쌍피로
-  const N_ACTIONS = 118;
+  const A_BUY = 118, A_NOBUY = 119;                      // 광 팔기: 쉬는 사람의 광을 살래요 / 안 살래요 (4~5명일 때만)
+  const N_ACTIONS = 120;
+  const SALE_PRICE = 1;                                  // 광 한 장 값 (점)
 
   // ── 난수 (mulberry32, 공개 도메인 · Tommy Ettinger) ─────────────
   function rnd(s) {
@@ -76,7 +78,9 @@
   const sl2 = a => { const o = new Array(a.length); for (let i = 0; i < a.length; i++) o[i] = a[i].slice(); return o; };
   function fastClone(s) {
     const o = {
-      v: s.v, n: s.n, bonus: s.bonus, seed: s.seed, rng: s.rng, round: s.round, carry: s.carry, first: s.first,
+      v: s.v, n: s.n, N: s.N, who: s.who, bench: s.bench,
+      sale: s.sale ? { offers: s.sale.offers, hid: s.sale.hid.slice(), i: s.sale.i, k: s.sale.k, sold: s.sale.sold.slice() } : null,
+      bonus: s.bonus, seed: s.seed, rng: s.rng, round: s.round, carry: s.carry, first: s.first,
       turn: s.turn, phase: s.phase, turnNo: s.turnNo,
       deck: s.deck.slice(), hands: sl2(s.hands), table: s.table.slice(), cap: sl2(s.cap),
       kook: s.kook, go: s.go.slice(), lastGo: s.lastGo.slice(), goSeq: s.goSeq.slice(),
@@ -92,12 +96,31 @@
 
   function gameCards(bonus) { const a = []; for (let i = 0; i < NBASE; i++) a.push(i); for (let i = 0; i < bonus; i++) a.push(BONUS_IDS[i]); return a; }
 
+  // 자리 짜기: 모인 N명(2~5) 중 이번 판에 칠 사람(who)과 쉬는 사람(bench). r = 0부터 센 판 번호
+  // 3명 이하는 모두 침. 4~5명은 3명이 치고, 판마다 (N-3)칸씩 돌아가서 오래 친 사람부터 쉼
+  function tablePlan(N, r) {
+    N = Math.max(2, Math.min(5, N | 0 || 2));
+    const n = N === 2 ? 2 : 3;
+    const shift = N > 3 ? (((r | 0) * (N - 3)) % N + N) % N : 0;
+    const order = Array.from({ length: N }, (_, i) => (i + shift) % N);
+    return { N, n, who: order.slice(0, n), bench: order.slice(n) };
+  }
+
+  // 모인 인원 → 방식: 2 맞고 · 3 고스톱 · 4~5 광 팔기 고스톱 (3명이 치고 나머지는 쉬며 광을 팜)
+  function modeOf(N) {
+    N = Math.max(2, Math.min(5, N | 0 || 2));
+    if (N === 2) return { N, kind: 'matgo', name: '맞고', n: 2, bench: 0 };
+    if (N === 3) return { N, kind: 'gostop', name: '고스톱', n: 3, bench: 0 };
+    return { N, kind: 'gwangpal', name: '광 팔기 고스톱', n: 3, bench: N - 3 };
+  }
+
   function blank(o) {
-    const n = o.players === 3 ? 3 : 2;
+    const plan = tablePlan(o.players, (o.round || 1) - 1);
+    const n = plan.n;
     const bonus = o.bonus === 2 || o.bonus === 3 ? o.bonus : 0;
     const seed = (o.seed >>> 0) || 1;
     return {
-      v: 1, n, bonus, seed, rng: seed | 0,
+      v: 1, n, N: plan.N, who: plan.who, bench: plan.bench, sale: null, bonus, seed, rng: seed | 0,
       round: o.round || 1, carry: Math.max(0, Math.min(MAX_CARRY, o.carry | 0)), first: (o.first | 0) % n,
       turn: (o.first | 0) % n, phase: 'play', turnNo: 0,
       deck: [], hands: arr(n, () => []), table: [], cap: arr(n, () => []),
@@ -126,6 +149,16 @@
       // 바닥에 같은 월 네 장이면 다시 섞음
       const cnt = monthCount(s.table);
       if (cnt.some(x => x === 4) && tries < 50) { s.dealt.redeal++; continue; }
+      // 쉬는 사람(4~5명): 더미 위에서 7장씩 받아 둠. 그중 광만 팔 수 있고, 안 팔린 패는 아래에서 더미로 돌아감
+      if (s.bench.length) {
+        s.sale = { offers: [], hid: [], i: 0, k: 0, sold: [] };
+        for (const seat of s.bench) {
+          const h = sortIds(s.deck.splice(s.deck.length - 7, 7));
+          s.sale.hid.push(...h);
+          const g = h.filter(c => c < NBASE && KIND[c] === GW);
+          if (g.length) s.sale.offers.push({ seat, cards: g });
+        }
+      }
       break;
     }
     // 바닥에 처음부터 같은 월 세 장 = 주인 없는 뻑 더미 (먹어도 피를 안 받음)
@@ -135,18 +168,37 @@
       const m = mc.indexOf(4);
       if (m >= 0) { finish(s, p, 'chongtong', [], { month: m }); break; }
     }
+    if (s.sale) {
+      if (s.result || !s.sale.offers.length) endSale(s, null);   // 총통이거나 팔 광이 없으면 바로 시작
+      else { s.phase = 'buy'; s.turn = s.first; }
+    }
     return s;
+  }
+
+  // 광 팔기 끝: 안 팔린 패는 섞어서 더미 맨 아래로, 쉬는 사람 패는 비움
+  function endSale(s, ev) {
+    const sale = s.sale;
+    const rest = shuffle(sale.hid.slice(), () => rnd(s));
+    s.deck.unshift(...rest);
+    sale.hid = [];
+    if (s.phase === 'buy') {
+      s.phase = 'play'; s.turn = s.first;
+      if (ev) { ev.push({ t: 'saleEnd', sold: sale.sold.map(x => ({ seat: x.seat, buyer: x.buyer, cards: x.cards.slice() })) }); ev.push({ t: 'turn', p: s.turn }); }
+    }
   }
 
   // 다음 판: 이긴 사람이 선, 나가리면 선 그대로 + 배수 2배
   function nextRound(prev, o) {
     o = o || {};
     const r = prev.result;
-    const first = r && r.winner >= 0 ? r.winner : prev.first;
+    // 선: 이긴 사람 (나가리면 그대로). 4~5명이면 다음 판에 쉬는 사람은 선이 못 되니 새 자리의 맨 앞
+    const prevSeat = prev.who[r && r.winner >= 0 ? r.winner : prev.first];
+    const nextPlan = tablePlan(prev.N, prev.round);
+    const first = Math.max(0, nextPlan.who.indexOf(prevSeat));
     const carry = r && r.kind === 'nagari' ? Math.min(MAX_CARRY, prev.carry + 1) : 0;
     const t = { rng: prev.rng };
     const seed = o.seed != null ? o.seed : (Math.floor(rnd(t) * 4294967296) >>> 0) || 7;
-    return create({ players: prev.n, bonus: o.bonus != null ? o.bonus : prev.bonus, seed, first, carry, round: prev.round + 1 });
+    return create({ players: prev.N, bonus: o.bonus != null ? o.bonus : prev.bonus, seed, first, carry, round: prev.round + 1 });
   }
 
   // 시험·연습용: 원하는 패로 판 만들기. deck 은 뒤집을 순서대로 (0번이 먼저)
@@ -202,6 +254,8 @@
   function settle(s, w, kind, extra) {
     const n = s.n, carryX = Math.pow(2, s.carry);
     const res = { kind, winner: w, round: s.round, carry: s.carry, items: [], mults: [], per: [], points: 0, base: 0, go: 0, total: 0, extra: extra || {} };
+    // 광 팔기 값: 판 결과와 상관없이 산 사람 → 판 사람(쉬는 사람)
+    res.sale = s.sale ? s.sale.sold.map(x => ({ seat: x.seat, buyer: x.buyer, buyerSeat: s.who[x.buyer], cards: x.cards.slice(), price: x.price })) : [];
     if (kind === 'nagari') { res.carryNext = Math.min(MAX_CARRY, s.carry + 1); return res; }
     res.carryNext = 0;
     let total, common = 1;
@@ -279,6 +333,7 @@
       case 'pickHand': case 'pickFlip': a.push(A_PICK, A_PICK + 1); break;
       case 'kook': a.push(A_KOOK_Y, A_KOOK_P); break;
       case 'goStop': a.push(A_GO, A_STOP); break;
+      case 'buy': a.push(A_BUY, A_NOBUY); break;
     }
     return a;
   }
@@ -299,6 +354,7 @@
       case 'pickHand': case 'pickFlip': return a === A_PICK || a === A_PICK + 1;
       case 'kook': return a === A_KOOK_Y || a === A_KOOK_P;
       case 'goStop': return a === A_GO || a === A_STOP;
+      case 'buy': return a === A_BUY || a === A_NOBUY;
     }
     return false;
   }
@@ -312,6 +368,7 @@
     if (s.phase === 'end') throw new Error('판이 끝났어요');
     if (!isLegal(s, a)) throw new Error('할 수 없는 행동 ' + a + ' (' + s.phase + ')');
     const p = s.turn;
+    if (s.phase === 'buy') return buyStage(s, a, ev);
     if (s.phase === 'play') return playStage(s, p, a, ev);
     if (s.phase === 'pickHand') { const c = s.cur; c.hp = c.opts[a - A_PICK]; c.opts = null; s.phase = 'play'; if (ev) ev.push({ t: 'pick', p, card: c.hp, stage: 'hand' }); return flipStage(s, ev); }
     if (s.phase === 'pickFlip') { const c = s.cur; c.fp = c.opts[a - A_PICK]; c.opts = null; s.phase = 'play'; if (ev) ev.push({ t: 'pick', p, card: c.fp, stage: 'flip' }); return resolve(s, ev); }
@@ -326,6 +383,28 @@
       }
       if (ev) ev.push({ t: 'stop', p, base });
       return finish(s, p, 'stop', ev);
+    }
+  }
+
+  // 광 팔기: 쉬는 사람이 내놓은 광 묶음을 선부터 차례로 살지 물음 (산 사람이 생기면 다음 묶음)
+  function buyStage(s, a, ev) {
+    const sale = s.sale, o = sale.offers[sale.i], p = s.turn;
+    let next = false;
+    if (a === A_BUY) {
+      for (const c of o.cards) s.cap[p].push(c);
+      sale.hid = sale.hid.filter(c => o.cards.indexOf(c) < 0);
+      sale.sold.push({ seat: o.seat, buyer: p, cards: o.cards.slice(), price: o.cards.length * SALE_PRICE });
+      if (ev) ev.push({ t: 'buy', p, seat: o.seat, cards: o.cards.slice() });
+      next = true;
+    } else {
+      if (ev) ev.push({ t: 'nobuy', p, seat: o.seat });
+      sale.k++;
+      if (sale.k >= s.n) { if (ev) ev.push({ t: 'unsold', seat: o.seat, cards: o.cards.slice() }); next = true; }
+      else s.turn = (s.first + sale.k) % s.n;
+    }
+    if (next) {
+      sale.i++; sale.k = 0; s.turn = s.first;
+      if (sale.i >= sale.offers.length) endSale(s, ev);
     }
   }
 
@@ -518,6 +597,7 @@
     const v = clone(s);
     v.me = p; v.seed = 0; v.rng = 0;
     v.deck = s.deck.map(() => -1);
+    if (v.sale) v.sale.hid = v.sale.hid.map(() => -1);   // 쉬는 사람이 쥔 패는 안 보임 (내놓은 광만 보임)
     // 보인 패 먼저, 나머지는 -1 (자리 순서로 숨은 패 번호가 새지 않게)
     for (let q = 0; q < s.n; q++) if (q !== p) {
       const kn = sortIds(s.hands[q].filter(c => s.known[q].indexOf(c) >= 0));
@@ -616,7 +696,7 @@
     if (a < A_PASS) return '폭탄 ' + (a - A_BOMB + 1) + '월';
     if (a === A_PASS) return '뒤집기만';
     if (a < A_GO) return '고르기 ' + (a - A_PICK);
-    return ['고', '스톱', '국진→열끗', '국진→쌍피'][a - A_GO] || '?';
+    return ['고', '스톱', '국진→열끗', '국진→쌍피', '광 사기', '안 사기'][a - A_GO] || '?';
   }
 
   // 지금 스톱하면 받을 점 (고/스톱 창에 보여 줌)
@@ -625,10 +705,10 @@
   const API = {
     VERSION: 1, NCARD, NBASE, KOOK, RAIN, GW, YE, TI, PI, R_HONG, R_CHEONG, R_CHO, R_PLAIN,
     KIND, PIV, RIB, BIRD, BONUS_IDS, MONTH_NAME,
-    A_PLAY, A_SHAKE, A_BOMB, A_PASS, A_PICK, A_GO, A_STOP, A_KOOK_Y, A_KOOK_P, N_ACTIONS,
+    A_PLAY, A_SHAKE, A_BOMB, A_PASS, A_PICK, A_GO, A_STOP, A_KOOK_Y, A_KOOK_P, A_BUY, A_NOBUY, N_ACTIONS, SALE_PRICE,
     OBS_LEN, PLANES, PHASES,
     monthOf, isBonus, cardName, gameCards, thresholdOf, pibakMax: PIBAK_MAX,
-    create, nextRound, setup, legal, legalMask, isLegal, step, apply, clone, fastClone,
+    tablePlan, modeOf, create, nextRound, setup, legal, legalMask, isLegal, step, apply, clone, fastClone,
     tally, goTotal, settle, stopPreview, view, debugFull, sampleWorld, obs, reward, hash, actionLabel,
     makeRng, shuffle, monthCount, hasTurns,
   };

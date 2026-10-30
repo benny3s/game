@@ -405,6 +405,132 @@ function randomRound(seed, n, bonus, check) {
   console.log('    무작위 판 결과: ' + JSON.stringify(kinds));
 }
 
+// ── 인원에 따른 방식 · 4~5명 광 팔기 ───────────────────────
+section('인원 → 방식 (2 맞고 · 3 고스톱 · 4~5 광 팔기) · 자리 돌려 쉬기');
+{
+  eq([2, 3, 4, 5].map(N => { const p = G.tablePlan(N, 0); return [p.n, p.who.length, p.bench.length]; }), [[2, 2, 0], [3, 3, 0], [3, 3, 1], [3, 3, 2]], '인원별 치는 사람 · 쉬는 사람 수');
+  eq([G.tablePlan(2, 7).who, G.tablePlan(3, 7).who], [[0, 1], [0, 1, 2]], '3명 이하는 늘 모두 침');
+  eq([0, 1, 2, 3, 4].map(r => G.tablePlan(4, r).bench), [[3], [0], [1], [2], [3]], '4명: 한 명씩 돌아가며 쉼');
+  eq([0, 1, 2, 3, 4].map(r => G.tablePlan(5, r).bench), [[3, 4], [0, 1], [2, 3], [4, 0], [1, 2]], '5명: 두 명씩 돌아가며 쉼');
+  for (const N of [4, 5]) {
+    const cnt = Array(N).fill(0);
+    for (let r = 0; r < N; r++) for (const b of G.tablePlan(N, r).bench) cnt[b]++;
+    eq(cnt, Array(N).fill(N - 3), N + '명: ' + N + '판에 모두 같은 횟수(' + (N - 3) + '번)씩 쉼');
+    let ok2 = true;
+    for (let r = 0; r < 20; r++) { const p = G.tablePlan(N, r), all = [...p.who, ...p.bench].sort(); if (JSON.stringify(all) !== JSON.stringify(Array.from({ length: N }, (_, i) => i))) ok2 = false; }
+    ok(ok2, N + '명: 치는 사람 + 쉬는 사람 = 모두 한 번씩');
+  }
+  eq([2, 3, 4, 5, 1, 9].map(N => G.modeOf(N).kind), ['matgo', 'gostop', 'gwangpal', 'gwangpal', 'matgo', 'gwangpal'], '인원이 방식을 정함: 2 맞고 · 3 고스톱 · 4~5 광 팔기');
+  eq([G.modeOf(4).bench, G.modeOf(5).bench, G.modeOf(3).bench], [1, 2, 0], '쉬는 사람 수');
+  const s4 = G.create({ players: 4, seed: 3 });
+  eq([s4.n, s4.N, s4.hands.map(h => h.length), s4.table.length], [3, 4, [7, 7, 7], 6], '4명: 한 판은 3인 고스톱 (7장·바닥 6장)');
+  eq(G.thresholdOf(s4.n), 3, '4명: 3점부터 고/스톱');
+}
+
+section('광 팔기 (쉬는 사람이 쥔 광을 치는 사람이 삼)');
+{
+  const sorted2 = a => a.slice().sort((x, y) => x - y);
+  const total = st => sorted2([...st.deck, ...st.table, ...st.hands.flat(), ...st.cap.flat(), ...(st.sale ? st.sale.hid : [])]);
+  const findSeed = (N, bonus, pred) => { for (let seed = 1; seed < 4000; seed++) { const s = G.create({ players: N, bonus, seed }); if (pred(s)) return seed; } return 0; };
+  // 안 팔리면(아무도 안 사면) 더미 아래로 돌아감
+  const sd = findSeed(4, 0, s => s.phase === 'buy' && s.sale.offers.length === 1);
+  ok(sd > 0, '광을 쥔 쉬는 사람이 있는 판이 나옴 (씨앗 ' + sd + ')');
+  let s = G.create({ players: 4, seed: sd });
+  const off = s.sale.offers[0];
+  eq([s.phase, s.turn, s.sale.hid.length, s.deck.length, off.cards.every(c => G.KIND[c] === G.GW)], ['buy', s.first, 7, 14, true], '판이 시작되면 광 팔기부터: 선부터 물음 · 쉬는 사람 7장은 더미 위에서 · 내놓는 건 광뿐');
+  eq(total(s), G.gameCards(0), '패가 하나도 빠지지 않고 늘 한 번씩');
+  const v = G.view(s, s.turn);
+  eq([v.sale.hid.every(c => c === -1), v.sale.offers[0].cards], [true, off.cards], '남에게는 쉬는 사람의 다른 패는 안 보이고 내놓은 광만 보임');
+  eq(G.legal(s), [G.A_BUY, G.A_NOBUY], '광 팔기 중엔 사기/안 사기만');
+  ok(!G.isLegal(s, G.A_PLAY + s.hands[s.turn][0]), '광 팔기 중엔 패를 못 냄');
+  const order = [];
+  let ev = act(s, G.A_NOBUY); order.push(s.turn);
+  ev = act(s, G.A_NOBUY); order.push(s.turn);
+  eq(order, [(s.first + 1) % 3, (s.first + 2) % 3], '안 사면 다음 사람에게 물음 (선 → 다음 → 그다음)');
+  ev = act(s, G.A_NOBUY);
+  eq([s.phase, s.turn, s.deck.length, s.sale.hid.length, s.cap.flat().length, has(ev, 'unsold'), has(ev, 'saleEnd')], ['play', s.first, 21, 0, 0, true, true], '셋 다 안 사면 광은 안 팔리고 더미로 돌아가 본판 시작');
+  eq(total(s), G.gameCards(0), '돌려준 뒤에도 패가 그대로');
+
+  // 사면: 산 사람 먹은 패로 + 값은 광 장수 × 1점
+  s = G.create({ players: 4, seed: sd });
+  const buyer = (s.first + 1) % 3;
+  act(s, G.A_NOBUY); ev = act(s, G.A_BUY);
+  eq([sorted2(s.cap[buyer]), s.phase, s.turn, s.deck.length, has(ev, 'buy')], [sorted2(off.cards), 'play', s.first, 21 - off.cards.length, true], '사면 광이 산 사람 먹은 패로, 나머지 패는 더미 아래로');
+  eq(s.sale.sold, [{ seat: off.seat, buyer, cards: off.cards, price: off.cards.length }], '판 기록: 누가 누구 광을 몇 점에 샀나');
+  eq(total(s), G.gameCards(0), '산 뒤에도 패가 그대로');
+  ok(G.tally(s, buyer).g === off.cards.length, '산 광은 광 점수에 셈');
+  // 값 정산 (이기든 지든 산 사람 → 판 사람)
+  const t = G.settle(s, buyer, 'stop');
+  eq(t.sale, [{ seat: off.seat, buyer, buyerSeat: s.who[buyer], cards: off.cards, price: off.cards.length }], '정산에 광값이 남음');
+  ok(t.sale[0].seat !== t.sale[0].buyerSeat && s.bench.indexOf(t.sale[0].seat) >= 0 && s.who.indexOf(t.sale[0].buyerSeat) >= 0, '판 사람은 쉬는 사람 · 산 사람은 치는 사람');
+
+  // 5명: 쉬는 사람이 둘이라 묶음이 둘 나올 수 있음 → 하나씩 차례로
+  const s5 = findSeed(5, 0, st => st.phase === 'buy' && st.sale.offers.length === 2);
+  ok(s5 > 0, '5명: 쉬는 두 사람 모두 광이 있는 판이 나옴 (씨앗 ' + s5 + ')');
+  s = G.create({ players: 5, seed: s5 });
+  eq([s.deck.length, s.sale.hid.length, s.bench.length], [7, 14, 2], '5명: 쉬는 두 사람 14장을 쥐고 더미엔 7장');
+  ev = act(s, G.A_BUY);
+  eq([s.phase, s.sale.i, s.turn, s.sale.sold.length], ['buy', 1, s.first, 1], '첫 묶음을 사면 두 번째 묶음을 다시 선부터 물음');
+  ev = act(s, G.A_NOBUY); act(s, G.A_NOBUY); act(s, G.A_NOBUY);
+  eq([s.phase, s.deck.length + s.cap.flat().length + s.hands.flat().length + s.table.length], ['play', 48], '5명: 끝나고 나면 48장이 한 곳에 하나씩');
+  eq(total(s), G.gameCards(0), '5명: 패 보존');
+  eq(s.sale.offers[1].cards.every(c => s.deck.indexOf(c) >= 0), true, '5명: 안 팔린 광은 더미로 돌아감');
+
+  // 팔 광이 없으면 바로 본판
+  const sn = findSeed(4, 0, st => st.phase === 'play');
+  ok(sn > 0, '쉬는 사람에게 광이 없으면 바로 시작');
+  s = G.create({ players: 4, seed: sn });
+  eq([s.phase, s.deck.length, s.sale.hid.length], ['play', 21, 0], '광이 없으면 광 팔기 없이 시작 · 쉬는 패는 더미 아래로');
+  eq(total(s), G.gameCards(0), '패 보존 (광 없음)');
+
+  // 판 돌리기: 4명·5명 무작위 · AI 수천 판
+  let bad = 0, rounds = 0, offered = 0, buys = 0;
+  const kinds = {};
+  for (let seed = 1; seed <= 1200; seed++) {
+    const N = seed % 2 ? 4 : 5, bonus = [0, 2, 3][seed % 3];
+    const all = JSON.stringify(G.gameCards(bonus));
+    const rng = G.makeRng(seed * 31 + 7);
+    let st = G.create({ players: N, bonus, seed }), chain = 0;
+    for (; chain < 3; chain++) {
+      for (let guard = 0; st.phase !== 'end'; guard++) {
+        if (guard > 450) throw new Error('끝나지 않는 판');
+        const pend = st.phase === 'pickHand' || st.phase === 'pickFlip' ? st.cur.caps : [];
+        if (JSON.stringify(sorted2([...st.deck, ...st.table, ...st.hands.flat(), ...st.cap.flat(), ...pend, ...(st.sale ? st.sale.hid : [])])) !== all) bad++;
+        const L = G.legal(st);
+        const a = seed % 4 < 2 ? L[Math.floor(rng() * L.length)] : AI.choose(G.view(st, st.turn), ['easy', 'normal'][seed % 2], { rng });
+        if (!G.isLegal(st, a)) { bad++; break; }
+        G.apply(st, a, []);
+      }
+      rounds++; kinds[st.result.kind] = (kinds[st.result.kind] || 0) + 1;
+      if (st.sale) offered += st.sale.offers.length;
+      const r = st.result;
+      if (r.sale) for (const x of r.sale) { buys++; if (x.price !== x.cards.length) bad++; }
+      if (r.winner >= 0 && r.points !== r.per.reduce((x, l) => x + l.pay, 0)) bad++;
+      const prev = st;
+      st = G.nextRound(st);
+      // 다음 판: 쉬는 사람이 바뀜 · 선은 이전 판 이긴 사람(들어올 수 있으면)
+      const pl = G.tablePlan(N, prev.round);
+      if (JSON.stringify(st.who) !== JSON.stringify(pl.who) || JSON.stringify(st.bench) !== JSON.stringify(pl.bench)) bad++;
+      if (st.who.indexOf(prev.who[r.winner >= 0 ? r.winner : prev.first]) >= 0 && st.who[st.first] !== prev.who[r.winner >= 0 ? r.winner : prev.first]) bad++;
+    }
+  }
+  eq(bad, 0, '4~5명 무작위/AI ' + rounds + '판: 패 보존 · 광값 · 다음 판 자리 · 합계 맞음');
+  ok(offered > 100 && buys > 20 && buys < offered, '광이 나오고 일부는 팔림 (내놓은 묶음 ' + offered + ' · 팔린 ' + buys + ')');
+  console.log('    4~5명 결과: ' + JSON.stringify(kinds) + ' · 광 묶음 ' + offered + '개 중 ' + buys + '개 팔림');
+
+  // 결정성 + 숨은 정보: 같은 씨앗·같은 입력 → 같은 지문, view/obs 에 쉬는 사람 패가 안 샘
+  const run = () => { let st = G.create({ players: 5, seed: s5 }), r2 = G.makeRng(11); while (st.phase !== 'end') { const L = G.legal(st); G.apply(st, L[Math.floor(r2() * L.length)], []); } return st; };
+  eq(G.hash(run()), G.hash(run()), '5명: 같은 씨앗 + 같은 입력 → 같은 지문');
+  s = G.create({ players: 5, seed: s5 });
+  const w1 = G.step(s, G.A_BUY).state;
+  eq(G.hash(s) === G.hash(G.create({ players: 5, seed: s5 })), true, 'step 은 넣은 상태를 안 바꿈 (광 팔기)');
+  eq(JSON.stringify(w1.cap.flat().length), String(s.sale.offers[0].cards.length), '순수 step 으로 사도 같음');
+  let leak = 0;
+  for (const p of [0, 1, 2]) { const o = G.obs(s, p); if (o.length !== G.OBS_LEN || o.some(x => !Number.isFinite(x))) leak++; }
+  eq(leak, 0, '광 팔기 중에도 관찰은 길이·숫자 정상');
+  eq(G.actionLabel(G.A_BUY) + '/' + G.actionLabel(G.A_NOBUY), '광 사기/안 사기', '행동 이름');
+}
+
 // ── AI 끼리 ────────────────────────────────────────────
 (async () => {
   section('AI 끼리 (오류 없음 · 점수 분포 · 실력 순서, 같은 판을 자리 바꿔 두 번)');

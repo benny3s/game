@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=4">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <div class="wrap" id="home">
@@ -22,17 +22,19 @@
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabLocal" aria-pressed="false">한 기기</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
     <div id="soloBox" class="box">
       <div class="coinline" id="coinLine"></div>
       <div class="seg center" id="modeSeg"></div>
+      <p class="small center-note" id="modeNote" hidden></p>
       <div class="tiers three" id="tiers"></div>
       <div class="optrows">
         <div class="optrow"><span class="small">보너스 피</span><div class="seg" id="bonusSeg"></div></div>
         <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="speedSeg"></div></div>
-        <div class="optrow"><span class="small">일타 강사</span><div class="seg" id="coachSeg"></div></div>
+        <div class="optrow"><span class="small">AI 선생님</span><div class="seg" id="coachSeg"></div></div>
       </div>
       <ul class="howto" id="howto">
         <li>같은 달(같은 그림)끼리 짝을 맞춰 가져와요</li>
@@ -41,6 +43,18 @@
       </ul>
       <button class="btn primary big" id="startBtn">시작하기</button>
       <button class="btn ghost" id="rulesBtn">📖 규칙 자세히 보기</button>
+    </div>
+
+    <div id="localBox" class="box" hidden>
+      <p class="lede">폰·TV 하나로 2~5명이 돌려 가며 해요. 사람 차례가 되면 덮개가 나와서 앞사람의 패를 가려요.</p>
+      <div class="optrow" id="lModeRow"><span class="small">사람 수</span><div class="seg" id="lModeSeg"></div></div>
+      <div class="wseats" id="lSeats"></div>
+      <div class="optrows">
+        <div class="optrow"><span class="small">보너스 피</span><div class="seg" id="lBonusSeg"></div></div>
+        <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="lSpeedSeg"></div></div>
+      </div>
+      <p class="small center-note" id="lNote"></p>
+      <button class="btn primary big" id="localBtn">시작하기</button>
     </div>
 
     <div id="watchBox" class="box" hidden>
@@ -60,6 +74,7 @@
     <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="sub"></span></div>
     <span class="pill" id="coinPill"></span>
   </div>
+  <div class="benchbar" id="benchBar" hidden></div>
   <div class="stage" id="stage">
     <div class="zone opp" id="zOpp"></div>
     <div class="zone table" id="zTable"><span class="deckn" id="deckN"></span></div>
@@ -70,8 +85,7 @@
   </div>
   <div class="dock" id="dock">
     <button id="passBtn" class="mintbtn" hidden><span class="ic">🃏<span class="badge" id="passN">2</span></span><span>뒤집기만</span></button>
-    <button id="coachBtn" aria-pressed="true"><span class="ic">🧑‍🏫</span><span>코치 켬</span></button>
-    <button id="hintBtn"><span class="ic">💡</span><span>힌트</span></button>
+    <button id="coachBtn" aria-pressed="false"><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
     <button id="pauseBtn" hidden><span class="ic">⏸</span><span>멈춤</span></button>
     <button id="speedBtn"><span class="ic">🐢</span><span>보통</span></button>
     <button id="ruleBtn"><span class="ic">📖</span><span>규칙</span></button>
@@ -89,9 +103,11 @@
 <script src="../common/arena-mock.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
-<script src="core.js?v=4"></script>
-<script src="ai.js?v=4"></script>
+<script src="../common/coach.js?v=1"></script>
+<script src="../common/hotseat.js?v=1"></script>
+<script src="core.js?v=5"></script>
+<script src="ai.js?v=5"></script>
 <script src="cards.js?v=4"></script>
-<script src="main.js?v=4"></script>
+<script src="main.js?v=5"></script>
 </body>
 </html>

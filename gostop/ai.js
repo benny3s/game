@@ -8,7 +8,7 @@
   'use strict';
   const G = typeof module !== 'undefined' && module.exports ? require('./core.js') : root.Gostop;
   const { KIND, PIV, RIB, BIRD, KOOK, RAIN, GW, YE, TI, PI, R_HONG, R_CHEONG, R_CHO } = G;
-  const A = { PLAY: G.A_PLAY, SHAKE: G.A_SHAKE, BOMB: G.A_BOMB, PASS: G.A_PASS, PICK: G.A_PICK, GO: G.A_GO, STOP: G.A_STOP, KY: G.A_KOOK_Y, KP: G.A_KOOK_P };
+  const A = { PLAY: G.A_PLAY, SHAKE: G.A_SHAKE, BOMB: G.A_BOMB, PASS: G.A_PASS, PICK: G.A_PICK, GO: G.A_GO, STOP: G.A_STOP, KY: G.A_KOOK_Y, KP: G.A_KOOK_P, BUY: G.A_BUY, NOBUY: G.A_NOBUY };
   const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
   const monthOf = G.monthOf;
   const SETS = { godori: [4, 12, 29], hong: [1, 5, 9], cheong: [21, 33, 37], cho: [13, 17, 25] };
@@ -353,10 +353,22 @@
     return best;
   }
 
+  // ── 광 팔기: 쉬는 사람이 내놓은 광을 살지 (값은 한 장 1점) ─────────────
+  // 🐣 반반 · 🐱🐯 내 손과 합쳐 광이 세 장이 되거나, 두 장 이상 한꺼번에 나오면 삼
+  function buyChoice(v, tier, rng) {
+    const p = v.turn, o = v.sale.offers[v.sale.i], k = o.cards.length;
+    if (tier === 'easy') return rng() < 0.5 ? A.BUY : A.NOBUY;
+    let have = 0;
+    for (const c of v.hands[p]) if (c >= 0 && KIND[c] === GW) have++;
+    for (const c of v.cap[p]) if (KIND[c] === GW) have++;
+    return have + k >= 3 || k >= 2 ? A.BUY : A.NOBUY;
+  }
+
   const TIERS = { easy, normal, hard };
   function choose(v, tier, opts) {
     opts = opts || {};
     const rng = opts.rng || G.makeRng((opts.seed >>> 0) || 12345);
+    if (v.phase === 'buy') return buyChoice(v, tier, rng);
     const f = TIERS[tier] || normal;
     return f(v, rng, opts);
   }
@@ -364,6 +376,7 @@
   // 힌트: 보통 AI 가 고른 수 + 짧은 까닭
   function hint(v, opts) {
     const rng = (opts && opts.rng) || G.makeRng(777);
+    if (v.phase === 'buy') { const b = buyChoice(v, 'normal', rng); return { action: b, why: b === A.BUY ? '광이 모이면 광 점수에 가까워져요' : '값을 치를 만큼은 아니에요', card: -1 }; }
     const a = normal(v, rng);
     let why = '';
     if (v.phase === 'play') {
