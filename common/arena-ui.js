@@ -117,7 +117,7 @@
       el.innerHTML = rows.length ? rows.map(r => {
         const full = r.n >= r.max, busy = r.ph === "play";
         const state = r.empty ? "빈 방" : busy ? "게임 중" : full ? "꽉 참" : "기다리는 중";
-        const btn = r.empty ? `<button class="arn-btn" data-del="${esc(r.code)}">지우기</button>` : `<button class="arn-btn" data-code="${esc(r.code)}" ${full || busy ? "disabled" : ""}>들어가기</button>`;
+        const btn = r.empty ? `<button class="arn-btn" data-del="${esc(r.code)}">지우기</button>` : `<button class="arn-btn" data-code="${esc(r.code)}" ${full ? "disabled" : ""}>${busy ? "구경하기" : "들어가기"}</button>`;   // 게임 중인 방도 들어가면 게임이 구경·다음 판으로 받음
         return `<div class="arn-room"><div class="who"><b>${esc(r.h || "?")}의 방</b><span>${esc(state)} · ${r.n}/${r.max}명${r.m ? " · " + esc(r.m) : ""}</span></div>${btn}</div>`;
       }).join("") : `<p class="arn-soft">${canHost ? "아직 열린 방이 없어요. 방을 만들고 친구에게 초대 링크를 보내 보세요." : "지금 열린 방이 없어요. 초대 링크나 방 코드를 받으면 들어갈 수 있어요."}</p>`;
     };
