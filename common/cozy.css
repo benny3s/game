@@ -291,3 +291,5 @@ body.playing .wrap{display:none}
 
 /* 아이폰: 두 번 톡 · 입력칸 눌렀을 때 화면 확대 막기 (게임 공통) */
 html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body,body *{touch-action:manipulation}   /* 아이폰은 html 에만 두면 안 따름. 게임 판처럼 따로 정한 곳(.play 등)은 그 값이 이김 */
+@supports (-webkit-touch-callout:none){input,select,textarea{font-size:max(16px,1em)!important}}   /* 아이폰: 16px 아래 입력칸은 누르면 확대됨 */

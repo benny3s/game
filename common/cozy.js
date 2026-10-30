@@ -18,7 +18,12 @@
     }
   } catch (e) {}
   // 아이폰 사파리: 두 손가락 확대 막기 (user-scalable=no 를 사파리가 무시해서). 두 번 톡 확대는 cozy.css touch-action
-  try { for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, e => e.preventDefault(), { passive: false }); } catch (e) {}
+  // 아이폰은 touch-action:none 을 안 따라서, 두 손가락(배구 양손 조작 등)이 벌어지면 확대됨 → 손가락 둘 이상 움직임은 막음
+  try {
+    for (const ev of ["gesturestart", "gesturechange", "gestureend"]) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+    document.addEventListener("touchmove", e => { if (e.touches.length > 1 || (e.scale && e.scale !== 1)) e.preventDefault(); }, { passive: false });
+    document.addEventListener("dblclick", e => e.preventDefault(), { passive: false });
+  } catch (e) {}
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const store = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
