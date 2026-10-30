@@ -799,7 +799,7 @@
     else if (s.turn === me) sub = s.phase === 'goStop' ? '고? 스톱?' : s.phase === 'kook' ? '국진을 어디에?' : s.phase.startsWith('pick') ? '가져올 패를 골라요' : '내 차례 · 패를 골라요';
     else sub = `${seatAt(ses, s.turn).name} 차례`;
     if (s.carry && G.carryMult(s) > 1) sub += ` · 나가리 ×${G.carryMult(s)}`;
-    $('sub').textContent = `${s.round}판 · ${sub}`;
+    $('sub').textContent = `${s.round}판 · ${sub}${ses.turnLeft != null && s.turn === me ? ` · ⏱${ses.turnLeft}` : ''}`;
     $('passBtn').hidden = !(s.phase === 'play' && s.turn === me && me >= 0 && s.pass[me] > 0 && ses.pending && !ses.pending.isResult);
     const myTurn = me >= 0 && s.phase !== 'end' && s.turn === me && !!ses.pending && !ses.pending.isResult && !ses.hide && !ses.replaying;
     $('sub').classList.toggle('myturn', myTurn);
@@ -1494,9 +1494,31 @@
   }
 
   // ── 내 차례 ──────────────────────────────────────────────
+  // ⏱ 친구랑: 내 차례 30초가 지나면 중급 AI 가 대신 둠 (10초 남으면 알림)
+  const TURN_SEC = 30;
+  function turnTimer(ses) {
+    clearInterval(ses.turnT); ses.turnLeft = null;
+    if (!ses.cfg.online || ses.replaying) return;
+    const end = Date.now() + TURN_SEC * 1000;
+    ses.turnLeft = TURN_SEC;
+    ses.turnT = setInterval(() => {
+      if (!ses.alive || !ses.pending || ses.pending.isResult) { clearInterval(ses.turnT); ses.turnLeft = null; return; }
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      if (left !== ses.turnLeft) { ses.turnLeft = left; if (left === 10) { C.toast('⏱ 10초 남았어요', 1500); C.vibrate(30); } drawHud(ses); }
+      if (left <= 0) {
+        clearInterval(ses.turnT); ses.turnLeft = null;
+        for (const close of ses.modals.splice(0)) { try { close(); } catch (e) {} }
+        $('goBox').hidden = true;
+        C.toast('⏱ 30초가 지나서 AI 가 대신 냈어요', 2000);
+        const a = AI.choose(G.view(ses.S, ses.S.turn), 'normal', { seed: rand32() });
+        finishHuman(ses, a);
+      }
+    }, 250);
+  }
   function humanTurn(ses) {
     return new Promise((resolve, reject) => {
       ses.pending = { resolve, reject };
+      turnTimer(ses);
       const s = ses.S;
       if (s.phase === 'play') {
         // 손의 패를 누르면 고르기, 한 번 더 누르면 내기
@@ -1513,6 +1535,7 @@
   }
   function finishHuman(ses, a) {
     const p = ses.pending; if (!p) return;
+    clearInterval(ses.turnT); ses.turnLeft = null;
     ses.pending = null; ses.sel = -1;
     markHand(ses);
     $('passBtn').hidden = true;
