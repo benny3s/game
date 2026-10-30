@@ -6,8 +6,13 @@
     "desc": "진한 초록 화투 담요 위에서 즐기는 정통 맞고·3인 고스톱. 🧑‍🏫 AI 일타 강사가 매 수의 기댓값(EV) 신호등(👑최선·🟢·🟡·🔴), 고/스톱 수학적 손익분기점, 판 종료 후 복기 노트와 [결정적 장면 다시 쳐보기]까지 과외해 드립니다.",
     "emoji": "🎴",
     "category": "board",
-    "players": "1~3명",
-    "modes": ["혼자 vs AI", "🧑‍🏫 AI 일타 강사", "친구랑 온라인", "AI 구경"],
+    "players": "1~5명",
+    "modes": [
+      "혼자 vs AI",
+      "🧑‍🏫 AI 일타 강사",
+      "친구랑 온라인",
+      "AI 구경"
+    ],
     "aiTech": "기댓값(EV) 코칭 + 상대 손패 베이즈 추정 AI",
     "accent": "#16a34a",
     "featured": true,
@@ -27,8 +32,13 @@
     "desc": "화투 20장으로 승부하는 짜릿한 정통 2장 섯다! 상대 오픈패 1장을 바탕으로 남은 17장 조합을 전수 계산하여 실시간 승률(%)·팟오즈·천적 패 경고·콜/하프/따당 기댓값(EV)을 알려주는 🧑‍🏫 AI 일타 강사가 내장되어 있습니다.",
     "emoji": "🔥",
     "category": "board",
-    "players": "2~3명",
-    "modes": ["혼자 vs AI", "🧑‍🏫 AI 일타 강사", "친구랑 온라인", "AI 구경"],
+    "players": "1~6명",
+    "modes": [
+      "혼자 vs AI",
+      "🧑‍🏫 AI 일타 강사",
+      "친구랑 온라인",
+      "AI 구경"
+    ],
     "aiTech": "조합 전수 승률(Exact Equity) + 베이즈 레인지 코칭 AI",
     "accent": "#dc2626",
     "featured": true,
@@ -48,8 +58,13 @@
     "desc": "내 손패 2장과 커뮤니티 보드 5장으로 겨루는 마인드 스포츠의 꽃! 실시간 몬테카를로 에퀴티(승률 지분) vs 팟 오즈 비교, 플러시·양차 스트레이트 드로 아웃츠(4-2 법칙) 자동 계산, 스트리트별 복기 노트를 제공합니다.",
     "emoji": "♠️",
     "category": "board",
-    "players": "2~4명",
-    "modes": ["혼자 vs AI", "🧑‍🏫 GTO 일타 강사", "친구랑 온라인", "AI 구경"],
+    "players": "1~8명",
+    "modes": [
+      "혼자 vs AI",
+      "🧑‍🏫 GTO 일타 강사",
+      "친구랑 온라인",
+      "AI 구경"
+    ],
     "aiTech": "몬테카를로 에퀴티 + GTO 팟오즈·아웃츠 코칭 AI",
     "accent": "#059669",
     "featured": true,
@@ -69,8 +84,13 @@
     "desc": "고즈넉한 기원 분위기에서 즐기는 9·13·19줄 바둑. 실제 KataGo 신경망(정책+가치 헤드)이 브라우저에서 직접 수를 읽고 형세 판단·사석 정리·계가까지 지원합니다.",
     "emoji": "⚫",
     "category": "board",
-    "players": "1~2명",
-    "modes": ["혼자 vs AI", "친구랑 온라인", "한 화면 둘이서", "AI 구경"],
+    "players": "1~2명 (구경 16명)",
+    "modes": [
+      "혼자 vs AI",
+      "친구랑 온라인",
+      "한 화면 둘이서",
+      "AI 구경"
+    ],
     "aiTech": "KataGo 신경망 (Int8 가중치 내장)",
     "accent": "#10b981",
     "featured": true,
@@ -90,8 +110,13 @@
     "desc": "나무 바둑판 위에서 두는 정통 오목. 공개 렌주 엔진(Quintet) 기반 AI가 위협 탐색과 금수 판정을 수행하며, 무르기·힌트·친구 대전을 지원합니다.",
     "emoji": "⚪",
     "category": "board",
-    "players": "1~2명",
-    "modes": ["혼자 vs AI", "친구랑 온라인", "한 화면 둘이서", "AI 구경"],
+    "players": "1~4명 (구경 16명)",
+    "modes": [
+      "혼자 vs AI",
+      "친구랑 온라인",
+      "한 화면 둘이서",
+      "AI 구경"
+    ],
     "aiTech": "Quintet 위협 공간 탐색(Threat Search) AI",
     "accent": "#d97706",
     "featured": false,
@@ -112,7 +137,11 @@
     "emoji": "🀄",
     "category": "board",
     "players": "1~4명",
-    "modes": ["혼자 vs AI", "친구랑 온라인", "AI 구경"],
+    "modes": [
+      "혼자 vs AI",
+      "친구랑 온라인",
+      "AI 구경"
+    ],
     "aiTech": "묶음 분해 탐색 + 버림패 기억 AI",
     "accent": "#0d9488",
     "featured": true,
@@ -126,14 +155,97 @@
     "hidden": false
   },
   {
+    "id": "chess",
+    "name": "체스",
+    "subtitle": "🐣 초급 · 🐱 중급 · 🐯 고급 AI · 🧑‍🏫 AI 선생님이 포크·핀까지 짚어 줘요",
+    "desc": "호두나무 판에서 두는 정통 체스. 끌거나 눌러서 두고, 캐슬링·앙파상·승진·시계(5·10분)까지 모두 돼요. 🧑‍🏫 AI 선생님이 좋은 수를 화살표로 보여 주고 '나이트로 포크를 걸어요'처럼 까닭을 알려 주며, 방금 둔 수도 돌아봐요.",
+    "emoji": "♟️",
+    "category": "board",
+    "players": "1~2명 (구경 16명)",
+    "modes": [
+      "혼자 vs AI",
+      "한 기기 둘이서",
+      "친구랑 온라인",
+      "AI 구경"
+    ],
+    "aiTech": "자체 알파베타 엔진 (반복 심화 · 치환표 · 정지 탐색) + 수 까닭 분석 코치",
+    "accent": "#6366f1",
+    "featured": false,
+    "tags": [
+      "🧑‍🏫 AI 코치",
+      "마인드 스포츠",
+      "친구랑",
+      "휴대폰 가능"
+    ],
+    "url": "chess/",
+    "hidden": false
+  },
+  {
+    "id": "yut",
+    "name": "윷놀이",
+    "subtitle": "한지 윷판 · 원목 윷가락 · 온 가족이 TV 하나로",
+    "desc": "도·개·걸·윷·모·빽도! 모서리 지름길·업기·잡기까지 정통 규칙 그대로. TV나 태블릿 하나로 팀을 나눠 돌아가며 던지거나, 🐣🐱🐯 AI·친구와 온라인으로 겨뤄요. 🧑‍🏫 AI 선생님이 좋은 수와 까닭을 알려 줘요.",
+    "emoji": "🪵",
+    "category": "board",
+    "players": "1~8명",
+    "modes": [
+      "한 기기에서 여럿",
+      "AI와 대결",
+      "친구랑 온라인",
+      "🧑‍🏫 AI 선생님"
+    ],
+    "aiTech": "기대 던지기 수 평가 + 상대 윷 확률 내다보기 AI",
+    "accent": "#c8432f",
+    "featured": false,
+    "tags": [
+      "명절 가족게임",
+      "전통 놀이",
+      "친구랑",
+      "혼자도 가능"
+    ],
+    "url": "yut/",
+    "hidden": false
+  },
+  {
+    "id": "billiards",
+    "name": "당구",
+    "subtitle": "4구 · 3쿠션 · 포켓볼 + 🧑‍🏫 AI 선생님",
+    "desc": "원목 테이블 위에서 즐기는 진짜 같은 당구! 회전(당점)·쿠션 각까지 계산하는 물리로 4구·3쿠션·8볼을 쳐요. 🐣🐱🐯 AI와 대결, 한 기기에서 여럿, 친구랑 온라인, 다시 보기, AI 선생님 추천 샷.",
+    "emoji": "🎱",
+    "category": "board",
+    "players": "1~4명",
+    "modes": [
+      "혼자 연습",
+      "AI와 대결",
+      "한 기기에서 여럿",
+      "친구랑 온라인"
+    ],
+    "aiTech": "샷 시뮬레이터 탐색 AI (각도·힘·회전)",
+    "accent": "#1f9d5c",
+    "featured": false,
+    "tags": [
+      "🧑‍🏫 AI 코치",
+      "물리 시뮬",
+      "친구랑",
+      "4구·3쿠션"
+    ],
+    "url": "billiards/",
+    "hidden": false
+  },
+  {
     "id": "volley",
     "name": "냥냥 배구",
     "subtitle": "통통한 고양이 해변 배구 · 퍼펙트 스매시 & 다이빙",
     "desc": "피카츄 배구 감성의 60Hz 물리 해변 배구. 점프 타이밍에 맞춘 퍼펙트 스매시, 방향 조절(강타·드롭샷), 다이빙 리시브를 지원합니다.",
     "emoji": "🏐",
     "category": "action",
-    "players": "1~2명",
-    "modes": ["혼자 vs AI", "친구랑 온라인", "한 화면 둘이서", "AI 구경"],
+    "players": "1~4명",
+    "modes": [
+      "혼자 vs AI",
+      "친구랑 온라인",
+      "한 화면 둘이서",
+      "AI 구경"
+    ],
     "aiTech": "탄도 예측 + 빈자리 타격 AI (강화학습 연동)",
     "accent": "#f97316",
     "featured": true,
@@ -153,8 +265,12 @@
     "desc": "모눈종이 위에서 크레파스 선을 그어 내 땅을 넓히는 8인 실시간 땅따먹기(Paper.io 스타일). 상대 꼬리를 끊거나 통째로 가두어 아웃시킬 수 있습니다.",
     "emoji": "🖍️",
     "category": "action",
-    "players": "1~8명",
-    "modes": ["혼자 vs AI", "친구랑 온라인(최대 8인)", "AI 구경"],
+    "players": "1~12명",
+    "modes": [
+      "혼자 vs AI",
+      "친구랑 온라인(최대 8인)",
+      "AI 구경"
+    ],
     "aiTech": "영토 위험도 평가 + 꼬리 추격 AI (강화학습 연동)",
     "accent": "#ef4444",
     "featured": true,
@@ -175,7 +291,11 @@
     "emoji": "🐱",
     "category": "puzzle",
     "players": "1~4명",
-    "modes": ["혼자 풀기", "친구랑 빨리 풀기", "AI 구경"],
+    "modes": [
+      "혼자 풀기",
+      "친구랑 빨리 풀기",
+      "AI 구경"
+    ],
     "aiTech": "제약 전파(Constraint Propagation) 추론 솔버",
     "accent": "#ec4899",
     "featured": false,
@@ -195,7 +315,10 @@
     "emoji": "🐍",
     "category": "action",
     "players": "1~2명",
-    "modes": ["혼자 vs RL AI", "연구실 · 감지기 실습"],
+    "modes": [
+      "혼자 vs RL AI",
+      "연구실 · 감지기 실습"
+    ],
     "aiTech": "PPO 셀프플레이 강화학습 신경망",
     "accent": "#38bdf8",
     "featured": false,
@@ -215,7 +338,10 @@
     "emoji": "⚔️",
     "category": "action",
     "players": "1~2명",
-    "modes": ["방장 PC 연동", "친구랑 초대 대결"],
+    "modes": [
+      "방장 PC 연동",
+      "친구랑 초대 대결"
+    ],
     "aiTech": "BWAPI 실시간 브릿지",
     "accent": "#a855f7",
     "featured": false,

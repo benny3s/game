@@ -1,0 +1,758 @@
+/* 체스 — 메뉴 · 대국 흐름 · 입력 · AI 워커 · 시계 · AI 선생님 · 친구랑(방장이 판의 주인)
+   누가 어느 색을 두는지는 G.players[색] = { kind: 'human' | 'ai' | 'remote', tier, name }
+   모든 수는 act() 한 길로 들어가 ChessCore.step() → 돌아온 사건(events)으로 움직임 · 소리 · 끝 처리 */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const C = window.ChessCore, Z = window.Cozy, esc = Z.esc;
+  const sfx = (n, o) => Z.sfx.play(n, o);
+  const store = (k, d) => Z.store('chess.' + k, d), save = (k, v) => Z.save('chess.' + k, v);
+  const PIECE = code => `vendor/pieces/chessnut/${code}.svg`;
+  const CN = { w: '백', b: '흑' };
+  const other = c => (c === 'w' ? 'b' : 'w');
+  const TIERS = {
+    easy:   { em: '🐣', name: '초급', desc: '규칙을 익히는 중이에요', cls: 't-easy' },
+    normal: { em: '🐱', name: '중급', desc: '기본 전술을 알아요', cls: 't-normal' },
+    hard:   { em: '🐯', name: '고급', desc: '여러 수 앞을 읽어요', cls: 't-hard' },
+  };
+  const TIER_IDS = ['easy', 'normal', 'hard'];
+  const tierLabel = t => `${TIERS[t].em} ${TIERS[t].name}`;
+  // 창: Cozy.modal 그대로, 열린 창 닫기 함수만 기억 (메뉴로 나갈 때 깔끔히 닫으려고)
+  const modals = [];
+  function modal(o) {
+    const oc = o.onClose;
+    const close = Z.modal(Object.assign({}, o, { onClose: () => { const i = modals.indexOf(close); if (i >= 0) modals.splice(i, 1); if (oc) oc(); } }));
+    modals.push(close);
+    return close;
+  }
+  const closeModals = () => { for (const c of modals.slice().reverse()) c(); };
+
+  // ── 고른 것 · 설정 ──
+  const pref = Object.assign({ tab: 'solo', tier: 'normal', color: 'w', clock: 0, rot: 'auto', ww: 'hard', wb: 'normal', speed: 'normal' }, store('pref', {}));
+  if (pref.tab === 'friend') pref.tab = 'solo';
+  const set = Object.assign({ notation: 'ko', coords: true }, store('settings', {}));
+  const savePref = () => save('pref', pref), saveSet = () => save('settings', set);
+
+  // ── 소리 (Web Audio 합성) ──
+  Z.sfx.add('move', (t, o, S) => { const p = 0.95 + Math.random() * 0.1; S.noise(t, 0.045, { vol: 0.42, type: 'bandpass', f: 1900 * p, q: 2.2 }); S.tone(t, 230 * p, 0.06, { vol: 0.2, f2: 140 }); });
+  Z.sfx.add('capture', (t, o, S) => { S.noise(t, 0.07, { vol: 0.55, type: 'bandpass', f: 1300, q: 1.5 }); S.tone(t, 170, 0.09, { vol: 0.3, f2: 85 }); S.noise(t + 0.05, 0.05, { vol: 0.28, type: 'bandpass', f: 2700, q: 2 }); });
+  Z.sfx.add('castle', (t, o, S) => { [0, 0.1].forEach((d, i) => { S.noise(t + d, 0.045, { vol: 0.4, type: 'bandpass', f: 1800 + i * 300, q: 2.2 }); S.tone(t + d, 220 + i * 30, 0.05, { vol: 0.18, f2: 140 }); }); });
+  Z.sfx.add('check', (t, o, S) => { S.tone(t, 880, 0.09, { type: 'triangle', vol: 0.12 }); S.tone(t + 0.1, 1175, 0.15, { type: 'triangle', vol: 0.12 }); });
+  Z.sfx.add('promote', (t, o, S) => { [S.N.C5, S.N.E5, S.N.G5, S.N.C6].forEach((f, i) => S.tone(t + i * 0.06, f, 0.16, { type: 'triangle', vol: 0.11 })); });
+  Z.sfx.add('lowtime', (t, o, S) => { S.tone(t, 1480, 0.05, { type: 'square', vol: 0.05 }); S.tone(t + 0.12, 1480, 0.05, { type: 'square', vol: 0.05 }); });
+  Z.sfx.add('start', (t, o, S) => { [S.N.G4, S.N.C5, S.N.E5].forEach((f, i) => S.tone(t + i * 0.08, f, 0.16, { type: 'triangle', vol: 0.12 })); });
+  Z.sfx.add('hint', (t, o, S) => { [S.N.A5, S.N.E6].forEach((f, i) => S.tone(t + i * 0.07, f, 0.18, { vol: 0.09 })); });
+
+  // ════════ 메뉴 ════════
+  function seg(el, items, cur, on) {
+    el.innerHTML = items.map(([v, label]) => `<button class="btn" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}">${label}</button>`).join('');
+    el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); on(b.dataset.v); };
+  }
+  const stats = () => store('stats', {});
+  const recLine = t => { const r = stats()[t]; return r && (r.w || r.l || r.d) ? `${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}` : ''; };
+  let seatPick = null;
+  function drawMenu() {
+    const tabs = { solo: 'tabSolo', duo: 'tabDuo', watch: 'tabWatch' };
+    for (const t in tabs) $(tabs[t]).setAttribute('aria-pressed', String(pref.tab === t));
+    $('soloBox').hidden = pref.tab !== 'solo'; $('duoBox').hidden = pref.tab !== 'duo'; $('watchBox').hidden = pref.tab !== 'watch';
+    $('tiers').innerHTML = TIER_IDS.map(t => `<button class="tier ${TIERS[t].cls}" data-t="${t}" aria-pressed="${pref.tier === t}"><span class="em">${TIERS[t].em}</span><b>${TIERS[t].name}</b><span>${TIERS[t].desc}</span><span class="rec">${recLine(t)}</span></button>`).join('');
+    $('tiers').onclick = e => { const b = e.target.closest('.tier'); if (!b) return; sfx('tap'); pref.tier = b.dataset.t; savePref(); drawMenu(); };
+    seg($('colorSeg'), [['w', '<i class="kp w"></i>백 (먼저)'], ['b', '<i class="kp b"></i>흑'], ['r', '🎲 랜덤']], pref.color, v => { pref.color = v; savePref(); drawMenu(); });
+    seg($('clockSeg'), [[0, '없음'], [5, '⏱ 5분'], [10, '⏱ 10분']], pref.clock, v => { pref.clock = +v; savePref(); drawMenu(); });
+    $('clockRow').hidden = pref.tab === 'watch';
+    seg($('rotSeg'), [['auto', '🔄 차례마다'], ['fixed', '돌리지 않기']], pref.rot, v => { pref.rot = v; savePref(); drawMenu(); });
+    if (pref.tab === 'duo' && !seatPick && window.HotSeat) {
+      try { seatPick = HotSeat.setup($('seats'), { game: 'chess', min: 2, max: 2, allowAI: true, tiers: TIER_IDS.map(id => ({ id, emoji: TIERS[id].em, label: TIERS[id].name })) }); } catch (e) { seatPick = null; }
+    }
+    const tl = TIER_IDS.map(t => [t, tierLabel(t)]);
+    seg($('watchW'), tl, pref.ww, v => { pref.ww = v; savePref(); drawMenu(); });
+    seg($('watchB'), tl, pref.wb, v => { pref.wb = v; savePref(); drawMenu(); });
+    seg($('speedSeg'), [['slow', '🐢 느리게'], ['normal', '보통'], ['fast', '🐇 빠르게']], pref.speed, v => { pref.speed = v; savePref(); drawMenu(); });
+    $('startBtn').textContent = pref.tab === 'watch' ? '▶ 구경 시작' : pref.tab === 'duo' ? '👥 둘이서 시작!' : `${tierLabel(pref.tier)} AI와 한 판!`;
+    $('howtoList').hidden = pref.tab === 'watch';
+  }
+  const tab = t => () => { sfx('tap'); pref.tab = t; savePref(); drawMenu(); };
+  $('tabSolo').onclick = tab('solo'); $('tabDuo').onclick = tab('duo'); $('tabWatch').onclick = tab('watch');
+  $('tabFriend').onclick = () => { sfx('tap'); openFriend(); };
+  $('startBtn').onclick = () => { sfx('tap'); startFromMenu(); };
+  $('helpBtn').onclick = () => howto(true);
+  $('setBtn').onclick = openSettings;
+
+  function startFromMenu() {
+    if (pref.tab === 'watch') newGame({ mode: 'watch', ww: pref.ww, wb: pref.wb, speed: pref.speed });
+    else if (pref.tab === 'duo') {
+      const seats = seatPick ? seatPick.seats : [{ kind: 'human', name: '사람 1' }, { kind: 'human', name: '사람 2' }];
+      newGame({ mode: 'duo', seats, rot: pref.rot, clock: pref.clock });
+    } else newGame({ mode: 'ai', tier: pref.tier, color: pref.color, clock: pref.clock });
+  }
+  const HOWTO = [
+    '백이 먼저, 번갈아 한 수씩 둬요. 상대 <b>킹</b>을 피할 곳 없이 공격하면(<b>체크메이트</b>) 이겨요',
+    '기물을 <b>끌어 놓거나</b>, 한 번 눌러 고른 뒤 <b>점</b>이 찍힌 칸을 눌러요. 고리는 잡을 수 있는 기물이에요',
+    '<b>캐슬링</b>: 킹을 룩 쪽으로 두 칸 옮기면 룩이 넘어와요 · <b>앙파상</b>·<b>승진</b>도 그대로 돼요',
+    '둘 곳이 없으면(스테일메이트), 같은 국면 세 번, 50수 동안 잡기·폰 이동이 없으면 비겨요',
+    '🧑‍🏫 <b>AI 선생님</b>을 켜면 좋은 수를 화살표로 보여 주고 까닭도 알려 줘요',
+    'AI 대전에서 실수했으면 ↶ 되돌리기 (내 수와 AI 수를 함께 물러요)',
+    '👥 친구랑: 2명이 두고, 더 들어온 친구는 실시간으로 구경해요 (최대 16명)',
+  ];
+  const howto = force => Z.howto('chess', '체스 하는 법', HOWTO, { force: !!force });
+  function openSettings() {
+    sfx('tap');
+    modal({ title: '⚙ 설정', html: `<div class="setlist">
+      <div class="optrow"><span class="small">기보 글자</span><div class="seg" id="sNot"></div></div>
+      <div class="optrow"><span class="small">좌표</span><div class="seg" id="sCoord"></div></div>
+      <div class="optrow"><span class="small">소리</span><div class="seg" id="sSnd"></div></div></div>`, buttons: [{ label: '닫기', primary: true }], dismiss: true });
+    const draw = () => {
+      seg($('sNot'), [['ko', '한글 (나f3)'], ['san', '영어 (Nf3)']], set.notation, v => { set.notation = v; saveSet(); drawMoves(); draw(); });
+      seg($('sCoord'), [['1', '보이기'], ['0', '숨기기']], set.coords ? '1' : '0', v => { set.coords = v === '1'; saveSet(); board.setCoords(set.coords); draw(); });
+      seg($('sSnd'), [['1', '켬'], ['0', '끔']], Z.sfx.on ? '1' : '0', v => { Z.sfx.set(v === '1'); drawSnd(); draw(); });
+    };
+    draw();
+  }
+
+  // ════════ AI 워커 (수 두기용 · 선생님용 따로) ════════
+  let mainAI = null;
+  function loadMainAI() {
+    if (mainAI) return mainAI;
+    mainAI = new Promise((ok, bad) => { if (window.ChessAI) return ok(window.ChessAI); const sc = document.createElement('script'); sc.src = 'ai.js?v=1'; sc.onload = () => ok(window.ChessAI); sc.onerror = bad; document.head.appendChild(sc); });
+    return mainAI;
+  }
+  function makeWorker() {
+    let w = null, okW = true, seq = 0;
+    const waits = new Map();
+    const kill = () => { if (w) w.terminate(); w = null; for (const [, x] of waits) x.bad(new Error('worker')); waits.clear(); };
+    const get = () => {
+      if (w || !okW) return w;
+      try {
+        w = new Worker('ai-worker.js?v=1');
+        w.onmessage = e => { const x = waits.get(e.data.id); if (x) { waits.delete(e.data.id); x.ok(e.data.res); } };
+        w.onerror = () => kill();
+      } catch (e) { w = null; okW = false; }
+      return w;
+    };
+    function think(game, opts) {
+      const ww = get();
+      if (!ww) return loadMainAI().then(ai => new Promise(ok => setTimeout(() => ok(ai.think(game, Object.assign({}, opts, { timeMs: Math.min(600, opts.timeMs || 600) }))), 20)));
+      const id = ++seq;
+      return new Promise((ok, bad) => {
+        const t = setTimeout(() => { if (waits.has(id)) { waits.delete(id); kill(); bad(new Error('timeout')); } }, 12000);
+        waits.set(id, { ok: r => { clearTimeout(t); ok(r); }, bad: e => { clearTimeout(t); bad(e); } });
+        ww.postMessage({ id, game, opts });
+      }).catch(() => loadMainAI().then(ai => ai.think(game, Object.assign({}, opts, { timeMs: 500 }))));
+    }
+    return { think, kill };
+  }
+  const AIW = makeWorker(), COACHW = makeWorker();
+
+  // ════════ 대국 ════════
+  const board = new ChessBoardView($('board'), {
+    pieceUrl: PIECE,
+    canMove: sq => { if (!humanTurn()) return false; const p = G.s.chess.get(sq); return !!p && p.color === C.turn(G.s); },
+    legalFrom: sq => { const seen = new Set(), out = []; for (const m of C.legal(G.s, sq)) if (!seen.has(m.to)) { seen.add(m.to); out.push({ to: m.to, cap: !!m.captured }); } return out; },
+    onMove: (from, to) => humanMove(from, to),
+    onPick: () => sfx('tap'),
+  });
+  board.setCoords(set.coords);
+  let G = null, aiTimer = 0, tickT = 0, reqId = 0;
+  const show = which => {
+    $('play').hidden = which !== 'play'; document.body.classList.toggle('playing', which === 'play');
+    if (which === 'play') { requestAnimationFrame(fit); pushHist(); }
+  };
+  function fit() {
+    if ($('play').hidden) return;
+    const st = $('stage'), s = Math.floor(Math.min(st.clientWidth, st.clientHeight));
+    if (s > 60) $('board').style.setProperty('--bs', s + 'px');
+  }
+  if (window.ResizeObserver) new ResizeObserver(() => requestAnimationFrame(fit)).observe($('stage'));
+  addEventListener('resize', () => requestAnimationFrame(fit));
+
+  function newGame(cfg) {
+    stopAll();
+    const s = C.create();
+    let me = null, players;
+    const ai = t => ({ kind: 'ai', tier: t, name: `${tierLabel(t)} AI` });
+    if (cfg.mode === 'ai') {
+      me = cfg.color === 'b' ? 'b' : cfg.color === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : 'w';
+      players = { [me]: { kind: 'human', name: (window.GME && GME.me && GME.me.name) || '나' }, [other(me)]: ai(cfg.tier) };
+    } else if (cfg.mode === 'duo') {
+      const sp = (x, i) => x && x.kind === 'ai' ? ai(x.tier || 'normal') : { kind: 'human', name: (x && x.name) || `사람 ${i + 1}` };
+      players = { w: sp(cfg.seats[0], 0), b: sp(cfg.seats[1], 1) };
+    } else if (cfg.mode === 'online') {
+      me = colorOf(cfg.seats, cfg.uid);
+      players = onlinePlayers(cfg.seats, me);
+    } else players = { w: ai(cfg.ww), b: ai(cfg.wb) };
+    const base = cfg.clock ? cfg.clock * 60000 : 0;
+    G = { cfg, mode: cfg.mode, s, me, players, clock: base ? { base, w: base, b: base, at: performance.now() } : null, over: false, thinking: false, paused: false,
+      undos: 0, coachUsed: 0, round: cfg.round || 0, seats: cfg.seats || null, low: {}, t0: Date.now(), coachRes: null, coachKey: '', review: null };
+    board.clearSel(); board.setArrow(null); board.closePromo();
+    board.setFlip(cfg.mode === 'ai' || cfg.mode === 'online' ? me === 'b' : false);
+    if (cfg.mode === 'online') closeModals();
+    show('play');
+    render(null);
+    drawDock(); coachEnter();
+    tickT = setInterval(tick, 200);
+    sfx('start');
+    if (cfg.mode === 'ai') Z.toast(me === 'w' ? `${cfg.color === 'r' ? '🎲 이번엔 ' : ''}내가 백이에요. 먼저 둬요!` : `${cfg.color === 'r' ? '🎲 이번엔 ' : ''}내가 흑이에요. ${TIERS[cfg.tier].em} AI가 먼저 둬요`, 1800);
+    else if (cfg.mode === 'online' && !cfg.quiet) Z.toast(!me ? '👀 구경 중이에요. 다음 판에 빈자리가 나면 앉을 수 있어요' : me === 'w' ? '⚪ 내가 백이에요. 먼저 둬요!' : '⚫ 내가 흑이에요. 친구가 먼저 둬요', 2000);
+    if (cfg.mode !== 'watch' && cfg.mode !== 'online') howto(false);
+    const g = G;
+    setTimeout(() => { if (G === g) advance(); }, cfg.mode === 'watch' ? 500 : 300);
+  }
+  function stopAll() { clearTimeout(aiTimer); clearInterval(tickT); reqId++; if (G) G.thinking = false; }
+  function goMenu() {
+    if (ON) { const n = ON.net; endOnline(); leaving = true; try { if (window.ArenaUI && ArenaUI.net === n) ArenaUI.leave(); else n.leave(); } catch (e) {} leaving = false; }
+    stopAll(); board.closePromo(); coachHide();
+    G = null; $('viewbar').hidden = true; show('menu'); drawMenu(); closeModals();
+    popHist();
+  }
+  // 휴대폰 '뒤로' 몸짓: 페이지를 떠나지 않고 ‹ 단추처럼
+  let histOn = false;
+  function pushHist() { if (histOn) return; try { history.pushState({ chess: 1 }, ''); histOn = true; } catch (e) {} }
+  function popHist() { if (!histOn) return; histOn = false; try { history.back(); } catch (e) {} }
+  addEventListener('popstate', () => {
+    if (!histOn) return;
+    histOn = false;
+    if (!G || $('play').hidden) return;
+    if (modals.length) { modals[modals.length - 1](); pushHist(); return; }
+    pushHist(); tryLeave();
+  });
+  const needGuard = () => !!(G && !G.over && G.mode !== 'watch' && G.s.moves.length > 0 && !(G.mode === 'online' && !G.me));
+  function tryLeave() {
+    if (!needGuard()) { goMenu(); return; }
+    modal({ title: '나갈까요?', html: `<p class="sub">${G.mode === 'online' ? '나가면 이번 판은 기권으로 끝나요.' : '지금 판은 저장되지 않아요.'}</p>`, buttons: [{ label: '계속 두기', primary: true }, { label: '나가기', onClick: () => { if (G && G.mode === 'online' && G.me && !G.over) act({ resign: G.me }); goMenu(); } }], dismiss: true });
+  }
+  $('backBtn').onclick = () => { sfx('tap'); tryLeave(); };
+
+  // 지금 둘 차례가 이 화면의 사람인가
+  const humanTurn = () => {
+    if (!G || G.over || G.thinking) return false;
+    const c = C.turn(G.s), pl = G.players[c];
+    if (G.mode === 'online') return G.me === c;
+    return pl.kind === 'human';
+  };
+  async function humanMove(from, to) {
+    if (!humanTurn()) return;
+    const g = G;
+    let promo = '';
+    if (C.needsPromotion(g.s, from, to)) {
+      promo = await board.pickPromotion(to, C.turn(g.s));
+      if (G !== g || !promo) { render(null); return; }
+    }
+    if (!act(from + to + promo)) { render(null); sfx('bad'); }
+  }
+
+  // 행동 하나: 'e2e4' 같은 수 · { resign: 색 } · { timeout: 색 }. 사람·AI·친구 모두 이 길로
+  function act(a, info) {
+    info = info || {};
+    if (!G || G.over) return false;
+    const g = G, s = g.s, n0 = s.moves.length, prevKey = posKey();
+    const ev = typeof a === 'string' ? C.step(s, a) : a.resign ? C.resign(s, a.resign) : a.timeout ? C.timeout(s, a.timeout) : [{ type: 'illegal' }];
+    if (ev[0].type === 'illegal') return false;
+    if (g.mode === 'online' && ON) {                                       // 방장은 확인한 수를 모두에게, 손님은 내 수를 방장에게 (꼭 도착)
+      const ck = g.clock ? { cw: Math.round(g.clock.w), cb: Math.round(g.clock.b) } : {};
+      if (ON.host) ON.net.broadcast(typeof a === 'string' ? Object.assign({ t: 'move', u: a, n: n0, round: g.round }, ck) : Object.assign({ t: 'end', round: g.round, winner: s.winner, reason: s.reason }, ck), true);
+      else if (info.from !== 'remote') ON.net.send(typeof a === 'string' ? { t: 'move', u: a, n: n0, round: g.round } : { t: 'resign', round: g.round }, true);
+    }
+    const mv = ev.find(e => e.type === 'move');
+    board.clearSel(); board.setArrow(null);
+    if (g.coachRes && g.coachRes.key !== posKey()) board.setArrow(null);
+    render(mv || null);
+    if (mv) {
+      sfx(mv.promotion ? 'promote' : mv.castle ? 'castle' : mv.captured ? 'capture' : 'move');
+      if (mv.check) setTimeout(() => { if (G === g) sfx('check'); }, 90);
+      if (info.from !== 'remote' || g.me) Z.vibrate(mv.captured ? 14 : 7);
+      // 선생님: 방금 이 화면의 사람이 둔 수 돌아보기 (AI·친구가 둔 수는 건드리지 않음)
+      if (g.players[mv.color] && g.players[mv.color].kind === 'human')
+        g.review = g.coachRes && g.coachRes.key === prevKey ? { prev: g.coachRes, played: mv.uci, san: mv.san, game: C.toJSON(s) } : null;
+    }
+    if (s.over) finish();
+    else advance();
+    return true;
+  }
+  const posKey = () => G ? G.round + ':' + G.s.moves.join(' ') : '';
+
+  function advance() {
+    if (!G || G.over) return;
+    drawStat(); drawBars();
+    const c = C.turn(G.s), pl = G.players[c];
+    if (G.mode === 'duo' && G.cfg.rot === 'auto' && pl.kind === 'human' && (G.players.w.kind === 'human' && G.players.b.kind === 'human')) {
+      const g = G; setTimeout(() => { if (G === g && C.turn(g.s) === c) { board.setFlip(c === 'b'); drawBars(); } }, 420);
+    }
+    if (pl.kind === 'ai' && !G.thinking && !(G.mode === 'watch' && G.paused)) requestAI();
+    coachTick();
+  }
+  function requestAI() {
+    const g = G, s = g.s, c = C.turn(s), pl = g.players[c], id = ++reqId, t0 = performance.now();
+    g.thinking = true; drawStat(); drawBars();
+    const sp = g.mode === 'watch' ? g.cfg.speed : 'normal';
+    const minWait = g.mode === 'watch' ? (sp === 'fast' ? 120 : sp === 'slow' ? 1100 : 550) : pl.tier === 'easy' ? 550 + Math.random() * 350 : 350 + Math.random() * 250;
+    const opts = { tier: pl.tier, seed: (Math.random() * 1e9) | 0 };
+    if (g.mode === 'watch' && sp === 'fast' && pl.tier === 'hard') opts.timeMs = 350;
+    if (g.clock && pl.tier === 'hard') opts.timeMs = Math.max(150, Math.min(1200, g.clock[c] / 40));
+    AIW.think(C.toJSON(s), opts).then(res => {
+      if (G !== g || id !== reqId || g.over) return;
+      const run = () => {
+        if (G !== g || id !== reqId || g.over) return;
+        if (g.paused) { aiTimer = setTimeout(run, 250); return; }
+        g.thinking = false;
+        if (!res || !res.move || !act(res.move, { ai: true })) { const L = C.legal(g.s); if (L.length) act(L[0].uci, { ai: true }); }
+      };
+      aiTimer = setTimeout(run, Math.max(0, minWait - (performance.now() - t0)));
+    }).catch(() => { if (G === g && id === reqId) { g.thinking = false; const L = C.legal(g.s); if (L.length) act(L[Math.floor(L.length / 2)].uci, { ai: true }); } });
+  }
+  function cancelAI() { reqId++; clearTimeout(aiTimer); if (G) G.thinking = false; }
+
+  // ── 시계 ──
+  function tick() {
+    if (!G || G.over || !G.clock) return;
+    const now = performance.now(), dt = now - G.clock.at; G.clock.at = now;
+    if (G.paused || G.s.moves.length < 1) return;
+    if (document.hidden && G.mode !== 'online') return;               // 화면을 내리면 혼자·둘이서는 멈춤
+    const c = C.turn(G.s);
+    G.clock[c] = Math.max(0, G.clock[c] - dt);
+    if (G.clock[c] <= 10000 && !G.low[c] && (G.mode === 'duo' || G.me === c)) { G.low[c] = 1; sfx('lowtime'); }
+    if (G.clock[c] <= 0 && (G.mode !== 'online' || (ON && ON.host))) { cancelAI(); act({ timeout: c }); return; }
+    drawClocks();
+  }
+  const fmtClock = ms => { const s = Math.ceil(ms / 1000); if (ms < 10000) return `${Math.floor(ms / 1000)}.${Math.floor(ms % 1000 / 100)}`; return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  function drawClocks() {
+    if (!G) return;
+    for (const id of ['pTop', 'pBot']) {
+      const el = $(id), c = el.dataset.c, k = el.querySelector('.clk'); if (!k) continue;
+      if (!G.clock) { k.hidden = true; continue; }
+      k.hidden = false; k.textContent = fmtClock(G.clock[c]);
+      k.classList.toggle('low', G.clock[c] < 20000);
+      k.classList.toggle('run', !G.over && C.turn(G.s) === c && G.s.moves.length >= 1);
+    }
+  }
+
+  // ── 화면 그리기 ──
+  function render(mv) {
+    if (!G) return;
+    const s = G.s, chk = s.chess.inCheck() ? C.kingSquare(s, C.turn(s)) : null;
+    board.set(C.board(s), mv);
+    const showHint = G.coachRes && G.coachRes.key === posKey() && coachOpen() && !G.over;
+    board.setMarks({ last: s.last ? [s.last.from, s.last.to] : null, check: chk, hint: showHint ? [G.coachRes.from, G.coachRes.to] : null });
+    board.setArrow(showHint ? [G.coachRes.from, G.coachRes.to] : null);
+    drawBars(); drawMoves(); drawStat();
+  }
+  function nameOf(c) {
+    const pl = G.players[c];
+    if (G.mode === 'online') { const u = G.seats && G.seats[c]; return u ? nmOf(u) : '빈자리'; }
+    return pl.name;
+  }
+  function drawBars() {
+    if (!G) return;
+    const bot = board.flip ? 'b' : 'w', top = other(bot), cap = C.captured(G.s), t = C.turn(G.s);
+    for (const [id, c] of [['pTop', top], ['pBot', bot]]) {
+      const el = $(id), pl = G.players[c];
+      el.dataset.c = c;
+      const mine = (G.mode === 'ai' || G.mode === 'online') && G.me === c;
+      const caps = cap[c];
+      let ci = '', prev = '';
+      for (const x of caps) { ci += `<i class="${prev && prev !== x ? 'gap' : ''}" style="background-image:url('${PIECE(other(c) + x.toUpperCase())}')"></i>`; prev = x; }
+      const d = c === 'w' ? cap.diff : -cap.diff;
+      el.innerHTML = `<span class="pk" style="background-image:url('${PIECE(c + 'K')}')"></span>
+        <span class="pn"><b class="nm">${esc(nameOf(c))}${mine && nameOf(c) !== '나' ? '<span class="tag">나</span>' : ''}<small>${CN[c]}</small></b><span class="caps">${ci}${d > 0 ? `<span class="diff">+${d}</span>` : ''}</span></span>
+        <span class="clk" hidden></span>`;
+      el.classList.toggle('turn', !G.over && t === c);
+      el.classList.toggle('think', !!(G.thinking && t === c && pl.kind === 'ai'));
+    }
+    drawClocks();
+  }
+  function drawMoves() {
+    if (!G) return;
+    const el = $('moves'), h = G.s.hist, lab = san => set.notation === 'ko' ? C.sanKo(san) : san;
+    const fullStart = +(G.s.start.split(' ')[5] || 1), blackFirst = G.s.start.split(' ')[1] === 'b';
+    let html = '';
+    h.forEach((m, i) => {
+      const k = i + (blackFirst ? 1 : 0);
+      if (k % 2 === 0) html += `<span class="no">${fullStart + k / 2}.</span>`;
+      else if (i === 0) html += `<span class="no">${fullStart}…</span>`;
+      html += `<span class="m${i === h.length - 1 ? ' cur' : ''}" title="${esc(C.describe(m))}">${esc(lab(m.san))}</span>`;
+    });
+    el.innerHTML = html;
+    el.scrollLeft = el.scrollWidth; el.scrollTop = el.scrollHeight;
+    $('movePill').textContent = `${Math.floor(G.s.moves.length / 2) + 1}수`;
+  }
+  function drawStat() {
+    if (!G) return;
+    const s = G.s, c = C.turn(s), pl = G.players[c];
+    const lbl = G.mode === 'ai' ? `${tierLabel(G.cfg.tier)} AI와 대국` : G.mode === 'duo' ? '👥 둘이서' : G.mode === 'online' ? '👥 친구랑' : `👀 ${tierLabel(G.cfg.ww)} vs ${tierLabel(G.cfg.wb)}`;
+    $('lbl').textContent = lbl;
+    const st = $('stat');
+    st.classList.remove('thinking');
+    if (s.over) { st.textContent = resultLine(); return; }
+    const chk = s.chess.inCheck() ? ' · 체크!' : '';
+    if (G.thinking && pl.kind === 'ai') { st.textContent = `${CN[c]} AI가 생각 중`; st.classList.add('thinking'); return; }
+    if (G.mode === 'ai') st.textContent = (c === G.me ? '내 차례' : '상대 차례') + chk;
+    else if (G.mode === 'online') st.textContent = (G.me ? (c === G.me ? '내 차례' : '친구 차례') : `${CN[c]} 차례`) + chk;
+    else st.textContent = `${CN[c]} 차례${G.mode === 'duo' && pl.kind === 'human' ? ` · ${pl.name}` : ''}${chk}`;
+  }
+  function resultLine() {
+    const s = G.s;
+    return s.winner ? `${CN[s.winner]} 승 · ${C.REASON[s.reason] || ''}` : `무승부 · ${C.REASON[s.reason] || ''}`;
+  }
+  function drawDock() {
+    const m = G ? G.mode : '';
+    $('undoBtn').hidden = !(m === 'ai' || m === 'duo');
+    $('resignBtn').hidden = !(m === 'ai' || m === 'duo' || (m === 'online' && G.me));
+    $('pauseBtn').hidden = m !== 'watch'; $('speedBtn').hidden = m !== 'watch'; $('againBtn').hidden = m !== 'watch';
+    if (m === 'watch') drawWatchDock();
+  }
+  function drawWatchDock() {
+    if (!G) return;
+    $('pauseBtn').setAttribute('aria-pressed', String(G.paused));
+    $('pauseBtn').innerHTML = G.paused ? '<span class="ic">▶</span><span>계속</span>' : '<span class="ic">⏸</span><span>멈춤</span>';
+    const sp = G.cfg.speed;
+    $('speedBtn').innerHTML = `<span class="ic">${sp === 'fast' ? '🐇' : sp === 'slow' ? '🐢' : '🚶'}</span><span>${sp === 'fast' ? '빠르게' : sp === 'slow' ? '느리게' : '보통'}</span>`;
+  }
+  Z.sfx.button($('sndBtn'));
+  const drawSnd = () => { const b = $('sndBtn'); b.querySelector('.ic').textContent = Z.sfx.on ? '🔊' : '🔇'; b.querySelector('.ic + span').textContent = Z.sfx.on ? '소리 켬' : '소리 끔'; };
+
+  $('flipBtn').onclick = () => { if (!G) return; sfx('flip'); board.setFlip(!board.flip); drawBars(); };
+  $('undoBtn').onclick = () => {
+    if (!G || !(G.mode === 'ai' || G.mode === 'duo') || !G.s.moves.length) { sfx('bad'); return; }
+    cancelAI(); board.closePromo();
+    const s = G.s, humanColor = c => G.players[c].kind === 'human';
+    let n = 0;
+    do { C.undo(s, 1); n++; } while (s.moves.length && !humanColor(C.turn(s)));
+    G.over = false; G.undos++; G.review = null; G.coachRes = null;
+    sfx('flip'); render(null); drawDock();
+    if (!tickT) tickT = setInterval(tick, 200);
+    if (G.clock) G.clock.at = performance.now();
+    advance();
+  };
+  $('resignBtn').onclick = () => {
+    if (!G || G.over) return;
+    const who = G.mode === 'duo' ? C.turn(G.s) : G.me;
+    if (!who) return;
+    sfx('tap');
+    modal({ title: '🏳️ 기권할까요?', html: `<p class="sub">${G.mode === 'duo' ? `${CN[who]}(${esc(G.players[who].name)})이 기권해요` : '이번 판은 지는 걸로 끝나요'}</p>`, buttons: [{ label: '계속 두기', primary: true }, { label: '기권', onClick: () => { if (G && !G.over) { cancelAI(); act({ resign: who }); } } }], dismiss: true });
+  };
+  $('pauseBtn').onclick = () => { if (!G) return; G.paused = !G.paused; sfx('tap'); drawWatchDock(); if (!G.paused) advance(); };
+  $('speedBtn').onclick = () => { if (!G) return; const o = ['slow', 'normal', 'fast']; G.cfg.speed = o[(o.indexOf(G.cfg.speed) + 1) % 3]; pref.speed = G.cfg.speed; savePref(); sfx('tap'); drawWatchDock(); };
+  $('againBtn').onclick = () => { if (G) { sfx('tap'); newGame(G.cfg); } };
+
+  // ── 끝 ──
+  function finish() {
+    const g = G; g.over = true; cancelAI(); clearInterval(tickT); tickT = 0; board.closePromo(); board.setArrow(null);
+    const s = g.s, w = s.winner;
+    let res = 'd';
+    if (g.mode === 'ai') { res = !w ? 'd' : w === g.me ? 'w' : 'l'; const st = stats(), r = st[g.cfg.tier] || { w: 0, l: 0, d: 0 }; r[res]++; st[g.cfg.tier] = r; save('stats', st); }
+    render(null);
+    const humanWon = g.mode === 'ai' ? res === 'w' : g.mode === 'online' ? !!g.me && w === g.me : g.mode === 'duo' ? !!w && g.players[w].kind === 'human' : false;
+    setTimeout(() => {
+      if (G !== g) return;
+      if (humanWon) { sfx('win'); Z.confetti(); } else if (w && (g.mode === 'ai' || (g.mode === 'online' && g.me))) sfx('lose'); else sfx('count');
+    }, 250);
+    coachTick();
+    setTimeout(() => { if (G === g) showResult(); }, s.reason === 'checkmate' ? 1100 : 600);
+  }
+  const fmtT = ms => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}분 ${s % 60}초`; };
+  function showResult() {
+    const g = G, s = g.s, w = s.winner, n = Math.ceil(s.moves.length / 2), why = C.REASON[s.reason] || '';
+    let title, body = '';
+    const pieceImg = c => `<div class="winp" style="background-image:url('${PIECE(c + 'K')}')"></div>`;
+    if (g.mode === 'ai') {
+      const T = TIERS[g.cfg.tier], r = stats()[g.cfg.tier] || { w: 0, l: 0, d: 0 };
+      const rec = `<p class="why">${T.em} ${T.name} 전적 ${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}</p>`;
+      if (w === g.me) {
+        const stars = 1 + (g.undos ? 0 : 1) + (g.coachUsed ? 0 : 1);
+        title = '🎉 이겼어요!';
+        body = `<div class="stars">${[0, 1, 2].map(j => `<span class="${j < stars ? 'on' : ''}" style="animation-delay:${0.15 + j * 0.25}s">⭐</span>`).join('')}</div>
+          <p class="bigline">${T.em} ${T.name} AI를 이겼어요 · ${why}</p><p class="sub">${n}수 · ${fmtT(Date.now() - g.t0)}</p>
+          <p class="why">${g.undos ? `되돌리기 ${g.undos}번` : '되돌리기 0 ✓'} · ${g.coachUsed ? '선생님 도움 받음' : '선생님 없이 ✓'}</p>${rec}`;
+      } else if (w) {
+        title = '😿 아쉽게 졌어요';
+        body = `<p class="bigline">${T.em} ${T.name} AI가 이겼어요 · ${why}</p><p class="sub">${n}수 · ${fmtT(Date.now() - g.t0)}</p>
+          <p class="why">${s.reason === 'checkmate' ? '킹 둘레를 비워 두지 말고, 상대의 체크를 미리 살펴봐요. 🧑‍🏫 AI 선생님을 켜면 도움이 돼요' : '다음 판은 끝까지 버텨 봐요!'}</p>${rec}`;
+      } else { title = '🤝 비겼어요'; body = `<p class="bigline">${why}</p><p class="sub">${n}수</p>${rec}`; }
+    } else {
+      const nm = c => esc(nameOf(c));
+      if (g.mode === 'online' && g.me) title = !w ? '🤝 비겼어요' : w === g.me ? '🎉 이겼어요!' : '😿 아쉽게 졌어요';
+      else title = w ? `${CN[w]} 승리!` : '🤝 비겼어요';
+      body = (w ? pieceImg(w) + `<p class="bigline">${nm(w)}</p>` : '') + `<p class="sub">${why} · ${n}수</p>` +
+        (g.mode === 'online' && !g.me ? `<p class="why">👀 구경 중 · ${ON && ON.host ? '' : '방장이 다음 판을 시작하면 이어서 봐요'}</p>` : '');
+    }
+    const spec = g.mode === 'online' && !g.me;
+    const btns = [
+      spec ? { label: '계속 구경', primary: true } : { label: g.mode === 'watch' ? '한 판 더' : '다시 하기', primary: true, onClick: () => again() },
+      { label: '기보 복사', onClick: () => { copyPgn(); return false; } },
+      { label: '메뉴', ghost: true, onClick: () => goMenu() },
+    ];
+    if (g.mode === 'online' && ON && ON.host && window.ArenaUI) btns.splice(2, 0, { label: '대기실', onClick: () => ArenaUI.toLobby() });
+    modal({ title, html: body, buttons: btns });
+  }
+  function copyPgn() {
+    if (!G) return;
+    const tags = { White: nameOf('w'), Black: nameOf('b') };
+    const txt = C.pgn(G.s, tags);
+    const done = () => Z.toast('기보(PGN)를 복사했어요');
+    try { navigator.clipboard.writeText(txt).then(done, () => Z.toast('복사하지 못했어요')); } catch (e) { Z.toast('복사하지 못했어요'); }
+  }
+  function again() {
+    if (!G) return;
+    if (G.mode === 'online') {
+      if (!ON) { goMenu(); return; }
+      if (ON.host) hostAgain();
+      else if (G.me) { ON.net.send({ t: 'again' }, true); Z.toast('방장에게 한 판 더 하자고 했어요', 1600); }
+      return;
+    }
+    const cfg = G.cfg;
+    if (cfg.mode === 'ai' && cfg.color !== 'r') cfg.color = G.me;   // 같은 색으로 다시
+    newGame(cfg);
+  }
+
+  // ════════ AI 선생님 (공용 창 CoachPanel + 아래 줄 단추 하나) ════════
+  // 혼자·둘이서는 늘, 친구랑은 방장이 대기실에서 켰을 때만 (cfg.coach). 창이 열려 있을 때만 수를 읽음
+  let coachBox = null;
+  function coachSetup() {
+    if (coachBox || !window.CoachPanel) return;
+    try {
+      coachBox = CoachPanel.create({ game: 'chess', title: 'AI 선생님', startHidden: true });
+      CoachPanel.button($('coachBtn'), coachBox, { onToggle: on => { if (on) sfx('hint'); } });
+      coachBox.onChange(() => { requestAnimationFrame(coachPlace); if (G) { if (coachOpen()) coachTick(); render(null); } });
+      addEventListener('resize', () => requestAnimationFrame(coachPlace));
+    } catch (e) { coachBox = null; }
+  }
+  // 기본 자리: 세로 화면은 아래 단추 줄 위, 가로 화면은 내 이름 줄 위(기보 칸) — 판과 내 줄을 가리지 않게. 사용자가 옮긴 자리는 그대로
+  function coachPlace() {
+    if (!coachBox || $('play').hidden) return;
+    let st = null; try { st = JSON.parse(localStorage.getItem('game.coach.chess') || 'null'); } catch (e) {}
+    const land = matchMedia('(orientation:landscape) and (min-width:600px)').matches;
+    const r = (land ? $('pBot') : $('dock')).getBoundingClientRect(); if (!r.height) return;
+    const off = Math.max(8, Math.round(innerHeight - r.top + 8)) + 'px';
+    if (!(st && st.p)) { coachBox.el.style.bottom = off; coachBox.el.style.top = 'auto'; }
+    if (!(st && st.c)) { coachBox.chip.style.bottom = off; coachBox.chip.style.top = 'auto'; }
+  }
+  const coachAvail = () => !!(G && G.mode !== 'watch' && (G.mode !== 'online' || (ON && ON.coach)));
+  const coachOpen = () => !!(coachBox && coachBox.visible && !coachBox.collapsed && coachAvail());
+  function coachEnter() {
+    coachSetup();
+    const ok = coachAvail();
+    $('coachBtn').hidden = !ok;
+    if (!coachBox) return;
+    if (ok && !CoachPanel.isOff('chess')) { coachBox.show(); coachBox.set(''); } else coachBox.hide();
+  }
+  function coachHide() { if (coachBox) coachBox.hide(); }
+  const pawnFmt = sc => (sc >= 0 ? '+' : '−') + (Math.abs(sc) / 100).toFixed(1);
+  function evalLine(res, c) {
+    if (res.mate) { const win = res.mate > 0 ? c : other(c); return `${CN[win]}이 ${Math.abs(res.mate)}수 안에 메이트할 수 있어요`; }
+    const w = c === 'w' ? res.score : -res.score;
+    if (Math.abs(w) < 35) return '형세: 비슷해요';
+    return `형세: ${w > 0 ? '백' : '흑'} ${pawnFmt(Math.abs(w))} ${Math.abs(w) >= 300 ? '(크게 유리)' : Math.abs(w) >= 120 ? '(유리)' : '(조금 유리)'}`;
+  }
+  const lab = san => (set.notation === 'ko' ? C.sanKo(san) : san);
+  function coachTick() {
+    if (!G || !coachOpen()) return;
+    const g = G, s = g.s, key = posKey(), c = C.turn(s);
+    if (s.over) { coachBox.set(`이번 판은 끝났어요 · ${esc(resultLine())}`); return; }
+    const spec = g.mode === 'online' && !g.me;
+    const mine = humanTurn() || (g.mode === 'duo' && g.players[c].kind === 'human') || spec;
+    const revHtml = reviewHtml();
+    if (g.review && g.review.score == null && !g.review.busy) reviewMove();
+    if (!mine) {
+      coachBox.set(revHtml + (g.mode === 'online' ? '친구 차례예요 · 친구가 두면 다시 알려 드릴게요' : 'AI가 생각하는 중이에요 · 내 차례가 되면 알려 드릴게요'));
+      return;
+    }
+    if (g.coachRes && g.coachRes.key === key) { coachShow(); return; }
+    if (g.coachBusy === key) return;
+    g.coachBusy = key;
+    coachBox.set(revHtml + '💡 좋은 수를 찾는 중…');
+    COACHW.think(C.toJSON(s), { tier: 'hard', hint: true, explain: true, timeMs: 800, seed: 7 }).then(res => {
+      if (G !== g) return;
+      if (g.coachBusy === key) g.coachBusy = null;
+      if (posKey() !== key || !res || !res.move) return;
+      const san = C.sanLine(s, res.pv, 4);
+      g.coachRes = { key, move: res.move, from: res.move.slice(0, 2), to: res.move.slice(2, 4), san: san[0] || res.move, line: san, score: res.score, mate: res.mate, why: res.why, c };
+      g.coachUsed++;
+      if (coachOpen()) { coachShow(); sfx('hint'); }
+    }).catch(() => { if (G === g && g.coachBusy === key) g.coachBusy = null; });
+  }
+  function coachShow() {
+    const g = G, r = g.coachRes; if (!r || !coachBox) return;
+    const spec = g.mode === 'online' && !g.me;
+    const who = spec || g.mode === 'duo' ? `${CN[r.c]} 차례라면 ` : '';
+    const line = r.line.length > 1 ? `예상 수순: ${r.line.map(lab).join(' ')} · ` : '';
+    coachBox.set(`${reviewHtml()}<div class="ch-mv">💡 ${who}<b>${esc(lab(r.san))}</b> ${r.why ? esc(r.why.text) : ''}</div>
+      <div class="ch-sub">${esc(line)}${esc(evalLine(r, r.c))}${spec ? ' · 👀 구경 중' : ''}</div>`);
+    render(null);
+  }
+  // 방금 둔 사람 수 돌아보기: 선생님이 본 최선과 견줘 봄 (새 국면을 짧게 읽음)
+  function reviewMove() {
+    const g = G, rv = g.review; if (!rv || rv.busy) return;
+    rv.busy = true;
+    if (rv.played === rv.prev.move) { rv.score = rv.prev.score; rv.loss = 0; coachTick(); return; }
+    COACHW.think(rv.game, { tier: 'hard', hint: true, timeMs: 350, seed: 3 }).then(res => {
+      if (G !== g || g.review !== rv || !res || !res.move) return;
+      rv.score = -res.score; rv.loss = rv.prev.mate > 0 && !(res.mate < 0) ? 999 : Math.max(0, rv.prev.score - rv.score);
+      if (Math.abs(rv.prev.score) > 20000 && Math.abs(rv.score) > 20000) rv.loss = 0;
+      coachTick();
+    }).catch(() => {});
+  }
+  function reviewHtml() {
+    const rv = G && G.review; if (!rv || rv.score == null) return '';
+    const p = rv.prev;
+    if (rv.played === p.move) return `<div class="ch-rev">👍 방금 <b>${esc(lab(rv.san))}</b>, 선생님 추천과 같은 수예요!</div>`;
+    if (rv.loss <= 45) return `<div class="ch-rev">👍 방금 <b>${esc(lab(rv.san))}</b>, 좋은 수예요</div>`;
+    if (rv.loss <= 140) return `<div class="ch-rev">🙂 방금 <b>${esc(lab(rv.san))}</b>도 괜찮아요. <b>${esc(lab(p.san))}</b>가 조금 더 좋았어요</div>`;
+    return `<div class="ch-rev bad">😮 방금 <b>${esc(lab(rv.san))}</b>는 아쉬워요${rv.loss < 900 ? ` (${pawnFmt(-rv.loss)})` : ''}. <b>${esc(lab(p.san))}</b>${p.why ? ` — ${esc(p.why.text)}` : '가 더 좋았어요'}</div>`;
+  }
+
+  // ════════ 친구랑: 방 최대 16명 — 2명이 두고 나머지는 실시간 구경 ════════
+  // 방장이 판의 주인: 손님 수는 방장에게 보내고, 방장이 확인해 모두에게 (수 번호 n 으로 순서 맞춤). 늦게 온 사람은 'hello' → 방장이 판 전체(sync)
+  let ON = null, leaving = false;
+  const nmOf = u => (ON && ON.names[u]) || '친구';
+  function noteNames(p) { if (!ON) return; for (const u in p || {}) if (p[u] && p[u].name) ON.names[u] = p[u].name; }
+  const colorOf = (seats, uid) => !seats || !uid ? null : seats.w === uid ? 'w' : seats.b === uid ? 'b' : null;
+  function order(players, hostUid) {
+    const pl = players || {};
+    return Object.keys(pl).filter(u => !(pl[u] && pl[u].watch)).sort((a, b) => (b === hostUid) - (a === hostUid) || ((pl[a] && pl[a].t) || 0) - ((pl[b] && pl[b].t) || 0));
+  }
+  function firstSeats(players, hostUid, hostColor) {
+    const o = order(players, hostUid), mate = o.find(u => u !== hostUid) || '';
+    const hc = hostColor === 'b' ? 'b' : hostColor === 'r' ? (Math.random() < 0.5 ? 'w' : 'b') : 'w';
+    return hc === 'w' ? { w: hostUid, b: mate } : { w: mate, b: hostUid };
+  }
+  function onlinePlayers(seats, me) { return { w: { kind: me === 'w' ? 'human' : 'remote', name: '' }, b: { kind: me === 'b' ? 'human' : 'remote', name: '' } }; }
+  const cfgLabel = c => `방장 ${c && c.hostColor === 'b' ? '흑' : c && c.hostColor === 'r' ? '랜덤' : '백'}${c && c.clock ? ` · ⏱ ${c.clock}분` : ''}${c && c.coach ? ' · AI 선생님' : ''}`;
+  function friendOpts() {
+    return {
+      game: 'chess', title: '체스', max: 16, min: 2, coach: true,
+      describe: n => n < 2 ? '친구가 한 명 더 들어오면 시작할 수 있어요' : n === 2 ? '2명이면 1:1 대국' : `${n}명이면 2명이 두고 ${n - 2}명은 구경해요 (다음 판엔 이긴 사람·구경꾼 순서로)`,
+      settings: {
+        defaults: { hostColor: 'w', clock: 0 },
+        label: cfgLabel,
+        render(el, c, canEdit, update) {
+          if (!canEdit) { el.innerHTML = `<p class="arn-soft" style="text-align:center">${esc(cfgLabel(c))}</p>`; return; }
+          el.innerHTML = `<div style="display:grid;gap:8px;margin-top:4px">
+            <div class="optrow"><span class="small">방장 색</span><div class="seg" id="fColSeg"></div></div>
+            <div class="optrow"><span class="small">시계</span><div class="seg" id="fClkSeg"></div></div>
+            <p class="arn-soft" style="text-align:center">먼저 온 2명이 두고 나머지는 구경해요</p></div>`;
+          seg(el.querySelector('#fColSeg'), [['w', '⚪ 백'], ['b', '⚫ 흑'], ['r', '🎲 랜덤']], (c && c.hostColor) || 'w', v => update({ hostColor: v }));
+          seg(el.querySelector('#fClkSeg'), [[0, '없음'], [5, '5분'], [10, '10분']], (c && c.clock) || 0, v => update({ clock: +v }));
+        },
+      },
+      onStart: ctx => startOnline(ctx),
+      onLobby: () => leaveOnlineGame(),
+      onLeave: () => { if (leaving) return; endOnline(); if (G && G.mode === 'online') goMenu(); },
+    };
+  }
+  function openFriend() { if (!window.ArenaUI) return Z.toast('온라인 모듈을 불러오지 못했어요'); ArenaUI.open(friendOpts()); }
+  function endOnline() { if (!ON) return; ON.offs.forEach(f => { try { f(); } catch (e) {} }); ON = null; }
+  function startOnline({ net, role, cfg, players }) {
+    endOnline();
+    const c = cfg || {};
+    const hostUid = (net.meta && net.meta.host) || (role === 'host' ? net.uid : '');
+    ON = { net, host: role === 'host', hostUid, uid: net.uid, cfg: c, names: {}, offs: [], coach: !!c.coach, syncAt: 0 };
+    noteNames(players || net.players);
+    startRound(firstSeats(players || net.players, hostUid, ON.host ? c.hostColor : (c.hostColor === 'b' ? 'b' : 'w')), 1, !ON.host);   // 손님은 방장 판(sync)을 받을 때까지 조용히
+    if (ON.host) { ON.offs.push(net.on('msg', (from, m) => onHostMsg(from, m))); broadcastSync(); }
+    else { ON.offs.push(net.on('msg', m => onGuestMsg(m))); askSync(true); }
+    ON.offs.push(net.on('players', p => { noteNames(p); if (ON && ON.host) hostPlayers(p); drawBars(); drawViewers(); }));
+  }
+  function startRound(seats, round, quiet) {
+    newGame({ mode: 'online', seats, round, uid: ON.uid, clock: (ON.cfg && ON.cfg.clock) || 0, quiet: !!quiet });
+    applyOnlineUI(); drawViewers();
+  }
+  const syncMsg = () => ({ t: 'sync', round: G.round, seats: G.seats, start: G.s.start, moves: G.s.moves.slice(), over: G.s.over ? { winner: G.s.winner, reason: G.s.reason } : null,
+    clock: G.clock ? { w: Math.round(G.clock.w), b: Math.round(G.clock.b) } : null, names: ON.names, cfg: ON.cfg });
+  function broadcastSync() { if (ON && ON.host && G && G.mode === 'online') ON.net.broadcast(syncMsg(), true); }
+  function askSync(force) {
+    if (!ON || ON.host) return;
+    const t = Date.now(); if (!force && t - ON.syncAt < 800) return;
+    ON.syncAt = t; ON.net.send({ t: 'hello' }, true);
+  }
+  function onHostMsg(from, m) {
+    if (!m || !ON || !G || G.mode !== 'online') return;
+    if (m.t === 'hello') { ON.net.send(from, syncMsg(), true); return; }
+    const col = colorOf(G.seats, from);
+    if (m.t === 'again') { if (G.over && col) hostAgain(); return; }
+    const back = () => ON.net.send(from, syncMsg(), true);              // 어긋났으면 그 사람에게 지금 판을 다시
+    if (m.round !== G.round || G.over) { back(); return; }
+    if (m.t === 'resign') { if (col) act({ resign: col }, { from: 'remote' }); return; }
+    if (m.t !== 'move') return;
+    if (m.n !== G.s.moves.length || col !== C.turn(G.s)) { back(); return; }
+    if (!act(m.u, { from: 'remote' })) back();
+  }
+  function onGuestMsg(m) {
+    if (!m || !ON) return;
+    if (m.t === 'sync') { applySync(m); return; }
+    if (!G || G.mode !== 'online') return;
+    if (m.round !== G.round) { askSync(); return; }
+    const setClock = () => { if (G.clock && typeof m.cw === 'number') { G.clock.w = m.cw; G.clock.b = m.cb; G.clock.at = performance.now(); drawClocks(); } };
+    if (m.t === 'end') { if (!G.over) applyEnd(m); setClock(); return; }
+    if (m.t !== 'move') return;
+    const n = G.s.moves.length;
+    if (m.n === n) { if (!act(m.u, { from: 'remote' })) askSync(); }
+    else if (m.n < n) { if (G.s.moves[m.n] !== m.u) askSync(); }     // 내가 이미 둔 수 (방장 확인)
+    else askSync();                                                    // 빠진 수가 있음
+    setClock();
+  }
+  function applyEnd(e) {
+    if (!G || G.over) return;
+    if (e.reason === 'time') act({ timeout: C.turn(G.s) }, { from: 'remote' });
+    else if (e.reason === 'resign') act({ resign: e.winner ? other(e.winner) : C.turn(G.s) }, { from: 'remote' });
+  }
+  function applySync(m) {
+    if (m.names) Object.assign(ON.names, m.names);
+    if (m.cfg) { ON.cfg = Object.assign({}, ON.cfg, m.cfg); ON.coach = !!ON.cfg.coach; }
+    const fresh = !G || G.mode !== 'online' || G.round !== m.round;
+    if (fresh) startRound(m.seats, m.round, true);
+    const g = G;
+    g.seats = m.seats; const meWas = g.me; g.me = colorOf(m.seats, ON.uid); g.players = onlinePlayers(m.seats, g.me);
+    if (meWas !== g.me || fresh) board.setFlip(g.me === 'b');
+    if (fresh || !ON.synced) { ON.synced = true; Z.toast(!g.me ? '👀 구경 중이에요. 다음 판에 빈자리가 나면 앉을 수 있어요' : g.me === 'w' ? '⚪ 내가 백이에요. 먼저 둬요!' : '⚫ 내가 흑이에요. 친구가 먼저 둬요', 2000); }
+    const cur = g.s.moves, nx = m.moves || [];
+    if (!g.over && g.s.start === m.start && cur.length <= nx.length && cur.every((u, i) => u === nx[i])) {
+      for (let i = cur.length; i < nx.length && G === g && !g.over; i++) act(nx[i], { from: 'remote' });   // 앞부분이 같으면 이어서 (소리·움직임 그대로)
+    } else if (g.s.start !== m.start || cur.join(' ') !== nx.join(' ')) {
+      const s = C.create(m.start); for (const u of nx) C.step(s, u);   // 크게 어긋나면 통째로
+      g.s = s; g.over = false; g.coachRes = null; g.review = null; render(null);
+      if (s.over) finish();
+    }
+    if (m.over && G === g && !g.over) applyEnd(m.over);
+    if (m.clock && g.clock) { g.clock.w = m.clock.w; g.clock.b = m.clock.b; g.clock.at = performance.now(); }
+    applyOnlineUI(); drawBars(); drawStat(); drawViewers(); coachEnter();
+    if (G === g && !g.over) advance();
+  }
+  // 방장: 두던 사람이 나가면 그 색 기권
+  function hostPlayers(p) {
+    if (!G || G.mode !== 'online') return;
+    for (const c of ['w', 'b']) {
+      const u = G.seats[c]; if (!u || (p && p[u])) continue;
+      if (!G.over) { Z.toast(`${nmOf(u)}님이 나가서 판이 끝났어요`, 2400); act({ resign: c }, { from: 'remote' }); }
+    }
+  }
+  // 방장: 다음 판 — 색 바꾸고, 빈자리는 구경하던 사람이 들어온 순서대로
+  function hostAgain() {
+    if (!ON || !ON.host || !G) return;
+    const pl = ON.net.players || {}, o = order(pl, ON.hostUid);
+    let seats = { w: G.seats.b, b: G.seats.w };
+    for (const c of ['w', 'b']) if (!seats[c] || !pl[seats[c]]) seats[c] = '';
+    for (const c of ['w', 'b']) if (!seats[c]) { const u = o.find(x => x !== seats.w && x !== seats.b); if (u) seats[c] = u; }
+    if (!seats.w || !seats.b) { Z.toast('같이 둘 친구가 없어요. 대기실에서 기다려요', 2200); if (window.ArenaUI) ArenaUI.toLobby(); return; }
+    startRound(seats, G.round + 1);
+    broadcastSync();
+  }
+  function leaveOnlineGame() { endOnline(); stopAll(); closeModals(); coachHide(); G = null; show('menu'); drawMenu(); popHist(); }
+  function applyOnlineUI() {
+    if (!G || G.mode !== 'online') return;
+    $('specPill').hidden = !!G.me;
+    drawDock();
+  }
+  function drawViewers() {
+    const el = $('viewbar');
+    if (!G || G.mode !== 'online' || !ON) { el.hidden = true; $('specPill').hidden = true; return; }
+    const pl = ON.net.players || {};
+    const v = order(pl, ON.hostUid).filter(u => !colorOf(G.seats, u));
+    el.hidden = !v.length && !!G.me;
+    el.innerHTML = (G.me ? '' : '<b class="vbadge">👀 구경 중</b>') + (v.length ? `<span class="vlist">구경 ${v.length}명 · ${v.map(u => esc(nmOf(u)) + (u === ON.uid ? ' (나)' : '')).join(', ')}</span>` : '<span class="vlist">다음 판에 빈자리가 나면 앉을 수 있어요</span>');
+  }
+
+  addEventListener('visibilitychange', () => { if (G && G.clock) G.clock.at = performance.now(); });
+  drawMenu(); drawSnd();
+  if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
+  // 시험용 엿보기 (?debug 일 때만)
+  if (/[?&]debug\b/.test(location.search)) window.__chess = { get G() { return G; }, act, C, board, coachTick };
+})();

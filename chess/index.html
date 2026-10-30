@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1222">
+<title>체스</title>
+<link rel="stylesheet" href="../common/cozy.css?v=6">
+<link rel="stylesheet" href="style.css?v=1">
+<link rel="preload" as="image" href="vendor/pieces/chessnut/wP.svg">
+<link rel="preload" as="image" href="vendor/pieces/chessnut/bP.svg">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1><span class="logo" aria-hidden="true"><i class="lk"></i><i class="ln"></i></span>체스</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section id="home" class="card">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabDuo" aria-pressed="false">둘이서</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <!-- 혼자: AI 와 -->
+    <div id="soloBox" class="box">
+      <div class="tiers three" id="tiers"></div>
+      <div class="optrow"><span class="small">내 색</span><div class="seg" id="colorSeg"></div></div>
+    </div>
+
+    <!-- 한 기기 둘이서 -->
+    <div id="duoBox" class="box" hidden>
+      <p class="lede">폰·태블릿 하나로 마주 앉아 번갈아 둬요. 첫째 자리가 <b>백</b>(먼저), 둘째 자리가 <b>흑</b>이에요.</p>
+      <div id="seats"></div>
+      <div class="optrow"><span class="small">판 돌리기</span><div class="seg" id="rotSeg"></div></div>
+    </div>
+
+    <!-- AI 구경 -->
+    <div id="watchBox" class="box" hidden>
+      <p class="lede">AI끼리 두는 모습을 구경해요. 누가 이길까요?</p>
+      <div class="optrow"><span class="small"><i class="kp w"></i>백</span><div class="seg" id="watchW"></div></div>
+      <div class="optrow"><span class="small"><i class="kp b"></i>흑</span><div class="seg" id="watchB"></div></div>
+      <div class="optrow"><span class="small">빠르기</span><div class="seg" id="speedSeg"></div></div>
+    </div>
+
+    <div class="optrow" id="clockRow"><span class="small">시계</span><div class="seg" id="clockSeg"></div></div>
+
+    <ul class="howto" id="howtoList">
+      <li>상대 <b>킹</b>을 피할 곳 없이 잡을 위기로 몰면(체크메이트) 이겨요</li>
+      <li>기물을 끌어 놓거나, 눌러서 고른 뒤 <b>점</b> 찍힌 칸을 눌러요</li>
+      <li>막히면 🧑‍🏫 <b>AI 선생님</b>이 좋은 수와 까닭을 알려 줘요</li>
+    </ul>
+    <button class="btn primary big" id="startBtn">시작!</button>
+    <div class="row center minor">
+      <button class="btn ghost" id="helpBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="setBtn">⚙ 설정</button>
+    </div>
+  </section>
+  <p class="small foot">AI 두뇌: 브라우저에서 바로 도는 알파베타 수읽기 엔진 · 규칙 확인은 chess.js</p>
+</div>
+
+<!-- 게임 화면 (한 장, 스크롤 없음) -->
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="stat"></span></div>
+    <span class="pills"><span class="pill spec" id="specPill" hidden>👀 구경</span><span class="pill" id="movePill">1수</span></span>
+  </div>
+  <div class="viewbar" id="viewbar" hidden></div>
+  <div class="pbar" id="pTop"></div>
+  <div class="stage" id="stage"><div id="board" role="application" aria-label="체스판"></div></div>
+  <div class="pbar" id="pBot"></div>
+  <div class="moves" id="moves" aria-label="기보"></div>
+  <div class="spring"></div>
+  <div class="dock" id="dock">
+    <button id="undoBtn"><span class="ic">↶</span><span>되돌리기</span></button>
+    <button id="coachBtn" hidden><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
+    <button id="pauseBtn" hidden aria-pressed="false"><span class="ic">⏸</span><span>멈춤</span></button>
+    <button id="speedBtn" hidden><span class="ic">🐇</span><span>빠르기</span></button>
+    <button id="flipBtn"><span class="ic">🔄</span><span>판 돌리기</span></button>
+    <button id="resignBtn"><span class="ic">🏳️</span><span>기권</span></button>
+    <button id="againBtn" hidden><span class="ic">↺</span><span>새 판</span></button>
+    <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
+  </div>
+</section>
+
+<script src="../common/cozy.js?v=6"></script>
+<script src="../common/me.js?v=6"></script>
+<script src="../common/arena.js?v=6"></script>
+<script src="../common/arena-ui.js?v=6"></script>
+<script src="../common/coach.js?v=2"></script>
+<script src="../common/hotseat.js?v=2"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="vendor/chess.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="board.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>
