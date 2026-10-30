@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a120b">
+<title>장기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@900&text=%E8%BB%8A%E5%8C%85%E9%A6%AC%E8%B1%A1%E5%A3%AB%E5%8D%92%E5%85%B5%E5%B0%87%E5%B8%A5%E6%A5%9A%E6%BC%A2&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=9">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1><span class="logo" aria-hidden="true"><i class="pc han k"><i class="o"><i class="i"><b>漢</b></i></i></i><i class="pc cho m"><i class="o"><i class="i"><b>車</b></i></i></i></span>장기</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section id="home" class="card">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabDuo" aria-pressed="false">둘이서</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <!-- 혼자: AI 와 -->
+    <div id="soloBox" class="box">
+      <div class="tiers three" id="tiers"></div>
+      <div class="optrow"><span class="small">내 편</span><div class="seg" id="sideSeg"></div></div>
+    </div>
+
+    <!-- 한 기기 둘이서 -->
+    <div id="duoBox" class="box" hidden>
+      <p class="lede">폰·태블릿 하나로 마주 앉아 번갈아 둬요. 첫째 자리가 <b>초</b>(먼저), 둘째 자리가 <b>한</b>이에요.</p>
+      <div id="seats"></div>
+      <div class="optrow"><span class="small">판 돌리기</span><div class="seg" id="rotSeg"></div></div>
+    </div>
+
+    <!-- AI 구경 -->
+    <div id="watchBox" class="box" hidden>
+      <p class="lede">AI끼리 두는 모습을 구경해요. 누가 이길까요?</p>
+      <div class="optrow"><span class="small"><i class="dotc cho"></i>초</span><div class="seg" id="watchC"></div></div>
+      <div class="optrow"><span class="small"><i class="dotc han"></i>한</span><div class="seg" id="watchH"></div></div>
+      <div class="optrow"><span class="small">빠르기</span><div class="seg" id="speedSeg"></div></div>
+    </div>
+
+    <div class="rulerow"><span class="small" id="ruleLine"></span><button class="btn ghost sm" id="ruleBtn">규칙 바꾸기</button></div>
+
+    <ul class="howto" id="howtoList">
+      <li>먼저 <b>상차림</b>(마·상 자리)을 고르고, 상대 <b>궁</b>을 피할 곳 없이 몰면(<b>외통</b>) 이겨요</li>
+      <li>내 기물을 누르면 갈 수 있는 곳에 <b>점</b>이 찍혀요 · 그곳을 누르면 둬요</li>
+      <li>막히면 🧑‍🏫 <b>AI 선생님</b>이 좋은 수와 까닭을 알려 줘요</li>
+    </ul>
+    <button class="btn primary big" id="startBtn">시작!</button>
+    <div class="row center minor">
+      <button class="btn ghost" id="helpBtn">📖 규칙</button>
+      <button class="btn ghost" id="setBtn">⚙ 설정</button>
+    </div>
+  </section>
+  <p class="small foot">AI 두뇌: 브라우저에서 바로 도는 알파베타 수읽기 엔진 (직접 만듦)</p>
+</div>
+
+<!-- 게임 화면 (한 장, 스크롤 없음) -->
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl"></span><span class="t" id="stat"></span></div>
+    <span class="pills"><span class="pill spec" id="specPill" hidden>👀 구경</span><span class="pill" id="movePill">0수</span><button class="iconbtn sm" id="sndBtn" aria-label="소리"><span class="ic">🔊</span></button></span>
+  </div>
+  <div class="viewbar" id="viewbar" hidden></div>
+  <div class="pbar" id="pTop"></div>
+  <div class="stage" id="stage"><div id="board" role="application" aria-label="장기판"></div></div>
+  <div class="pbar" id="pBot"></div>
+  <div class="setup" id="setupBox" hidden>
+    <div class="su-h"><b id="suTitle">상차림 고르기</b><span class="small" id="suSub"></span></div>
+    <div class="su-opts" id="suOpts"></div>
+    <div class="su-f"><span class="small" id="suDesc"></span><button class="btn primary" id="suGo">이대로 ✔</button></div>
+  </div>
+  <div class="moves" id="moves" aria-label="기보"></div>
+  <div class="spring"></div>
+  <div class="cspace" id="coachSpace" aria-hidden="true"></div>
+  <div class="dock" id="dock">
+    <button id="undoBtn"><span class="ic">↶</span><span>무르기</span></button>
+    <button id="coachBtn" hidden><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
+    <button id="passBtn"><span class="ic">⏭</span><span>한수 쉼</span></button>
+    <button id="pauseBtn" hidden aria-pressed="false"><span class="ic">⏸</span><span>멈춤</span></button>
+    <button id="speedBtn" hidden><span class="ic">🐇</span><span>빠르기</span></button>
+    <button id="flipBtn"><span class="ic">🔄</span><span>판 돌리기</span></button>
+    <button id="resignBtn"><span class="ic">🏳️</span><span>기권</span></button>
+    <button id="againBtn" hidden><span class="ic">↺</span><span>새 판</span></button>
+    <button id="rulesBtn"><span class="ic">📖</span><span>규칙</span></button>
+  </div>
+</section>
+
+<script src="../common/cozy.js?v=9"></script>
+<script src="../common/me.js?v=7"></script>
+<script src="../common/arena-mock.js?v=7"></script>
+<script src="../common/arena.js?v=8"></script>
+<script src="../common/arena-ui.js?v=8"></script>
+<script src="../common/coach.js?v=2"></script>
+<script src="../common/hotseat.js?v=2"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="core.js?v=1"></script>
+<script src="board.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

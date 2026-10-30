@@ -999,6 +999,34 @@ button { font: inherit; cursor: pointer; }
           <path d="M146 100 L196 86" stroke="#7dd3fc" stroke-width="3" stroke-linecap="round"/><path d="M178 86 L230 96" stroke="#d8b4fe" stroke-width="3" stroke-linecap="round" stroke-dasharray="8 6"/>
           <circle cx="196" cy="88" r="10" fill="#fde68a" opacity=".85"/>
         </svg>`;
+      case "janggi":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="jgWood" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#f0cb88"/><stop offset="55%" stop-color="#e0ac62"/><stop offset="100%" stop-color="#c98f49"/></linearGradient>
+            <radialGradient id="jgFace" cx="38%" cy="32%" r="75%"><stop offset="0%" stop-color="#fffdf6"/><stop offset="60%" stop-color="#f4e3c3"/><stop offset="100%" stop-color="#e2c494"/></radialGradient>
+            <pattern id="jgGrain" width="14" height="200" patternUnits="userSpaceOnUse"><path d="M4 0 Q7 100 4 200" stroke="#9a5d22" stroke-opacity=".16" fill="none"/></pattern>
+            <polygon id="jgOct" points="-0.414,-1 0.414,-1 1,-0.414 1,0.414 0.414,1 -0.414,1 -1,0.414 -1,-0.414"/>
+            <marker id="jgHead" markerWidth="4" markerHeight="4" refX="2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="#059669"/></marker>
+          </defs>
+          <rect width="400" height="200" fill="#2a1a0c"/>
+          <rect x="8" y="8" width="384" height="184" rx="10" fill="url(#jgWood)"/>
+          <rect x="8" y="8" width="384" height="184" rx="10" fill="url(#jgGrain)"/>
+          <g stroke="#4a2a10" stroke-width="2" fill="none" stroke-linecap="square">
+            <path d="M40 20V180M80 20V180M120 20V180M160 20V180M200 20V180M240 20V180M280 20V180M320 20V180M360 20V180"/>
+            <path d="M40 20H360M40 60H360M40 100H360M40 140H360M40 180H360"/>
+            <path d="M160 20L240 100M240 20L160 100"/>
+          </g>
+          <g font-family="'Noto Serif KR','Noto Serif CJK KR','Batang','AppleMyungjo','SimSun',serif" font-weight="900" text-anchor="middle">
+            <g transform="translate(200,60)"><use href="#jgOct" transform="translate(2,4) scale(31)" fill="#000" fill-opacity=".28"/><use href="#jgOct" transform="scale(31)" fill="#3b2311"/><use href="#jgOct" transform="scale(27.3)" fill="#c4232c"/><use href="#jgOct" transform="scale(25)" fill="url(#jgFace)"/><text y="11" font-size="31" fill="#c4232c">漢</text></g>
+            <g transform="translate(120,60)"><use href="#jgOct" transform="translate(2,3) scale(24)" fill="#000" fill-opacity=".28"/><use href="#jgOct" transform="scale(24)" fill="#3b2311"/><use href="#jgOct" transform="scale(21)" fill="#c4232c"/><use href="#jgOct" transform="scale(19.3)" fill="url(#jgFace)"/><text y="8.5" font-size="24" fill="#c4232c">馬</text></g>
+            <g transform="translate(280,100)"><use href="#jgOct" transform="translate(2,3) scale(24)" fill="#000" fill-opacity=".28"/><use href="#jgOct" transform="scale(24)" fill="#3b2311"/><use href="#jgOct" transform="scale(21)" fill="#c4232c"/><use href="#jgOct" transform="scale(19.3)" fill="url(#jgFace)"/><text y="8.5" font-size="24" fill="#c4232c">包</text></g>
+            <g transform="translate(240,140)"><use href="#jgOct" transform="translate(2,3) scale(18)" fill="#000" fill-opacity=".28"/><use href="#jgOct" transform="scale(18)" fill="#3b2311"/><use href="#jgOct" transform="scale(15.8)" fill="#0b6a96"/><use href="#jgOct" transform="scale(14.4)" fill="url(#jgFace)"/><text y="6.5" font-size="18" fill="#0b6a96">卒</text></g>
+            <g transform="translate(330,150)"><use href="#jgOct" transform="translate(2,4) scale(29)" fill="#000" fill-opacity=".28"/><use href="#jgOct" transform="scale(29)" fill="#3b2311"/><use href="#jgOct" transform="scale(25.5)" fill="#0b6a96"/><use href="#jgOct" transform="scale(23.3)" fill="url(#jgFace)"/><text y="10.5" font-size="29" fill="#0b6a96">將</text></g>
+            <g transform="translate(120,140)"><use href="#jgOct" transform="translate(2,3) scale(24)" fill="#000" fill-opacity=".28"/><use href="#jgOct" transform="scale(24)" fill="#3b2311"/><use href="#jgOct" transform="scale(21)" fill="#0b6a96"/><use href="#jgOct" transform="scale(19.3)" fill="url(#jgFace)"/><text y="8.5" font-size="24" fill="#0b6a96">車</text></g>
+          </g>
+          <circle cx="120" cy="60" r="27" fill="none" stroke="#10b981" stroke-width="3"/>
+          <line x1="120" y1="113" x2="120" y2="93" stroke="#059669" stroke-width="5" stroke-linecap="round" marker-end="url(#jgHead)" opacity=".92"/>
+        </svg>`;
       default:
         return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
           <rect width="400" height="200" fill="#18122b"/>
