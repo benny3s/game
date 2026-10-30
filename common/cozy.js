@@ -80,8 +80,10 @@
   // ── 소리: 파일 없이 Web Audio 로 (냥도쿠 sound.js 와 같은 방식). 아이폰은 첫 터치 때 깨워야 함
   const sfx = (() => {
     let ac = null, master = null, noiseBuf = null;
-    const key = "cozy.sound";
+    const key = "cozy.sound2";                        // 10-31: 모두 한 번 '켬'으로 (예전에 끈 사람도) — 크기는 폰 볼륨으로
     let on = store(key, true) !== false;
+    // 아이폰: 무음 스위치를 켜 둬도 게임 소리가 나고, 미디어 볼륨으로 조절되게 (사파리 16.4+)
+    try { if (navigator.audioSession) navigator.audioSession.type = "playback"; } catch (e) {}
     function ctx() {
       if (!ac) {
         const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
