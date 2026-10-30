@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><title>slither 관찰 실습 (가짜 환경)</title>
+<style>
+  body{margin:0;background:#070a0c;color:#cfd6dd;font:14px/1.5 system-ui,'Malgun Gothic',sans-serif}
+  #game{display:block;width:100vw;height:100vh;background:radial-gradient(circle at 50% 50%,#12203a,#05070c 70%)}
+  #mini{margin:-160px 0 0 12px;display:block;width:110px;height:110px;border:1px solid #2b3a4a;border-radius:8px;background:#0a1016}
+  .note{position:fixed;right:10px;bottom:10px;max-width:380px;background:rgba(10,16,22,.9);border:1px solid #2b3a4a;border-radius:8px;padding:8px 10px;font-size:12px;color:#8d97a3}
+</style></head><body>
+<canvas id="game"></canvas><canvas id="mini"></canvas>
+<div class="note">가짜 환경: slither.io 게임 스크립트 없이 <b>window 전역 이름·구조만</b> 똑같이 흉내냅니다.
+실제 slither.io에서 확인한 필드(slithers/foods/slither/grd/gotPacket/ws)를 그대로 씁니다.</div>
+
+<script>
+/* ── slither.io game.js 흉내: 최상위 var → window 전역 (실제 코드와 같은 방식) */
+var grd = 21600;
+var view_xx = 10800, view_yy = 10800, gsc = 1, xm = 0, ym = 0, want_e = false;
+var slither = null, slithers = [], foods = [];
+var __wsSends = 0;
+
+var ws = { readyState: 1, send: function (b) { __wsSends++; return true; } };
+
+function mkSnake(id, x, y, ang, n) {
+  var s = { id: id, xx: x, yy: y, ang: ang, eang: ang, wang: ang, sp: 2, fam: 0, pts: [] };
+  for (var i = 0; i < n; i++) s.pts.push({ xx: x - Math.cos(ang) * i * 5, yy: y - Math.sin(ang) * i * 5 });
+  s.sct = s.pts.length; s.tl = s.sct + s.fam;
+  return s;
+}
+
+// 내 뱀 + 봇 4마리
+slither = mkSnake(1, 10800, 10800, 0, 40);
+slithers.push(slither);
+for (var i = 0; i < 4; i++) slithers.push(mkSnake(2 + i, 10800 + Math.cos(i * 1.6) * 260, 10800 + Math.sin(i * 1.6) * 260, i, 22));
+// 먹이 80개 (앞쪽에 몰아서 '먹이 쪽 구역'이 밝게 보이도록)
+for (var f = 0; f < 80; f++) foods.push({ xx: 10800 + (Math.random() - 0.15) * 300, yy: 10800 + (Math.random() - 0.5) * 300 });
+
+/* ── 패킷 스트림: gotPacket을 게임이 직접 부르는 구조 그대로 */
+function gotPacket(a) { return a[0]; }
+setInterval(function () {
+  var types = [103, 101, 104, 98, 97];   // 'g','e','h','b','a'
+  var t = types[(Math.random() * types.length) | 0];
+  var pkt = new Uint8Array(t === 103 ? 9 : t === 101 ? 6 : 7);
+  pkt[0] = t;
+  window.gotPacket(pkt);
+}, 40);
+
+/* ── 움직임 흉내: 각도와 머리 위치를 계속 바꿈 */
+var t0 = performance.now();
+function frame() {
+  var dt = (performance.now() - t0) / 1000;
+  slither.ang = Math.sin(dt * 0.7) * 1.2; slither.eang = slither.ang;
+  slither.xx = 10800 + Math.cos(dt * 0.5) * 120; slither.yy = 10800 + Math.sin(dt * 0.5) * 120;
+  slither.pts.unshift({ xx: slither.xx, yy: slither.yy }); slither.pts.pop();
+  for (var i = 1; i < slithers.length; i++) {
+    var s = slithers[i]; s.ang += 0.01; s.eang = s.ang;
+    s.xx = 10800 + Math.cos(i * 1.6 + dt * 0.3) * 260; s.yy = 10800 + Math.sin(i * 1.6 + dt * 0.3) * 260;
+    s.pts.unshift({ xx: s.xx, yy: s.yy }); s.pts.pop();
+  }
+  // 화면에 대충 그림 (실제 slither는 pixi로 그림)
+  var c = document.getElementById("game"), g = c.getContext("2d");
+  var W = c.width = innerWidth, H = c.height = innerHeight;
+  g.clearRect(0, 0, W, H);
+  var toS = function (x, y) { return [W / 2 + (x - slither.xx) * 1.6, H / 2 + (y - slither.yy) * 1.6]; };
+  g.fillStyle = "#ffd666";
+  foods.forEach(function (f) { var p = toS(f.xx, f.yy); g.beginPath(); g.arc(p[0], p[1], 1.6, 0, 6.283); g.fill(); });
+  slithers.forEach(function (s) {
+    g.strokeStyle = s === slither ? "#7ee0ff" : "#ff7f9c"; g.lineWidth = 4; g.beginPath();
+    s.pts.forEach(function (p, i) { var q = toS(p.xx, p.yy); i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]); }); g.stroke();
+  });
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+<script src="slither-probe.js?v=1"></script>
+</body></html>

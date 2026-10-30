@@ -77,6 +77,12 @@
     $("chatBtn").hidden = mode === "solo";
     RND.resize();
     clientAC = AC.client(input);
+    window.__ac = {                                                       // 시험용: 콘솔에서 감지 점수를 바로 읽는다
+      get sig() { return clientAC.summary().sig; },
+      get score() { const d = !!(settings.helper && settings.helper !== "none"); return AC.total(clientAC.summary().sig, { declared: d }); },
+      get verdict() { return AC.verdict(this.score); },
+      log: () => clientAC.summary().log
+    };
     if (settings.helper !== "none") loadHelper(settings.helper === "on" ? "see" : settings.helper);
     NET.init().then(updateAdminButtons).catch(() => {});
   }
@@ -520,8 +526,8 @@
       }
       if (mode === "client" && joinCtl) LOG.net(NET.uid, { name: settings.name, role: "친구", conn: joinCtl.p2p ? "직접" : "Firebase", ping: pingS.avg, pingMax: pingS.max, gap: gapS.avg, jitter: gapS.jitter, reconnects });
       if (mode === "host" && hostCtl) { const ps = hostCtl.peers(); LOG.net(NET.uid, { name: settings.name, role: "방장", friends: ps.length, direct: ps.filter(p => p[1]).length, reconnects }); }
-      const c = clientAC.summary();
-      NET.report(roomKey, NET.uid, "client", { name: settings.name, mode, helperDeclared: settings.helper, score: AC.total(c.sig), sig: c.sig.map(s => [s[0], s[1] ? 1 : 0, s[2]]) });
+      const c = clientAC.summary(), declared = !!(settings.helper && settings.helper !== "none");
+      NET.report(roomKey, NET.uid, "client", { name: settings.name, mode, helperDeclared: settings.helper, score: AC.total(c.sig, { declared }), sig: c.sig.map(s => [s[0], s[1] ? 1 : 0, s[2]]) });
       if (mode !== "client") for (const s of sim.snakes) if (s.kind === "human") {
         const b = behaviors.get(s.id); if (!b) continue; const sm = b.summary();
         const uid = s.id === "me" ? NET.uid : s.id;
@@ -585,8 +591,9 @@
   $("myAc").onclick = () => {
     if (!sim) return;
     const b = behaviors.get(meId), all = clientAC.summary().sig.concat(b ? b.summary().sig : []);
-    const n = AC.total(all), v = AC.verdict(n);
-    alert(`내 의심 점수 ${n} (${v[0]})\n\n` + all.map(s => `${s[1] ? "●" : "○"} ${s[0]} — ${s[2]}`).join("\n") + "\n\n" + clientAC.summary().log.join("\n"));
+    const declared = !!(settings.helper && settings.helper !== "none");
+    const n = AC.total(all, { declared }), v = AC.verdict(n);
+    alert(`내 의심 점수 ${n} (${v[0]})${declared ? " · 헬퍼 선언됨(주입 신호 면제)" : ""}\n\n` + all.map(s => `${s[1] ? "●" : "○"} ${s[0]} — ${s[2]}`).join("\n") + "\n\n" + clientAC.summary().log.join("\n"));
   };
 
   // ── 헬퍼: 메뉴에서 고르면 바깥 스크립트를 붙임 (북마크로 붙이는 것과 같은 파일)

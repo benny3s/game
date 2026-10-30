@@ -14,7 +14,7 @@
   const BASE = (document.currentScript && document.currentScript.src) || location.href;
   const TAU = Math.PI * 2, K = G.consts, { N_SECT, VIEW, L_MIN } = K;
   let brain = null;
-  fetch(new URL("brains.json?v=v2a-2m", BASE)).then(r => r.json()).then(b => { brain = b.trained; });
+  fetch(new URL("brains.json?v=v2a-2m", BASE)).then(r => r.json()).then(b => { brain = b[preset.brain || "trained"]; });
   const radius = (window.SNK && SNK.radius) || (L => L <= 50 ? 0.5 + 0.01 * L : 1 + 0.6 * (Math.sqrt(L / 50) - 1));   // 게임과 같은 굵기
   const turnRate = L => { const x = Math.min(1, Math.max(0, (L - 10) / 250)); return K.TURN * (0.35 + 0.65 * (1 - x) ** 2); };
 
@@ -35,7 +35,7 @@
     <div data-out style="color:#c9a6ff">대기 중</div>
     <button data-off style="font:inherit;padding:3px 9px;border-radius:6px;border:1px solid #6b4fa0;background:#2a1f3d;color:#eee;cursor:pointer">헬퍼 끄기</button></div>`;
   document.body.appendChild(panel);
-  const opt = { radar: true, path: true, food: false, arrow: false, zoom: false, buzz: false, guard: false, auto: false, human: false, how: "var" };
+  const opt = { radar: true, path: true, food: false, arrow: false, zoom: false, buzz: false, guard: false, auto: false, human: false, lag: null, how: "var" };
   function apply(p) {
     Object.assign(opt, p || {});
     panel.querySelectorAll("[data-k]").forEach(c => { c.checked = !!opt[c.dataset.k]; });
@@ -125,6 +125,7 @@
   let boosting = false;
   function steer(aim, boost) {
     const me = G.me;
+    if (opt.how === "trusted") { window.__helperCmd = { aim, boost, at: performance.now() }; return; }   // 밖(Node/CDP)이 진짜 마우스를 움직임
     if (opt.how === "var") { G.input.aim = aim; G.input.target = null; G.input.turn = 0; G.input.boost = boost; return; }
     const world = [me.head[0] + 8 * Math.cos(aim), me.head[1] + 8 * Math.sin(aim)];
     const [x, y] = G.view.toScreen(world), r = cv.getBoundingClientRect();
@@ -137,6 +138,14 @@
 
   const last = { action: 1, danger: false, human: null, foodAt: null };
   let dangerSince = 0, alive = true, timer = null, wasTaking = false, buzzed = false;
+  // ── 계측: 바깥(시험 스크립트·감지기)에서 상태를 읽을 수 있게. 위장이 실제로 먹히는지 숫자로 비교하는 용도
+  const auto = { want: null, at: 0, delay: 0, applied: null, waited: 0, sign: 0, cmd: null };
+  const met = { ticks: 0, at: 0, gaps: [], aims: [], lastAim: null, lastAimAt: 0 };
+  const gapStat = a => {
+    if (a.length < 2) return { n: a.length, mean: null, cv: null };
+    const m = a.reduce((x, y) => x + y, 0) / a.length;
+    return { n: a.length, mean: Math.round(m * 10) / 10, cv: Math.round(Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length) / m * 100) / 100 };
+  };
   function densestFood(me) {                                                // 반경 40 안 5칸 격자에서 먹이 값 합이 가장 큰 곳
     const cells = new Map();
     for (const f of G.food) {
@@ -151,6 +160,11 @@
   function loop() {
     if (!alive) return;
     const me = G.me;
+    const nowT = performance.now();
+    met.ticks++;
+    if (met.at) { met.gaps.push(nowT - met.at); if (met.gaps.length > 200) met.gaps.shift(); }
+    met.at = nowT;
+    if (G.input.aim !== met.lastAim) { if (met.lastAimAt) met.aims.push(nowT - met.lastAimAt); met.lastAimAt = nowT; met.lastAim = G.input.aim; if (met.aims.length > 200) met.aims.shift(); }
     if (me && me.alive) {
       const obs = obstacles(me), now = performance.now();
       const hum = simulate(me, obs, humanPolicy(), G.input.boost, true);
@@ -163,7 +177,13 @@
       if (opt.food && (!last.foodAt || Math.random() < 0.1)) last.foodAt = densestFood(me);
       let take = false;
       if (opt.auto && brain) {                                              // 자동 조종: AI가 고른 방향
-        const a = last.action; steer(me.ang + (a % 3 - 1) * 0.6, a >= 3); take = true; out.textContent = "자동 조종 중";
+        const a = last.action, turn = a % 3 - 1, want = me.ang + turn * 0.6;
+        // 위장: '새로 꺾기 시작한 순간'에만 사람 반응 지연을 준다 (매 틱 얼리면 그냥 멈춘 것과 같음)
+        if (Math.sign(turn) !== auto.sign) { auto.sign = Math.sign(turn); auto.at = now; auto.delay = (opt.lag == null ? opt.human : opt.lag) ? 140 + Math.random() * 120 : 0; }
+        const wait = now - auto.at < auto.delay;
+        if (wait) auto.waited++; else { auto.cmd = want; auto.applied = want; }
+        steer(auto.cmd == null ? want : auto.cmd, a >= 3); take = true;
+        out.textContent = wait ? "자동 조종 중 (반응 대기)" : "자동 조종 중";
       } else if (opt.guard && last.danger && now - dangerSince >= (opt.human ? 200 + Math.random() * 150 : 0)) {
         // 예측 회피: 사람 조작대로면 부딪힘 → 후보 중 가장 오래 안전한 것 (같으면 부스트 없이, 사람이 가려던 쪽에 가까운 것)
         const wantSide = G.input.aim != null ? Math.sign(Math.sin(G.input.aim - me.ang)) : 0;
@@ -225,5 +245,17 @@
     delete window.__snakeHelper;
   }
   panel.querySelector("[data-off]").addEventListener("click", off);
-  window.__snakeHelper = { panel, apply, off };
+  // ── 바깥에서 읽는 상태 (시험 자동화용). 감지기가 없어도 '무엇을 어떻게 했는지'가 남아야 비교가 됨
+  const stat = () => ({
+    on: true, alive: alive && !!(G.me && G.me.alive), brain: !!brain,
+    mode: opt.auto ? "auto" : opt.guard ? "guard" : "watch",
+    human: !!opt.human, how: opt.how, declared: !!opt.declared,
+    status: out.textContent, action: last.action, danger: last.danger,
+    ttc: last.human ? last.human.ttc : null,
+    aim: G.input.aim == null ? null : Math.round(G.input.aim * 1000) / 1000,
+    boost: !!G.input.boost, len: G.me ? Math.round(G.me.length * 10) / 10 : null,
+    ticks: met.ticks, waited: auto.waited, delay: Math.round(auto.delay),
+    tickGap: gapStat(met.gaps), aimGap: gapStat(met.aims),
+  });
+  window.__snakeHelper = { panel, apply, off, stat, get state() { return stat(); } };
 })();
