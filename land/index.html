@@ -131,6 +131,24 @@ header.top h1{white-space:nowrap}
 /* 결과 단추 줄은 늘 보이게 (긴 순위표를 내려도 아래에 붙음) */
 .land-modal>div>.row{position:sticky;bottom:-20px;background:var(--card);padding:8px 0 4px;margin-bottom:-4px;z-index:1}
 /* 가로 휴대폰: 단추 줄을 오른쪽 세로로 */
+/* 친구랑: 나간 친구 자리 묻기 (방장) — 경기를 가리지 않는 작은 카드, 조작은 그대로 됨 */
+#goneBox{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 62px);transform:translateX(-50%);z-index:30;display:grid;gap:6px;width:min(420px,calc(100vw - 24px));pointer-events:none}
+.gcard{pointer-events:auto;display:grid;gap:4px;background:var(--card);border:1.5px solid var(--gold);color:var(--ink);border-radius:14px;padding:7px 10px;box-shadow:0 8px 22px rgba(0,0,0,.45);font:14px/1.35 var(--text)}
+.gcard b{font:15px/1.2 var(--round);font-weight:400;color:#fde68a}
+.gcard span{font-size:12px;color:var(--soft)}
+.gcard div{display:flex;gap:5px}
+.gcard button{flex:1 1 auto;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.1);color:var(--ink);border-radius:10px;padding:7px 6px;font:600 12.5px var(--text);cursor:pointer;touch-action:manipulation;white-space:nowrap}
+.gcard button.pri{background:var(--accent);border-color:transparent;color:#fff}
+
+/* 판 사이 준비 · 구경 (결과 창 안) */
+.rdy{display:grid;gap:6px;text-align:left;font-size:13.5px}
+.rdy-row{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.rdy-row>span{padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);white-space:nowrap}
+.rdy-row>span.ok{background:rgba(22,163,74,.25);border-color:#4ade80}
+.rdy-row>span.gone{background:rgba(127,29,29,.35);border-color:#f87171}
+.rdy-w{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:center;opacity:.92}
+.rdy-w label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
+.rlist li span small.wn{font:12px var(--text);color:var(--soft);margin-left:4px}
 @media (orientation:landscape) and (max-height:560px){
   .play{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto minmax(0,1fr);column-gap:12px;row-gap:8px;padding-top:calc(env(safe-area-inset-top,0px) + 8px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 8px);padding-left:calc(env(safe-area-inset-left,0px) + 12px);padding-right:calc(env(safe-area-inset-right,0px) + 12px)}
   .play .bar{grid-column:1 / -1}
@@ -233,6 +251,7 @@ header.top h1{white-space:nowrap}
 <script src="https://cdn.jsdelivr.net/npm/roughjs@4.6.6/bundled/rough.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
 <script src="../common/cozy.js?v=9"></script>
+<script src="../common/arena-mock.js?v=7"></script>
 <script src="../common/arena.js?v=8"></script>
 <script src="../common/arena-ui.js?v=8"></script>
 <script src="core.js?v=5"></script>
@@ -240,6 +259,6 @@ header.top h1{white-space:nowrap}
 <script src="art.js?v=5"></script>
 <script src="render.js?v=6"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=6"></script>
+<script src="main.js?v=8"></script>
 </body>
 </html>

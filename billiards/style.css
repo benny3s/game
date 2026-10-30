@@ -154,3 +154,19 @@ body.land.short .bar .mid .t{display:inline}
 .cpn-body .cbtn{margin-top:7px;font:700 12.5px var(--round);border:1px solid var(--gold);background:rgba(217,180,106,.18);color:#fde68a;border-radius:9px;padding:6px 10px;cursor:pointer}
 .cpn-body .rate{display:inline-block;margin-top:4px;font-weight:800;color:#6ee7b7}
 .cpn-body .cl{display:block;margin-top:3px}
+
+/* 친구랑: 내 차례 강조 (금색 깜빡) · 이긴 횟수 · 구경 인원 */
+#sub.myturn{color:#3b2606;background:linear-gradient(180deg,#fde047,#f59e0b);border-radius:99px;padding:2px 12px;font-weight:800;animation:subpulse 1s ease-in-out infinite}
+@keyframes subpulse{0%,100%{box-shadow:0 0 0 0 rgba(250,204,21,.75)}50%{box-shadow:0 0 0 7px rgba(250,204,21,0)}}
+.chip .wn{font:700 11px var(--round);color:#fde68a;white-space:nowrap}
+.chip.eye{padding:3px 10px;opacity:.85}
+.chip.sub{opacity:.85}
+
+/* 판 사이 준비 · 구경 */
+.rdy{margin-top:10px;display:grid;gap:6px;text-align:left;font-size:13.5px}
+.rdy-row{display:flex;flex-wrap:wrap;gap:6px}
+.rdy-row>span{padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);white-space:nowrap}
+.rdy-row>span.ok{background:rgba(22,163,74,.25);border-color:#4ade80}
+.rdy-row>span.gone{background:rgba(127,29,29,.35);border-color:#f87171}
+.rdy-w{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;opacity:.92}
+.rdy-w label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}

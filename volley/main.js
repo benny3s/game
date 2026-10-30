@@ -168,7 +168,9 @@
     el.onclick = e => { const x = e.target.closest('button'); if (!x) return; if (x.dataset.tg) update({ target: +x.dataset.tg }); else if (x.dataset.ai) update({ ai: x.dataset.ai }); };
     el.onchange = e => { if (e.target.matches('[data-fill]')) update({ fill: e.target.checked }); };
   }
-  let boundNet = null, hostGo = null;
+  let boundNet = null, boundOffs = [], hostGo = null;
+  // 방 하나에 대한 것 (판이 바뀌어도 유지): 이긴 횟수(uid별) · 판 끝난 뒤 준비한 사람 · 방장이 고른 구경꾼
+  let RM = { wins: {}, rdy: new Set(), pick: {} };
   function openFriendModal() {
     if (!window.ArenaUI) { Cozy.toast('친구 대전 모듈을 불러오지 못했어요'); return; }
     ArenaUI.open({
@@ -188,37 +190,64 @@
   }
 
   // 방장: 자리·씨앗을 정해 모두에게 'go' (늦게 온 친구는 'hi' 를 보내면 같은 go 를 받아 구경)
-  function makeGo(net) {
+  //  again: 같은 방에서 다음 판 — 앉았던 사람 중 아직 있는 사람 + 방장이 체크한 구경꾼 (최대 4명)
+  function makeGo(net, again) {
     const c = (net.meta && net.meta.cfg) || {}, pl = net.players || {}, host = (net.meta && net.meta.host) || net.uid;
-    const ids = Object.keys(pl).sort((a, b) => (b === host) - (a === host) || (pl[a].t || 0) - (pl[b].t || 0)).slice(0, 4);
+    let ids = Object.keys(pl).sort((a, b) => (b === host) - (a === host) || (pl[a].t || 0) - (pl[b].t || 0));
+    if (again && G && G.o.kind === 'online') {
+      const prev = G.o.seats.filter(u => u && pl[u]);
+      ids = prev.concat(ids.filter(u => !prev.includes(u) && RM.pick[u]));
+    }
+    ids = ids.slice(0, 4);
     const team = ids.length >= 3 || c.fill ? 2 : 1, N = team * 2;
     const seats = Array.from({ length: N }, (_, k) => ids[k] || null);
     const f0 = FURS[c.hostFur] ? c.hostFur : 'cheese';
     const furs = [f0, ...FUR_IDS.filter(f => f !== f0)].slice(0, N);
     const names = seats.map((u, k) => u ? String((pl[u] && pl[u].name) || '친구').slice(0, 8) : '🤖 AI');
-    return { t: 'go', seats, team, furs, names, target: c.target || 11, ai: TIER_IDS.includes(c.ai) ? c.ai : 'normal', seed: (Math.random() * 4294967296) >>> 0 };
+    // wins = 이 판을 시작하기 전까지의 이긴 횟수 (이긴 판은 모두가 같은 순간에 +1 하므로, 다시 들어온 친구가 두 번 세지 않게)
+    return { t: 'go', seats, team, furs, names, target: c.target || 11, ai: TIER_IDS.includes(c.ai) ? c.ai : 'normal', seed: (Math.random() * 4294967296) >>> 0, wins: Object.assign({}, RM.wins) };
   }
+  const curGo = () => Object.assign({}, hostGo, { sub: G && G.sub ? G.sub.slice() : [] });   // 'hi' 에 답할 때: 지금 AI 가 대신하는 자리도 같이
   function bindNet(net, role) {
     if (boundNet === net) return;
-    boundNet = net;
+    boundOffs.splice(0).forEach(f => { try { f(); } catch (e) {} });
+    boundNet = net; RM = { wins: {}, rdy: new Set(), pick: {} };
+    const ON = (ev, fn) => { const off = net.on(ev, fn); if (typeof off === 'function') boundOffs.push(off); };
+    ON('players', () => { if (boundNet !== net || !G || G.o.kind !== 'online') return; drawSub(); if (G.drawReady) G.drawReady(); });   // 구경 인원 · 준비 목록
     if (role === 'host') {
-      net.on('msg', (uid, m) => {
+      ON('msg', (uid, m) => {
         if (!m || boundNet !== net) return;
-        if (m.t === 'hi') { if (hostGo) net.send(uid, hostGo, true); }
-        else if (m.t === 'in') { if (G && G.o.kind === 'online') { const k = G.o.seats.indexOf(uid); if (k >= 0) G.rin[k] = m.b | 0; } }
-        else if (m.t === 'rematch') { if (G && G.o.kind === 'online' && G.over) hostRestart(); }
+        if (m.t === 'hi') { restoreSeat(uid); if (hostGo) net.send(uid, curGo(), true); }
+        else if (m.t === 'in') { if (G && G.o.kind === 'online') { const k = G.o.seats.indexOf(uid); if (k >= 0 && !G.sub[k]) G.rin[k] = m.b | 0; } }
+        else if (m.t === 'rdy') {                                   // 판이 끝난 뒤 '준비' (구경꾼이 누르면 '다음 판에 낄래요')
+          if (!G || G.o.kind !== 'online' || !G.over || m.sd !== G.o.seed) return;
+          RM.rdy.add(uid);
+          if (!G.o.seats.includes(uid)) RM.pick[uid] = true;
+          sendRdy();
+        }
       });
-      net.on('leave', uid => {                                      // 경기 중에 나간 친구 자리는 AI 가 이어받음
+      ON('leave', uid => {                                          // 경기 중에 나간 친구: 5초 안에 안 돌아오면 방장이 고름
         if (!G || G.o.kind !== 'online' || boundNet !== net) return;
         const k = G.o.seats.indexOf(uid); if (k < 0) return;
-        G.o.seats[k] = null; G.ctl[k] = G.mkBot(G.o.ai, k);
-        Cozy.toast(`${G.o.names[k]} 님이 나가서 AI 가 이어 해요`);
+        G.rin[k] = 0;                                               // 누르고 있던 키로 계속 달리지 않게
+        Cozy.toast(`${G.o.names[k]} 님 연결이 끊겼어요. 같은 링크로 다시 들어오면 이어서 해요`, 3200);
+        if (G.drawReady) G.drawReady();
+        if (G.over) return;
+        const g0 = G;
+        setTimeout(() => { if (G !== g0 || boundNet !== net || g0.over || (net.players || {})[uid] || g0.sub[k]) return; askGone(k); }, 5000);
       });
+      ON('join', uid => restoreSeat(uid));
     } else {
-      net.on('msg', m => {
+      ON('msg', m => {
         if (!m || boundNet !== net) return;
         if (m.t === 'go') startFromGo(m, net, 'guest');
         else if (m.t === 'st' && G && G.o.kind === 'online' && G.o.seed === m.sd) applyState(m);
+        else if (m.t === 'sub') { if (G && G.o.kind === 'online' && G.o.seed === m.sd && m.k < G.sub.length) { G.sub[m.k] = !!m.on; relabel(); } }
+        else if (m.t === 'rdyl') {
+          if (!G || G.o.kind !== 'online' || m.sd !== G.o.seed) return;
+          (m.uids || []).forEach(u => RM.rdy.add(u)); RM.pick = m.pick || {};
+          if (G.drawReady) G.drawReady();
+        }
       });
     }
   }
@@ -232,10 +261,11 @@
   }
   function hostRestart() {
     const net = window.ArenaUI && ArenaUI.net; if (!net || !net.isHost) return;
-    hostGo = makeGo(net); net.broadcast(hostGo, true); startFromGo(hostGo, net, 'host');
+    hostGo = makeGo(net, true); net.broadcast(hostGo, true); startFromGo(hostGo, net, 'host');
   }
   function startFromGo(go, net, role) {
-    start({ kind: 'online', role, net, seats: go.seats.slice(), team: go.team, furs: go.furs, names: go.names, target: go.target, ai: go.ai, seed: go.seed });
+    RM.wins = Object.assign({}, go.wins || {}); RM.rdy = new Set(); RM.pick = {};
+    start({ kind: 'online', role, net, seats: go.seats.slice(), team: go.team, furs: go.furs, names: go.names, target: go.target, ai: go.ai, seed: go.seed, sub: go.sub });
   }
   // 손님: 방장 상태를 그대로 덮어씀 (사이 틱은 마지막으로 받은 입력으로 미리 굴려 둠)
   function applyState(m) {
@@ -243,8 +273,50 @@
     if (m.s && m.s.cats && m.s.cats.length === gs.cats.length) { Object.assign(gs, m.s); if (!('lastPoint' in m.s)) gs.lastPoint = null; }
     if (m.in) for (let k = 0; k < G.rin.length; k++) G.rin[k] = m.in[k] | 0;
     if (m.evs && m.evs.length) onEvents(m.evs, true);
+    if (gs.phase === 'over' && !G.over) onOver({ t: 'over', w: gs.winner });          // 결과 창이 떠 있을 때 다시 들어온 친구도 결과를 받음
     drawHud();
   }
+
+  // ── 🔌 AI 가 대신 · 돌아온 친구 (방장). 실시간 경기라 경기를 가리지 않는 작은 카드로 물음
+  const goneBox = () => { let b = $('goneBox'); if (!b) { b = document.createElement('div'); b.id = 'goneBox'; document.body.appendChild(b); } return b; };
+  function closeGone(k) {
+    if (!G || !G.goneAsk) return;
+    for (const i of k == null ? Object.keys(G.goneAsk) : [k]) { const x = G.goneAsk[i]; if (x) { x.el.remove(); delete G.goneAsk[i]; } }
+  }
+  function askGone(k) {
+    const g = G; if (!g || g.o.kind !== 'online' || g.o.role !== 'host' || g.sub[k] || g.goneAsk[k]) return;
+    const net = g.o.net, el = document.createElement('div'); el.className = 'gcard';
+    el.innerHTML = `<b>🔌 ${escH(g.o.names[k])} 님이 나갔어요</b><span>AI 는 ${escH(Cozy.TIERS[g.o.ai].em + ' ' + Cozy.TIERS[g.o.ai].name.split(' · ')[0])} 고양이가 대신 쳐요 · 같은 링크로 돌아오면 자리를 돌려줘요</span>
+      <div><button type="button" data-a="ai" class="pri">🤖 AI가 대신</button><button type="button" data-a="lobby">🔄 처음부터 다시 (대기실로)</button><button type="button" data-a="wait">⏳ 기다릴게요</button></div>`;
+    el.onclick = e => {
+      const a = e.target.closest('button') && e.target.closest('button').dataset.a; if (!a || G !== g) return;
+      Cozy.sfx.play('tap');
+      if (a === 'ai') subAI(k);
+      else if (a === 'lobby') { try { net.chat('🔄 방장이 처음부터 다시 하기로 했어요'); } catch (er) {} if (window.ArenaUI && ArenaUI.net === net) ArenaUI.toLobby(); }
+      closeGone(k);
+    };
+    goneBox().appendChild(el);
+    g.goneAsk[k] = { uid: g.o.seats[k], el };
+  }
+  function relabel() { if (G && G.o.kind === 'online') R.setFurs(G.o.furs, labelsOf(G.o, G.myCat)); }
+  function subAI(k) {
+    const g = G; if (!g || g.o.kind !== 'online' || g.o.role !== 'host' || g.sub[k]) return;
+    g.sub[k] = true; g.ctl[k] = g.mkBot(g.o.ai, k); g.rin[k] = 0;
+    try { g.o.net.broadcast({ t: 'sub', sd: g.o.seed, k, on: 1 }, true); g.o.net.chat(`🤖 ${g.o.names[k]} 님 자리는 AI 가 대신 쳐요 (돌아오면 다시 직접)`); } catch (e) {}
+    relabel();
+  }
+  function restoreSeat(uid) {
+    const g = G; if (!g || g.o.kind !== 'online' || g.o.role !== 'host') return;
+    const k = g.o.seats.indexOf(uid); if (k < 0) return;
+    closeGone(k);
+    if (!g.sub[k]) return;
+    g.sub[k] = false; g.ctl[k] = { kind: 'remote', input: () => G.rin[k] }; g.rin[k] = 0;
+    Cozy.toast(`${g.o.names[k]} 님이 돌아왔어요. 다시 직접 쳐요`, 2400);
+    try { g.o.net.broadcast({ t: 'sub', sd: g.o.seed, k, on: 0 }, true); g.o.net.chat(`🙌 ${g.o.names[k]} 님이 돌아와서 직접 쳐요`); } catch (e) {}
+    relabel();
+  }
+  const sendRdy = () => { if (!G || !G.o.net) return; G.o.net.broadcast({ t: 'rdyl', sd: G.o.seed, uids: [...RM.rdy], pick: RM.pick }, true); if (G.drawReady) G.drawReady(); };
+  const watchers = () => G && G.o.kind === 'online' && G.o.net ? Object.keys(G.o.net.players || {}).filter(u => !G.o.seats.includes(u)).length : 0;
 
   $('startBtn').onclick = () => {
     const team = cfg.team, op = AI_FUR[cfg.mode].find(f => f !== cfg.fur), rest = FUR_IDS.filter(f => f !== cfg.fur && f !== op);
@@ -357,7 +429,7 @@
   const clearLater = () => { timers.forEach(clearTimeout); timers = []; };
 
   function start(o) {
-    clearLater();
+    clearLater(); closeGone();
     for (const ov of document.querySelectorAll('body > .overlay:not(#pauseBox)')) ov.remove();
     const seed = o.seed != null ? o.seed >>> 0 : (Math.random() * 4294967296) >>> 0;   // 시험 때만 씨앗을 정해 줌
     const team = o.team === 2 ? 2 : 1, N = team * 2;
@@ -369,13 +441,14 @@
     let myCat = -1;
     if (o.kind === 'online') {
       myCat = o.seats.indexOf(o.net.uid);                           // -1 이면 구경 (늦게 들어온 친구)
-      let lastSent = -1;
+      let lastSent = -1, lastAt = 0;
       for (let k = 0; k < N; k++) {
         if (k === myCat) {
           humanCat[k] = true;
           ctl.push({ kind: 'human', input: () => {
             const v = readInput(0);
-            if (o.role !== 'host' && v !== lastSent) { lastSent = v; o.net.send({ t: 'in', b: v }); }
+            const now = performance.now();   // 바뀔 때 + 0.25초마다 한 번 더 (빠른 길이라 '떼기'가 빠지면 눌린 채로 남지 않게)
+            if (o.role !== 'host' && (v !== lastSent || now - lastAt > 250)) { lastSent = v; lastAt = now; o.net.send({ t: 'in', b: v }); }
             return v;
           } });
         } else if (o.role === 'host' && !o.seats[k]) ctl.push(mkBot(o.ai, k));
@@ -398,12 +471,13 @@
     const human = [local.some((h, k) => h && (k & 1) === 0), local.some((h, k) => h && (k & 1) === 1)];
     const hcats = humanCat.map((h, k) => h ? k : -1).filter(k => k >= 0);
     const keys = o.kind === 'duo' ? KS.build(hcats).map : null;
-    G = { o, s, seed, ctl, human, local, myCat, rin, mkBot, team, keys, hcats, prev: { c: s.cats.map(() => [0, 0]), b: [0, 0] }, acc: 0, speed: 1, paused: false, stop: 0, wait: 0, held: false, over: false, gen: ++gen, lastHit: null };
+    G = { o, s, seed, ctl, human, local, myCat, rin, mkBot, team, keys, hcats, prev: { c: s.cats.map(() => [0, 0]), b: [0, 0] }, acc: 0, speed: 1, paused: false, stop: 0, wait: 0, held: false, over: false, gen: ++gen, lastHit: null,
+      sub: Array.from({ length: N }, (_, k) => !!(o.sub && o.sub[k])), goneAsk: {} };      // sub = 나간 친구 자리를 AI 가 대신하는 중
     snap();
     $('pauseBox').hidden = true;
     clearInput();
     let labels;
-    if (o.kind === 'online') labels = o.names.map((n, k) => k === myCat ? '나' : n);
+    if (o.kind === 'online') labels = labelsOf(o, myCat);
     else if (o.kind === 'duo') labels = humanCat.map((h, k) => !h ? 'AI' : touchUI ? (hcats.indexOf(k) === 0 ? '👈' : '👉') : KS.SETS[k].label);
     else if (o.kind === 'ai') labels = team === 2 ? ['나', '', '짝꿍', ''] : ['나', ''];
     else labels = s.cats.map((_, k) => Cozy.TIERS[o.tiers[k & 1]].name);
@@ -422,6 +496,8 @@
       Cozy.save('volley.duoTip', true); later(() => Cozy.toast('가로로 돌리면 둘이서 하기 더 편해요 📱', 2800), 600);
     }
   }
+  // 고양이 위 이름표: 친구랑은 내 고양이 = '나', AI 가 대신하는 자리는 🤖
+  const labelsOf = (o, myCat) => o.names.map((n, k) => k === myCat ? '나' : n + (G.sub[k] ? ' 🤖' : ''));
   function snap() {
     const s = G.s, p = G.prev;
     for (let k = 0; k < s.cats.length; k++) { p.c[k][0] = s.cats[k].x; p.c[k][1] = s.cats[k].y; }
@@ -486,7 +562,8 @@
   }
   function onOver(e) {
     G.over = true;
-    drawHud();
+    if (G.o.kind === 'online') G.o.seats.forEach((u, k) => { if (u && (k & 1) === e.w) RM.wins[u] = (RM.wins[u] || 0) + 1; });   // 이긴 편 사람마다 +1 (모든 화면이 같은 순간에)
+    drawHud(); drawSub();
     const o = G.o, solo = o.kind === 'ai', won = solo ? e.w === 0 : o.kind === 'online' ? (G.myCat < 0 || G.human[e.w]) : true;
     if (solo && G.team === 1) {                                     // 기록은 1:1 만 (2:2 는 짝꿍 몫이 커서 따로 안 셈)
       const r = rec[o.tier] || (rec[o.tier] = { w: 0, l: 0, best: null });
@@ -525,18 +602,46 @@
       body = `<div class="big">${sc[0]} : ${sc[1]}</div>${body0}${stats}`;
     }
     keyGuardUntil = performance.now() + 900;
-    // 친구랑: 방장은 다시 하기(지금 방 인원으로 자리 다시 정함)·대기실로, 손님은 다시 하자고 부탁·나가기
-    const online = o.kind === 'online' && o.net;
-    const buttons = online
-      ? (o.role === 'host'
-        ? [{ label: '다시 하기', primary: true, onClick: hostRestart }, { label: '대기실로', onClick: () => { if (window.ArenaUI) ArenaUI.toLobby(); } }]
-        : [{ label: '다시 하자고 하기', primary: true, onClick: () => { o.net.send({ t: 'rematch' }, true); Cozy.toast('방장에게 알렸어요'); } }, { label: '나가기', onClick: goMenu }])
-      : [{ label: o.kind === 'watch' ? '한 판 더' : '다시 하기', primary: true, onClick: () => start(o) }, { label: '메뉴', onClick: goMenu }];
-    Cozy.modal({ title, html: body, buttons });
+    // 친구랑: 판 사이에 손님은 '✋ 준비', 방장은 다 준비되면 다음 판 시작 (혼자 다시 시작하지 못함) · 구경꾼은 방장이 체크하면 다음 판부터 같이
+    if (o.kind === 'online' && o.net) return onlineResult(title, body);
+    Cozy.modal({ title, html: body, buttons: [{ label: o.kind === 'watch' ? '한 판 더' : '다시 하기', primary: true, onClick: () => start(o) }, { label: '메뉴', onClick: goMenu }] });
+  }
+  function onlineResult(title, body) {
+    const g = G, o = g.o, net = o.net, host = o.role === 'host', myId = net.uid;
+    const buttons = host
+      ? [{ label: '다음 판 시작 ▶', primary: true, onClick: hostRestart }, { label: '안 기다리고 시작', onClick: hostRestart }, { label: '대기실로', onClick: () => { if (window.ArenaUI) ArenaUI.toLobby(); } }, { label: '나가기', ghost: true, onClick: goMenu }]
+      : [{ label: '✋ 준비', primary: true, onClick: () => { RM.rdy.add(myId); net.send({ t: 'rdy', sd: o.seed }, true); g.drawReady(); return false; } }, { label: '나가기', onClick: goMenu }];
+    Cozy.modal({ title, html: body + '<div class="rdy"></div>', buttons, cls: 'vb-res' });
+    const ov = [...document.querySelectorAll('body > .overlay.vb-res')].pop(), rb = ov.querySelector('.rdy'), bs = ov.querySelectorAll('.row button'), nb = bs[0], fb = host ? bs[1] : null;
+    g.drawReady = () => {
+      if (G !== g || !rb.isConnected) return;
+      const pl = net.players || {}, hostId = (net.meta || {}).host;
+      const row = o.seats.map((u, k) => u ? [k, u] : null).filter(Boolean).map(([k, u]) => {
+        if (u === hostId) return `<span class="ok">👑 ${escH(o.names[k])}${u === myId ? ' (나)' : ''}</span>`;
+        const gone = !pl[u], ok = RM.rdy.has(u) || g.sub[k];
+        return `<span class="${ok ? 'ok' : gone ? 'gone' : ''}">${ok ? '✅' : gone ? '🔌' : '⏳'} ${escH(o.names[k])}${u === myId ? ' (나)' : ''}</span>`;
+      });
+      const wu = Object.keys(pl).filter(u => !o.seats.includes(u));
+      const wl = wu.map(u => {
+        const nm = escH((pl[u] || {}).name || '친구'), hand = RM.rdy.has(u) ? ' ✋' : '';
+        return host ? `<label><input type="checkbox" data-pick="${escH(u)}" ${RM.pick[u] ? 'checked' : ''}> ${nm}${hand}</label>` : `<span>${nm}${hand}${RM.pick[u] ? ' ✔' : ''}</span>`;
+      }).join('');
+      rb.innerHTML = `<div class="rdy-row">${row.join('')}</div>${wu.length ? `<div class="rdy-w">👀 구경 ${wu.length}명${host ? ' · 체크하면 다음 판부터 같이' : ''}: ${wl}</div>` : ''}`;
+      if (host) {
+        const need = o.seats.filter((u, k) => u && u !== myId && pl[u] && !g.sub[k]), n = need.filter(u => RM.rdy.has(u)).length, all = n === need.length;
+        nb.disabled = !all; nb.textContent = all ? '다음 판 시작 ▶' : `다음 판 시작 (준비 ${n}/${need.length})`;
+        fb.hidden = all;
+        rb.querySelectorAll('[data-pick]').forEach(c => c.onchange = () => { RM.pick[c.dataset.pick] = c.checked; sendRdy(); });
+      } else {
+        const on = RM.rdy.has(myId), seated = o.seats.includes(myId);
+        nb.disabled = on; nb.textContent = on ? '✅ 준비 완료 · 방장을 기다려요' : seated ? '✋ 준비' : '✋ 다음 판에 낄래요';
+      }
+    };
+    g.drawReady();
   }
   // 게임만 멈춤 (친구랑 대기실로 돌아갈 때) · back = 메뉴 화면 뒤에 깔기
   function stopGame(back) {
-    clearLater(); hideBanner(true);
+    clearLater(); closeGone(); hideBanner(true);
     for (const ov of document.querySelectorAll('body > .overlay:not(#pauseBox)')) ov.remove();
     G = null; clearInput();
     $('pauseBox').hidden = true;
@@ -546,6 +651,7 @@
     const online = G && G.o.kind === 'online';
     stopGame(true);
     if ((online || boundNet) && window.ArenaUI && ArenaUI.net) ArenaUI.leave();   // 친구랑이면 방에서도 나감
+    boundOffs.splice(0).forEach(f => { try { f(); } catch (e) {} });
     boundNet = null;
   }
   function pause(v) {
@@ -566,14 +672,27 @@
         const w = $('who' + i); w.innerHTML = ''; w.classList.toggle('two', G.team === 2);
         w.appendChild(ART.portrait(G.o.furs[i], 44)); if (G.team === 2) w.appendChild(ART.portrait(G.o.furs[i + 2], 44));
       }
-      const o = G.o;
-      $('sub').textContent = o.kind === 'ai' ? `${tierName(o.tier)}${G.team === 2 ? ' · 2:2' : ''} · ${s.target}점 내기` : o.kind === 'online' ? `🌐 친구랑${G.team === 2 ? ' 2:2' : ''}${G.myCat < 0 ? ' · 👀 구경 중' : ''} · ${s.target}점 내기` : o.kind === 'duo' ? `👫 한 기기 ${G.hcats.length}명${G.team === 2 ? ' · 2:2' : ''} · ${s.target}점 내기` : `${tierName(o.tiers[0])} vs ${tierName(o.tiers[1])}`;
+      drawSub();
     }
     for (let i = 0; i < 2; i++) {
       const el = $('sc' + i), v = String(s.score[i]);
       if (el.textContent !== v) { el.textContent = v; if (!first) bump(el, 'pop'); }
       $('who' + i).classList.toggle('srv', s.server === i && !G.over);
     }
+  }
+  // 점수판 아래 한 줄. 친구랑은 이 방 전적(이긴 횟수)과 구경 인원도 (경기를 가리지 않게 같은 줄에)
+  function drawSub() {
+    if (!G) return;
+    const o = G.o, s = G.s;
+    let t;
+    if (o.kind === 'ai') t = `${tierName(o.tier)}${G.team === 2 ? ' · 2:2' : ''} · ${s.target}점 내기`;
+    else if (o.kind === 'online') {
+      const hs = o.seats.map((u, k) => u ? [k, u] : null).filter(Boolean), wc = watchers();
+      const wl = hs.some(([, u]) => RM.wins[u]) ? hs.map(([k, u]) => `${[...o.names[k]].slice(0, 4).join('')} ${RM.wins[u] || 0}승`).join(' · ') : '';
+      t = (wl ? `🏆 ${wl}` : `🌐 친구랑${G.team === 2 ? ' 2:2' : ''} · ${s.target}점 내기`) + (G.myCat < 0 ? ' · 👀 구경 중' : '') + (wc ? ` · 👀 ${wc}` : '');
+    } else if (o.kind === 'duo') t = `👫 한 기기 ${G.hcats.length}명${G.team === 2 ? ' · 2:2' : ''} · ${s.target}점 내기`;
+    else t = `${tierName(o.tiers[0])} vs ${tierName(o.tiers[1])}`;
+    if ($('sub').textContent !== t) $('sub').textContent = t;
   }
   function bump(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
   let bannerT = 0;

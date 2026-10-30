@@ -136,13 +136,18 @@
   }
 
   let NET = null, lastSh = null, hostG = 0, early = [], syncAt = 0;
+  // 방 하나에 대한 것 (판이 바뀌어도 유지): 이긴 횟수(uid별) · 판 끝난 뒤 준비한 사람 · 방장이 고른 구경꾼
+  let RM = { wins: {}, rdy: new Set(), pick: {} };
   function bindNet(net) {
-    if (net._land) return;
+    if (net._land) return;                                              // 듣기는 방(net) 하나에 한 번만 (net.leave 때 같이 정리됨)
     net._land = true;
+    RM = { wins: {}, rdy: new Set(), pick: {} };
+    net.on('players', () => { if (net !== NET || !S || S.kind !== 'online') return; hud(); if (S.drawReady) S.drawReady(); });   // 구경 인원 · 준비 목록
     if (net.isHost) {
       hostG = 0;
       net.on('msg', (uid, m) => onHostMsg(uid, m));
       net.on('leave', uid => onHostLeave(uid));
+      net.on('join', uid => restoreSeat(uid));
     } else {
       early = [];
       net.on('msg', m => onGuestMsg(m));
@@ -156,17 +161,24 @@
     else guestMaybeStart();
   }
   // 방장: 새 판 (자리 = 방장 먼저, 그다음 들어온 순 · 12명까지) → 공유 기록에 적고 바로 시작
-  function hostRound(c) {
+  //  again: 같은 방에서 다음 판 — 앉았던 사람 중 아직 방에 있는 사람 + 방장이 체크한 구경꾼
+  function hostRound(c, again) {
     const net = NET; if (!net || !net.isHost) return;
     c = c || (net.meta && net.meta.cfg) || {};
     const pl = net.players || {}, host = net.meta && net.meta.host;
-    const seats = Object.keys(pl).filter(u => !pl[u].watch)
-      .sort((a, b) => (b === host) - (a === host) || (pl[a].t || 0) - (pl[b].t || 0) || (a < b ? -1 : 1)).slice(0, MAXP);
+    let ids = Object.keys(pl).filter(u => !pl[u].watch)
+      .sort((a, b) => (b === host) - (a === host) || (pl[a].t || 0) - (pl[b].t || 0) || (a < b ? -1 : 1));
+    if (again && S && S.kind === 'online') {
+      const prev = S.seats.filter(u => pl[u]);
+      ids = prev.concat(ids.filter(u => !prev.includes(u) && RM.pick[u]));
+    }
+    const seats = ids.slice(0, MAXP);
     if (!seats.includes(net.uid)) { seats.unshift(net.uid); seats.length = Math.min(seats.length, MAXP); }
     const sh = {
       g: ++hostG, seed: (Math.random() * 4294967296) >>> 0, n: totalFor(seats.length, c),
       mode: c.mode === 'life' ? 'life' : 'classic', tier: c.tier || 'normal',
       seats, names: seats.map(u => String((pl[u] && pl[u].name) || '친구').slice(0, 12)),
+      wins: Object.assign({}, RM.wins),                                 // 이 판을 시작하기 전까지의 이긴 횟수 (이긴 판은 모두가 같은 순간에 +1)
     };
     try { net.setShared('land', sh); } catch (e) {}
     startRound(sh);
@@ -181,6 +193,7 @@
   function startRound(sh) {
     endSession(true);
     const net = NET, host = net.isHost;
+    RM.wins = Object.assign({}, sh.wins || {}); RM.rdy = new Set(); RM.pick = {};
     const st = L.create({ n: sh.n, mode: sh.mode }, sh.seed);
     const me = sh.seats.indexOf(net.uid);
     const animals = Array.from({ length: st.n }, (_, i) => (i + sh.seed) % A.ANIMALS.length);
@@ -198,7 +211,9 @@
       ctrls, acts: new Array(st.n), netQ: [], synced: host, acc: 0, speed: 1, ff: false,
       running: false, counting: false, paused: false, ended: false, out: false,
       timers: [], cdTimers: [], modals: [], danger: false, dangerTick: -99, followAuto: true, followTick: 0, lastSec: -1, crashKey: '',
+      subs: new Set(), goneAsk: {}, drawReady: null,                        // subs = 나간 친구 자리를 AI 가 대신하는 중인 번호
     };
+    if (host) for (let i = 0; i < sh.seats.length; i++) if (S.ctrls[i].kind === 'bot') { S.subs.add(i); S.names[i] += ' 🤖'; }   // 시작 전에 나간 친구 자리는 처음부터 AI
     show(true);
     R.reset(st, { me, follow: me >= 0 ? me : leader(), animals, names });
     $('feed').innerHTML = ''; hideMsg();
@@ -216,6 +231,8 @@
     syncAt = now; S.synced = false;
     try { NET.send({ t: 'sync', g: S.g }, true); } catch (e) {}
   }
+  const rdylMsg = () => ({ t: 'rdyl', g: S.g, uids: [...RM.rdy], pick: RM.pick });
+  const sendRdy = () => { if (!S || S.kind !== 'online' || S.role !== 'host') return; try { NET.broadcast(rdylMsg(), true); } catch (e) {} if (S.drawReady) S.drawReady(); };
   function onHostMsg(uid, m) {
     if (!m || !S || S.kind !== 'online' || S.role !== 'host' || NET !== S.net) return;
     if (m.t === 'steer') {
@@ -227,25 +244,72 @@
       q.push(d);
     } else if (m.t === 'sync') {
       if (m.g !== S.g) return;
-      try { NET.send(uid, { t: 'snap', g: S.g, s: L.pack(S.st) }, true); } catch (e) {}
-    } else if (m.t === 'again') {
-      if (S.ended) hostRound();
+      restoreSeat(uid);                                                    // 다시 들어온 친구는 자리를 되찾음
+      try { NET.send(uid, { t: 'snap', g: S.g, s: L.pack(S.st), sub: [...S.subs] }, true); if (S.ended) NET.send(uid, rdylMsg(), true); } catch (e) {}
+    } else if (m.t === 'rdy') {                                            // 판이 끝난 뒤 '준비' (구경꾼이 누르면 '다음 판에 낄래요')
+      if (!S.ended || m.g !== S.g) return;
+      RM.rdy.add(uid);
+      if (!S.seats.includes(uid)) RM.pick[uid] = true;
+      sendRdy();
     }
   }
-  // 방장: 판 도중 나간 친구 자리는 AI 가 이어서 (모두에게 알림)
+  // 방장: 판 도중 나간 친구 — 5초 안에 안 돌아오면 고름 (그동안 그 동물은 방향을 못 바꿈)
   function onHostLeave(uid) {
-    if (!S || S.kind !== 'online' || S.role !== 'host' || S.ended) return;
+    if (!S || S.kind !== 'online' || S.role !== 'host') return;
     const p = S.seats.indexOf(uid);
-    if (p < 0 || !S.ctrls[p] || S.ctrls[p].kind !== 'human') return;
-    S.ctrls[p] = botCtrl(S.st, p, S.tier, S.seed, S.seats.map((_, i) => i));
-    botSeat(p);
-    try { NET.broadcast({ t: 'bot', g: S.g, p }, true); } catch (e) {}
+    if (p < 0) return;
+    if (S.drawReady) S.drawReady();
+    if (S.ended || !S.ctrls[p] || S.ctrls[p].kind !== 'human') return;
+    S.ctrls[p].q.length = 0;
+    Cozy.toast(`${S.names[p].replace(/ 🤖$/, '')} 님 연결이 끊겼어요. 같은 링크로 다시 들어오면 이어서 해요`, 3200);
+    const s0 = S;
+    setTimeout(() => { if (S !== s0 || s0.ended || (NET.players || {})[uid] || s0.ctrls[p].kind !== 'human') return; askGone(p); }, 5000);
   }
-  function botSeat(p) {
-    const old = S.names[p];
-    S.names[p] = `${old} 🤖`;
-    Cozy.toast(`${old} 님이 나갔어요 · AI 가 이어서 해요`, 2200);
+  // 실시간 경기라 경기를 가리지 않는 작은 카드로 물음 (조작은 그대로 됨)
+  const goneBox = () => { let b = $('goneBox'); if (!b) { b = document.createElement('div'); b.id = 'goneBox'; document.body.appendChild(b); } return b; };
+  function closeGone(p) {
+    if (!S || !S.goneAsk) return;
+    for (const i of p == null ? Object.keys(S.goneAsk) : [p]) { const x = S.goneAsk[i]; if (x) { x.el.remove(); delete S.goneAsk[i]; } }
+  }
+  function askGone(p) {
+    const s = S; if (!s || s.kind !== 'online' || s.role !== 'host' || s.subs.has(p) || s.goneAsk[p]) return;
+    const el = document.createElement('div'), nm = Cozy.esc(s.names[p]); el.className = 'gcard';
+    el.innerHTML = `<b>🔌 ${nm} 님이 나갔어요</b><span>AI 가 대신 움직여요 · 같은 링크로 돌아오면 자리를 돌려줘요</span>
+      <div><button type="button" data-a="ai" class="pri">🤖 AI가 대신</button><button type="button" data-a="lobby">🔄 처음부터 다시 (대기실로)</button><button type="button" data-a="wait">⏳ 기다릴게요</button></div>`;
+    el.onclick = e => {
+      const b = e.target.closest('button'), a = b && b.dataset.a; if (!a || S !== s) return;
+      sfx('tap');
+      if (a === 'ai') subAI(p);
+      else if (a === 'lobby') { try { NET.chat('🔄 방장이 처음부터 다시 하기로 했어요'); } catch (er) {} toLobby(); }
+      closeGone(p);
+    };
+    goneBox().appendChild(el);
+    s.goneAsk[p] = { uid: s.seats[p], el };
+  }
+  function subAI(p) {
+    if (!S || S.kind !== 'online' || S.role !== 'host' || S.ended || !S.ctrls[p] || S.ctrls[p].kind !== 'human') return;
+    S.ctrls[p] = botCtrl(S.st, p, S.tier, S.seed, S.seats.map((_, i) => i));
+    markSub(p, true);
+    try { NET.broadcast({ t: 'bot', g: S.g, p, on: 1 }, true); NET.chat(`🤖 ${S.names[p].replace(/ 🤖$/, '')} 님 자리는 AI 가 대신 움직여요 (돌아오면 다시 직접)`); } catch (e) {}
+  }
+  // 돌아온 친구: AI 가 대신하던 동물을 다시 직접 (방장)
+  function restoreSeat(uid) {
+    if (!S || S.kind !== 'online' || S.role !== 'host') return;
+    const p = S.seats.indexOf(uid); if (p < 0) return;
+    closeGone(p);
+    if (!S.subs.has(p) || S.ended) { if (S.drawReady) S.drawReady(); return; }
+    S.ctrls[p] = humanCtrl();
+    markSub(p, false);
+    try { NET.broadcast({ t: 'bot', g: S.g, p, on: 0 }, true); NET.chat(`🙌 ${S.names[p]} 님이 돌아와서 직접 움직여요`); } catch (e) {}
+  }
+  // 이름 옆 🤖 (AI 가 대신하는 자리) — 방장·친구 모두 같게. quiet = 알림 없이
+  function markSub(p, on, quiet) {
+    if (!S || p < 0 || p >= S.names.length || S.subs.has(p) === !!on) return;
+    const base = S.names[p].replace(/ 🤖$/, '');
+    if (on) { S.subs.add(p); S.names[p] = `${base} 🤖`; if (!quiet) Cozy.toast(`${base} 님이 나갔어요 · AI 가 이어서 해요`, 2200); }
+    else { S.subs.delete(p); S.names[p] = base; if (!quiet) Cozy.toast(`${base} 님이 돌아왔어요`, 2200); }
     drawRank(true);
+    if (S.drawReady) S.drawReady();
   }
   function onGuestMsg(m) {
     if (!m || !NET || NET.isHost) return;
@@ -254,13 +318,17 @@
       if (cur && cur.g === m.g) cur.netQ.push(m);
       else { if (early.length && early[0].g !== m.g) early = []; if (early.length < 400) early.push(m); }
     } else if (m.t === 'snap') {
-      if (cur && cur.g === m.g && m.s) applySnap(m.s);
+      if (cur && cur.g === m.g && m.s) applySnap(m.s, m.sub);
     } else if (m.t === 'bot') {
-      if (cur && cur.g === m.g && m.p >= 0 && m.p < cur.names.length) botSeat(m.p);
+      if (cur && cur.g === m.g && m.p >= 0 && m.p < cur.names.length) markSub(m.p, m.on !== 0 && m.on !== false);
+    } else if (m.t === 'rdyl') {
+      if (!cur || cur.g !== m.g) return;
+      (m.uids || []).forEach(u => RM.rdy.add(u)); RM.pick = m.pick || {};
+      if (cur.drawReady) cur.drawReady();
     }
   }
   // 친구: 방장이 보낸 지금 상태로 맞춤 (처음 · 중간 참가 · 어긋났을 때)
-  function applySnap(o) {
+  function applySnap(o, sub) {
     let st;
     try { st = L.unpack(o); } catch (e) { return; }
     if (!st || st.n !== S.st.n) return;
@@ -273,10 +341,16 @@
       if (S.me >= 0 && S.ctrls[S.me]) S.ctrls[S.me].q.length = 0;
       hud(); drawRank(true);
     }
+    if (Array.isArray(sub)) for (let p = 0; p < S.names.length; p++) markSub(p, sub.includes(p), true);   // 지금 AI 가 대신하는 자리 (늦게 들어온 사람도)
     if (st.tick > 0 && S.counting) {                                        // 판이 이미 돌고 있음 → 카운트다운 없이 바로 따라감
       for (const t of S.cdTimers) clearTimeout(t);
       S.cdTimers = []; S.counting = false; R.setHint(false); $('countBox').hidden = true; S.running = true;
       if (S.me < 0) Cozy.toast('게임 중이라 이번 판은 구경해요 · 다음 판부터 같이 해요', 2600);
+    }
+    if (st.over && !S.ended) {                                              // 판이 이미 끝난 뒤에 들어옴 → 바로 결과
+      for (const t of S.cdTimers) clearTimeout(t);
+      S.cdTimers = []; S.counting = false; R.setHint(false); $('countBox').hidden = true;
+      endGame();
     }
   }
 
@@ -285,7 +359,7 @@
   let S = null;
 
   const ANIM = i => A.ANIMALS[S.animals[i]];
-  const nameOf = i => (S && S.names && S.names[i]) ? S.names[i] : (i === S.me ? '나' : ANIM(i).name);
+  const nameOf = i => Cozy.esc((S && S.names && S.names[i]) ? S.names[i] : (i === S.me ? '나' : ANIM(i).name));   // 친구 이름은 HTML 로 들어가니 꼭 이스케이프
   const who = i => `${ANIM(i).em} ${nameOf(i)}`;
   function later(fn, ms) { const s = S, id = setTimeout(() => { if (S === s) fn(); }, ms); if (s) s.timers.push(id); return id; }
   function modal(title, html, buttons, dismiss, cls) {
@@ -344,6 +418,7 @@
     const wasNet = S.kind === 'online' && !keepNet;
     for (const t of S.timers) clearTimeout(t);
     for (const c of S.modals) c();
+    if (S.kind === 'online') closeGone();
     S = null;
     $('countBox').hidden = true; $('comboPop').hidden = true; hideMsg();
     $('feed').innerHTML = ''; $('rankBox').innerHTML = '';
@@ -358,9 +433,8 @@
   }
   function restart() {
     if (S && S.kind === 'online') {
-      if (S.role === 'host') hostRound();
-      else if (S.ended) { try { NET.send({ t: 'again', g: S.g }, true); } catch (e) {} Cozy.toast('방장에게 한 판 더 하자고 했어요', 1800); return false; }
-      else Cozy.toast('처음부터는 방장만 할 수 있어요', 1600);
+      if (S.role === 'host') hostRound(undefined, true);
+      else Cozy.toast('새 판은 방장만 열 수 있어요', 1600);
       return;
     }
     start(S ? S.kind : opts.tab);
@@ -550,6 +624,11 @@
     const tl = $('timer');
     let tt = `⏱ ${fmtT(left)}`;
     if (S.mode === 'life') { let n = 0; for (const q of st.players) if (q.alive) n++; tt += ` · ❤️ ${n}`; }
+    if (S.kind === 'online') {                                          // 친구랑: 이 방에서 내가 이긴 횟수 · 구경하는 사람 수
+      const mw = S.me >= 0 ? RM.wins[S.seats[S.me]] || 0 : 0, wc = Object.keys((NET && NET.players) || {}).filter(u => !S.seats.includes(u)).length;
+      if (mw) tt += ` · 🏅 ${mw}승`;
+      if (wc) tt += ` · 👀 ${wc}`;
+    }
     if (tl.textContent !== tt) tl.textContent = tt;
     tl.classList.toggle('hurry', left <= 10 && !S.ended);
   }
@@ -635,6 +714,10 @@
 
   function endGame() {
     S.ended = true; S.running = false; S.ff = false;
+    if (S.kind === 'online' && S.st.results) {                          // 1등인 사람 +1승 (모든 화면이 같은 순간에 세므로 방장 기록과 같음)
+      const w = S.st.results.find(r => r.rank === 1), u = w && S.seats[w.id];
+      if (u) RM.wins[u] = (RM.wins[u] || 0) + 1;
+    }
     sfx('land-whistle'); R.setDanger(false); hideMsg();
     hud(); drawRank(true);
     $('timer').classList.remove('hurry');
@@ -648,18 +731,24 @@
     if (r.id === S.me || (S.kind === 'duo' && r.id === S.me2)) cls.push('me');
     if (life && !r.alive) cls.push('out');
     const tag = life ? `<small>${r.alive ? '❤️ 끝까지' : `💫 ${fmtT(r.aliveT / TPS)}`}</small>` : '';
-    return `<li class="${cls.join(' ')}"><i>${medal(r.rank)}</i><span class="dot" style="background:${PAL[S.animals[r.id]].mini}">${an.em}</span><span>${nameOf(r.id)}</span><em>${tag}${pctStr(r.pct)}%</em></li>`;
+    const ww = S.kind === 'online' ? RM.wins[S.seats[r.id]] || 0 : 0;      // 친구랑: 이 방 전적
+    return `<li class="${cls.join(' ')}"><i>${medal(r.rank)}</i><span class="dot" style="background:${PAL[S.animals[r.id]].mini}">${an.em}</span><span>${nameOf(r.id)}${ww ? ` <small class="wn">🏅${ww}</small>` : ''}</span><em>${tag}${pctStr(r.pct)}%</em></li>`;
   }
   function showResults() {
     const st = S.st, res = st.results;
     const online = S.kind === 'online', host = online && S.role === 'host';
+    // 친구랑: 판 사이에 손님은 '✋ 준비', 방장은 다 준비되면 다음 판 시작 (혼자 다시 시작하지 못함) · 구경꾼은 방장이 체크하면 다음 판부터 같이
+    const nextRound = () => hostRound(undefined, true);
     const againBtns = online
-      ? (host ? [['한 판 더', restart, true], ['대기실', toLobby], ['나가기', goMenu, false, true]] : [['한 판 더 하자', restart, true], ['나가기', goMenu, false, true]])
+      ? (host ? [['다음 판 시작 ▶', nextRound, true], ['안 기다리고 시작', nextRound], ['대기실', toLobby], ['나가기', goMenu, false, true]]
+        : [['✋ 준비', () => { RM.rdy.add(NET.uid); try { NET.send({ t: 'rdy', g: S.g }, true); } catch (e) {} S.drawReady(); return false; }, true], ['나가기', goMenu, false, true]])
       : null;
+    const rdy = online ? '<div class="rdy"></div>' : '';
     if (S.me < 0) {
       const w = res[0];
-      modal('🏁 구경 끝!', `<div class="big">${ANIM(w.id).em} ${nameOf(w.id)}</div><p class="res-sub">${pctStr(w.pct)}% 칠하고 1등! · ✂️ ${w.kills}번 끊었어요</p><ol class="rlist">${res.map(resRow).join('')}</ol>`,
+      modal('🏁 구경 끝!', `<div class="big">${ANIM(w.id).em} ${nameOf(w.id)}</div><p class="res-sub">${pctStr(w.pct)}% 칠하고 1등! · ✂️ ${w.kills}번 끊었어요</p><ol class="rlist">${res.map(resRow).join('')}</ol>${rdy}`,
         againBtns || [['한 판 더 구경', restart, true], ['메뉴', goMenu]], false, 'land-res');
+      if (online) wireReady();
       sfx('good');
       return;
     }
@@ -685,11 +774,45 @@
         <span><i>⏱ 살아 있던 시간</i><b>${fmtT(r.aliveT / TPS)}</b></span>
         <span><i>💫 아웃</i><b>${r.deaths}번</b></span>
       </div>
-      <ol class="rlist">${res.map(resRow).join('')}</ol>`;
+      <ol class="rlist">${res.map(resRow).join('')}</ol>${rdy}`;
     modal(title, html, againBtns || [['다시 하기', restart, true], ['메뉴', goMenu]], false, 'land-res');
+    if (online) wireReady();
     if (r.rank === 1) { sfx('land-win'); Cozy.confetti(); }
     else if (r.rank <= 3) sfx('good');
     else sfx('lose');
+  }
+
+  // 판 사이 준비 목록 (결과 창 안): 앉은 사람 ✅/⏳/🔌 · 구경하는 사람(방장은 체크해서 다음 판에 같이) · 방장 단추는 다 준비돼야 켜짐
+  function wireReady() {
+    const s = S, net = NET, host = s.role === 'host', myId = net.uid;
+    const ov = [...document.querySelectorAll('.overlay.land-res')].pop(); if (!ov) return;
+    const rb = ov.querySelector('.rdy'), bs = ov.querySelectorAll('.row button'), nb = bs[0], fb = host ? bs[1] : null;
+    s.drawReady = () => {
+      if (S !== s || !rb.isConnected) return;
+      const pl = net.players || {}, hostId = (net.meta || {}).host, esc = Cozy.esc;
+      const row = s.seats.map((u, p) => {
+        const nm = esc(u === myId ? '나' : s.names[p]);
+        if (u === hostId) return `<span class="ok">👑 ${nm}</span>`;
+        const gone = !pl[u], ok = RM.rdy.has(u) || s.subs.has(p);
+        return `<span class="${ok ? 'ok' : gone ? 'gone' : ''}">${ok ? '✅' : gone ? '🔌' : '⏳'} ${nm}</span>`;
+      });
+      const wu = Object.keys(pl).filter(u => !s.seats.includes(u));
+      const wl = wu.map(u => {
+        const nm = esc((pl[u] || {}).name || '친구'), hand = RM.rdy.has(u) ? ' ✋' : '';
+        return host ? `<label><input type="checkbox" data-pick="${esc(u)}" ${RM.pick[u] ? 'checked' : ''}> ${nm}${hand}</label>` : `<span>${nm}${hand}${RM.pick[u] ? ' ✔' : ''}</span>`;
+      }).join('');
+      rb.innerHTML = `<div class="rdy-row">${row.join('')}</div>${wu.length ? `<div class="rdy-w">👀 구경 ${wu.length}명${host ? ' · 체크하면 다음 판부터 같이' : ''}: ${wl}</div>` : ''}`;
+      if (host) {
+        const need = s.seats.filter((u, p) => u !== myId && pl[u] && !s.subs.has(p)), n = need.filter(u => RM.rdy.has(u)).length, all = n === need.length;
+        nb.disabled = !all; nb.textContent = all ? '다음 판 시작 ▶' : `다음 판 시작 (준비 ${n}/${need.length})`;
+        fb.hidden = all;
+        rb.querySelectorAll('[data-pick]').forEach(c => c.onchange = () => { RM.pick[c.dataset.pick] = c.checked; sendRdy(); });
+      } else {
+        const on = RM.rdy.has(myId), seated = s.seats.includes(myId);
+        nb.disabled = on; nb.textContent = on ? '✅ 준비 완료 · 방장을 기다려요' : seated ? '✋ 준비' : '✋ 다음 판에 낄래요';
+      }
+    };
+    s.drawReady();
   }
 
   // 한 키보드 둘이서 결과: 1P · 2P 중 누가 이겼나 + 둘의 기록 (최고 기록은 안 남김)
