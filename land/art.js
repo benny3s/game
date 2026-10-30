@@ -1,4 +1,4 @@
-/* 땅따먹기 — 그림 재료: 동물 8마리와 크레파스 색, 동물 얼굴 그리기, 크레파스 결·종이 결 무늬
+/* 땅따먹기 — 그림 재료: 동물 12마리와 크레파스 색, 동물 얼굴 그리기, 크레파스 결·종이 결 무늬
    · 얼굴은 반지름 1 기준으로 그림 (ctx 를 옮기고 키워서 씀) → 판 위 머리·메뉴 고르기 칸 모두 같은 그림
    · 결(무늬)은 simplex-noise(MIT, 있으면)로 이음매 없는 타일을 만듦. 못 불러오면 단순한 결로 대신 */
 (function () {
@@ -15,6 +15,11 @@
     { id: 'frog', name: '개구리', em: '🐸', color: '#9fd468' },
     { id: 'pig', name: '꿀꿀이', em: '🐷', color: '#f497b9' },
     { id: 'fox', name: '여우', em: '🦊', color: '#ff9866' },
+    // 친구랑 12명까지: 4마리 더 (기존 8색과 겹치지 않는 회색 · 남색 · 자주 · 빨강)
+    { id: 'koala', name: '코알라', em: '🐨', color: '#9eaabb' },
+    { id: 'penguin', name: '펭귄', em: '🐧', color: '#5a78c8' },
+    { id: 'mouse', name: '생쥐', em: '🐭', color: '#d27bd0' },
+    { id: 'squirrel', name: '다람쥐', em: '🐿️', color: '#e2665e' },
   ];
   const INK = '#4a3426';
 
@@ -125,13 +130,19 @@
     const fill = c => { g.fillStyle = c; g.fill(); };
     const pink = '#ff9fb4';
     // 1) 머리 뒤에 오는 귀
-    if (id === 'cat' || id === 'fox') {
-      const tall = id === 'fox' ? 0.14 : 0;
+    if (id === 'cat' || id === 'fox' || id === 'squirrel') {
+      const tall = id === 'fox' ? 0.14 : id === 'squirrel' ? 0.08 : 0;
       for (const s of [-1, 1]) {
         g.beginPath(); g.moveTo(s * 0.9, -0.22); g.quadraticCurveTo(s * 0.94, -1.0 - tall, s * 0.64, -1.08 - tall); g.quadraticCurveTo(s * 0.42, -0.98 - tall, s * 0.16, -0.84); g.closePath();
         fill(headC); stroke();
         g.beginPath(); g.moveTo(s * 0.74, -0.4); g.quadraticCurveTo(s * 0.78, -0.86 - tall, s * 0.62, -0.92 - tall); g.quadraticCurveTo(s * 0.48, -0.86 - tall, s * 0.34, -0.76); g.closePath();
-        fill(id === 'fox' ? shade(A.color, -0.32) : pink);
+        fill(id === 'cat' ? pink : shade(A.color, -0.32));
+      }
+    } else if (id === 'koala' || id === 'mouse') {                          // 크고 둥근 귀
+      const ex = id === 'koala' ? 0.86 : 0.74, ey = id === 'koala' ? -0.52 : -0.74, er = id === 'koala' ? 0.44 : 0.4;
+      for (const s of [-1, 1]) {
+        ell(g, s * ex, ey, er, er * 0.95); fill(headC); stroke();
+        ell(g, s * ex * 0.97, ey + 0.02, er * 0.55, er * 0.52); fill(id === 'koala' ? shade(A.color, 0.55) : pink);
       }
     } else if (id === 'rabbit') {
       for (const s of [-1, 1]) {
@@ -161,7 +172,12 @@
       for (const s of [-1, 1]) { ell(g, s * 0.4 + fx, 0.5 + fy, 0.55, 0.42); fill('#fff6ea'); }
       g.restore();
     }
-    if (id === 'dog' || id === 'bear') { ell(g, fx, 0.36 + fy, 0.4, 0.29); fill(shade(A.color, 0.55)); }
+    if (id === 'penguin') {                                                 // 하얀 얼굴 (하트 모양 두 겹)
+      g.save(); ell(g, 0, 0, 0.95, 0.92); g.clip();
+      for (const s of [-1, 1]) { ell(g, s * 0.3 + fx, 0.16 + fy, 0.44, 0.6); fill('#fffaf3'); }
+      g.restore();
+    }
+    if (id === 'dog' || id === 'bear' || id === 'squirrel') { ell(g, fx, 0.36 + fy, 0.4, 0.29); fill(shade(A.color, 0.55)); }
     if (id === 'panda') for (const s of [-1, 1]) { ell(g, s * 0.37 + fx, -0.02 + fy, 0.21, 0.27, s * -0.5); fill('#4d4038'); }
     // 3) 볼
     if (mood !== 2) for (const s of [-1, 1]) { ell(g, s * 0.6 + fx, 0.27 + fy, 0.17, 0.11); fill('rgba(255,112,124,0.32)'); }
@@ -189,18 +205,24 @@
     if (id === 'pig') {
       ell(g, mx, 0.3 + my, 0.36, 0.26); fill(shade(A.color, -0.06)); stroke(0.07);
       for (const s of [-1, 1]) { ell(g, mx + s * 0.12, 0.3 + my, 0.055, 0.085); fill(shade(A.color, -0.45)); }
+    } else if (id === 'koala') {                                            // 크고 까만 코
+      ell(g, mx, 0.2 + my, 0.19, 0.24); fill(INK);
+      ell(g, mx - 0.06, 0.12 + my, 0.05, 0.06); fill('rgba(255,255,255,0.45)');
+    } else if (id === 'penguin') {                                          // 노란 부리
+      g.beginPath(); g.moveTo(mx - 0.17, 0.2 + my); g.quadraticCurveTo(mx, 0.12 + my, mx + 0.17, 0.2 + my); g.quadraticCurveTo(mx, 0.42 + my, mx - 0.17, 0.2 + my); g.closePath();
+      fill('#ffb547'); stroke(0.05, '#d98a2b');
     } else if (id === 'frog') {
       g.beginPath(); g.moveTo(mx - 0.42, 0.18 + my); g.quadraticCurveTo(mx, 0.52 + my, mx + 0.42, 0.18 + my); stroke(0.075, shade(A.color, -0.5));
     } else {
-      const darkNose = id === 'dog' || id === 'bear' || id === 'panda' || id === 'fox';
+      const darkNose = id === 'dog' || id === 'bear' || id === 'panda' || id === 'fox' || id === 'squirrel';
       if (darkNose) { ell(g, mx, 0.2 + my, 0.11, 0.075); fill(INK); }
       else { g.beginPath(); g.moveTo(mx - 0.08, 0.15 + my); g.lineTo(mx + 0.08, 0.15 + my); g.lineTo(mx, 0.24 + my); g.closePath(); fill('#f2839a'); }
       if (mood === 2) { ell(g, mx, 0.42 + my, 0.08, 0.1); fill(INK); }
       else if (mood === 1) { g.beginPath(); g.moveTo(mx - 0.16, 0.3 + my); g.quadraticCurveTo(mx, 0.56 + my, mx + 0.16, 0.3 + my); g.closePath(); fill('#e86a7f'); }
       else { g.beginPath(); g.moveTo(mx - 0.15, 0.29 + my); g.quadraticCurveTo(mx - 0.075, 0.4 + my, mx, 0.3 + my); g.quadraticCurveTo(mx + 0.075, 0.4 + my, mx + 0.15, 0.29 + my); stroke(0.055, INK); }
     }
-    // 6) 고양이 수염
-    if (id === 'cat') {
+    // 6) 고양이·생쥐 수염
+    if (id === 'cat' || id === 'mouse') {
       g.globalAlpha *= 0.55;
       for (const s of [-1, 1]) { g.beginPath(); g.moveTo(s * 0.52 + mx, 0.2 + my); g.lineTo(s * 0.95 + mx, 0.12 + my); g.moveTo(s * 0.52 + mx, 0.31 + my); g.lineTo(s * 0.94 + mx, 0.38 + my); stroke(0.035, INK); }
       g.globalAlpha /= 0.55;

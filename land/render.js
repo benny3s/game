@@ -42,6 +42,7 @@
     // 사람마다 그리기 정보
     let P = [];
     let ghosts = [], decals = [], parts = [], texts = [], rings = [];
+    let pair = null, snap = false;                               // 한 키보드 둘이서: [1P, 2P] 자리 → 카메라가 둘 다 보이게 · snap: 다음 화면에 바로 맞춤
     let danger = false, overview = false, fast = false, hint = false;   // fast: 빨리 감기 중엔 칸 움직임·파편 없이 바로 · hint: 카운트다운 중 '나' 표시 통통
     let lightTrail = [];                                         // 밝은 색(노랑·연두) 선은 크림 종이 위에서 흐려서 테두리를 더함
     // rough.js 그림(낙서 자국 · 동그라미)은 동물마다 한 장씩만 만들어 판이 바뀌어도 다시 씀 (아웃마다 새로 그리면 느린 폰에서 끊김)
@@ -223,6 +224,7 @@
       names = opt.names || animals.map(a => A.ANIMALS[a].name);
       rt = 0; groups = []; gid = 0; dirty = []; ghosts = []; decals = []; parts = []; texts = []; rings = [];
       danger = false; overview = false; fast = false; hint = false;
+      pair = Array.isArray(opt.pair) && opt.pair.length === 2 ? opt.pair.slice() : null;
       lightTrail = animals.map(a => lum(PAL[a].land) > 0.7);
       disp = Uint8Array.from(st.owner); claim = new Int32Array(N);
       jitter();
@@ -361,6 +363,7 @@
       const c0 = e.y * W + e.x;
       addIn(cells, k, CX[c0], CY[c0], 0.06);
       q.born = rt; q.px = q.cx = CX[c0]; q.py = q.cy = CY[c0];
+      if (pair && pair.includes(e.p)) snap = true;
       if (visible(CX[c0], CY[c0], 4)) rings.push({ x: CX[c0], y: CY[c0], c: PAL[animals[e.p]].edge, t0: rt, life: 0.65, r0: 0.7, r1: 3.2, d: cachedSprite('ring', animals[e.p]), rot: Math.random() * TAU });
     }
     // rough.js 그림을 작은 캔버스에 한 번만 그려 둠 (매 화면은 붙이기만) · size = 칸 단위 한 변
@@ -390,8 +393,20 @@
 
     // ── 카메라
     function headPos(i, alpha) { const q = P[i]; return [q.px + (q.cx - q.px) * alpha, q.py + (q.cy - q.py) * alpha]; }
+    // 한 키보드 둘이서: 살아 있는 두 머리 (없으면 빈 배열)
+    function pairHeads(alpha) {
+      const hs = [];
+      if (pair) for (const i of pair) if (P[i] && P[i].alive && st.players[i].alive) hs.push(headPos(i, alpha));
+      return hs;
+    }
     function target(alpha) {
       if (overview || !st) return [W / 2, H / 2];
+      if (pair) {                                                       // 두 사람 가운데 (하나만 살아 있으면 그 사람)
+        const hs = pairHeads(alpha);
+        if (hs.length === 2) return [(hs[0][0] + hs[1][0]) / 2, (hs[0][1] + hs[1][1]) / 2];
+        if (hs.length === 1) return hs[0];
+        return [cam.x, cam.y];
+      }
       if (follow >= 0 && P[follow] && P[follow].alive) {
         const h = headPos(follow, alpha);
         return [h[0] + cam.lx, h[1] + cam.ly];
@@ -416,15 +431,24 @@
       rt += dt;
       flushDirty();
       // 카메라: 따라가는 머리 + 가는 쪽으로 조금 앞을 봄
-      const f = follow >= 0 && P[follow] && P[follow].alive ? P[follow] : null;
+      const f = !pair && follow >= 0 && P[follow] && P[follow].alive ? P[follow] : null;
       const la = Math.min(vw, vh) / baseZ * 0.16;
       cam.lx += ((f ? f.lx * la : 0) - cam.lx) * (1 - Math.exp(-dt * 2.2));
       cam.ly += ((f ? f.ly * la : 0) - cam.ly) * (1 - Math.exp(-dt * 2.2));
       if (overview) cam.kT = Math.min(1, Math.min(vw, vh) / (Math.max(W, H) + 4) / baseZ);
+      else if (pair) {
+        // 둘이서: 두 머리가 (둘레 7칸 넉넉히) 다 보이게 줌. 가장 멀어도 종이 전체까지만, 가까우면 0.85배까지
+        const all = Math.min(vw / ((W + 4) * baseZ), vh / ((H + 4) * baseZ)), hs = pairHeads(alpha);
+        let k = 0.85;
+        if (hs.length === 2) k = Math.min(vw / ((Math.abs(hs[0][0] - hs[1][0]) + 14) * baseZ), vh / ((Math.abs(hs[0][1] - hs[1][1]) + 14) * baseZ));
+        else if (!hs.length) k = all;
+        cam.kT = clamp(k, Math.min(all, 0.85), 0.85);
+      }
       else cam.kT = f ? (me < 0 ? 0.86 : 1) : 0.9;                      // 구경은 조금 더 넓게
-      cam.k += (cam.kT - cam.k) * (1 - Math.exp(-dt * 2.6));
+      cam.k += (cam.kT - cam.k) * (1 - Math.exp(-dt * (pair && cam.kT < cam.k ? 8 : 2.6)));   // 둘이서: 넓힐 땐 빨리
       z = baseZ * cam.k;
       const tg = target(alpha), ease = 1 - Math.exp(-dt * (overview ? 2.5 : 6));
+      if (snap) { snap = false; cam.k = cam.kT; z = baseZ * cam.k; cam.x = tg[0]; cam.y = tg[1]; }   // 둘이서: 1P·2P 가 멀리서 다시 태어나면 바로 그곳까지 보이게
       cam.x += (tg[0] - cam.x) * ease; cam.y += (tg[1] - cam.y) * ease;
       clampCam();
       cam.shake *= Math.exp(-dt * 8);
@@ -499,9 +523,10 @@
         drawTrail(g, gh.i, gh.pts, clamp(1 - t / gh.life, 0, 1), false);
       }
       for (let i = 0; i < NP; i++) {
-        const p = st.players[i], q = P[i];
+        const p = st.players[i];
         if (!p.alive || !p.trail.length) continue;
         const h = headPos(i, alpha);
+        if (offView(p.trail, p.exit, h[0], h[1], L, R, T, B)) continue;   // 화면 밖 선은 안 그림 (12명이면 큰 차이)
         drawTrail(g, i, trailPts(p.trail, p.exit, h[0], h[1]), 1, i === me && danger);
       }
       // 종이 테두리 (손그림 빨간 크레파스: 닿으면 아웃)
@@ -519,7 +544,7 @@
       }
       // 머리 (아래쪽에 있는 것을 나중에 → 겹칠 때 자연스럽게)
       const order = [];
-      for (let i = 0; i < NP; i++) if (P[i].alive && st.players[i].alive) order.push(i);
+      for (let i = 0; i < NP; i++) if (P[i].alive && st.players[i].alive && P[i].cx > L - 2 && P[i].cx < R + 2 && P[i].cy > T - 2 && P[i].cy < B + 2) order.push(i);
       order.sort((a, b) => P[a].cy - P[b].cy);
       for (const i of order) drawHead(g, i, alpha, dt);
       // 크레파스 조각 · 반짝이
@@ -544,7 +569,14 @@
       g.setTransform(1, 0, 0, 1, 0, 0);
       // 이름표: 나 (혼자) · 따라가는 친구 (구경)
       const ti = me >= 0 && P[me] && P[me].alive ? me : follow;
-      if (ti >= 0 && P[ti] && P[ti].alive && st.players[ti].alive && !overview) {
+      if (pair && !overview) {                                          // 둘이서: 1P · 2P 이름표 둘 다
+        for (const i of pair) {
+          if (!P[i] || !P[i].alive || !st.players[i].alive) continue;
+          const hop = hint ? Math.abs(Math.sin(rt * 6 + i)) : 0;
+          const h = headPos(i, alpha), x = h[0] * z + ox, y = (h[1] - HEAD_R * 1.7) * z + oy + Math.sin(rt * 5 + i) * dpr * 1.5 - hop * 6 * dpr;
+          tag(g, x, y, names[i] || '', hint ? 1.18 + hop * 0.12 : 1);
+        }
+      } else if (ti >= 0 && P[ti] && P[ti].alive && st.players[ti].alive && !overview) {
         // 카운트다운 중엔 통통 크게 (내가 누구인지 바로 보이게)
         const hop = hint ? Math.abs(Math.sin(rt * 6)) : 0;
         const h = headPos(ti, alpha), x = h[0] * z + ox, y = (h[1] - HEAD_R * 1.7) * z + oy + Math.sin(rt * 5) * dpr * 1.5 - hop * 6 * dpr;
@@ -573,6 +605,18 @@
       }
     }
 
+    // 선(칸들 + 나간 칸 + 머리)이 보이는 곳(L~R, T~B)과 하나도 안 겹치면 true
+    function offView(cells, exit, hx, hy, L, R, T, B) {
+      if (hx >= L && hx <= R && hy >= T && hy <= B) return false;
+      let x0 = hx, x1 = hx, y0 = hy, y1 = hy;
+      for (let j = -1; j < cells.length; j++) {
+        const c = j < 0 ? exit : cells[j]; if (c < 0) continue;
+        const x = c % W, y = (c - x) / W;
+        if (x < x0) x0 = x; if (x + 1 > x1) x1 = x + 1;
+        if (y < y0) y0 = y; if (y + 1 > y1) y1 = y + 1;
+      }
+      return x1 < L || x0 > R || y1 < T || y0 > B;
+    }
     function drawTrail(g, i, pts, a, warn) {
       if (pts.length < 4) return;
       const pal = PAL[animals[i]];
@@ -684,7 +728,7 @@
       // 머리
       for (let i = 0; i < NP; i++) {
         if (!st.players[i].alive) continue;
-        const p = st.players[i], big = i === me || (me < 0 && i === follow);
+        const p = st.players[i], big = i === me || (me < 0 && i === follow) || (!!pair && pair.includes(i));
         const r = big ? s / 26 + Math.sin(rt * 6) * s / 160 : s / 40;
         mctx.beginPath(); mctx.arc((p.x + 0.5) * k, (p.y + 0.5) * k, r + s / 120, 0, TAU); mctx.fillStyle = '#ffffff'; mctx.fill();
         mctx.beginPath(); mctx.arc((p.x + 0.5) * k, (p.y + 0.5) * k, r, 0, TAU); mctx.fillStyle = PAL[animals[i]].edge; mctx.fill();

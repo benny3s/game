@@ -50,6 +50,17 @@ header.top h1{white-space:nowrap}
 .best{margin:-4px 0 0;text-align:center}
 .best:empty{display:none}
 .helprow{display:flex;justify-content:center}
+.p2row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:6px 8px 6px 14px;font:700 14px var(--round)}
+.p2row b{font-weight:700;color:var(--gold)}
+.p2row .btn{padding:7px 12px;font-size:13px}
+/* 친구랑 대기실 설정 (공용 대기실 안) */
+.lnd-set{display:grid;gap:6px}
+.lnd-set>span{font:700 13px var(--round);color:var(--soft);padding-left:2px}
+.lnd-seg{display:flex;gap:6px;flex-wrap:wrap}
+.lnd-seg .arn-btn{flex:1 1 0;min-width:0;padding:9px 6px;font-size:13.5px;white-space:nowrap}
+.lnd-seg .arn-btn[aria-pressed="true"]{background:linear-gradient(135deg,var(--accent),var(--accent-d));color:#fff;border-color:rgba(255,255,255,.3)}
+.lnd-seg .arn-btn:disabled[aria-pressed="true"]{opacity:.9}
+.lnd-desc{text-align:center;margin:2px 0 0!important}
 
 /* ── 게임 화면 (화면 어디서나 확대·끌기 안 되게, 누르기는 그대로) */
 .play{touch-action:none}
@@ -60,6 +71,7 @@ header.top h1{white-space:nowrap}
 .stage{background:#f4e3cf;border-radius:22px;box-shadow:var(--shadow);overflow:hidden;place-items:stretch;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 #cv{position:absolute;inset:0;width:100%;height:100%}
 .hud{position:absolute;pointer-events:none}
+.rankbox,.feed div,.msg,.cnthint{color:#4a3426}                       /* 흰 카드 위 글자는 진한 갈색 (어두운 메뉴의 흰 글자색을 물려받지 않게) */
 .rankbox{left:8px;top:8px;background:rgba(255,255,255,.84);border-radius:14px;padding:4px 5px;box-shadow:0 3px 10px rgba(140,98,70,.16);display:grid;gap:1px;width:122px}
 .rankbox:empty{display:none}
 .rk{display:grid;grid-template-columns:11px 18px minmax(0,1fr) auto;align-items:center;gap:4px;font:12px/1 var(--round);height:19px;padding:0 3px;border-radius:8px}
@@ -164,15 +176,18 @@ header.top h1{white-space:nowrap}
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+      <button class="btn" id="tabDuo" aria-pressed="false" title="한 키보드 둘이서 (1P WASD · 2P 방향키)" hidden>⌨️ 둘이서</button>
     </div>
     <p class="lede" id="lede"></p>
     <div class="opt"><div class="seg center" id="modeSeg"></div><p class="modedesc" id="modeDesc"></p></div>
+    <div class="opt"><span class="small">동물 수</span><div class="seg center" id="countSeg"></div><p class="modedesc" id="countDesc"></p></div>
     <div class="opt"><span class="small" id="tierLbl">친구들 실력</span><div class="tiers three" id="tiers"></div></div>
-    <div class="opt" id="animalBox"><span class="small">내 동물 (내 색)</span><div class="animals" id="animals"></div></div>
+    <div class="opt" id="animalBox"><span class="small" id="animalLbl">내 동물 (내 색)</span><div class="animals" id="animals"></div>
+      <div class="p2row" id="p2Row" hidden><span>2P 동물 <b id="p2Name"></b></span><button class="btn ghost" id="p2Btn">바꾸기</button></div></div>
     <div class="startwrap"><button class="btn primary big" id="startBtn">시작!</button></div>
     <p class="small best" id="bestLine"></p>
     <ul class="howto" id="howtoList">
-      <li>밀면(스와이프) 그쪽으로 돌아요 · PC는 방향키나 WASD</li>
+      <li id="howto1">밀면(스와이프) 그쪽으로 돌아요 · PC는 방향키나 WASD</li>
       <li>내 땅 밖으로 나가면 선이 그려지고, 돌아오면 안쪽이 모두 내 땅</li>
       <li>선을 긋는 중에 누가 내 선을 밟으면 아웃! 남의 선을 밟으면 그 친구가 아웃</li>
       <li>종이 끝에 닿거나 내 선을 밟아도 아웃이에요</li>
@@ -220,11 +235,11 @@ header.top h1{white-space:nowrap}
 <script src="../common/cozy.js?v=4"></script>
 <script src="../common/arena.js?v=4"></script>
 <script src="../common/arena-ui.js?v=4"></script>
-<script src="core.js?v=4"></script>
+<script src="core.js?v=5"></script>
 <script src="bots.js?v=4"></script>
-<script src="art.js?v=4"></script>
-<script src="render.js?v=4"></script>
+<script src="art.js?v=5"></script>
+<script src="render.js?v=6"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=4"></script>
+<script src="main.js?v=6"></script>
 </body>
 </html>

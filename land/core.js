@@ -389,8 +389,36 @@
     return ('0000000' + h.toString(16)).slice(-8);
   }
 
+  // ── 작게 묶기 (온라인 중간 참가·다시 맞추기용): 칸 배열을 [값, 개수, …] 로 줄여 JSON 크기를 수십 분의 일로
+  function rle(a) {
+    const o = [];
+    if (!a.length) return o;
+    let v = a[0], k = 0;
+    for (let i = 0; i < a.length; i++) { if (a[i] === v) k++; else { o.push(v, k); v = a[i]; k = 1; } }
+    o.push(v, k);
+    return o;
+  }
+  function unrle(o, len) {
+    const a = new Uint8Array(len);
+    for (let j = 0, i = 0; j < o.length; j += 2) { a.fill(o[j], i, i + o[j + 1]); i += o[j + 1]; }
+    return a;
+  }
+  function pack(st) {
+    const o = toJSON(Object.assign({}, st, { owner: new Uint8Array(0), trail: new Uint8Array(0) }));
+    o.owner = rle(st.owner); o.trail = rle(st.trail); o.packed = 1;
+    return o;
+  }
+  function unpack(o) {
+    if (typeof o === 'string') o = JSON.parse(o);
+    if (!o.packed) return fromJSON(o);
+    const st = fromJSON(Object.assign({}, o, { owner: [], trail: [] }));
+    delete st.packed;
+    st.owner = unrle(o.owner, o.W * o.H); st.trail = unrle(o.trail, o.W * o.H);
+    return st;
+  }
+
   const API = {
-    C, DX, DY, ACT, CAUSES, sizeFor, turn, create, step, obs, ranking, pct, toJSON, fromJSON, clone, hash,
+    C, DX, DY, ACT, CAUSES, sizeFor, turn, create, step, obs, ranking, pct, toJSON, fromJSON, clone, hash, pack, unpack,
     rand,   // 봇·도구가 쓰는 같은 난수 (상태 대신 {rng} 객체를 넘겨도 됨)
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;

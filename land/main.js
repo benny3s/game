@@ -19,8 +19,13 @@
     '친구를 통째로 둘러싸 내 땅으로 만들면 그 친구도 아웃! 머리끼리 부딪히면 둘 다 아웃인데, 그 칸이 누구 땅이면 땅 주인만 살아요',
     '🖍 클래식은 3분 동안 가장 넓게(아웃돼도 2초 뒤 다시), ❤️ 한 목숨은 끝까지 살아남기',
   ];
-  const opts = Object.assign({ tab: 'solo', mode: 'classic', tier: 'normal', animal: 0, pad: false }, Cozy.store('land.opts', {}));
+  const opts = Object.assign({ tab: 'solo', mode: 'classic', tier: 'normal', animal: 0, pad: false, count: 8 }, Cozy.store('land.opts', {}));
   if (!(opts.animal >= 0 && opts.animal < A.ANIMALS.length)) opts.animal = 0;
+  const COUNTS = [[4, '4마리'], [8, '8마리'], [12, '12마리']];
+  const KEYBOARD = matchMedia('(hover: hover) and (pointer: fine)').matches;   // 마우스·키보드 기기 (한 키보드 둘이서는 여기서만)
+  if (!COUNTS.some(c => c[0] === opts.count)) opts.count = 8;
+  // 최고 기록 칸: 8마리 판은 예전 기록 그대로, 다른 인원은 따로
+  const bestKey = (mode, tier, n) => mode + '.' + tier + (n === 8 ? '' : '.' + n);
   const saveOpts = () => Cozy.save('land.opts', opts);
   // 받침 따라 조사 (이/가, 과/와)
   const josa = (w, a, b) => { const c = w.charCodeAt(w.length - 1); return w + (c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? a : b); };
@@ -44,102 +49,235 @@
     $('animals').appendChild(b);
     return b;
   });
+  // 2P 동물: 1P 와 다르게 (저장된 것이 같으면 다음 동물)
+  const p2Animal = () => { let a = opts.animal2 >= 0 && opts.animal2 < A.ANIMALS.length ? opts.animal2 : 1; if (a === opts.animal) a = (a + 1) % A.ANIMALS.length; return a; };
   function drawMenu() {
-    const solo = opts.tab === 'solo';
-    $('tabSolo').setAttribute('aria-pressed', String(solo)); $('tabWatch').setAttribute('aria-pressed', String(!solo));
-    $('lede').textContent = solo ? '크레파스로 선을 그어 내 땅을 넓혀요. 선을 긋는 동안 밟히면 아웃이니 조심!' : 'AI 친구 8마리가 땅따먹기를 해요. 화면은 1등을 따라가요';
+    if (opts.tab === 'duo' && !KEYBOARD) opts.tab = 'solo';               // 손가락만 되는 기기: 한 키보드 둘이서는 없음
+    const solo = opts.tab === 'solo', duo = opts.tab === 'duo', play = solo || duo;
+    $('tabSolo').setAttribute('aria-pressed', String(solo)); $('tabWatch').setAttribute('aria-pressed', String(opts.tab === 'watch'));
+    $('tabDuo').hidden = !KEYBOARD; $('tabDuo').setAttribute('aria-pressed', String(duo));
+    $('lede').textContent = solo ? '크레파스로 선을 그어 내 땅을 넓혀요. 선을 긋는 동안 밟히면 아웃이니 조심!'
+      : duo ? '⌨️ 한 키보드 둘이서! 1P는 WASD, 2P는 방향키로 움직여요. 화면은 두 사람이 다 보이게 넓어져요'
+      : `AI 친구 ${opts.count}마리가 땅따먹기를 해요. 화면은 1등을 따라가요`;
     segBtns($('modeSeg'), MODES, opts.mode, v => { opts.mode = v; saveOpts(); drawMenu(); });
+    segBtns($('countSeg'), COUNTS, opts.count, v => { opts.count = +v; saveOpts(); drawMenu(); });
+    $('countDesc').textContent = `${solo ? '나까지 ' : duo ? '둘까지 ' : ''}${opts.count}마리 · 종이 ${L.sizeFor(opts.count)}×${L.sizeFor(opts.count)}칸`;
     $('modeDesc').textContent = MODE_DESC[opts.mode];
-    $('tierLbl').textContent = solo ? '친구들 실력' : 'AI 실력';
+    $('tierLbl').textContent = play ? 'AI 친구들 실력' : 'AI 실력';
     Cozy.tierCards($('tiers'), TIERS, id => { opts.tier = id; saveOpts(); drawMenu(); }, { selected: opts.tier });
-    $('animalBox').hidden = !solo;
+    $('animalBox').hidden = !play;
+    $('animalLbl').textContent = duo ? '1P 동물 (1P 색)' : '내 동물 (내 색)';
     animalBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(i === opts.animal)));
-    $('howtoList').hidden = !solo;
-    $('startBtn').textContent = solo ? '시작!' : '구경하기';
-    const best = Cozy.store('land.best', {})[opts.mode + '.' + opts.tier];
+    $('p2Row').hidden = !duo;
+    if (duo) { const a = A.ANIMALS[p2Animal()]; $('p2Name').textContent = `${a.em} ${a.name}`; }
+    $('howtoList').hidden = !play;
+    $('howto1').textContent = duo ? '1P는 W·A·S·D, 2P는 방향키로 돌아요 · 멈춤은 Space' : '밀면(스와이프) 그쪽으로 돌아요 · PC는 방향키나 WASD';
+    $('startBtn').textContent = solo ? '시작!' : duo ? '⌨️ 둘이서 시작!' : '구경하기';
+    const best = Cozy.store('land.best', {})[bestKey(opts.mode, opts.tier, opts.count)];
     $('bestLine').textContent = solo && best ? `🏅 최고 기록 · ${best.rank}등 · ${pctStr(best.pct)}%` : '';
   }
   $('tabSolo').onclick = () => { if (opts.tab !== 'solo') sfx('tap'); opts.tab = 'solo'; saveOpts(); drawMenu(); };
   if ($('tabFriend')) $('tabFriend').onclick = () => { sfx('tap'); openFriendModal(); };
   $('tabWatch').onclick = () => { if (opts.tab !== 'watch') sfx('tap'); opts.tab = 'watch'; saveOpts(); drawMenu(); };
+  $('tabDuo').onclick = () => { if (opts.tab !== 'duo') sfx('tap'); opts.tab = 'duo'; saveOpts(); drawMenu(); };
+  $('p2Btn').onclick = () => { sfx('pop'); let a = (p2Animal() + 1) % A.ANIMALS.length; if (a === opts.animal) a = (a + 1) % A.ANIMALS.length; opts.animal2 = a; saveOpts(); drawMenu(); };
   $('startBtn').onclick = () => start(opts.tab);
   $('helpBtn').onclick = () => howto(true);
 
+  // ══ 친구랑 (온라인 2~12명) ═════════════════════════════════
+  //  · 방장 기기가 판을 돌림(봇도 방장이). 틱마다 모두의 행동을 꼭 전하기(rel)로 보내고, 친구 기기는 같은 규칙으로 따라 돌림
+  //  · 판 정보(자리·씨앗·인원)는 공유 기록 'land' 에 → 판 중간에 들어온 친구도 읽고 '구경'으로 따라옴
+  //  · 친구 기기는 들어오자마자 방장에게 지금 상태(작게 묶은 것)를 받아 맞춤. 틱 번호가 비거나 확인값이 다르면 다시 받음
+  //  · 판 도중 나간 친구 자리는 AI 가 이어서 함
+  const MAXP = 12;
+  const FILLS = [[0, '없이'], [6, '6마리까지'], [8, '8마리까지'], [12, '12마리까지']];
+  const modeTxt = m => m === 'life' ? '❤️ 한 목숨' : '🖍 클래식 3분';
+  const fillOf = c => (c && c.fill != null ? c.fill | 0 : 8);
+  const totalFor = (humans, c) => Math.max(1, Math.min(MAXP, Math.max(humans, fillOf(c))));
+  const lobbyCfg = () => (window.ArenaUI && ArenaUI.net && ArenaUI.net.meta && ArenaUI.net.meta.cfg) || null;
+  function describe(n, cfg) {
+    const t = totalFor(n, cfg || lobbyCfg()), s = L.sizeFor(t);
+    return `${n}명${t > n ? ` + AI ${t - n}마리` : ''} · 종이 ${s}×${s}칸`;
+  }
+  // 대기실 설정 (방장만 바꿈, 친구는 보기만)
+  function renderCfg(el, c, canEdit, update) {
+    c = c || {};
+    const seg = (k, items, cur) => `<div class="lnd-seg">${items.map(([v, t]) => `<button class="arn-btn" data-k="${k}" data-v="${v}" aria-pressed="${String(v) === String(cur)}" ${canEdit ? '' : 'disabled'}>${t}</button>`).join('')}</div>`;
+    el.innerHTML = `<div class="lnd-set">
+        <span>모드</span>${seg('mode', MODES, c.mode || 'classic')}
+        <span>빈자리 AI 동물</span>${seg('fill', FILLS, fillOf(c))}
+        <span>AI 실력</span>${seg('tier', TIERS.map(t => [t.id, `${t.em || ''} ${String(t.name || t.id).split(' · ')[0]}`]), c.tier || 'normal')}
+      </div>${canEdit ? '' : '<p class="arn-soft lnd-desc">설정은 방장이 정해요</p>'}`;
+    if (!canEdit) return;
+    el.onclick = e => {
+      const b = e.target.closest('button[data-k]'); if (!b) return;
+      sfx('tap');
+      const k = b.dataset.k, v = k === 'fill' ? +b.dataset.v : b.dataset.v;
+      if (k === 'mode') { opts.mode = v; saveOpts(); } else if (k === 'tier') { opts.tier = v; saveOpts(); }
+      update({ [k]: v });
+    };
+  }
   function openFriendModal() {
     if (!window.ArenaUI) { Cozy.toast('친구 대전 모듈을 불러오지 못했어요'); return; }
     ArenaUI.open({
       game: 'land',
-      title: '🖍️ 땅따먹기 · 친구랑',
-      minPlayers: 2,
-      maxPlayers: 8,
-      extraOptionsHtml: `
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:4px">
-          <span class="small" style="align-self:center">모드: <b>${opts.mode === 'life' ? '❤️ 한 목숨' : '🖍 클래식 3분'}</b> · 남은 자리는 AI 동물</span>
-        </div>`,
-      buildConfig: () => ({
-        mode: opts.mode,
-        tier: opts.tier,
-        seed: (Math.random() * 4294967296) >>> 0,
-      }),
-      renderConfig: c => `${(c && c.mode) === 'life' ? '❤️ 한 목숨' : '🖍 클래식 3분'} · 8마리 대결`,
-      onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
+      title: '🖍️ 땅따먹기',
+      max: MAXP, min: 2,
+      describe,
+      settings: {
+        defaults: { mode: opts.mode, tier: opts.tier, fill: 8 },
+        label: c => `${modeTxt(c && c.mode)}${fillOf(c) ? ` · AI ${fillOf(c)}마리까지` : ''}`,
+        render: renderCfg,
+      },
+      onStart: ctx => startOnline(ctx),
+      onLobby: () => { if (S && S.kind === 'online') { endSession(true); show(false); drawMenu(); } },
+      onLeave: () => { NET = null; lastSh = null; if (S && S.kind === 'online') { endSession(true); show(false); drawMenu(); } },
     });
   }
 
-  function startOnline({ net, role, cfg: c, players }, overrideSeed) {
+  let NET = null, lastSh = null, hostG = 0, early = [], syncAt = 0;
+  function bindNet(net) {
+    if (net._land) return;
+    net._land = true;
+    if (net.isHost) {
+      hostG = 0;
+      net.on('msg', (uid, m) => onHostMsg(uid, m));
+      net.on('leave', uid => onHostLeave(uid));
+    } else {
+      early = [];
+      net.on('msg', m => onGuestMsg(m));
+      net.watchShared('land', v => { if (net !== NET) return; lastSh = v || null; guestMaybeStart(); });
+    }
+  }
+  function startOnline(ctx) {
+    NET = ctx.net;
+    bindNet(ctx.net);
+    if (ctx.net.isHost) hostRound(ctx.cfg);
+    else guestMaybeStart();
+  }
+  // 방장: 새 판 (자리 = 방장 먼저, 그다음 들어온 순 · 12명까지) → 공유 기록에 적고 바로 시작
+  function hostRound(c) {
+    const net = NET; if (!net || !net.isHost) return;
+    c = c || (net.meta && net.meta.cfg) || {};
+    const pl = net.players || {}, host = net.meta && net.meta.host;
+    const seats = Object.keys(pl).filter(u => !pl[u].watch)
+      .sort((a, b) => (b === host) - (a === host) || (pl[a].t || 0) - (pl[b].t || 0) || (a < b ? -1 : 1)).slice(0, MAXP);
+    if (!seats.includes(net.uid)) { seats.unshift(net.uid); seats.length = Math.min(seats.length, MAXP); }
+    const sh = {
+      g: ++hostG, seed: (Math.random() * 4294967296) >>> 0, n: totalFor(seats.length, c),
+      mode: c.mode === 'life' ? 'life' : 'classic', tier: c.tier || 'normal',
+      seats, names: seats.map(u => String((pl[u] && pl[u].name) || '친구').slice(0, 12)),
+    };
+    try { net.setShared('land', sh); } catch (e) {}
+    startRound(sh);
+  }
+  function guestMaybeStart() {
+    const net = NET;
+    if (!net || net.isHost || !lastSh || !net.meta || net.meta.phase !== 'play') return;
+    if (S && S.kind === 'online' && S.g === lastSh.g) return;
+    startRound(lastSh);
+  }
+  // 방장·친구 같은 길: 씨앗으로 판을 만들고 그림 준비 (친구는 방장에게 지금 상태를 받아 맞춤)
+  function startRound(sh) {
     endSession(true);
-    const plist = Object.entries(players || {}).map(([uid, p]) => Object.assign({ uid }, p)).sort((a, b) => (a.slot ?? 9) - (b.slot ?? 9));
-    const seed = overrideSeed != null ? overrideSeed >>> 0 : ((c && c.seed) || 12345) >>> 0;
-    const mode = (c && c.mode) || 'classic';
-    const tier = (c && c.tier) || 'normal';
-    const st = L.create({ n: 8, mode }, seed);
-    const me = Math.max(0, plist.findIndex(p => p.uid === net.uid));
-    const animals = Array.from({ length: st.n }, (_, i) => (i + (seed % A.ANIMALS.length)) % A.ANIMALS.length);
-    const names = st.players.map((_, i) => {
-      if (i < plist.length) return i === me ? '나' : (plist[i].name || `친구${i + 1}`);
-      return A.ANIMALS[animals[i]].name;
-    });
-    const humanSeats = plist.map((_, i) => i);
+    const net = NET, host = net.isHost;
+    const st = L.create({ n: sh.n, mode: sh.mode }, sh.seed);
+    const me = sh.seats.indexOf(net.uid);
+    const animals = Array.from({ length: st.n }, (_, i) => (i + sh.seed) % A.ANIMALS.length);
+    const names = st.players.map((_, i) => i < sh.seats.length ? (i === me ? '나' : sh.names[i] || `친구${i + 1}`) : A.ANIMALS[animals[i]].name);
+    const humanSeats = sh.seats.map((_, i) => i);
+    const here = net.players || {};
     const ctrls = st.players.map((_, i) => {
-      if (i < plist.length) return humanCtrl();
-      return botCtrl(st, i, tier, seed, humanSeats);
+      if (!host) return i === me ? humanCtrl() : null;
+      if (i < sh.seats.length && (here[sh.seats[i]] || sh.seats[i] === net.uid)) return humanCtrl();
+      return botCtrl(st, i, sh.tier, sh.seed, humanSeats);                 // 빈자리 · 시작 전에 나간 친구 = AI
     });
     S = {
-      kind: 'online', role, net, onlineArgs: { net, role, cfg: c, players },
-      mode, tier, seed, st, me, animals, names,
-      ctrls, acts: new Array(st.n), netQ: [], acc: 0, speed: 1, ff: false,
+      kind: 'online', role: host ? 'host' : 'guest', net, g: sh.g, seats: sh.seats,
+      mode: sh.mode, tier: sh.tier, seed: sh.seed, st, me, animals, names,
+      ctrls, acts: new Array(st.n), netQ: [], synced: host, acc: 0, speed: 1, ff: false,
       running: false, counting: false, paused: false, ended: false, out: false,
       timers: [], cdTimers: [], modals: [], danger: false, dangerTick: -99, followAuto: true, followTick: 0, lastSec: -1, crashKey: '',
     };
-    if (!net._landBound) {
-      net._landBound = true;
-      const onMsg = m => {
-        if (!m || !S || S.kind !== 'online') return;
-        if (m.t === 'steer' && S.role === 'host') {
-          const p = S.st.players[m.p];
-          const q = S.ctrls[m.p] && S.ctrls[m.p].q;
-          if (p && p.alive && q) {
-            const lastD = q.length ? q[q.length - 1] : p.dir;
-            if (m.d !== lastD && m.d !== ((lastD + 2) & 3)) {
-              if (q.length >= 3) q.pop();
-              q.push(m.d);
-            }
-          }
-        } else if (m.t === 'tk' && S.role !== 'host') {
-          S.netQ.push(m.a);
-        } else if (m.t === 'rematch') {
-          if (S.role === 'host') S.net.broadcast(m);
-          startOnline(S.onlineArgs, m.seed);
-        }
-      };
-      if (role === 'host') net.on('msg', (_uid, m) => onMsg(m));
-      else net.on('msg', m => onMsg(m));
-    }
     show(true);
-    R.reset(st, { me, follow: me, animals, names });
+    R.reset(st, { me, follow: me >= 0 ? me : leader(), animals, names });
     $('feed').innerHTML = ''; hideMsg();
     dockFor(); syncPad(); hud(); drawRank(true);
+    if (!host) {
+      S.netQ = early.filter(m => m.g === sh.g); early = [];
+      askSync(true);
+    }
     countdown(() => { if (S) S.running = true; });
+  }
+  function askSync(force) {
+    if (!S || S.kind !== 'online' || S.role === 'host') return;
+    const now = performance.now();
+    if (!force && now - syncAt < 1200) return;
+    syncAt = now; S.synced = false;
+    try { NET.send({ t: 'sync', g: S.g }, true); } catch (e) {}
+  }
+  function onHostMsg(uid, m) {
+    if (!m || !S || S.kind !== 'online' || S.role !== 'host' || NET !== S.net) return;
+    if (m.t === 'steer') {
+      const p = S.seats.indexOf(uid), c = S.ctrls[p], pl = S.st.players[p];
+      if (p < 0 || !c || c.kind !== 'human' || !pl || !pl.alive || m.g !== S.g) return;
+      const q = c.q, lastD = q.length ? q[q.length - 1] : pl.dir, d = m.d | 0;
+      if (d < 0 || d > 3 || d === lastD || d === ((lastD + 2) & 3)) return;
+      if (q.length >= 3) q.pop();
+      q.push(d);
+    } else if (m.t === 'sync') {
+      if (m.g !== S.g) return;
+      try { NET.send(uid, { t: 'snap', g: S.g, s: L.pack(S.st) }, true); } catch (e) {}
+    } else if (m.t === 'again') {
+      if (S.ended) hostRound();
+    }
+  }
+  // 방장: 판 도중 나간 친구 자리는 AI 가 이어서 (모두에게 알림)
+  function onHostLeave(uid) {
+    if (!S || S.kind !== 'online' || S.role !== 'host' || S.ended) return;
+    const p = S.seats.indexOf(uid);
+    if (p < 0 || !S.ctrls[p] || S.ctrls[p].kind !== 'human') return;
+    S.ctrls[p] = botCtrl(S.st, p, S.tier, S.seed, S.seats.map((_, i) => i));
+    botSeat(p);
+    try { NET.broadcast({ t: 'bot', g: S.g, p }, true); } catch (e) {}
+  }
+  function botSeat(p) {
+    const old = S.names[p];
+    S.names[p] = `${old} 🤖`;
+    Cozy.toast(`${old} 님이 나갔어요 · AI 가 이어서 해요`, 2200);
+    drawRank(true);
+  }
+  function onGuestMsg(m) {
+    if (!m || !NET || NET.isHost) return;
+    const cur = S && S.kind === 'online' && S.net === NET ? S : null;
+    if (m.t === 'tk') {
+      if (cur && cur.g === m.g) cur.netQ.push(m);
+      else { if (early.length && early[0].g !== m.g) early = []; if (early.length < 400) early.push(m); }
+    } else if (m.t === 'snap') {
+      if (cur && cur.g === m.g && m.s) applySnap(m.s);
+    } else if (m.t === 'bot') {
+      if (cur && cur.g === m.g && m.p >= 0 && m.p < cur.names.length) botSeat(m.p);
+    }
+  }
+  // 친구: 방장이 보낸 지금 상태로 맞춤 (처음 · 중간 참가 · 어긋났을 때)
+  function applySnap(o) {
+    let st;
+    try { st = L.unpack(o); } catch (e) { return; }
+    if (!st || st.n !== S.st.n) return;
+    const same = L.hash(st) === L.hash(S.st);
+    S.netQ = S.netQ.filter(m => m.k > st.tick);
+    S.synced = true;
+    if (!same) {
+      S.st = st;
+      R.reset(st, { me: S.me, follow: S.me >= 0 && st.players[S.me].alive ? S.me : leader(), animals: S.animals, names: S.names });
+      if (S.me >= 0 && S.ctrls[S.me]) S.ctrls[S.me].q.length = 0;
+      hud(); drawRank(true);
+    }
+    if (st.tick > 0 && S.counting) {                                        // 판이 이미 돌고 있음 → 카운트다운 없이 바로 따라감
+      for (const t of S.cdTimers) clearTimeout(t);
+      S.cdTimers = []; S.counting = false; R.setHint(false); $('countBox').hidden = true; S.running = true;
+      if (S.me < 0) Cozy.toast('게임 중이라 이번 판은 구경해요 · 다음 판부터 같이 해요', 2600);
+    }
   }
 
   // ══ 판 (세션) ══════════════════════════════════════════════
@@ -179,38 +317,50 @@
   function start(kind) {
     endSession();
     const seed = (Math.random() * 4294967296) >>> 0;
-    const st = L.create({ n: 8, mode: opts.mode }, seed);
-    const me = kind === 'solo' ? 0 : -1;
-    const rest = shuffle(A.ANIMALS.map((_, i) => i).filter(i => kind !== 'solo' || i !== opts.animal));
-    const animals = kind === 'solo' ? [opts.animal].concat(rest.slice(0, st.n - 1)) : rest.slice(0, st.n);
+    if (kind === 'duo' && !KEYBOARD) kind = 'solo';
+    const duo = kind === 'duo';
+    const st = L.create({ n: Math.max(duo ? 2 : 1, opts.count), mode: opts.mode }, seed);
+    const me = kind === 'solo' || duo ? 0 : -1, me2 = duo ? 1 : -1;    // 둘이서: 0번 = 1P (WASD) · 1번 = 2P (방향키)
+    const mine = duo ? [opts.animal, p2Animal()] : kind === 'solo' ? [opts.animal] : [];
+    const rest = shuffle(A.ANIMALS.map((_, i) => i).filter(i => !mine.includes(i)));
+    const animals = mine.concat(rest.slice(0, st.n - mine.length));
+    const humans = duo ? [0, 1] : me >= 0 ? [me] : [];
+    const names = st.players.map((p, i) => duo && i < 2 ? `${i + 1}P` : i === me ? '나' : A.ANIMALS[animals[i]].name);
     S = {
-      kind, mode: opts.mode, tier: opts.tier, seed, st, me, animals,
-      ctrls: st.players.map((p, i) => i === me ? humanCtrl() : botCtrl(st, i, opts.tier, seed, me >= 0 ? [me] : [])),
+      kind, mode: opts.mode, tier: opts.tier, seed, st, me, me2, animals, names, outs: [false, false],
+      ctrls: st.players.map((p, i) => humans.includes(i) ? humanCtrl() : botCtrl(st, i, opts.tier, seed, humans)),
       acts: new Array(st.n), acc: 0, speed: 1, ff: false,
       running: false, counting: false, paused: false, ended: false, out: false,
       timers: [], cdTimers: [], modals: [], danger: false, dangerTick: -99, followAuto: true, followTick: 0, lastSec: -1, crashKey: '',
     };
     show(true);
-    R.reset(st, { me, follow: me >= 0 ? me : leader(), animals, names: st.players.map((p, i) => i === me ? '나' : A.ANIMALS[animals[i]].name) });
+    R.reset(st, { me, follow: me >= 0 ? me : leader(), animals, names, pair: duo ? [0, 1] : null });
     $('feed').innerHTML = ''; hideMsg();
     dockFor(); syncPad(); hud(); drawRank(true);
     countdown(() => { S.running = true; });
   }
   function endSession(keepNet) {
     if (!S) return;
-    if (!keepNet && S.net) { try { S.net.close(); } catch (e) {} }
+    const wasNet = S.kind === 'online' && !keepNet;
     for (const t of S.timers) clearTimeout(t);
     for (const c of S.modals) c();
     S = null;
     $('countBox').hidden = true; $('comboPop').hidden = true; hideMsg();
     $('feed').innerHTML = ''; $('rankBox').innerHTML = '';
+    if (wasNet && window.ArenaUI) ArenaUI.leave();                       // 방 나가기 (방장이면 방이 닫힘)
   }
   function goMenu() { endSession(); show(false); drawMenu(); }
+  // 친구랑 대기실로 (방장만): 공유 판 정보를 지워 대기실에서 옛 판이 다시 시작되지 않게
+  function toLobby() {
+    if (!NET || !NET.isHost || !window.ArenaUI) return;
+    try { NET.setShared('land', null); } catch (e) {}
+    ArenaUI.toLobby();
+  }
   function restart() {
-    if (S && S.kind === 'online' && S.net) {
-      const msg = { t: 'rematch', seed: (Math.random() * 4294967296) >>> 0 };
-      if (S.role === 'host') { S.net.broadcast(msg); startOnline(S.onlineArgs, msg.seed); }
-      else S.net.send(msg);
+    if (S && S.kind === 'online') {
+      if (S.role === 'host') hostRound();
+      else if (S.ended) { try { NET.send({ t: 'again', g: S.g }, true); } catch (e) {} Cozy.toast('방장에게 한 판 더 하자고 했어요', 1800); return false; }
+      else Cozy.toast('처음부터는 방장만 할 수 있어요', 1600);
       return;
     }
     start(S ? S.kind : opts.tab);
@@ -238,6 +388,9 @@
       S.acc += dt * S.speed;
       let n = 0;
       while (S.acc >= TICK && n < 16) { tick(); n++; if (!S) return; S.acc -= TICK; if (S.ended) break; }
+      // 친구 기기: 받아 둔 틱이 밀렸으면(늦게 시작 · 잠깐 끊김) 조금씩 더 돌려 따라잡음
+      if (S.kind === 'online' && S.role !== 'host') for (let x = 0; x < 12 && S && !S.ended && S.synced && S.netQ.length > 3; x++) { const k = S.st.tick; tick(); if (!S || S.st.tick === k) break; }
+      if (!S) return;
       if (S.ended) S.acc = 0;
       if (S.acc > TICK) S.acc = TICK;                                   // 느린 기기: 밀린 시간은 버림
       alpha = S.ended ? 1 : S.acc / TICK;
@@ -265,11 +418,19 @@
     if (S.kind === 'online') {
       if (S.role === 'host') {
         for (let i = 0; i < st.n; i++) acts[i] = S.ctrls[i].decide(st, i);
-        if (S.net) S.net.broadcast({ t: 'tk', a: acts.slice() });
+        // 꼭 전하기(순서대로) · 틱 번호 k · 5초마다 확인값 h (친구 기기가 어긋났는지 스스로 알게)
+        const m = { t: 'tk', g: S.g, k: st.tick + 1, a: acts.slice() };
+        if (st.tick % 40 === 0) m.h = L.hash(st);
+        try { S.net.broadcast(m, true); } catch (e) {}
       } else {
+        if (!S.synced) return;
+        let m = null;
+        while (S.netQ.length && S.netQ[0].k <= st.tick) S.netQ.shift();   // 이미 지난 틱
         if (!S.netQ.length) return;
-        const nextActs = S.netQ.shift();
-        for (let i = 0; i < st.n; i++) acts[i] = nextActs[i];
+        m = S.netQ[0];
+        if (m.k !== st.tick + 1 || (m.h && m.h !== L.hash(st))) { askSync(); return; }   // 빠졌거나 어긋남 → 다시 받음
+        S.netQ.shift();
+        for (let i = 0; i < st.n; i++) acts[i] = m.a[i] | 0;
       }
     } else {
       for (let i = 0; i < st.n; i++) acts[i] = S.ctrls[i].decide(st, i);
@@ -283,27 +444,28 @@
 
   // ══ 일어난 일 → 소리 · 효과 · 알림 ══════════════════════════
   const onScreen = c => R.visible(c[0], c[1], 2);                       // 화면 안(+2칸)에서 일어난 일만 소리
+  const isMine = i => S.me >= 0 && i >= 0 && (i === S.me || i === S.me2);   // 이 기기 사람 (둘이서면 1P·2P 둘 다)
   function onEvent(e) {
     const st = S.st, total = st.W * st.H;
     if (window.__land && __land.onEv) __land.onEv(e);
     if (e.t === 'capture') {
       const pct = e.n / total * 100, c = R.cellCenter(e.y * st.W + e.x);
-      const watchIt = S.me < 0 || S.out ? e.p === R.follow : e.p === S.me;
+      const watchIt = S.me < 0 || S.out ? e.p === R.follow : isMine(e.p);
       if (watchIt && !S.ff) {
-        sfx('land-cap', { pct: e.p === S.me ? pct : pct * 0.7 });
+        sfx('land-cap', { pct: isMine(e.p) ? pct : pct * 0.7 });
         const m = R.centroid(e.cells);                                  // 새로 칠해진 곳 가운데 (내 머리를 가리지 않게)
         R.floatText(m[0], m[1], `+${pctStr(Math.max(0.1, pct))}%`, PAL[S.animals[e.p]].text, Math.min(34, 19 + pct * 2.4), e.p);
-        if (e.p === S.me) { if (pct >= 1) Cozy.vibrate(pct >= 4 ? 30 : 12); if (pct >= 5) combo('🎉 크게 먹었다!'); }
+        if (isMine(e.p)) { if (pct >= 1) Cozy.vibrate(pct >= 4 ? 30 : 12); if (pct >= 5) combo('🎉 크게 먹었다!'); }
       } else if (!S.ff && onScreen(c)) sfx('land-pop');
     } else if (e.t === 'death') {
       feed(e);
-      if (e.p === S.me) myDeath(e);
-      else if (e.by === S.me && S.me >= 0) myKill(e);
+      if (isMine(e.p)) myDeath(e);
+      else if (isMine(e.by)) myKill(e);
       else if (!S.ff && onScreen(R.cellCenter(e.y * st.W + e.x))) sfx('land-splat', { vol: 0.12 });
     } else if (e.t === 'spawn') {
-      if (e.p === S.me) { sfx('land-spawn'); hideMsg(); S.ctrls[S.me].q.length = 0; }
+      if (isMine(e.p)) { sfx('land-spawn'); hideMsg(); S.ctrls[e.p].q.length = 0; }
     } else if (e.t === 'leave') {
-      if (e.p === S.me) sfx('land-leave');
+      if (isMine(e.p)) sfx('land-leave');
     } else if (e.t === 'end') endGame();
   }
   function deathWhy(e) {
@@ -320,15 +482,20 @@
   }
   function myDeath(e) {
     sfx('land-die'); Cozy.vibrate([40, 40, 70]);
-    S.ctrls[S.me].q.length = 0;
-    S.danger = false; R.setDanger(false);
+    S.ctrls[e.p].q.length = 0;
+    if (e.p === S.me) { S.danger = false; R.setDanger(false); }
+    const duo = S.kind === 'duo', pre = duo ? `${S.names[e.p]} · ` : '';
     // 알림은 철퍽 자리 반대쪽에 (터지는 모습이 가려지지 않게)
     const c = R.cellCenter(e.y * S.st.W + e.x), s = R.screenOf(c[0], c[1]), h = $('stage').clientHeight;
     $('msg').style.top = s[1] < h * 0.5 ? '68%' : '30%';
-    if (S.mode === 'classic') showMsg(deathWhy(e), '2초 뒤 새 땅에서 다시 시작해요');
-    else {
-      S.out = true; S.followAuto = true;
-      showMsg(deathWhy(e), '탈락! 남은 친구들을 구경해요');
+    if (S.mode === 'classic') showMsg(pre + deathWhy(e), '2초 뒤 새 땅에서 다시 시작해요');
+    else if (duo && !S.outs[1 - e.p]) {                                    // 둘이서 한 목숨: 한 명만 탈락 → 다른 한 명은 계속
+      S.outs[e.p] = true;
+      showMsg(pre + deathWhy(e), `탈락! ${S.names[1 - e.p]} 힘내요`);
+      later(hideMsg, 2200);
+    } else {
+      S.outs[e.p] = true; S.out = true; S.followAuto = true;
+      showMsg(pre + deathWhy(e), duo ? '둘 다 탈락! 남은 친구들을 구경해요' : '탈락! 남은 친구들을 구경해요');
       later(() => { hideMsg(); dockFor(); syncPad(); }, 2200);
     }
   }
@@ -354,7 +521,7 @@
     else h = `${v} 자기 선에 꼬였어요 🌀`;
     const d = document.createElement('div');
     d.innerHTML = h;
-    if (S.me >= 0 && (e.p === S.me || e.by === S.me || (e.w && e.w.includes(S.me)))) d.className = 'mine';
+    if (isMine(e.p) || isMine(e.by) || (e.w && e.w.some(isMine))) d.className = 'mine';
     const f = $('feed'); f.appendChild(d);
     while (f.children.length > 3) f.firstChild.remove();
     later(() => d.remove(), 3800);
@@ -378,7 +545,8 @@
     const st = S.st, f = focusId(), p = st.players[f], total = st.W * st.H;
     const left = (st.limit - st.tick) / TPS;
     const setT = (id, v) => { const el = $(id); if (el.textContent !== v) el.textContent = v; };   // 바뀔 때만 (레이아웃 일 줄이기)
-    setT('myPct', `${ANIM(f).em} ${pctStr(p.area / total * 100)}%`);
+    if (S.kind === 'duo') { const a = st.players[0], b = st.players[1]; setT('myPct', `${ANIM(0).em}${pctStr(a.area / total * 100)} · ${ANIM(1).em}${pctStr(b.area / total * 100)}%`); }
+    else setT('myPct', `${ANIM(f).em} ${pctStr(p.area / total * 100)}%`);
     const tl = $('timer');
     let tt = `⏱ ${fmtT(left)}`;
     if (S.mode === 'life') { let n = 0; for (const q of st.players) if (q.alive) n++; tt += ` · ❤️ ${n}`; }
@@ -390,7 +558,7 @@
     const st = S.st, rk = L.ranking(st), f = focusId(), total = st.W * st.H;
     const row = (r, i) => {
       const p = st.players[r.id], an = ANIM(r.id), cls = ['rk'];
-      if (r.id === S.me) cls.push('me');
+      if (isMine(r.id)) cls.push('me');
       if (!p.alive) cls.push('out');
       if (r.id === R.follow && (S.me < 0 || S.out)) cls.push('fol');
       return `<div class="${cls.join(' ')}" data-id="${r.id}"><i>${i + 1}</i><span class="dot" style="background:${PAL[S.animals[r.id]].mini}">${an.em}</span><b>${nameOf(r.id)}</b><em>${pctStr(r.area / total * 100)}</em></div>`;
@@ -398,11 +566,16 @@
     // 늘 6줄 + 점선 자리 (내가 5등 안팎을 오가도 카드 크기가 그대로): 6등 밖이면 점선 + 나, 아니면 6등을 그대로
     let h = rk.slice(0, 5).map(row).join('');
     const fi = rk.findIndex(r => r.id === f);
-    if (fi >= 6) h += '<div class="rk sep"></div>' + row(rk[fi], fi);
+    if (S.kind === 'duo') {                                                // 둘이서: 5등 밖의 1P·2P 를 아래에 (등수 순)
+      const out = [0, 1].map(id => rk.findIndex(r => r.id === id)).filter(i => i >= 5).sort((a, b) => a - b);
+      if (out.length) h += '<div class="rk sep"></div>' + out.map(i => row(rk[i], i)).join('');
+      else if (rk.length > 5) h += '<div class="rk sep ghost"></div>' + row(rk[5], 5);
+    } else if (fi >= 6) h += '<div class="rk sep"></div>' + row(rk[fi], fi);
     else if (rk.length > 5) h += '<div class="rk sep ghost"></div>' + row(rk[5], 5);
     $('rankBox').innerHTML = h;
     // 위 알약(내 등수)도 같은 순위로 같이 (둘이 어긋나 보이지 않게)
-    const pill = S.me >= 0 && !S.out ? `🏆 ${fi + 1}등` : `${ANIM(f).em} ${fi + 1}등`, pe = $('rankPill');
+    const r2 = S.kind === 'duo' ? rk.findIndex(r => r.id === 1) : -1;
+    const pill = S.kind === 'duo' ? `1P ${rk.findIndex(r => r.id === 0) + 1}등 · 2P ${r2 + 1}등` : S.me >= 0 && !S.out ? `🏆 ${fi + 1}등` : `${ANIM(f).em} ${fi + 1}등`, pe = $('rankPill');
     if (pe.textContent !== pill) pe.textContent = pill;
   }
   function afterTick() {
@@ -438,7 +611,7 @@
     // 처음 시작 땐 조작 한 줄 (카운트 중에 미리 방향을 정할 수 있음)
     const hint = $('cntHint');
     hint.hidden = !!fast;
-    hint.textContent = S.me < 0 ? '🎥 화면이 1등을 따라가요' : PC ? '⌨️ 방향키·WASD로 움직여요' : '👆 화면을 밀면 그쪽으로 돌아요';
+    hint.textContent = S.kind === 'duo' ? '⌨️ 1P는 WASD · 2P는 방향키' : S.me < 0 ? '🎥 화면이 1등을 따라가요' : PC ? '⌨️ 방향키·WASD로 움직여요' : '👆 화면을 밀면 그쪽으로 돌아요';
     const cd = (fn, ms) => S.cdTimers.push(later(fn, ms));              // 카운트다운 타이머는 따로 (멈추면 이것만 지움)
     R.setHint(S.me >= 0 || S.kind === 'watch');                          // '나'(구경: 따라가는 친구) 이름표 통통
     const next = () => {
@@ -451,14 +624,14 @@
     next();
   }
   function pause() {
-    if (!S || S.ended || (S.paused && !S.counting)) return;               // 다시 시작 카운트 중에 숨겨져도 다시 멈춤
+    if (!S || S.ended || S.kind === 'online' || (S.paused && !S.counting)) return;   // 다시 시작 카운트 중에 숨겨져도 다시 멈춤 · 친구랑은 멈춤 없음
     if (S.counting) { for (const t of S.cdTimers) clearTimeout(t); S.cdTimers = []; S.counting = false; R.setHint(false); $('countBox').hidden = true; S.running = true; }
     S.paused = true;
     modal('⏸ 잠깐 멈췄어요', '<p class="lede" style="margin:0">준비되면 계속해요. 3초를 세고 다시 시작해요.</p>', [
       ['계속하기', resume, true], ['하는 법', () => { howto(true); return false; }], ['메뉴', goMenu, false, true]]);
   }
   function resume() { if (!S || !S.paused) return; countdown(() => { if (S) S.paused = false; }, true); }
-  document.addEventListener('visibilitychange', () => { if (document.hidden && S && !S.ended && (S.counting || (S.running && !S.paused))) pause(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && S && S.kind !== 'online' && !S.ended && (S.counting || (S.running && !S.paused))) pause(); });
 
   function endGame() {
     S.ended = true; S.running = false; S.ff = false;
@@ -472,20 +645,25 @@
   // 한 목숨: 끝까지 산 친구는 ❤️, 아웃된 친구는 흐리게 + 아웃된 때 (순위가 '오래 버틴 순'인 게 보이게)
   function resRow(r) {
     const an = ANIM(r.id), life = S.mode === 'life', cls = [];
-    if (r.id === S.me) cls.push('me');
+    if (r.id === S.me || (S.kind === 'duo' && r.id === S.me2)) cls.push('me');
     if (life && !r.alive) cls.push('out');
     const tag = life ? `<small>${r.alive ? '❤️ 끝까지' : `💫 ${fmtT(r.aliveT / TPS)}`}</small>` : '';
     return `<li class="${cls.join(' ')}"><i>${medal(r.rank)}</i><span class="dot" style="background:${PAL[S.animals[r.id]].mini}">${an.em}</span><span>${nameOf(r.id)}</span><em>${tag}${pctStr(r.pct)}%</em></li>`;
   }
   function showResults() {
     const st = S.st, res = st.results;
+    const online = S.kind === 'online', host = online && S.role === 'host';
+    const againBtns = online
+      ? (host ? [['한 판 더', restart, true], ['대기실', toLobby], ['나가기', goMenu, false, true]] : [['한 판 더 하자', restart, true], ['나가기', goMenu, false, true]])
+      : null;
     if (S.me < 0) {
       const w = res[0];
       modal('🏁 구경 끝!', `<div class="big">${ANIM(w.id).em} ${nameOf(w.id)}</div><p class="res-sub">${pctStr(w.pct)}% 칠하고 1등! · ✂️ ${w.kills}번 끊었어요</p><ol class="rlist">${res.map(resRow).join('')}</ol>`,
-        [['한 판 더 구경', restart, true], ['메뉴', goMenu]], false, 'land-res');
+        againBtns || [['한 판 더 구경', restart, true], ['메뉴', goMenu]], false, 'land-res');
       sfx('good');
       return;
     }
+    if (S.kind === 'duo') return duoResults(res);
     const r = res.find(x => x.id === S.me);
     const life = S.mode === 'life';
     const title = life && r.rank === 1 && r.alive ? '🏆 끝까지 살아남았어요!' : r.rank <= 3 ? `${medal(r.rank)} ${r.rank}등!` : `${r.rank}등`;
@@ -493,10 +671,10 @@
     if (!life && !r.alive) sub = '끝날 때 아웃돼 있어서 0%예요. 마지막엔 내 땅 안에 있기!';
     if (life && !r.alive) sub = `${fmtT(r.aliveT / TPS)} 동안 버텼어요. ${r.rank <= 3 ? '잘했어요!' : '다음엔 더 오래!'}`;
     // 최고 기록: 클래식은 % 먼저, 한 목숨은 등수 → 버틴 시간 → % 순. 처음 기록은 3등 안일 때만 '최고 기록!' 으로 축하
-    const key = S.mode + '.' + S.tier, bests = Cozy.store('land.best', {}), old = bests[key];
-    const beat = life
+    const key = bestKey(S.mode, S.tier, S.st.n), bests = Cozy.store('land.best', {}), old = bests[key];
+    const beat = !online && life
       ? (!old || r.rank < old.rank || (r.rank === old.rank && ((r.aliveT || 0) > (old.aliveT || 0) || ((r.aliveT || 0) === (old.aliveT || 0) && r.pct > old.pct))))
-      : r.pct > 0 && (!old || r.pct > old.pct || (r.pct === old.pct && r.rank < old.rank));
+      : !online && r.pct > 0 && (!old || r.pct > old.pct || (r.pct === old.pct && r.rank < old.rank));
     if (beat) { bests[key] = { pct: r.pct, rank: r.rank, aliveT: r.aliveT }; Cozy.save('land.best', bests); }
     const isBest = beat && (old ? true : r.rank <= 3);
     const html = `<div class="big">${pctStr(r.pct)}%</div>
@@ -508,10 +686,23 @@
         <span><i>💫 아웃</i><b>${r.deaths}번</b></span>
       </div>
       <ol class="rlist">${res.map(resRow).join('')}</ol>`;
-    modal(title, html, [['다시 하기', restart, true], ['메뉴', goMenu]], false, 'land-res');
+    modal(title, html, againBtns || [['다시 하기', restart, true], ['메뉴', goMenu]], false, 'land-res');
     if (r.rank === 1) { sfx('land-win'); Cozy.confetti(); }
     else if (r.rank <= 3) sfx('good');
     else sfx('lose');
+  }
+
+  // 한 키보드 둘이서 결과: 1P · 2P 중 누가 이겼나 + 둘의 기록 (최고 기록은 안 남김)
+  function duoResults(res) {
+    const a = res.find(x => x.id === 0), b = res.find(x => x.id === 1);
+    const win = a.rank < b.rank ? 0 : 1, w = win ? b : a;
+    const card = (r, i) => `<span><i>${ANIM(i).em} ${i + 1}P · ${medal(r.rank)}${r.rank > 3 ? '등' : ''}</i><b>${pctStr(r.pct)}%</b><i>✂️ ${r.kills}번 · 💫 ${r.deaths}번</i></span>`;
+    const html = `<div class="big">${ANIM(win).em} ${win + 1}P 승리!</div>
+      <p class="res-sub">${w.rank === 1 ? '전체 1등까지! 👑' : `${win ? '1P' : '2P'}보다 넓게 칠했어요`}</p>
+      <div class="rstat">${card(a, 0)}${card(b, 1)}</div>
+      <ol class="rlist">${res.map(resRow).join('')}</ol>`;
+    modal(`🏁 ${win + 1}P 승리!`, html, [['다시 하기', restart, true], ['메뉴', goMenu]], false, 'land-res');
+    sfx('land-win'); Cozy.confetti();
   }
 
   // ══ 조작: 밀기(어디서나) · 방향키 · 둥근 방향 단추 ══════════
@@ -521,16 +712,18 @@
     const q = S.ctrls[S.me].q;
     return q.length ? q[q.length - 1] : S.st.players[S.me].dir;
   }
-  function steer(d) {
-    if (!S || S.me < 0 || S.out || S.paused || S.ended) return false;
-    const p = S.st.players[S.me];
-    if (!p.alive) return false;
-    const q = S.ctrls[S.me].q, lastD = q.length ? q[q.length - 1] : p.dir;
+  function steer(d, seat) {
+    if (!S || S.me < 0 || S.paused || S.ended) return false;
+    seat = seat == null ? S.me : seat;                                   // 둘이서: 1 = 2P
+    if (seat !== S.me && seat !== S.me2) return false;
+    const p = S.st.players[seat];
+    if (!p.alive || (S.kind === 'duo' ? S.outs[seat] : S.out)) return false;
+    const q = S.ctrls[seat].q, lastD = q.length ? q[q.length - 1] : p.dir;
     if (d === lastD || d === ((lastD + 2) & 3)) return false;
     if (q.length >= 3) q.pop();
     q.push(d);
     if (S.kind === 'online' && S.role !== 'host' && S.net) {
-      S.net.send({ t: 'steer', p: S.me, d });
+      try { S.net.send({ t: 'steer', g: S.g, d }, true); } catch (e) {}  // 꼭 전하기 (돌기 하나가 빠지면 벽으로 가니까)
     }
     return true;
   }
@@ -549,8 +742,8 @@
     if ($('play').hidden && e.key === 'Enter' && !document.querySelector('.overlay:not([hidden])') && !(document.activeElement && document.activeElement.closest('button, a, input'))) { e.preventDefault(); start(opts.tab); return; }
     if (!S || $('play').hidden) return;
     if (document.querySelector('.overlay.land-modal, .overlay:not(.soft):not([hidden])')) return;   // 창이 떠 있으면 창이 키를 받음
-    if (e.code in KEYS) { e.preventDefault(); if (!e.repeat) steer(KEYS[e.code]); return; }
-    if (e.code === 'Escape' || e.code === 'KeyP' || e.code === 'Space') { e.preventDefault(); if (S.kind === 'solo' && !S.out) pause(); }
+    if (e.code in KEYS) { e.preventDefault(); if (!e.repeat) steer(KEYS[e.code], S.kind === 'duo' ? (e.code.startsWith('Arrow') ? 1 : 0) : S.me); return; }   // 둘이서: WASD = 1P · 방향키 = 2P
+    if (e.code === 'Escape' || e.code === 'KeyP' || e.code === 'Space') { e.preventDefault(); if ((S.kind === 'solo' || S.kind === 'duo') && !S.out) pause(); }
   });
   // 밀기 (손가락마다 따로): 한 번 끄는 동안(손을 떼기 전)
   //  · 첫 돌기: 16px 움직이면 바로, 가장 많이 움직인 쪽으로
@@ -611,18 +804,19 @@
 
   // ══ 아래 단추 줄 ══════════════════════════════════════════
   function dockFor() {
-    const solo = S.me >= 0, watching = !solo || S.out;
-    $('pauseBtn').hidden = watching;
-    $('padBtn').hidden = watching;
-    $('speedBtn').hidden = !watching;
-    $('followBtn').hidden = solo;
-    $('skipBtn').hidden = !(solo && S.out);
-    $('restartBtn').lastElementChild.textContent = solo ? '처음부터' : '다시 구경';
+    const solo = S.me >= 0, watching = !solo || S.out, online = S.kind === 'online';
+    $('pauseBtn').hidden = watching || online;                           // 친구랑: 멈춤·빠르게·결과 보기 없음 (모두 같은 시계)
+    $('padBtn').hidden = watching || S.kind === 'duo';                    // 둘이서는 키보드만
+    $('speedBtn').hidden = !watching || online;
+    $('followBtn').hidden = solo && !(online && S.out);
+    $('skipBtn').hidden = !(solo && S.out) || online;
+    $('restartBtn').hidden = online && S.role !== 'host';
+    $('restartBtn').lastElementChild.textContent = online ? '새 판' : solo ? '처음부터' : '다시 구경';
     $('play').classList.toggle('watch', watching);
     drawSpeed();
   }
   function syncPad() {
-    const on = opts.pad && S && S.me >= 0 && !S.out;
+    const on = opts.pad && S && S.me >= 0 && !S.out && S.kind !== 'duo';
     $('dpad').hidden = !on;
     $('padBtn').setAttribute('aria-pressed', String(!!opts.pad));
     $('play').classList.toggle('padon', !!on);
@@ -658,6 +852,7 @@
   window.__land = {                                                     // 점검용
     get S() { return S; }, get st() { return S && S.st; }, R, opts,
     ff(n) { R.setFast(true); for (let i = 0; i < n && S && !S.ended; i++) tick(); if (S) R.setFast(S.ff); },
-    steer, start, goMenu, pause, resume, restart,
+    steer, start, goMenu, pause, resume, restart, toLobby,
+    get net() { return NET; }, get shared() { return lastSh; },
   };
 })();

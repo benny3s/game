@@ -502,5 +502,162 @@ section('봇끼리');
   }
 }
 
+// ════════════════════════════════════════════════════════
+section('친구랑 12명 (최대 인원)');
+// 땅 숫자가 칸과 맞는지 (area = 실제 칸 수 · 선 칸 = trail 배열)
+function consistent(st) {
+  const cnt = new Array(st.n + 1).fill(0), tcnt = new Array(st.n + 1).fill(0);
+  for (let c = 0; c < st.owner.length; c++) { cnt[st.owner[c]]++; tcnt[st.trail[c]]++; }
+  for (const p of st.players) {
+    if (cnt[p.id + 1] !== p.area) return `${p.id}번 area ${p.area} ≠ 칸 ${cnt[p.id + 1]}`;
+    if (tcnt[p.id + 1] !== p.trail.length) return `${p.id}번 선 ${p.trail.length} ≠ 칸 ${tcnt[p.id + 1]}`;
+    if (!p.alive && (p.area || p.trail.length)) return `${p.id}번 아웃인데 땅·선이 남음`;
+  }
+  return '';
+}
+{
+  // 맵 크기: 인원에 맞춰 커짐 (한 사람 몫 칸 수가 비슷하게)
+  const per = n => Land.sizeFor(n) ** 2 / n;
+  eq(Land.sizeFor(12), 87, '12명 판 크기');
+  ok(Land.sizeFor(2) < Land.sizeFor(4) && Land.sizeFor(4) < Land.sizeFor(8) && Land.sizeFor(8) < Land.sizeFor(12), '인원이 많을수록 큰 종이');
+  ok(Math.abs(per(12) - per(8)) / per(8) < 0.1, `한 명 몫 칸 수 8명 ${per(8).toFixed(0)} · 12명 ${per(12).toFixed(0)} (10% 안)`);
+  // 처음 자리: 여러 씨앗에서 5x5 땅이 안 겹치고, 벽·서로 넉넉히 떨어짐
+  let minGap = 99, minWall = 99, overlapBad = 0, sumBad = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const st = Land.create({ n: 12 }, seed * 7919);
+    for (const p of st.players) if (countOwner(st, p.id + 1) !== 25) overlapBad++;
+    if (st.owner.reduce((s, o) => s + (o ? 1 : 0), 0) !== 300) sumBad++;
+    for (const p of st.players) {
+      minWall = Math.min(minWall, p.x, p.y, st.W - 1 - p.x, st.H - 1 - p.y);
+      for (const q of st.players) if (q.id > p.id) minGap = Math.min(minGap, Math.max(Math.abs(p.x - q.x), Math.abs(p.y - q.y)));
+    }
+  }
+  eq(overlapBad, 0, '12명 처음 땅 5x5 모두 온전 (겹침 없음, 40판)');
+  eq(sumBad, 0, '칠해진 칸 = 12 × 25');
+  ok(minGap >= 9, `처음 머리끼리 가장 가까운 거리 ${minGap}칸 (9 이상)`);
+  ok(minWall >= Land.C.BASE + 3, `벽에서 가장 가까운 머리 ${minWall}칸`);
+}
+{
+  // 12명 판에서 땅 먹기: 남의 땅 조각을 감싸 먹으면 그 사람 area 가 정확히 그만큼 줄고, 멀리 있는 사람은 그대로
+  const st = blank(12, 40);
+  land(st, 4, 10, 10, 14, 14); head(st, 4, 12, 12, 0);
+  land(st, 9, 17, 11, 18, 12);                                            // 9번 땅 조각 4칸 (감싸일 곳)
+  land(st, 9, 0, 35, 39, 35); head(st, 9, 1, 35, 1);                      // 9번 머리는 아래 긴 땅 위를 그냥 달림
+  land(st, 2, 30, 30, 34, 34); head(st, 2, 32, 32, 0);                    // 멀리 있는 사람 (위로 선을 그으며 감)
+  const before2 = st.players[2].area, before9 = st.players[9].area;
+  // 4번: 위로 3칸(마지막 칸 (12,9)는 밖) → 오른쪽 8 → 아래 5 → 왼쪽 6 = (14,14) 내 땅으로 돌아와 먹기
+  const ev = drive(st, 4, ['3', 'R8', 'D5', 'L6']);
+  const cap = ev.find(e => e.t === 'capture' && e.p === 4);
+  ok(!!cap, '12명 판: 땅 먹기 일어남');
+  eq(cap && cap.stolen, 4, '감싼 남의 땅 4칸을 가져옴');
+  eq(st.players[9].area, before9 - 4, '9번 area 가 정확히 4 줄어듦');
+  ok(st.players[9].alive, '9번은 다른 땅이 남아 살아 있음');
+  eq(at(st, 17, 11), 5, '감싼 칸 주인 = 4번');
+  eq(st.players[2].area, before2, '멀리 있는 사람 땅은 그대로');
+  eq(consistent(st), '', '땅·선 숫자 = 칸 (12명 시나리오)');
+}
+{
+  // 봇 12명 한 판: 50틱마다 숫자 확인 · 결정성 · 빠르기
+  const tiers = ['hard', 'normal', 'easy'];
+  const mk = seed => {
+    const st = Land.create({ n: 12 }, seed);
+    const mems = st.players.map((p, i) => Bots.create(st, i, tiers[i % 3], seed * 31 + i * 7919 + 1));
+    return { st, mems };
+  };
+  const play = (g, n, check) => {
+    const acts = new Array(12);
+    for (let t = 0; t < n && !g.st.over; t++) {
+      for (let i = 0; i < 12; i++) acts[i] = Bots.decide(g.st, i, g.mems[i]);
+      Land.step(g.st, acts);
+      if (check && g.st.tick % 50 === 0) { const why = consistent(g.st); if (why) return why; }
+    }
+    return '';
+  };
+  const a = mk(2026), b = mk(2026);
+  const s = Date.now();
+  const why = play(a, 1e9, true);
+  const ms = Date.now() - s;
+  eq(why, '', '봇 12명 3분 한 판: 땅·선 숫자 늘 맞음');
+  ok(a.st.over && a.st.results.length === 12, '12명 판 끝까지 진행, 순위 12줄');
+  play(b, 1e9, false);
+  eq(Land.hash(a.st), Land.hash(b.st), '12명: 같은 씨앗 = 같은 결과');
+  const perTick = ms / a.st.tick;
+  console.log(`  12명 한 판 ${a.st.tick}틱 · ${ms}ms (틱당 ${perTick.toFixed(3)}ms, 규칙+봇 12명)`);
+  ok(perTick < 1.5, '틱당 1.5ms 안 (휴대폰 방장도 넉넉, 틱 간격 125ms)');
+}
+{
+  // 작게 묶기 (중간 참가 상태 전하기): 되살리면 같은 해시, 이어 해도 같음, 크기 작음
+  const st = Land.create({ n: 12 }, 99);
+  const mems = st.players.map((p, i) => Bots.create(st, i, 'normal', 500 + i));
+  for (let t = 0; t < 400; t++) Land.step(st, st.players.map((p, j) => Bots.decide(st, j, mems[j])));
+  const pk = Land.pack(st), txt = JSON.stringify(pk), full = JSON.stringify(Land.toJSON(st));
+  const back = Land.unpack(txt);
+  eq(Land.hash(back), Land.hash(st), '묶었다 풀면 같은 해시');
+  ok(txt.length < full.length / 4, `묶은 크기 ${(txt.length / 1024).toFixed(1)}KB (그냥 JSON ${(full.length / 1024).toFixed(1)}KB 의 1/4 안)`);
+  ok(back.owner instanceof Uint8Array && back.trail instanceof Uint8Array && !('packed' in back), '풀면 보통 상태 모양');
+  const acts = st.players.map((p, i) => i % 3);
+  for (let i = 0; i < 60; i++) { Land.step(st, acts); Land.step(back, acts); }
+  eq(Land.hash(back), Land.hash(st), '풀어서 이어 해도 같음');
+  eq(Land.hash(Land.unpack(Land.toJSON(st))), Land.hash(st), 'unpack 은 묶지 않은 JSON 도 받음');
+}
+{
+  // 온라인 흉내 (main.js 와 같은 약속): 방장이 틱마다 {k, a, h(40틱마다)} 를 보냄 → 친구는 따라 돌림
+  //  · 판 중간(300틱)에 들어온 구경꾼은 묶은 상태로 맞추고 이어 감
+  //  · 틱 하나가 빠지면(k 건너뜀) 다시 받아 맞춤 · 도중에 나간 사람 자리는 봇이 이어 함 (방장만 앎, 친구는 행동만 받음)
+  const seed = 31337, n = 12, humans = 5;
+  const host = Land.create({ n }, seed), rnd = { rng: 7 };
+  const mems = host.players.map((p, i) => i >= humans ? Bots.create(host, i, 'normal', seed * 31 + i * 7919 + 1, { gentle: [0, 1, 2, 3, 4] }) : null);
+  const guest = Land.create({ n }, seed);
+  let late = null, resync = 0, drops = 0, hashChecks = 0;
+  const apply = (st, m) => {
+    if (m.k <= st.tick) return 'old';
+    if (m.k !== st.tick + 1) return 'gap';
+    if (m.h) { hashChecks++; if (m.h !== Land.hash(st)) return 'bad'; }
+    Land.step(st, m.a); return 'ok';
+  };
+  while (!host.over) {
+    if (host.tick === 500) mems[3] = Bots.create(host, 3, 'normal', 4242, { gentle: [0, 1, 2, 4] });   // 3번이 나감 → 봇
+    const a = host.players.map((p, i) => {
+      if (mems[i]) return Bots.decide(host, i, mems[i]);
+      return Land.rand(rnd) < 0.08 ? 3 + Math.floor(Land.rand(rnd) * 4) : 0;  // 사람 흉내: 가끔 아무 쪽으로
+    });
+    const m = { k: host.tick + 1, a };
+    if (host.tick % 40 === 0) m.h = Land.hash(host);
+    Land.step(host, a);
+    if (host.tick === 300) late = Land.unpack(JSON.parse(JSON.stringify(Land.pack(host))));
+    else if (late && apply(late, m) !== 'ok') resync++;
+    if (host.tick === 700) { drops++; continue; }                         // 친구에게 가던 틱 하나가 사라짐
+    const r = apply(guest, m);
+    if (r === 'gap' || r === 'bad') { resync++; const fix = Land.unpack(JSON.parse(JSON.stringify(Land.pack(host)))); guest.owner = fix.owner; Object.assign(guest, fix); }
+  }
+  eq(Land.hash(guest), Land.hash(host), '친구 기기 = 방장 기기 (끝 상태 해시)');
+  eq(Land.hash(late), Land.hash(host), '300틱에 들어온 구경꾼도 끝까지 같음');
+  eq(resync, 1, '빠진 틱 1번 → 다시 맞추기 1번');
+  ok(hashChecks > 30, `확인값 비교 ${hashChecks}번`);
+  ok(host.results.length === 12, '12명 결과');
+}
+
+// ════════════════════════════════════════════════════════
+section('한 키보드 둘이서 (사람 2 + 봇)');
+{
+  // main.js 와 같은 자리: 0번 = 1P · 1번 = 2P (사람), 나머지는 두 사람을 봐주는 봇. 4 · 8 · 12마리 모두 끝까지
+  for (const n of [4, 8, 12]) {
+    const seed = 4100 + n, st = Land.create({ n }, seed), rnd = { rng: n };
+    const mems = st.players.map((p, i) => i >= 2 ? Bots.create(st, i, 'easy', seed * 31 + i * 7919 + 1, { gentle: [0, 1] }) : null);
+    let turns = [0, 0], bad = '';
+    while (!st.over) {
+      const acts = st.players.map((p, i) => {
+        if (mems[i]) return Bots.decide(st, i, mems[i]);
+        if (Land.rand(rnd) < 0.1) { turns[i]++; return 3 + Math.floor(Land.rand(rnd) * 4); }   // 키 누름 흉내 (절대 방향)
+        return 0;
+      });
+      Land.step(st, acts);
+      if (st.tick % 120 === 0 && !bad) bad = consistent(st);
+    }
+    ok(!bad && st.results.length === n && turns[0] > 0 && turns[1] > 0, `둘이서 ${n}마리: 끝까지 진행 · 숫자 맞음 ${bad}`);
+    ok(JSON.stringify(mems[2]).includes('"gentle":[0,1]'), `${n}마리: 봇은 1P·2P 둘 다 봐줌`);
+  }
+}
+
 console.log(`\n${fail ? '실패' : '통과'}: ${pass}개 통과, ${fail}개 실패 · ${((Date.now() - t0) / 1000).toFixed(1)}초`);
 process.exit(fail ? 1 : 0);
