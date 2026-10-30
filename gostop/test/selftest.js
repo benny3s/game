@@ -531,6 +531,318 @@ section('광 팔기 (쉬는 사람이 쥔 광을 치는 사람이 삼)');
   eq(G.actionLabel(G.A_BUY) + '/' + G.actionLabel(G.A_NOBUY), '광 사기/안 사기', '행동 이름');
 }
 
+// ── 우리 집 규칙 ────────────────────────────────────────
+section('우리 집 규칙: 검증 · 기본값 · 묶음');
+{
+  const D = G.defaultRules();
+  eq(G.normRules(), D, '규칙이 없으면 전부 기본값');
+  eq(G.normRules({}), D, '빈 규칙도 기본값');
+  ok(G.RULE_DEFS.length >= 30, '규칙 항목이 서른 개 넘게 있음 (' + G.RULE_DEFS.length + ')');
+  eq([G.normRules({ goMatgo: 99 }).goMatgo, G.normRules({ goMatgo: -3 }).goMatgo, G.normRules({ goMatgo: 'abc' }).goMatgo, G.normRules({ goMatgo: '9' }).goMatgo, G.normRules({ goMatgo: 8.6 }).goMatgo], [30, 1, 7, 9, 9], '숫자는 범위 안으로 · 글자는 기본값 · 반올림');
+  eq([G.normRules({ chongtong: 'zzz' }).chongtong, G.normRules({ goBonus: 'plus' }).goBonus, G.normRules({ bonus: '3' }).bonus, G.normRules({ bonus: 4 }).bonus], ['score', 'plus', 3, 0], '고르는 값은 목록 안에서만 (숫자 글자도 맞춰 줌)');
+  eq([G.normRules({ pibak: false }).pibak, G.normRules({ pibak: 'false' }).pibak, G.normRules({ pibak: 0 }).pibak, G.normRules({ pibak: 1 }).pibak, G.normRules({ pibak: null }).pibak], [false, false, false, true, true], '켬/끔 값 정리');
+  ok(!('hacked' in G.normRules({ hacked: 1 })), '모르는 항목은 버림');
+  eq(G.normRules(G.normRules({ maxPts: 12, chipPer: 50 })), G.normRules({ maxPts: 12, chipPer: 50 }), '다시 정리해도 그대로');
+  eq(G.RULE_PRESETS.map(p => G.matchPreset(G.presetRules(p.id))), G.RULE_PRESETS.map(p => p.id), '묶음마다 자기 자신으로 알아봄 (서로 달라서 헷갈리지 않음)');
+  eq(G.matchPreset({}), 'basic', '아무것도 안 바꾸면 기본 묶음');
+  eq(G.matchPreset({ pibak: false }), '', '하나만 바꾸면 어느 묶음도 아님');
+  eq(G.matchPreset({ chipPer: 50 }), 'basic', '점당 칩은 묶음 판별에 안 들어감');
+  eq(G.diffRules({}), [], '기본이면 바뀐 규칙 없음');
+  eq(G.diffRules({ pibak: false, shakeX: 3, chongtong: 'win', ppeokFirst: 3 }).map(x => x.label + ':' + x.text), ['피박:끔', '흔들기·폭탄 배수:3배', '총통:승리', '첫뻑 보너스:3점'], '바뀐 규칙만 글로');
+  const s0 = G.create({ players: 2, seed: 5 });
+  eq(s0.rules, D, '새 판의 규칙은 기본값 (옛 호출 그대로)');
+  eq(G.create({ players: 2, seed: 5, rules: { pibak: false } }).rules.pibak, false, '새 판에 규칙을 실어 보냄');
+  const s1 = G.create({ players: 3, seed: 8, rules: { gobak: false } });
+  eq(G.nextRound(s1).rules.gobak, false, '다음 판도 같은 규칙');
+  eq(G.fastClone(s1).rules, s1.rules, '빠른 복사 · view 도 규칙 유지');
+  eq(G.view(s1, 0).rules.gobak, false, 'view 에 규칙이 보임');
+  eq(G.hash(G.create({ players: 2, seed: 5 })), G.hash(G.create({ players: 2, seed: 5, rules: {} })), '규칙을 안 줘도 {} 줘도 같은 판');
+}
+
+section('우리 집 규칙: 고/스톱 기준 · 고 보너스 · 고박');
+{
+  const CAP7 = [21, 33, 37, 0, 8, 2, 3, 6, 7, 10, 11, 14, 15, 18];   // 청단 3 + 광 두 장 + 피 9장 = 7점
+  const play7 = rules => { const s = S({ rules, hands: [[28, 44, 45], [36, 38, 39]], table: [30], deck: [24, 25, 26, 27, 34], cap: [CAP7, []] }); act(s, P(28)); return s; };
+  eq(play7({}).phase, 'goStop', '맞고 기본 7점에서 고/스톱');
+  let s = play7({ goMatgo: 8 });
+  eq([G.tally(s, 0).base, s.phase], [7, 'play'], '맞고 기준 8점이면 7점에선 계속 진행');
+  eq(play7({ goMatgo: 5 }).phase, 'goStop', '맞고 기준 5점이면 7점에서도 고/스톱');
+  eq([G.thresholdOf(2, G.normRules({ goMatgo: 9 })), G.thresholdOf(3, G.normRules({ goMatgo: 9 })), G.thresholdOf(3, G.normRules({ go3: 5 })), G.thresholdOf(2)], [9, 3, 5, 7], '기준 점수 함수');
+  const t3 = rules => { const s = G.setup({ players: 3, rules, hands: [[1, 44], [36], [12]], table: [0], deck: [24, 25, 26], cap: [[5, 9], [], []] }); act(s, P(1)); return s; };
+  eq(t3({}).phase, 'goStop', '3인 기본 3점에서 고/스톱');
+  eq(t3({ go3: 4 }).phase, 'play', '3인 기준 4점이면 3점에선 계속');
+  eq(t3({ go3: 2 }).phase, 'goStop', '3인 기준 2점이면 고/스톱');
+  s = G.create({ players: 4, seed: 3, rules: { go3: 6 } });
+  eq(G.thresholdOf(s.n, s.rules), 6, '4~5명 광 팔기도 3인 기준을 따름');
+
+  eq([0, 1, 2, 3, 4].map(g => G.goTotal(7, g, 'std')), [7, 8, 9, 20, 44], '고 보너스 기본: 1고 +1 · 2고 +2 · 3고부터 (점수+고)×2^(고-2)');
+  eq([0, 1, 2, 3, 4].map(g => G.goTotal(7, g, 'plus')), [7, 8, 9, 10, 11], '고마다 +1점');
+  eq([0, 1, 2, 3, 4].map(g => G.goTotal(7, g, 'double')), [7, 14, 28, 56, 112], '고마다 두 배');
+  eq([0, 1, 2, 3, 4].map(g => G.goTotal(7, g, 'none')), [7, 7, 7, 7, 7], '고 보너스 없음');
+  eq(G.goTotal(7, 3), G.goTotal(7, 3, 'std'), '방식을 안 주면 기본');
+  const ST = (rules, o) => G.settle(S(Object.assign({ rules }, o)), 0, 'stop');
+  const goCap = [[1, 5, 9, 0, 8, 28], [40]];
+  eq(['std', 'plus', 'double', 'none'].map(m => ST({ goBonus: m }, { cap: goCap, go: [3, 0] }).total), [18, 9, 48, 6], '정산: 3고 홍단+삼광 6점 → 기본 18 · +1씩 9 · ×2씩 48 · 없음 6');
+  const r = ST({ goBonus: 'double' }, { cap: goCap, go: [2, 0] });
+  eq([r.total, r.items.find(i => /고$/.test(i.k)).x], [24, 4], '고마다 두 배: 내역에 ×4');
+  eq(ST({ gobak: false }, { cap: [[1, 5, 9], [0]], go: [0, 1] }).per[0].pay, 3, '맞고 고박 끔: 고했다 져도 그대로');
+  eq(ST({ gobakX: 3 }, { cap: [[1, 5, 9], [0]], go: [0, 1] }).per[0].pay, 9, '맞고 고박 3배');
+  eq(ST({ gobakX: 1 }, { cap: [[1, 5, 9], [0]], go: [0, 1] }).per[0].pay, 3, '고박 1배면 배수 없음');
+  const g3 = rules => G.settle(G.setup({ players: 3, rules, cap: [[1, 5, 9], [0], [8]], go: [0, 1, 0], goSeq: [1] }), 0, 'stop');
+  eq([g3({}).per.map(x => x.pay), g3({ gobak: false }).per.map(x => x.pay)], [[6, 0], [3, 3]], '3인 고박 끔: 각자 자기 몫만');
+}
+
+section('우리 집 규칙: 피박 · 광박 · 멍박 · 흔들기 배수');
+{
+  const ST = (rules, o) => G.settle(S(Object.assign({ rules }, o)), 0, 'stop').per[0].pay;
+  const pibakCap = { cap: [PIS, [22, 23, 26, 27, 30]] };
+  eq([ST({}, pibakCap), ST({ pibak: false }, pibakCap), ST({ pibakX: 3 }, pibakCap), ST({ pibakX: 1 }, pibakCap)], [2, 1, 3, 1], '피박: 기본 2 · 끔 1 · 3배 3 · 1배 1');
+  const gwangCap = { cap: [[0, 8, 28], [2]] };
+  eq([ST({}, gwangCap), ST({ gwangbak: false }, gwangCap), ST({ gwangbakX: 3 }, gwangCap), ST({ gwangbakX: 4, pibak: false }, gwangCap)], [6, 3, 9, 12], '광박: 기본 6 · 끔 3 · 3배 9 · 4배 12');
+  const meongCap = { cap: [[4, 12, 16, 20, 24, 36, 45], [0]] };
+  eq([ST({}, meongCap), ST({ meongbak: false }, meongCap), ST({ meongbakX: 3 }, meongCap), ST({ meongbakX: 1 }, meongCap)], [6, 3, 9, 3], '멍박(열끗 7장): 기본 6 · 끔 3 · 3배 9 · 1배 3');
+  const shk = { cap: [[1, 5, 9], [0]] };
+  const sh = (rules, n) => ST(rules, Object.assign({ shake: [n, 0] }, shk));
+  eq([sh({}, 1), sh({ shakeX: 3 }, 1), sh({ shakeX: 3 }, 2), sh({ shakeX: 1 }, 2), sh({ shakeX: 4 }, 1)], [6, 9, 27, 3, 12], '흔들기·폭탄: 2배 6 · 3배 9 · 두 번 27 · 1배 3 · 4배 12');
+  const both = { cap: [[0, 8, 28, ...PIS], [22]], shake: [1, 0] };
+  eq([ST({}, both), ST({ pibakX: 3, gwangbakX: 3, shakeX: 3 }, both)], [32, 4 * 27], '배수가 겹치면 각자 곱함');
+  const rr = G.settle(S({ rules: { pibak: false, gwangbak: false }, cap: [[0, 8, 28], [2]] }), 0, 'stop');
+  eq(rr.per[0].mults, [], '꺼진 박은 내역에도 안 나옴');
+}
+
+section('우리 집 규칙: 총통 · 쓰리뻑 · 국진 · 보너스 피');
+{
+  let seed = 0;
+  for (let sd = 1; sd < 6000 && !seed; sd++) { const t = G.create({ players: 2, seed: sd }); if (t.result && t.result.kind === 'chongtong') seed = sd; }
+  ok(seed > 0, '총통이 나오는 씨앗을 찾음 (' + seed + ')');
+  const c1 = G.create({ players: 2, seed }), c2 = G.create({ players: 2, seed, rules: { chongtong: 'win' } }), c3 = G.create({ players: 2, seed, rules: { chongtong: 'off' } });
+  eq([c1.result.total, c1.result.items[0].k], [10, '총통'], '총통 기본: 10점');
+  eq([c2.result.kind, c2.result.total, c2.result.winner === c1.result.winner], ['chongtong', 7, true], '총통 승리: 맞고 기준 점수(7점)로 바로 이김');
+  eq([c3.result, c3.phase, c3.hands.flat().length], [null, 'play', 20], '총통 안 씀: 그냥 계속 침');
+  let seed3 = 0;
+  for (let sd = 1; sd < 6000 && !seed3; sd++) { const t = G.create({ players: 3, seed: sd }); if (t.result && t.result.kind === 'chongtong') seed3 = sd; }
+  eq(G.create({ players: 3, seed: seed3, rules: { chongtong: 'win' } }).result.total, 3, '3인 총통 승리: 3점');
+  eq(G.create({ players: 3, seed: seed3, rules: { chongtong: 'win', go3: 5 } }).result.total, 5, '총통 승리 점수는 고/스톱 기준을 따름');
+
+  const pp = rules => { const s = S({ rules, hands: [[0, 44], [36, 38]], table: [2], deck: [3, 24], ppeok: [2, 0] }); act(s, P(0)); return s; };
+  eq([pp({}).result.total, pp({}).result.kind], [7, 'ppeok3'], '쓰리뻑 기본: 바로 이김, 맞고 7점');
+  eq(pp({ ppeok3Pts: 12 }).result.total, 12, '쓰리뻑 점수 12점');
+  eq(pp({ ppeok3Pts: 12 }).result.per[0].pay, 12, '쓰리뻑 점수대로 진 사람이 냄');
+  let s = pp({ ppeok3: 'off' });
+  eq([s.phase, s.result, s.ppeok[0]], ['play', null, 3], '쓰리뻑 안 씀: 뻑 세 번째여도 계속');
+
+  const kk = rules => { const s = S({ rules, hands: [[34, 44], [36, 38]], table: [32], deck: [24, 25] }); act(s, P(34)); return s; };
+  eq([kk({}).phase, kk({}).kook], ['kook', ''], '국진 기본: 고르기');
+  s = kk({ kook: 'yeol' });
+  eq([s.phase, s.kook, G.tally(s, 0).y, G.tally(s, 0).pi], ['play', 'Y', 1, 1], '국진 열끗 고정: 안 물어봄 (국진은 열끗, 피 1장은 다른 패)');
+  s = kk({ kook: 'ssang' });
+  eq([s.phase, s.kook, G.tally(s, 0).y, G.tally(s, 0).pi], ['play', 'P', 0, 3], '국진 쌍피 고정: 안 물어봄 (피 3)');
+  eq(G.create({ players: 2, seed: 3, rules: { kook: 'ssang' } }).kook, 'P', '새 판부터 쌍피로 정해 둠');
+
+  s = G.create({ players: 2, seed: 77, rules: { bonus: 3 } });
+  eq([s.bonus, s.rules.bonus, G.gameCards(s.bonus).length], [3, 3, 51], '규칙의 보너스 피 3장이 판에 반영');
+  s = G.create({ players: 2, seed: 77, bonus: 2, rules: { bonus: 3 } });
+  eq([s.bonus, s.rules.bonus], [2, 2], '옛 호출(bonus 따로)이 있으면 그게 먼저');
+  s = G.create({ players: 2, seed: 77, rules: { bonus: 0 } });
+  eq(s.bonus, 0, '보너스 피 없음');
+  eq(G.nextRound(G.create({ players: 2, seed: 77, rules: { bonus: 2 } })).bonus, 2, '다음 판도 보너스 피 유지');
+}
+
+section('우리 집 규칙: 첫뻑 · 연뻑 보너스');
+{
+  const mk = (rules, o) => S(Object.assign({ rules, hands: [[0, 44], [1, 38]], table: [2], deck: [3, 24, 25, 26], cap: [[6], [7]] }, o));
+  let s = mk({ ppeokFirst: 3 });
+  let ev = act(s, P(0));
+  eq([s.ptag[0], ev.find(e => e.t === 'ppeok').tag], ['first', 'first'], '첫 차례의 뻑에 첫뻑 표시');
+  ev = act(s, P(1));
+  eq(s.side, [{ from: 0, to: 1, pts: 3, k: '첫뻑' }], '남의 첫뻑을 먹으면 싼 사람이 3점을 줌');
+  ok(ev.some(e => e.t === 'ppeokBonus' && e.pts === 3 && e.k === '첫뻑'), '첫뻑 보너스 알림');
+  eq(s.ptag[0], '', '먹으면 표시가 지워짐');
+  const fin = G.settle(s, 1, 'stop');
+  eq(fin.side, [{ from: 0, to: 1, fromSeat: 0, toSeat: 1, pts: 3, k: '첫뻑' }], '정산에 따로 남음');
+
+  s = mk({ ppeokFirst: 3 }, { hands: [[0, 1, 44], [36, 38, 39]], deck: [3, 24, 25, 26, 27], cap: [[], [6, 7]] });
+  act(s, P(0)); act(s, P(38)); act(s, P(1));
+  eq(s.side, [{ from: 1, to: 0, pts: 3, k: '첫뻑' }], '자뻑 먹기: 나머지 모두에게서 받음');
+
+  // 첫 차례가 아닌 뻑은 첫뻑이 아님
+  s = S({ rules: { ppeokFirst: 3 }, hands: [[44, 40], [1, 38]], table: [2], deck: [30, 3, 24, 25, 26], cap: [[6], [7]] });
+  act(s, P(44)); act(s, P(1));
+  eq([s.ptag[0], s.owner[0]], ['', 1], '두 번째 차례의 뻑은 첫뻑 아님');
+  act(s, P(40));
+  eq(s.side, [], '보너스 없음');
+
+  // 보너스 0점(기본)이면 표시도 보너스도 없음
+  s = mk({}); act(s, P(0)); act(s, P(1));
+  eq([s.side, s.ptag[0]], [[], ''], '기본: 첫뻑 보너스 없음');
+
+  // 연뻑: p0 뻑 → p1 평범 → p0 또 뻑 → p1 이 먹음
+  const yeon = rules => S({ rules, hands: [[0, 4, 44], [36, 6, 38]], table: [2, 5], deck: [3, 24, 7, 25, 26, 27], cap: [[], [9, 10]] });
+  s = yeon({ ppeokYeon: 5 });
+  act(s, P(0));
+  eq([s.ptag[0], s.streak[0]], ['', 1], '첫 뻑은 연뻑이 아님 (표시 없음, 연속 1)');
+  act(s, P(36));
+  eq(s.streak[0], 1, '남의 차례가 끼어도 내 연속은 그대로');
+  act(s, P(4));
+  eq([s.ptag[1], s.ppeok[0]], ['yeon', 2], '연달아 두 번째 뻑에 연뻑 표시');
+  act(s, P(6));
+  eq(s.side, [{ from: 0, to: 1, pts: 5, k: '연뻑' }], '연뻑을 먹으면 싼 사람이 5점을 줌');
+  // 중간에 뻑이 아닌 차례가 끼면 연뻑 아님
+  s = yeon({ ppeokYeon: 5 });
+  act(s, P(0)); act(s, P(36)); act(s, P(44));
+  eq([s.streak[0], s.phase], [0, 'play'], '뻑 없는 차례가 끼면 연속이 끊김');
+}
+
+section('우리 집 규칙: 피 뺏기 장수');
+{
+  const run = (rules, o, card) => { const s = S(Object.assign({ rules }, o)); const ev = act(s, P(card)); return { s, ev }; };
+  const jj = { hands: [[0, 44], [36, 38]], table: [20], deck: [2, 24], cap: [[], [6, 7, 10, 11]] };
+  eq([{}, { stealJjok: 2 }, { stealJjok: 3 }, { stealJjok: 0 }].map(r => run(r, jj, 0).s.cap[1].length), [3, 2, 1, 4], '쪽: 기본 1 · 2장 · 3장 · 0장(안 뺏음)');
+  const td = { hands: [[0, 44], [36, 38]], table: [2, 3, 20], deck: [1, 24], cap: [[], [6, 7, 10, 11]] };
+  eq([{}, { stealTtadak: 2 }, { stealTtadak: 0 }].map(r => run(r, td, 0).s.cap[1].length), [3, 2, 4], '따닥: 기본 1 · 2장 · 0장');
+  const sw = { hands: [[0, 44], [36, 38]], table: [2, 20], deck: [21, 24], cap: [[], [6, 7, 10, 11]] };
+  eq([{}, { stealSweep: 2 }, { stealSweep: 0 }].map(r => run(r, sw, 0).s.cap[1].length), [3, 2, 4], '싹쓸이: 기본 1 · 2장 · 0장');
+  ok(run({ stealSweep: 0 }, sw, 0).ev.some(e => e.t === 'sweep' && e.steal === 0), '피를 안 뺏어도 싹쓸이 알림은 나옴');
+  const bm = { hands: [[0, 1, 2, 44], [36, 38, 39, 40]], table: [3, 20], deck: [24, 25, 26, 27], cap: [[], [6, 7, 10, 11]] };
+  eq([{}, { stealBomb: 2 }, { stealBomb: 0 }].map(r => { const s = S(Object.assign({ rules: r }, bm)); act(s, G.A_BOMB); return s.cap[1].length; }), [3, 2, 4], '폭탄: 기본 1 · 2장 · 0장');
+  const eat = rules => { const s = S({ rules, hands: [[0, 44], [1, 38]], table: [2], deck: [3, 24, 25, 26], cap: [[6, 7, 10], [14]] }); act(s, P(0)); act(s, P(1)); return s.cap[0].length; };
+  eq([eat({}), eat({ stealEat: 2 }), eat({ stealEat: 0 })], [2, 1, 3], '남의 뻑 먹기: 기본 1장 · 2장 · 0장');
+  const self = rules => { const s = S({ rules, hands: [[0, 1, 44], [36, 38, 39]], table: [2], deck: [3, 24, 25, 26, 27], cap: [[], [6, 7, 10]] }); act(s, P(0)); act(s, P(38)); act(s, P(1)); return s.cap[1].length; };
+  eq([self({}), self({ stealSelf: 3 }), self({ stealSelf: 1 }), self({ stealSelf: 0 })], [1, 0, 2, 3], '자뻑 먹기: 기본 2장 · 3장 · 1장 · 0장');
+  // 마지막 차례는 여전히 안 뺏음
+  const last = S({ rules: { stealJjok: 3 }, hands: [[0], []], table: [20], deck: [2], cap: [[], [6]] });
+  act(last, P(0));
+  eq(last.cap[1], [6], '마지막 차례는 몇 장이든 안 뺏음');
+}
+
+section('우리 집 규칙: 나가리 · 점수 상한 · 광 팔기');
+{
+  const ST = (rules, o) => G.settle(S(Object.assign({ rules }, o)), 0, 'stop');
+  const cp = { cap: [[1, 5, 9], [0]] };
+  eq([ST({}, Object.assign({ carry: 1 }, cp)).per[0].pay, ST({ nagariX: 3 }, Object.assign({ carry: 2 }, cp)).per[0].pay, ST({ nagariX: 1 }, Object.assign({ carry: 2 }, cp)).per[0].pay, ST({ nagariX: 4 }, Object.assign({ carry: 1 }, cp)).per[0].pay], [6, 27, 3, 12], '나가리 배수: 기본 2배 · 3배 두 번 27 · 1배 3 · 4배 12');
+  eq(ST({ nagariX: 1 }, Object.assign({ carry: 1 }, cp)).mults, [], '배수 1이면 내역에도 안 나옴');
+  const nag = rules => { const s = S({ rules, hands: [[0], []], table: [20], deck: [2], cap: [[], []] }); act(s, P(0)); return s; };
+  const n1 = nag({ nagariX: 3 });
+  eq([n1.result.kind, n1.result.carryNext, n1.result.nextMult], ['nagari', 1, 3], '나가리 뒤 다음 판 배수 3');
+  eq(G.nextRound(n1).carry, 1, '다음 판에 나가리 1칸');
+  const chain = (rules, k) => { const s = S({ rules, hands: [[0], []], table: [20], deck: [2], cap: [[], []], carry: k }); act(s, P(0)); return [s.result.carryNext, s.result.nextMult]; };
+  eq([chain({}, 2), chain({}, 3), chain({ nagariMax: 5 }, 4), chain({ nagariMax: 1 }, 1), chain({ nagariMax: 0 }, 0)], [[3, 8], [3, 8], [5, 32], [1, 2], [0, 1]], '연속 나가리 한도: 기본 3(8배) · 5까지 32배 · 1까지 · 0이면 안 쌓음');
+  eq(S({ rules: { nagariMax: 1 }, carry: 3 }).carry, 1, '새 판의 나가리 칸도 한도 안으로');
+  eq(G.carryMult(S({ rules: { nagariX: 3 }, carry: 2 })), 9, '나가리 배수 함수');
+
+  // 최대 점수 상한
+  const big = { cap: [[0, 8, 28, ...PIS], [22]], shake: [1, 0] };
+  eq([ST({}, big).per[0].pay, ST({ maxPts: 20 }, big).per[0].pay, ST({ maxPts: 100 }, big).per[0].pay], [32, 20, 32], '점수 상한: 없음 32 · 20점이면 20 · 100점이면 그대로');
+  const cr = ST({ maxPts: 20 }, big);
+  eq([cr.capped, cr.points, cr.per[0].mults[cr.per[0].mults.length - 1].k], [true, 20, '상한 20점'], '상한에 걸린 판 표시 · 이긴 사람이 받는 점도 상한');
+  eq(ST({ maxPts: 20 }, { cap: [[1, 5, 9], [0]] }).capped, false, '상한 안이면 걸림 없음');
+  const t3 = G.settle(G.setup({ players: 3, rules: { maxPts: 10 }, cap: [[0, 8, 28, 40, 44], [2], [3]], go: [0, 1, 0], goSeq: [1] }), 0, 'stop');
+  eq(t3.per.map(x => x.pay), [10, 0], '3인 고박 몫도 상한 안');
+  eq(G.settle(S({ rules: { maxPts: 5, ppeok3Pts: 12 } }), 0, 'ppeok3').per[0].pay, 5, '쓰리뻑 점수에도 상한');
+
+  // 광 팔기
+  const findSeed = (N, pred, rules) => { for (let seed = 1; seed < 4000; seed++) { const s = G.create({ players: N, seed, rules }); if (pred(s)) return seed; } return 0; };
+  const off = findSeed(4, s => s.phase === 'buy' && s.sale.offers.length === 1, {});
+  ok(off > 0, '광 팔기 판 찾음');
+  let s = G.create({ players: 4, seed: off, rules: { saleOn: false } });
+  eq([s.sale, s.phase, s.deck.length, s.bench.length], [null, 'play', 21, 1], '광 팔기 끔: 쉬는 사람은 패 없이 쉬기만 · 더미는 그대로');
+  eq(sorted([...s.deck, ...s.table, ...s.hands.flat(), ...s.cap.flat()]), G.gameCards(0), '광 팔기 끄면 48장이 판에');
+  const price = (rules, skip) => { const t = G.create({ players: 4, seed: off, rules }); const cards = t.sale.offers[0].cards.length; for (let i = 0; i < skip; i++) act(t, G.A_NOBUY); act(t, G.A_BUY); return [t.sale.sold[0].price, cards]; };
+  const p2 = price({ salePrice: 2 }, 0);
+  eq(p2[0], p2[1] * 2, '광 한 장 2점');
+  eq(price({ salePrice: 0 }, 0)[0], 0, '광 공짜');
+  const p5 = price({ salePrice: 5 }, 1);
+  eq(p5[0], p5[1] * 5, '광 한 장 5점 (둘째 사람이 삼)');
+  const sold = G.create({ players: 4, seed: off, rules: { salePrice: 3 } }); act(sold, G.A_BUY);
+  eq(G.settle(sold, sold.sale.sold[0].buyer, 'stop').sale[0].price, sold.sale.sold[0].cards.length * 3, '정산에 규칙대로 값이 남음');
+  // 살 수 있는 사람
+  const dl = G.create({ players: 4, seed: off, rules: { saleWho: 'dealer' } });
+  eq([dl.phase, dl.turn], ['buy', dl.first], '선만 살 수 있음: 선에게만 물음');
+  const ev = act(dl, G.A_NOBUY);
+  eq([dl.phase, dl.turn, ev.some(e => e.t === 'unsold')], ['play', dl.first, true], '선이 안 사면 바로 안 팔림');
+  const ot = G.create({ players: 4, seed: off, rules: { saleWho: 'others' } });
+  eq([ot.phase, ot.turn], ['buy', (ot.first + 1) % 3], '선 빼고: 선 다음 사람부터 물음');
+  eq(G.askers(ot), [(ot.first + 1) % 3, (ot.first + 2) % 3], '묻는 순서');
+  act(ot, G.A_NOBUY);
+  eq(ot.turn, (ot.first + 2) % 3, '그다음 사람');
+  act(ot, G.A_NOBUY);
+  eq([ot.phase, ot.cap[ot.first]], ['play', []], '선은 끝까지 안 물어봄');
+}
+
+section('우리 집 규칙: 칩 정산 (점수 변화의 합은 늘 0)');
+{
+  let s = null;
+  for (let seed = 1; seed < 4000 && !s; seed++) { const t = G.create({ players: 4, seed }); if (t.phase === 'buy' && t.sale.offers.length === 1) s = t; }
+  act(s, G.A_BUY);
+  const buyer = s.sale.sold[0].buyer, seller = s.sale.sold[0].seat, price = s.sale.sold[0].price;
+  const w = (buyer + 1) % 3;
+  s.cap[w] = [13, 17, 25, 21, 33, 37];            // 초단 + 청단 = 6점
+  s.result = G.settle(s, w, 'stop'); s.phase = 'end';
+  const d = G.pointDeltas(s);
+  eq(d.reduce((a, b) => a + b, 0), 0, '합이 0');
+  eq(d.length, 4, '쉬는 사람 자리까지 4칸');
+  eq(d[seller], price, '쉬는 사람은 광값을 받음');
+  eq(d[s.who[w]], s.result.points, '이긴 사람은 받는 점 그대로');
+  eq(d[s.who[buyer]], -price - s.result.per.find(l => l.p === buyer).pay, '광을 산 사람은 광값 + 진 점수');
+  // 첫뻑 (나가리여도 주고받음)
+  const f = S({ rules: { ppeokFirst: 3 }, hands: [[0], []], table: [2], deck: [3], cap: [[], []] });
+  f.side.push({ from: 0, to: 1, pts: 3, k: '첫뻑' });
+  f.result = G.settle(f, -1, 'nagari');
+  eq(G.pointDeltas(f), [-3, 3], '나가리여도 첫뻑 보너스는 주고받음');
+}
+
+// 규칙을 무작위로 섞어 수천 판: 카드 보존 · 합계 0 · 점수 == 낸 합 · 상한 · 오류 없음
+section('우리 집 규칙: 무작위 규칙 × 무작위 판 (오류 없음 · 합계 0 · 카드 보존)');
+{
+  let bad = 0, rounds = 0, zero = 0, capHit = 0, sides = 0;
+  const kinds = {};
+  const rr = G.makeRng(2024);
+  const randRules = () => {
+    const r = {};
+    for (const d of G.RULE_DEFS) {
+      if (d.t === 'bool') r[d.k] = rr() < 0.7;
+      else if (d.t === 'num') r[d.k] = rr() < 0.4 ? d.d : d.min + Math.floor(rr() * (Math.min(d.max, d.d * 3 + 3) - d.min + 1));
+      else r[d.k] = d.opts[Math.floor(rr() * d.opts.length)][0];
+    }
+    r.chipPer = 10; r.go3 = Math.min(r.go3, 5); r.goMatgo = Math.min(r.goMatgo, 9);
+    return r;
+  };
+  for (let seed = 1; seed <= 1600; seed++) {
+    const N = [2, 3, 4, 5][seed % 4], rules = G.normRules(randRules());
+    const rng = G.makeRng(seed * 13 + 1);
+    let st = G.create({ players: N, seed, rules });
+    for (let chain = 0; chain < 2; chain++) {
+      const all = JSON.stringify(G.gameCards(st.bonus));
+      for (let guard = 0; st.phase !== 'end'; guard++) {
+        if (guard > 500) throw new Error('끝나지 않는 판 ' + seed);
+        const pend = st.phase === 'pickHand' || st.phase === 'pickFlip' ? st.cur.caps : [];
+        const cards = sorted([...st.deck, ...st.table, ...st.hands.flat(), ...st.cap.flat(), ...pend, ...(st.sale ? st.sale.hid : [])]);
+        if (JSON.stringify(cards) !== all) bad++;
+        const L = G.legal(st);
+        if (!L.length) { bad++; break; }
+        const a = seed % 3 ? L[Math.floor(rng() * L.length)] : AI.choose(G.view(st, st.turn), 'easy', { rng });
+        if (!G.isLegal(st, a)) { bad++; break; }
+        G.apply(st, a, []);
+      }
+      rounds++; const r = st.result; kinds[r.kind] = (kinds[r.kind] || 0) + 1;
+      const d = G.pointDeltas(st);
+      if (d.reduce((x, y) => x + y, 0) === 0) zero++; else bad++;
+      if (r.winner >= 0 && r.points !== r.per.reduce((x, l) => x + l.pay, 0)) bad++;
+      if (rules.maxPts > 0 && r.per.some(l => l.pay > rules.maxPts)) bad++;
+      if (r.capped) capHit++;
+      sides += r.side.length;
+      if (r.per.some(l => l.pay < 0 || !Number.isFinite(l.pay))) bad++;
+      if (G.hash(JSON.parse(JSON.stringify(st))) !== G.hash(st)) bad++;
+      st = G.nextRound(st);
+      if (JSON.stringify(st.rules) !== JSON.stringify(rules)) bad++;
+    }
+  }
+  eq(bad, 0, '무작위 규칙 ' + rounds + '판: 카드 보존 · 점수 합 · 상한 · 저장/복원');
+  eq(zero, rounds, '모든 판에서 칩 변화의 합이 0');
+  ok(capHit > 20 && sides > 20, '상한에 걸린 판(' + capHit + ')과 첫뻑/연뻑 보너스(' + sides + '건)가 실제로 나옴');
+  console.log('    무작위 규칙 결과: ' + JSON.stringify(kinds));
+}
+
 // ── AI 끼리 ────────────────────────────────────────────
 (async () => {
   section('AI 끼리 (오류 없음 · 점수 분포 · 실력 순서, 같은 판을 자리 바꿔 두 번)');

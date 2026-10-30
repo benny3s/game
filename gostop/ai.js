@@ -43,7 +43,7 @@
       dead.gwang = 5 - othersG < 3;
       P.push({ t, dead });
     }
-    return { n, kook, P, thr: G.thresholdOf(n) };
+    return { n, kook, P, thr: G.thresholdOf(n, v.rules) };
   }
   // 먹은 패의 '값어치' (점수 + 약에 다가간 정도, 점수 단위 대략)
   const PROG3 = [0, 0.55, 1.45];
@@ -280,7 +280,7 @@
     switch (s.phase) {
       case 'goStop': {
         let ob = 0; for (let q = 0; q < s.n; q++) if (q !== p) ob = Math.max(ob, G.tally(s, q).base);
-        const left = s.hands[p].length + s.pass[p], thr = G.thresholdOf(s.n);
+        const left = s.hands[p].length + s.pass[p], thr = G.thresholdOf(s.n, s.rules);
         return left >= 4 && ob <= thr - 4 && s.go[p] < 2 && rng() < 0.6 ? A.GO : A.STOP;
       }
       case 'kook': return quick(s.cap[p], 'Y').pi >= 7 ? A.KP : A.KY;

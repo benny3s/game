@@ -64,10 +64,91 @@
   // 상태 밖에서 쓰는 씨앗 난수 (AI·시험용)
   function makeRng(seed) { const o = { rng: seed | 0 }; return () => rnd(o); }
 
+  // ── 우리 집 규칙 (cfg.rules) ─────────────────────────────────
+  // 집마다 달라서 하나하나 바꿀 수 있어요. 기본값 = 이 게임의 원래 규칙. normRules 가 모르는 값·범위 밖 값을 고쳐 줌
+  // t: bool | num(min~max 정수, zero = 0일 때 보여 줄 말) | enum(opts = [[값, 이름, 설명?]])
+  const RULE_GROUPS = [['go', '🔥 고 · 스톱'], ['bak', '✋ 박 · 배수'], ['special', '🎴 특별한 일'], ['steal', '🤲 피 뺏기 장수'], ['nagari', '🤝 나가리'], ['sale', '💰 광 팔기 (4~5명)'], ['pay', '🪙 점수 · 칩']];
+  const RULE_DEFS = [
+    { k: 'goMatgo', g: 'go', t: 'num', d: 7, min: 1, max: 30, unit: '점', label: '맞고 고/스톱 기준', note: '2명이 칠 때 이 점수부터 고·스톱' },
+    { k: 'go3', g: 'go', t: 'num', d: 3, min: 1, max: 30, unit: '점', label: '3인 고/스톱 기준', note: '3명(4~5명 포함)이 칠 때 이 점수부터' },
+    { k: 'goBonus', g: 'go', t: 'enum', d: 'std', label: '고 보너스 방식', note: '고를 외칠 때마다 붙는 점수', opts: [['std', '기본', '1고 +1 · 2고 +2 · 3고부터 (점수+고)×2씩'], ['plus', '+1씩', '고마다 +1점'], ['double', '×2씩', '고마다 점수 두 배'], ['none', '없음', '고는 계속하기만']] },
+    { k: 'gobak', g: 'go', t: 'bool', d: true, label: '고박', note: '고를 했다가 지면 맞고는 배수, 3인은 진 사람 몫을 혼자 다 냄' },
+    { k: 'gobakX', g: 'go', t: 'num', d: 2, min: 1, max: 5, unit: '배', label: '고박 배수 (맞고)', note: '1배면 배수 없음' },
+    { k: 'pibak', g: 'bak', t: 'bool', d: true, label: '피박', note: '이긴 사람이 피로 났고 진 사람 피가 적을 때' },
+    { k: 'pibakX', g: 'bak', t: 'num', d: 2, min: 1, max: 5, unit: '배', label: '피박 배수' },
+    { k: 'gwangbak', g: 'bak', t: 'bool', d: true, label: '광박', note: '이긴 사람이 광으로 났고 진 사람 광이 0장일 때' },
+    { k: 'gwangbakX', g: 'bak', t: 'num', d: 2, min: 1, max: 5, unit: '배', label: '광박 배수' },
+    { k: 'meongbak', g: 'bak', t: 'bool', d: true, label: '멍박 (열끗박)', note: '이긴 사람 열끗이 7장 이상이면 모두에게' },
+    { k: 'meongbakX', g: 'bak', t: 'num', d: 2, min: 1, max: 5, unit: '배', label: '멍박 배수' },
+    { k: 'shakeX', g: 'bak', t: 'num', d: 2, min: 1, max: 4, unit: '배', label: '흔들기·폭탄 배수', note: '한 번마다 곱해요 (1배면 배수 없음)' },
+    { k: 'chongtong', g: 'special', t: 'enum', d: 'score', label: '총통', note: '처음 손패에 같은 월 네 장', opts: [['score', '10점', '바로 이기고 10점'], ['win', '승리', '바로 이기고 고/스톱 기준 점수'], ['off', '안 씀', '그냥 계속 쳐요']] },
+    { k: 'ppeok3', g: 'special', t: 'enum', d: 'win', label: '쓰리뻑 (뻑 3번)', note: '한 판에 뻑을 세 번 하면', opts: [['win', '바로 승리'], ['off', '안 씀']] },
+    { k: 'ppeok3Pts', g: 'special', t: 'num', d: 0, min: 0, max: 50, unit: '점', zero: '기준 점수', label: '쓰리뻑 점수', note: '0이면 고/스톱 기준 점수' },
+    { k: 'ppeokFirst', g: 'special', t: 'num', d: 0, min: 0, max: 20, unit: '점', zero: '없음', label: '첫뻑 보너스', note: '판의 첫 차례에 난 뻑을 먹으면 싼 사람에게서 받아요 (자뻑이면 모두에게서)' },
+    { k: 'ppeokYeon', g: 'special', t: 'num', d: 0, min: 0, max: 20, unit: '점', zero: '없음', label: '연뻑 보너스', note: '같은 사람이 연달아 싼 두 번째 뻑을 먹으면 받아요' },
+    { k: 'kook', g: 'special', t: 'enum', d: 'choose', label: '국진 (9월 열끗)', note: '쌍피로 고를 수 있는지', opts: [['choose', '고르기', '먹을 때 열끗 / 쌍피 선택'], ['yeol', '열끗 고정'], ['ssang', '쌍피 고정']] },
+    { k: 'bonus', g: 'special', t: 'enum', d: 0, label: '보너스 쌍피', note: '덱에 넣는 보너스 피 장수', opts: [[0, '없음'], [2, '2장', '쌍피 + 쓰리피'], [3, '3장', '쌍피 두 장 + 쓰리피']] },
+    { k: 'stealJjok', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '쪽' },
+    { k: 'stealTtadak', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '따닥' },
+    { k: 'stealSweep', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '싹쓸이' },
+    { k: 'stealBomb', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '폭탄' },
+    { k: 'stealEat', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '남의 뻑 먹기' },
+    { k: 'stealSelf', g: 'steal', t: 'num', d: 2, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '자뻑 먹기' },
+    { k: 'nagariX', g: 'nagari', t: 'num', d: 2, min: 1, max: 4, unit: '배', label: '나가리 다음 판 배수', note: '나가리가 나면 다음 판 점수에 곱해요 (1배면 없음)' },
+    { k: 'nagariMax', g: 'nagari', t: 'num', d: 3, min: 0, max: 5, unit: '번', zero: '안 쌓음', label: '연속 나가리 쌓는 한도', note: '연달아 나가리가 나도 이 횟수까지만 곱해요' },
+    { k: 'saleOn', g: 'sale', t: 'bool', d: true, label: '광 팔기', note: '끄면 쉬는 사람은 그냥 쉬어요' },
+    { k: 'salePrice', g: 'sale', t: 'num', d: 1, min: 0, max: 5, unit: '점', zero: '공짜', label: '광 한 장 값' },
+    { k: 'saleWho', g: 'sale', t: 'enum', d: 'all', label: '살 수 있는 사람', opts: [['all', '모두', '치는 사람이 선부터 차례로'], ['dealer', '선만'], ['others', '선 빼고']] },
+    { k: 'maxPts', g: 'pay', t: 'num', d: 0, min: 0, max: 200, unit: '점', zero: '없음', steps: [0, 5, 10, 15, 20, 30, 50, 100, 200], label: '최대 점수 상한', note: '한 사람이 한 판에 낼 수 있는 점수의 끝' },
+    { k: 'chipPer', g: 'pay', t: 'num', d: 10, min: 1, max: 1000, unit: '칩', steps: [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000], label: '점당 칩', note: '친구랑 정산에 쓰는 점수 1점의 칩' },
+  ];
+  const RULE_BY = {}; for (const d of RULE_DEFS) RULE_BY[d.k] = d;
+  function defaultRules() { const r = {}; for (const d of RULE_DEFS) r[d.k] = d.d; return r; }
+  // 안 맞는 값은 기본값으로, 숫자는 범위 안으로
+  function normRules(x) {
+    const r = {}; x = x && typeof x === 'object' ? x : {};
+    for (const d of RULE_DEFS) {
+      const v = x[d.k];
+      if (d.t === 'bool') r[d.k] = v == null ? d.d : (v === 'false' || v === 0 ? false : !!v);
+      else if (d.t === 'num') { const n = Math.round(Number(v)); r[d.k] = v == null || v === '' || !isFinite(n) ? d.d : Math.max(d.min, Math.min(d.max, n)); }
+      else { const hit = d.opts.find(o => String(o[0]) === String(v)); r[d.k] = hit ? hit[0] : d.d; }
+    }
+    return r;
+  }
+  function ruleText(d, v) {
+    if (d.t === 'bool') return v ? '켬' : '끔';
+    if (d.t === 'enum') { const o = d.opts.find(q => q[0] === v); return o ? o[1] : String(v); }
+    return v === 0 && d.zero ? d.zero : v + (d.unit || '');
+  }
+  // 기본과 다른 규칙만: [{ k, label, text }]
+  function diffRules(rules) {
+    const r = normRules(rules), out = [];
+    for (const d of RULE_DEFS) if (r[d.k] !== d.d) out.push({ k: d.k, label: d.label, text: ruleText(d, r[d.k]) });
+    return out;
+  }
+  // 자주 쓰는 묶음 (기본값 위에 덮어씀)
+  const RULE_PRESETS = [
+    { id: 'basic', name: '기본', desc: '이 게임의 원래 규칙', rules: {} },
+    { id: 'matgo', name: '맞고 표준', desc: '맞고 7점 · 보너스 쌍피 3장 · 박은 모두 켬', rules: { bonus: 3 } },
+    { id: 'town', name: '동네 고스톱', desc: '총통은 승리 · 첫뻑 3점 · 연뻑 5점 · 쓰리뻑 10점', rules: { chongtong: 'win', ppeokFirst: 3, ppeokYeon: 5, ppeok3Pts: 10, bonus: 2 } },
+    { id: 'mild', name: '순한 맛', desc: '박 없음 · 고박 없음 · 한 판 30점까지', rules: { pibak: false, gwangbak: false, meongbak: false, gobak: false, maxPts: 30 } },
+    { id: 'spicy', name: '화끈한 집', desc: '피 두 장씩 뺏고 · 고는 점수 두 배씩 · 박은 세 배', rules: { goBonus: 'double', stealJjok: 2, stealTtadak: 2, stealSweep: 2, stealBomb: 2, pibakX: 3, gwangbakX: 3, nagariMax: 4, ppeokFirst: 5, ppeokYeon: 10 } },
+  ];
+  const presetRules = id => { const p = RULE_PRESETS.find(q => q.id === id); return normRules(p ? p.rules : {}); };
+  // 지금 규칙이 어느 묶음과 같은지 (점당 칩은 묶음에 안 들어 있어서 따지지 않음). 없으면 ''
+  function matchPreset(rules) {
+    const r = normRules(rules);
+    for (const p of RULE_PRESETS) { const q = presetRules(p.id); if (RULE_DEFS.every(d => d.k === 'chipPer' || q[d.k] === r[d.k])) return p.id; }
+    return '';
+  }
+
   // ── 상태 ───────────────────────────────────────────────────
-  const thresholdOf = n => (n === 2 ? 7 : 3);           // 고/스톱 할 수 있는 점수
+  const DEF_RULES = defaultRules();
+  const rulesOf = s => s.rules || DEF_RULES;
+  const thresholdOf = (n, rules) => { const r = rules || DEF_RULES; return n === 2 ? r.goMatgo : r.go3; };   // 고/스톱 할 수 있는 점수
+  const thr = s => thresholdOf(s.n, s.rules);
   const PIBAK_MAX = n => (n === 2 ? 7 : 5);             // 피박: 진 사람 피가 이 값 이하 (0장은 면제)
-  const MAX_CARRY = 3;                                  // 나가리 배수는 8배까지
+  const carryMult = s => Math.pow(rulesOf(s).nagariX, s.carry);   // 이 판의 나가리 배수
   const sortIds = a => a.sort((x, y) => x - y);
   const arr = (n, v) => Array.from({ length: n }, () => (typeof v === 'function' ? v() : v));
 
@@ -80,10 +161,11 @@
     const o = {
       v: s.v, n: s.n, N: s.N, who: s.who, bench: s.bench,
       sale: s.sale ? { offers: s.sale.offers, hid: s.sale.hid.slice(), i: s.sale.i, k: s.sale.k, sold: s.sale.sold.slice() } : null,
-      bonus: s.bonus, seed: s.seed, rng: s.rng, round: s.round, carry: s.carry, first: s.first,
+      rules: s.rules, bonus: s.bonus, seed: s.seed, rng: s.rng, round: s.round, carry: s.carry, first: s.first,
       turn: s.turn, phase: s.phase, turnNo: s.turnNo,
       deck: s.deck.slice(), hands: sl2(s.hands), table: s.table.slice(), cap: sl2(s.cap),
       kook: s.kook, go: s.go.slice(), lastGo: s.lastGo.slice(), goSeq: s.goSeq.slice(),
+      ptag: s.ptag.slice(), streak: s.streak.slice(), side: s.side.slice(),
       shake: s.shake.slice(), shook: sl2(s.shook), known: sl2(s.known),
       pass: s.pass.slice(), ppeok: s.ppeok.slice(), owner: s.owner.slice(),
       dealt: s.dealt, cur: null, result: s.result,
@@ -117,14 +199,17 @@
   function blank(o) {
     const plan = tablePlan(o.players, (o.round || 1) - 1);
     const n = plan.n;
-    const bonus = o.bonus === 2 || o.bonus === 3 ? o.bonus : 0;
+    const rules = normRules(o.rules);
+    const bonus = o.bonus != null ? (o.bonus === 2 || o.bonus === 3 ? o.bonus : 0) : rules.bonus;   // o.bonus 가 있으면 그게 먼저 (시험·옛 호출)
+    rules.bonus = bonus;
     const seed = (o.seed >>> 0) || 1;
     return {
-      v: 1, n, N: plan.N, who: plan.who, bench: plan.bench, sale: null, bonus, seed, rng: seed | 0,
-      round: o.round || 1, carry: Math.max(0, Math.min(MAX_CARRY, o.carry | 0)), first: (o.first | 0) % n,
+      v: 1, n, N: plan.N, who: plan.who, bench: plan.bench, sale: null, rules, bonus, seed, rng: seed | 0,
+      round: o.round || 1, carry: Math.max(0, Math.min(rules.nagariMax, o.carry | 0)), first: (o.first | 0) % n,
       turn: (o.first | 0) % n, phase: 'play', turnNo: 0,
       deck: [], hands: arr(n, () => []), table: [], cap: arr(n, () => []),
-      kook: '', go: arr(n, 0), lastGo: arr(n, 0), goSeq: [],
+      kook: rules.kook === 'yeol' ? 'Y' : rules.kook === 'ssang' ? 'P' : '', go: arr(n, 0), lastGo: arr(n, 0), goSeq: [],
+      ptag: arr(12, ''), streak: arr(n, 0), side: [],
       shake: arr(n, 0), shook: arr(n, () => []), known: arr(n, () => []),
       pass: arr(n, 0), ppeok: arr(n, 0), owner: arr(12, -1),
       dealt: { bonus: [], redeal: 0 }, cur: null, result: null,
@@ -150,7 +235,7 @@
       const cnt = monthCount(s.table);
       if (cnt.some(x => x === 4) && tries < 50) { s.dealt.redeal++; continue; }
       // 쉬는 사람(4~5명): 더미 위에서 7장씩 받아 둠. 그중 광만 팔 수 있고, 안 팔린 패는 아래에서 더미로 돌아감
-      if (s.bench.length) {
+      if (s.bench.length && s.rules.saleOn) {
         s.sale = { offers: [], hid: [], i: 0, k: 0, sold: [] };
         for (const seat of s.bench) {
           const h = sortIds(s.deck.splice(s.deck.length - 7, 7));
@@ -163,16 +248,21 @@
     }
     // 바닥에 처음부터 같은 월 세 장 = 주인 없는 뻑 더미 (먹어도 피를 안 받음)
     // 총통: 손에 같은 월 네 장 → 바로 이김 (선부터 차례대로 봄)
-    for (let i = 0; i < s.n; i++) {
+    if (s.rules.chongtong !== 'off') for (let i = 0; i < s.n; i++) {
       const p = (s.first + i) % s.n, mc = monthCount(s.hands[p]);
       const m = mc.indexOf(4);
       if (m >= 0) { finish(s, p, 'chongtong', [], { month: m }); break; }
     }
     if (s.sale) {
       if (s.result || !s.sale.offers.length) endSale(s, null);   // 총통이거나 팔 광이 없으면 바로 시작
-      else { s.phase = 'buy'; s.turn = s.first; }
+      else { s.phase = 'buy'; s.turn = askers(s)[0]; }
     }
     return s;
+  }
+  // 광을 살지 묻는 순서 (선부터). saleWho: 모두 · 선만 · 선 빼고
+  function askers(s) {
+    const all = Array.from({ length: s.n }, (_, i) => (s.first + i) % s.n), w = rulesOf(s).saleWho;
+    return w === 'dealer' ? [s.first] : w === 'others' ? all.slice(1) : all;
   }
 
   // 광 팔기 끝: 안 팔린 패는 섞어서 더미 맨 아래로, 쉬는 사람 패는 비움
@@ -195,10 +285,10 @@
     const prevSeat = prev.who[r && r.winner >= 0 ? r.winner : prev.first];
     const nextPlan = tablePlan(prev.N, prev.round);
     const first = Math.max(0, nextPlan.who.indexOf(prevSeat));
-    const carry = r && r.kind === 'nagari' ? Math.min(MAX_CARRY, prev.carry + 1) : 0;
+    const carry = r && r.kind === 'nagari' ? Math.min(rulesOf(prev).nagariMax, prev.carry + 1) : 0;
     const t = { rng: prev.rng };
     const seed = o.seed != null ? o.seed : (Math.floor(rnd(t) * 4294967296) >>> 0) || 7;
-    return create({ players: prev.N, bonus: o.bonus != null ? o.bonus : prev.bonus, seed, first, carry, round: prev.round + 1 });
+    return create({ players: prev.N, bonus: o.bonus != null ? o.bonus : prev.bonus, rules: o.rules || prev.rules, seed, first, carry, round: prev.round + 1 });
   }
 
   // 시험·연습용: 원하는 패로 판 만들기. deck 은 뒤집을 순서대로 (0번이 먼저)
@@ -247,21 +337,30 @@
       base: gwang + yeol + godori + tti + dan + piPts,
     };
   }
-  // 고 보너스: 1고 +1, 2고 +2, 3고부터 (점수+고 횟수) × 2^(고-2)
-  function goTotal(base, go) { return go <= 0 ? base : go <= 2 ? base + go : (base + go) * Math.pow(2, go - 2); }
+  // 고 보너스 (mode): std = 1고 +1, 2고 +2, 3고부터 (점수+고 횟수) × 2^(고-2) · plus = 고마다 +1 · double = 고마다 ×2 · none = 없음
+  function goTotal(base, go, mode) {
+    if (go <= 0) return base;
+    if (mode === 'plus') return base + go;
+    if (mode === 'double') return base * Math.pow(2, go);
+    if (mode === 'none') return base;
+    return go <= 2 ? base + go : (base + go) * Math.pow(2, go - 2);
+  }
 
   // 판 끝 정산 (점 계산). kind: stop | chongtong | ppeok3 | nagari
   function settle(s, w, kind, extra) {
-    const n = s.n, carryX = Math.pow(2, s.carry);
+    const n = s.n, R = rulesOf(s), carryX = carryMult(s);
     const res = { kind, winner: w, round: s.round, carry: s.carry, items: [], mults: [], per: [], points: 0, base: 0, go: 0, total: 0, extra: extra || {} };
     // 광 팔기 값: 판 결과와 상관없이 산 사람 → 판 사람(쉬는 사람)
     res.sale = s.sale ? s.sale.sold.map(x => ({ seat: x.seat, buyer: x.buyer, buyerSeat: s.who[x.buyer], cards: x.cards.slice(), price: x.price })) : [];
-    if (kind === 'nagari') { res.carryNext = Math.min(MAX_CARRY, s.carry + 1); return res; }
+    // 첫뻑·연뻑 보너스 (판 결과와 상관없이 먹은 사람이 싼 사람에게서)
+    res.side = (s.side || []).map(x => ({ from: x.from, to: x.to, fromSeat: s.who[x.from], toSeat: s.who[x.to], pts: x.pts, k: x.k }));
+    res.nextMult = 1;
+    if (kind === 'nagari') { res.carryNext = Math.min(R.nagariMax, s.carry + 1); res.nextMult = Math.pow(R.nagariX, res.carryNext); return res; }
     res.carryNext = 0;
     let total, common = 1;
     const tw = tally(s, w);
-    if (kind === 'chongtong') { total = 10; res.items.push({ k: '총통', pts: 10 }); }
-    else if (kind === 'ppeok3') { total = thresholdOf(n); res.items.push({ k: '쓰리뻑', pts: total }); }
+    if (kind === 'chongtong') { total = R.chongtong === 'win' ? thr(s) : 10; res.items.push({ k: R.chongtong === 'win' ? '총통 (승리)' : '총통', pts: total }); }
+    else if (kind === 'ppeok3') { total = R.ppeok3Pts || thr(s); res.items.push({ k: '쓰리뻑', pts: total }); }
     else {
       const it = res.items;
       if (tw.gwang) it.push({ k: tw.g === 3 && tw.rain ? '비삼광' : tw.g + '광', pts: tw.gwang });
@@ -273,12 +372,16 @@
       if (tw.tti) it.push({ k: '띠 ' + tw.t + '장', pts: tw.tti });
       if (tw.piPts) it.push({ k: '피 ' + tw.pi + '장', pts: tw.piPts });
       res.base = tw.base; res.go = s.go[w];
-      total = goTotal(tw.base, s.go[w]);
-      if (s.go[w] > 0) it.push({ k: s.go[w] + '고', pts: total - tw.base, x: s.go[w] >= 3 ? Math.pow(2, s.go[w] - 2) : 0 });
-      if (s.shake[w]) { const x = Math.pow(2, s.shake[w]); common *= x; res.mults.push({ k: '흔들기·폭탄 ' + s.shake[w] + '번', x }); }
-      if (tw.y >= 7) { common *= 2; res.mults.push({ k: '멍박 (열끗 ' + tw.y + '장)', x: 2 }); }
+      total = goTotal(tw.base, s.go[w], R.goBonus);
+      // add = 곱하기 앞에 더하는 고 횟수 (표시용)
+      if (s.go[w] > 0) {
+        const g = s.go[w];
+        it.push({ k: g + '고', pts: total - tw.base, x: R.goBonus === 'double' ? Math.pow(2, g) : R.goBonus === 'std' && g >= 3 ? Math.pow(2, g - 2) : 0, add: R.goBonus === 'std' && g >= 3 ? g : 0 });
+      }
+      if (s.shake[w] && R.shakeX > 1) { const x = Math.pow(R.shakeX, s.shake[w]); common *= x; res.mults.push({ k: '흔들기·폭탄 ' + s.shake[w] + '번', x }); }
+      if (tw.y >= 7 && R.meongbak && R.meongbakX > 1) { common *= R.meongbakX; res.mults.push({ k: '멍박 (열끗 ' + tw.y + '장)', x: R.meongbakX }); }
     }
-    if (s.carry) { common *= carryX; res.mults.push({ k: '나가리 판', x: carryX }); }
+    if (s.carry && carryX > 1) { common *= carryX; res.mults.push({ k: '나가리 판', x: carryX }); }
     res.total = total;
     // 진 사람마다
     const losers = [];
@@ -287,14 +390,14 @@
       const tq = tally(s, q), m = [];
       let x = common;
       if (kind === 'stop') {
-        if (tw.piPts > 0 && tq.pi >= 1 && tq.pi <= PIBAK_MAX(n)) { x *= 2; m.push({ k: '피박', x: 2 }); }
-        if (tw.gwang > 0 && tq.g === 0) { x *= 2; m.push({ k: '광박', x: 2 }); }
-        if (n === 2 && s.go[q] > 0) { x *= 2; m.push({ k: '고박', x: 2 }); }
+        if (R.pibak && R.pibakX > 1 && tw.piPts > 0 && tq.pi >= 1 && tq.pi <= PIBAK_MAX(n)) { x *= R.pibakX; m.push({ k: '피박', x: R.pibakX }); }
+        if (R.gwangbak && R.gwangbakX > 1 && tw.gwang > 0 && tq.g === 0) { x *= R.gwangbakX; m.push({ k: '광박', x: R.gwangbakX }); }
+        if (n === 2 && R.gobak && R.gobakX > 1 && s.go[q] > 0) { x *= R.gobakX; m.push({ k: '고박', x: R.gobakX }); }
       }
       losers.push({ p: q, pay: total * x, mults: m, bear: false, gone: s.go[q] > 0 });
     }
     // 3인 고박: 고를 했다가 진 사람이 진 사람 몫을 다 냄 (둘 다 고했으면 나중에 고한 사람)
-    if (kind === 'stop' && n === 3) {
+    if (kind === 'stop' && n === 3 && R.gobak) {
       const gone = losers.filter(l => l.gone);
       if (gone.length) {
         let bearer = gone[0];
@@ -304,6 +407,9 @@
       }
     }
     for (const l of losers) delete l.gone;
+    // 최대 점수 상한: 한 사람이 한 판에 내는 점수의 끝
+    if (R.maxPts > 0) for (const l of losers) if (l.pay > R.maxPts) { l.pay = R.maxPts; l.capped = true; l.mults.push({ k: '상한 ' + R.maxPts + '점', x: 0 }); }
+    res.capped = losers.some(l => l.capped);
     res.per = losers;
     res.points = losers.reduce((a, l) => a + l.pay, 0);
     return res;
@@ -388,22 +494,23 @@
 
   // 광 팔기: 쉬는 사람이 내놓은 광 묶음을 선부터 차례로 살지 물음 (산 사람이 생기면 다음 묶음)
   function buyStage(s, a, ev) {
-    const sale = s.sale, o = sale.offers[sale.i], p = s.turn;
+    const sale = s.sale, o = sale.offers[sale.i], p = s.turn, order = askers(s);
     let next = false;
     if (a === A_BUY) {
+      const price = o.cards.length * rulesOf(s).salePrice;
       for (const c of o.cards) s.cap[p].push(c);
       sale.hid = sale.hid.filter(c => o.cards.indexOf(c) < 0);
-      sale.sold.push({ seat: o.seat, buyer: p, cards: o.cards.slice(), price: o.cards.length * SALE_PRICE });
-      if (ev) ev.push({ t: 'buy', p, seat: o.seat, cards: o.cards.slice() });
+      sale.sold.push({ seat: o.seat, buyer: p, cards: o.cards.slice(), price });
+      if (ev) ev.push({ t: 'buy', p, seat: o.seat, cards: o.cards.slice(), price });
       next = true;
     } else {
       if (ev) ev.push({ t: 'nobuy', p, seat: o.seat });
       sale.k++;
-      if (sale.k >= s.n) { if (ev) ev.push({ t: 'unsold', seat: o.seat, cards: o.cards.slice() }); next = true; }
-      else s.turn = (s.first + sale.k) % s.n;
+      if (sale.k >= order.length) { if (ev) ev.push({ t: 'unsold', seat: o.seat, cards: o.cards.slice() }); next = true; }
+      else s.turn = order[sale.k];
     }
     if (next) {
-      sale.i++; sale.k = 0; s.turn = s.first;
+      sale.i++; sale.k = 0; s.turn = order[0];
       if (sale.i >= sale.offers.length) endSale(s, ev);
     }
   }
@@ -423,9 +530,9 @@
       for (const c of cards) { removeFrom(h, c); removeFrom(s.known[p], c); }
       removeFrom(s.table, tc);
       const cur = s.cur = newCur(p, 'bomb'); cur.before = tally(s, p);
-      cur.m = m; cur.ht = 3; cur.caps.push(...cards, tc); cur.steal++;
+      cur.m = m; cur.ht = 3; cur.caps.push(...cards, tc); cur.steal += rulesOf(s).stealBomb;
       s.shake[p]++; s.pass[p] += 2;
-      if (ev) ev.push({ t: 'bomb', p, m, cards, target: tc });
+      if (ev) ev.push({ t: 'bomb', p, m, cards, target: tc, steal: rulesOf(s).stealBomb });
       return flipStage(s, ev);
     }
     const shake = a >= A_SHAKE && a < A_SHAKE + NBASE;
@@ -456,9 +563,10 @@
       for (const x of T) removeFrom(s.table, x);
       cur.caps.push(c, ...T);
       const own = s.owner[m];
-      const st = own === p ? 2 : own >= 0 ? 1 : 0;
+      const st = own === p ? rulesOf(s).stealSelf : own >= 0 ? rulesOf(s).stealEat : 0;
       cur.steal += st;
       if (ev) ev.push({ t: 'eat', p, m, own: own === p, by: own, steal: st, cards: [c, ...T] });
+      eatBonus(s, p, m, ev);
       s.owner[m] = -1;
       return flipStage(s, ev);
     }
@@ -488,17 +596,18 @@
     if (cur.kind === 'card' && md === cur.m && cur.ht <= 2) {
       const m = cur.m;
       if (cur.ht === 0) {                                  // 쪽
-        removeFrom(s.table, cur.c); cur.caps.push(cur.c, d); cur.steal++;
-        if (ev) ev.push({ t: 'jjok', p, m, cards: [cur.c, d] });
+        removeFrom(s.table, cur.c); cur.caps.push(cur.c, d); cur.steal += rulesOf(s).stealJjok;
+        if (ev) ev.push({ t: 'jjok', p, m, cards: [cur.c, d], steal: rulesOf(s).stealJjok });
       } else if (cur.ht === 1) {                           // 뻑: 세 장이 바닥에 남음
         s.table.push(d); cur.hp = -1; cur.ppeok = true;
         s.owner[m] = p; s.ppeok[p]++;
-        if (ev) ev.push({ t: 'ppeok', p, m, count: s.ppeok[p], cards: tableOf(s, m) });
+        s.ptag[m] = s.turnNo === 0 && rulesOf(s).ppeokFirst > 0 ? 'first' : s.streak[p] >= 1 && rulesOf(s).ppeokYeon > 0 ? 'yeon' : '';   // 첫뻑 · 연뻑 표시
+        if (ev) ev.push({ t: 'ppeok', p, m, count: s.ppeok[p], cards: tableOf(s, m), tag: s.ptag[m] });
       } else {                                             // 따닥: 네 장 다
         const all = tableOf(s, m);
         for (const x of all) removeFrom(s.table, x);
-        cur.caps.push(...all, d); cur.hp = -1; cur.steal++;
-        if (ev) ev.push({ t: 'ttadak', p, m, cards: [...all, d] });
+        cur.caps.push(...all, d); cur.hp = -1; cur.steal += rulesOf(s).stealTtadak;
+        if (ev) ev.push({ t: 'ttadak', p, m, cards: [...all, d], steal: rulesOf(s).stealTtadak });
       }
       return resolve(s, ev);
     }
@@ -506,9 +615,10 @@
     if (U.length === 3) {
       for (const x of U) removeFrom(s.table, x);
       cur.caps.push(d, ...U);
-      const own = s.owner[md], st = own === p ? 2 : own >= 0 ? 1 : 0;
+      const own = s.owner[md], st = own === p ? rulesOf(s).stealSelf : own >= 0 ? rulesOf(s).stealEat : 0;
       cur.steal += st;
       if (ev) ev.push({ t: 'eat', p, m: md, own: own === p, by: own, steal: st, cards: [d, ...U], flip: true });
+      eatBonus(s, p, md, ev);
       s.owner[md] = -1;
       return resolve(s, ev);
     }
@@ -530,15 +640,29 @@
       for (const c of cur.caps) s.cap[p].push(c);
       if (ev) ev.push({ t: 'capture', p, cards: cur.caps.slice() });
     }
-    if (cur.caps.length && s.table.length === 0) { cur.steal++; if (ev) ev.push({ t: 'sweep', p }); }
+    if (cur.caps.length && s.table.length === 0) { cur.steal += rulesOf(s).stealSweep; if (ev) ev.push({ t: 'sweep', p, steal: rulesOf(s).stealSweep }); }
     // 마지막 차례(모두 손패를 다 냄)의 뻑 먹기·따닥·쪽·싹쓸이는 피를 안 받음 (폭탄은 마지막일 수 없음)
     const last = s.hands.every((h, q) => !hasTurns(s, q));
     if (cur.steal && !last) for (let q = 0; q < s.n; q++) if (q !== p) for (let i = 0; i < cur.steal; i++) stealPi(s, q, p, ev);
+    // 연달아 뻑 센 횟수 (연뻑 보너스용)
+    s.streak[p] = cur.ppeok ? s.streak[p] + 1 : 0;
     // 3뻑이면 바로 이김
-    if (cur.ppeok && s.ppeok[p] >= 3) { combos(s, p, ev); return finish(s, p, 'ppeok3', ev); }
+    if (cur.ppeok && s.ppeok[p] >= 3 && rulesOf(s).ppeok3 === 'win') { combos(s, p, ev); return finish(s, p, 'ppeok3', ev); }
     combos(s, p, ev);
     if (s.kook === '' && s.cap[p].indexOf(KOOK) >= 0) { s.phase = 'kook'; return; }
     return scoreCheck(s, ev);
+  }
+
+  // 첫뻑·연뻑 더미를 먹으면 보너스 점수 (먹은 사람이 싼 사람에게서, 자뻑이면 나머지 모두에게서). 정산 때 따로 주고받음
+  function eatBonus(s, p, m, ev) {
+    const tag = s.ptag[m], R = rulesOf(s);
+    s.ptag[m] = '';
+    const pts = tag === 'first' ? R.ppeokFirst : tag === 'yeon' ? R.ppeokYeon : 0;
+    if (!pts) return;
+    const maker = s.owner[m], k = tag === 'first' ? '첫뻑' : '연뻑', from = [];
+    if (maker === p) { for (let q = 0; q < s.n; q++) if (q !== p) from.push(q); } else if (maker >= 0) from.push(maker);
+    for (const q of from) s.side.push({ from: q, to: p, pts, k });
+    if (ev && from.length) ev.push({ t: 'ppeokBonus', p, k, pts, from, own: maker === p });
   }
 
   // 새로 된 약 (화면에 띄울 말)
@@ -571,7 +695,7 @@
   function scoreCheck(s, ev) {
     const p = s.cur ? s.cur.p : s.turn;
     const base = tally(s, p).base;
-    if (base >= thresholdOf(s.n) && base > s.lastGo[p]) {
+    if (base >= thr(s) && base > s.lastGo[p]) {
       if (!hasTurns(s, p)) { if (ev) ev.push({ t: 'stop', p, base, auto: true }); return finish(s, p, 'stop', ev); }
       s.phase = 'goStop'; s.turn = p;
       if (ev) ev.push({ t: 'canStop', p, base });
@@ -668,7 +792,7 @@
     for (const q of seat) scal.push(q < 0 ? 0 : f(v.pass[q], 2));
     for (const q of seat) scal.push(q < 0 ? 0 : f(v.ppeok[q], 3));
     for (const q of seat) scal.push(q < 0 ? 0 : f(v.lastGo[q], 10));
-    scal.push(v.kook === 'Y' ? 1 : 0, v.kook === 'P' ? 1 : 0, f(v.carry, 3), f(thresholdOf(n), 7));
+    scal.push(v.kook === 'Y' ? 1 : 0, v.kook === 'P' ? 1 : 0, f(v.carry, 3), f(thresholdOf(n, v.rules), 7));
     for (const q of seat) scal.push(q >= 0 && v.turn === q ? 1 : 0);
     for (const t of tl) { scal.push(t ? f(t.pi, 20) : 0, t ? f(t.g, 5) : 0, t ? f(t.y, 9) : 0, t ? f(t.t, 10) : 0); }
     for (let i = 0; i < scal.length; i++) o[at + i] = scal[i];
@@ -680,6 +804,16 @@
     const r = s.result; if (!r || r.winner < 0) return 0;
     if (r.winner === p) return r.points;
     const l = r.per.find(x => x.p === p); return l ? -l.pay : 0;
+  }
+
+  // 판 끝 정산을 방 자리(0..N-1, 쉬는 사람 포함) 기준 점수 변화로: 이긴 판 점수 · 진 판 점수 · 광 팔기 값 · 첫뻑/연뻑 보너스. 합은 늘 0
+  function pointDeltas(s) {
+    const r = s.result, d = Array(s.N).fill(0);
+    if (!r) return d;
+    if (r.winner >= 0) { d[s.who[r.winner]] += r.points; for (const l of r.per) d[s.who[l.p]] -= l.pay; }
+    for (const x of r.sale || []) { d[x.buyerSeat] -= x.price; d[x.seat] += x.price; }
+    for (const x of r.side || []) { d[x.toSeat] += x.pts; d[x.fromSeat] -= x.pts; }
+    return d;
   }
 
   // 상태 지문 (결정성 시험용, FNV-1a)
@@ -711,6 +845,7 @@
     tablePlan, modeOf, create, nextRound, setup, legal, legalMask, isLegal, step, apply, clone, fastClone,
     tally, goTotal, settle, stopPreview, view, debugFull, sampleWorld, obs, reward, hash, actionLabel,
     makeRng, shuffle, monthCount, hasTurns,
+    RULE_GROUPS, RULE_DEFS, RULE_PRESETS, defaultRules, normRules, ruleText, diffRules, presetRules, matchPreset, carryMult, askers, pointDeltas,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.Gostop = API;
 })(this);

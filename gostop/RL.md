@@ -116,3 +116,7 @@ s = G.nextRound(s);                          // 다음 판 (이긴 사람이 선
 3. 브라우저에서는 `ai-worker.js` 안에서 가중치를 불러 계산 (예: onnxruntime-web 를 jsDelivr 고정 버전으로, `.onnx` 는 이 폴더에). 화면 쪽 `aiChoose()` 가 일꾼 결과를 기다려요.
 4. 자리마다 누가 두는지는 `main.js` 의 `seats[p].ctrl` ('me' | 'ai') — 나중에 친구(원격) 자리도 같은 행동 번호를 주고받으면 돼요.
 5. 셀프플레이 상대는 `easy`/`normal`/`hard` 를 섞으면 좋아요. 🐯 은 끝까지 두기가 비싸니 `samples` 를 작게.
+
+## 우리 집 규칙과 강화학습
+
+상태 `s.rules`(기본값 = 원래 규칙)에 집 규칙이 실려 다녀요. 행동표·관찰 길이(`OBS_LEN`)는 그대로이고, 고/스톱 기준 점수만 관찰에 반영돼요(`thresholdOf(n, rules)`). 학습·벤치는 규칙을 안 주면 기본 규칙이에요. 판 끝 칩 정산은 `Gostop.pointDeltas(s)` (방 자리별 점수 변화, 합 0).

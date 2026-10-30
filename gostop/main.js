@@ -19,11 +19,33 @@
     tab: C.store(KEY + 'tab', 'solo'), mode: C.store(KEY + 'mode', 2), tier: C.store(KEY + 'tier', 'normal'),
     bonus: C.store(KEY + 'bonus', 0), speed: C.store(KEY + 'speed', 'normal'), coach: C.store(KEY + 'coach', 1),
     wMode: C.store(KEY + 'wMode', 2), wTiers: C.store(KEY + 'wTiers', ['hard', 'normal', 'easy']), wSpeed: C.store(KEY + 'wSpeed', 'normal'),
+    bank: C.store(KEY + 'bank', null), bankName: C.store(KEY + 'bankName', null),     // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
     lMode: C.store(KEY + 'lMode', 2), lSeats: C.store(KEY + 'lSeats', ['human', 'human', 'normal', 'normal', 'normal']),
   };
   const saveOpt = k => C.save(KEY + k, opt[k]);
   let coins = C.store(KEY + 'coins', 0);
   let stats = C.store(KEY + 'stats', { played: 0, won: 0, best: 0 });
+
+  // ── 우리 집 규칙: 이 기기에 저장해 둔 규칙 (옛 '보너스 피' 설정은 처음 한 번 이어받음) ──
+  let houseRules = G.normRules(C.store(KEY + 'rules', null) || { bonus: opt.bonus });
+  const setRules = r => { houseRules = G.normRules(r); C.save(KEY + 'rules', houseRules); };
+  const presetName = r => { const p = G.RULE_PRESETS.find(q => q.id === G.matchPreset(r)); return p ? p.name : '직접 고침'; };
+  // 규칙 한 줄 요약: 바뀐 것만 (넷까지)
+  function ruleSummary(r) {
+    const d = G.diffRules(r).filter(x => x.k !== 'chipPer');
+    return (d.length ? d.slice(0, 4).map(x => `${x.label} ${x.text}`).join(' · ') + (d.length > 4 ? ` 외 ${d.length - 4}개` : '') : '원래 규칙 그대로') + ` · 점당 ${r.chipPer}칩`;
+  }
+
+  // ── 칩 출입구 한 곳 (나중에 공용 은행이 여기에 꽂힘. 섯다·포커와 같은 모양)
+  //   start(kind, n): 자리별 시작 칩 [n] (kind: solo | hot | watch | host | guest)
+  //   report(kind, info): 판이 끝날 때마다 { round, over:false, deltas:{ 자리번호: 칩 변화 (합 0) }, coins:[자리별 칩], seats:[{name,ctrl}], me } 를 알림 (window 'chips:report' 이벤트)
+  //   deltas = 점수 변화 × 점당 칩 (이긴 판·진 판 박 배수, 광 팔기 값, 첫뻑/연뻑 보너스까지). 쉬는 사람 자리도 있음
+  const CHIPS = {
+    start(kind, n) { return Array.from({ length: n }, () => 500); },
+    report(kind, info) {
+      try { window.dispatchEvent(new CustomEvent('chips:report', { detail: Object.assign({ game: 'gostop', kind }, info) })); } catch (e) {}
+    },
+  };
 
   const TIER = {
     easy:   { em: '🌱', name: '동네 하수', cls: 't-easy',   desc: '패를 솔직하게 내는 입문자', names: ['김씨', '박씨', '정씨', '한씨'] },
@@ -49,7 +71,7 @@
     $('modeNote').hidden = !mo.bench;
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })),
       id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
-    segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], opt.bonus, v => { opt.bonus = +v; saveOpt('bonus'); drawMenu(); });
+    segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], houseRules.bonus, v => { setRules(Object.assign({}, houseRules, { bonus: +v })); drawMenu(); });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     if ($('coachSeg')) segBtns($('coachSeg'), [[1, '🧑‍🏫 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
     $('startBtn').textContent = `🎴 ${mo.name} 대국 시작 (${TIER[opt.tier].name})`;
@@ -62,6 +84,14 @@
     }
     drawLocalMenu();
     segBtns($('wSpeedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.wSpeed, v => { opt.wSpeed = v; saveOpt('wSpeed'); drawMenu(); });
+    // 우리 집 규칙 단추 (혼자 · 한 기기 · AI 구경 모두)
+    for (const id of ['ruleLine1', 'ruleLine2', 'ruleLine3']) {
+      const el = $(id); if (!el) continue;
+      el.innerHTML = `<button class="btn hr-open" type="button">🛠️ 우리 집 규칙 <b>${esc(presetName(houseRules))}</b></button><p class="small hr-sum">${esc(ruleSummary(houseRules))}</p>`;
+      el.querySelector('button').onclick = openRuleSheet;
+    }
+    // 첫 화면 안내 글도 지금 규칙의 점수로
+    const hw = $('howto'); if (hw && hw.children[2]) hw.children[2].textContent = `광·열끗·띠·피를 모아 점수를 내요. 맞고는 ${houseRules.goMatgo}점, 셋이면 ${houseRules.go3}점부터 고·스톱`;
   }
   // 한 기기에서 여럿 (2~5명, 자리마다 사람 / AI). 공통 HotSeat.setup 이 있으면 그걸 쓰고, 없으면 아래 간단한 고르기
   let lPick = null;
@@ -92,7 +122,7 @@
         segBtns(el, KINDS, kinds[i], v => { opt.lSeats[i] = v; saveOpt('lSeats'); drawMenu(); });
       }
     }
-    segBtns($('lBonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], opt.bonus, v => { opt.bonus = +v; saveOpt('bonus'); drawMenu(); });
+    segBtns($('lBonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], houseRules.bonus, v => { setRules(Object.assign({}, houseRules, { bonus: +v })); drawMenu(); });
     segBtns($('lSpeedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     drawLocalNote();
   }
@@ -115,13 +145,19 @@
         : count === 4 ? '4명이면 고스톱 · 한 명씩 돌아가며 쉬고 광 팔기'
         : '5명이면 고스톱 · 두 명씩 돌아가며 쉬고 광 팔기',
       settings: {
-        defaults: { bonus: opt.bonus || 0, seed: rand32() },
-        label: cfg => `보너스 피 ${(cfg && cfg.bonus) || 0}장`,
+        defaults: { rules: G.normRules(houseRules), seed: rand32(), bank: opt.bank || null, bankName: opt.bank ? opt.bankName || null : null },
+        label: cfg => { const r = G.normRules(cfg && cfg.rules); return `${presetName(r)} · 점당 ${r.chipPer}칩${window.Bank && Bank.label(cfg) ? ' · ' + Bank.label(cfg) : ''}`; },
+        // 우리 집 규칙: 방장이 고치고, 친구는 읽기만. 접어 두면 한 줄 요약
         render(el, cfg, canEdit, update) {
-          el.innerHTML = `<div class="optrow"><span class="small">보너스 피</span><div class="seg" id="fBonusSeg"></div></div>`;
-          const seg = el.querySelector('#fBonusSeg'), cur = (cfg && cfg.bonus) || 0;
-          if (canEdit) segBtns(seg, [[0, '없음'], [2, '2장'], [3, '3장']], cur, v => update({ bonus: +v }));
-          else seg.innerHTML = `<span class="small">${cur ? cur + '장' : '없음'} (방장이 정해요)</span>`;
+          const r = G.normRules(cfg && cfg.rules);
+          el.innerHTML = `<div data-bank></div><details class="hr-top"${lobbyRulesOpen ? ' open' : ''}><summary>🛠️ 우리 집 규칙 · <b>${esc(presetName(r))}</b><small>${esc(ruleSummary(r))}</small></summary><div class="hr-body"></div></details>`;
+          // 🏦 은행 모임 (방장이 고르고, 친구는 보기만). cfg.bank / cfg.bankName 으로 모두에게 전해짐
+          const bx = el.querySelector('[data-bank]');
+          if (window.Bank && bx && el.isConnected) Bank.lobbyPicker(bx, { bank: cfg && cfg.bank, bankName: cfg && cfg.bankName }, canEdit, p => { opt.bank = p.bank || null; opt.bankName = p.bankName || null; saveOpt('bank'); saveOpt('bankName'); update({ bank: opt.bank, bankName: opt.bankName }); });
+          const det = el.querySelector('details');
+          det.addEventListener('toggle', () => { lobbyRulesOpen = det.open; });
+          const body = el.querySelector('.hr-body');
+          ruleSheet(body, r, canEdit, nr => { setRules(nr); update({ rules: nr }); });
         },
       },
       onStart: ({ net, role, cfg, players }) => startOnline({ net, role, cfg, players }),
@@ -132,48 +168,139 @@
     ArenaUI.open(friendOpts());
   }
 
-  // ── 규칙 창 ───────────────────────────────────────────────
-  const RULES_HTML = `<div class="rules">
+  // ── 🛠️ 우리 집 규칙 시트 (혼자·한 기기·AI 구경 메뉴, 친구랑 대기실에서 같이 씀) ──────────────
+  // ruleSheet(el, 규칙, 고칠 수 있나, 바뀌면 부름(새 규칙)): 묶음 단추 + 묶음별 항목. 고칠 수 없으면 값만 보여 줌 (손님)
+  const HR_OPEN = new Set(['go']);                         // 펼쳐 둔 묶음 (다시 그려도 그대로)
+  let lobbyRulesOpen = false;
+  function ruleSheet(el, rules, canEdit, onChange) {
+    let r = G.normRules(rules);
+    const D = G.defaultRules();
+    const row = d => {
+      const v = r[d.k], ch = v !== D[d.k];
+      let note = d.note || '';
+      if (d.t === 'enum') { const op = d.opts.find(q => q[0] === v); if (op && op[2]) note = op[2]; }
+      let ctl;
+      if (!canEdit) ctl = `<span class="hr-v">${esc(G.ruleText(d, v))}</span>`;
+      else if (d.t === 'bool') ctl = `<div class="seg">${[[1, '켬'], [0, '끔']].map(([b, l]) => `<button class="btn" type="button" data-k="${d.k}" data-v="${b}" aria-pressed="${!!b === v}">${l}</button>`).join('')}</div>`;
+      else if (d.t === 'enum') ctl = `<div class="seg">${d.opts.map(op => `<button class="btn" type="button" data-k="${d.k}" data-v="${esc(op[0])}" aria-pressed="${op[0] === v}">${esc(op[1])}</button>`).join('')}</div>`;
+      else ctl = `<div class="hr-step"><button class="btn" type="button" data-k="${d.k}" data-d="-1" aria-label="${esc(d.label)} 줄이기"${v <= d.min ? ' disabled' : ''}>−</button><output>${esc(G.ruleText(d, v))}</output><button class="btn" type="button" data-k="${d.k}" data-d="1" aria-label="${esc(d.label)} 늘리기"${v >= d.max ? ' disabled' : ''}>+</button></div>`;
+      return `<div class="hr-row${ch ? ' chg' : ''}"><div class="hr-l"><b>${esc(d.label)}</b>${note ? `<small>${esc(note)}</small>` : ''}</div><div class="hr-c">${ctl}</div></div>`;
+    };
+    const draw = () => {
+      const sc = el.closest('.overlay > div, .arn-box'), y = sc ? sc.scrollTop : 0;
+      const pid = G.matchPreset(r), cur = G.RULE_PRESETS.find(p => p.id === pid);
+      let h = '<div class="hr">';
+      if (!canEdit) h += '<p class="small hr-ro">방장이 정한 규칙이에요 (볼 수만 있어요)</p>';
+      if (canEdit) h += `<div class="hr-pre">${G.RULE_PRESETS.map(p => `<button class="btn" type="button" data-pre="${p.id}" aria-pressed="${p.id === pid}">${esc(p.name)}</button>`).join('')}</div>`;
+      h += `<p class="hr-cur">${cur ? `<b>${esc(cur.name)}</b> · ${esc(cur.desc)}` : '<b>직접 고친 규칙</b> · 아래 항목을 하나씩 바꿨어요'}</p>`;
+      for (const [gid, gname] of G.RULE_GROUPS) {
+        const defs = G.RULE_DEFS.filter(d => d.g === gid), changed = defs.filter(d => r[d.k] !== D[d.k]).length;
+        h += `<details class="hr-g" data-g="${gid}"${HR_OPEN.has(gid) ? ' open' : ''}><summary>${gname}${changed ? `<span class="hr-n">${changed}개 바꿈</span>` : ''}</summary>${defs.map(row).join('')}</details>`;
+      }
+      el.innerHTML = h + '</div>';
+      if (sc) sc.scrollTop = y;
+    };
+    el.onclick = e => {
+      const b = e.target.closest('button'); if (!b || !canEdit) return;
+      sfx('tap');
+      if (b.dataset.pre) r = G.normRules(Object.assign({}, G.presetRules(b.dataset.pre), { chipPer: r.chipPer }));   // 점당 칩은 묶음과 상관없이 그대로
+      else if (b.dataset.k) {
+        const d = G.RULE_DEFS.find(q => q.k === b.dataset.k); if (!d) return;
+        let nv;
+        if (d.t === 'bool') nv = b.dataset.v === '1';
+        else if (d.t === 'enum') nv = d.opts.find(q => String(q[0]) === b.dataset.v)[0];
+        else {
+          const dir = +b.dataset.d, v = r[d.k];
+          if (d.steps) { let i = 0; d.steps.forEach((s, k) => { if (Math.abs(s - v) < Math.abs(d.steps[i] - v)) i = k; }); nv = d.steps[Math.max(0, Math.min(d.steps.length - 1, i + dir))]; }
+          else nv = v + dir;
+        }
+        r = G.normRules(Object.assign({}, r, { [d.k]: nv }));
+      } else return;
+      if (onChange) onChange(r);
+      draw();
+    };
+    if (!el._hrToggle) { el._hrToggle = 1; el.addEventListener('toggle', e => { const g = e.target.dataset && e.target.dataset.g; if (g) { if (e.target.open) HR_OPEN.add(g); else HR_OPEN.delete(g); } }, true); }
+    draw();
+  }
+  function openRuleSheet() {
+    sfx('tap');
+    C.modal({
+      title: '🛠️ 우리 집 규칙',
+      html: '<p class="small hr-intro">집마다 규칙이 달라서 하나씩 바꿀 수 있어요. 묶음을 고른 뒤 항목을 더 바꿔도 돼요. 이 기기에 저장돼요</p><div id="hrBox"></div>',
+      buttons: [{ label: '📖 규칙 보기', onClick: () => { setTimeout(() => showRules(), 30); } }, { label: '닫기', primary: true }],
+      dismiss: true, cls: 'rulesov hrov', onClose: () => { if (!SES) drawMenu(); },
+    });
+    ruleSheet($('hrBox'), houseRules, true, nr => setRules(nr));
+  }
+
+  // ── 규칙 창 (지금 쓰는 우리 집 규칙을 그대로 보여 줌) ─────────────────────
+  function rulesHtml(R) {
+    R = G.normRules(R);
+    const diff = G.diffRules(R).filter(d => d.k !== 'chipPer');
+    const pi = n => (n > 0 ? `피 ${n}장씩 받아요` : '피는 안 받아요');
+    const dealer = R.saleWho === 'dealer' ? '선만' : R.saleWho === 'others' ? '선을 뺀 사람이' : '선부터 차례로';
+    const goTxt = { std: '1고 +1점 · 2고 +2점 · 3고부터 <b>(점수 + 고 횟수) × 2^(고−2)</b> (3고 ×2, 4고 ×4 …)', plus: '고 한 번마다 +1점', double: '고 한 번마다 점수 두 배', none: '고 보너스 없음 (고는 계속하는 선택만)' }[R.goBonus];
+    const chong = { score: '바로 이김, 10점', win: `바로 이김, 고/스톱 기준 점수(맞고 ${R.goMatgo}점 · 셋이 ${R.go3}점)`, off: '쓰지 않음 (그냥 계속 쳐요)' }[R.chongtong];
+    const p3 = R.ppeok3 === 'off' ? '쓰지 않음' : `바로 이김, ${R.ppeok3Pts || `맞고 ${R.goMatgo} · 셋이 ${R.go3}`}점`;
+    const kook = { choose: '먹는 그 자리에서 <b>열끗</b>으로 둘지 <b>쌍피</b>로 쓸지 골라요. 고른 대로 끝까지 가요', yeol: '늘 <b>열끗</b>으로 셈 (이 집 규칙)', ssang: '늘 <b>쌍피</b>로 셈 (이 집 규칙)' }[R.kook];
+    const sale = !R.saleOn ? '<li>이 집은 <b>광 팔기를 쓰지 않아요</b>. 쉬는 사람은 패 없이 구경만 해요</li>' : `<li>쉬는 사람은 더미 위에서 7장씩 받아 둬요. 그중 <b>광</b>이 있으면 판에 내놓아요 (다른 패는 안 보이고, 나중에 더미 아래로 돌아가요)</li><li>${dealer} "그 광을 살래요?" 에 답해요. 사면 그 광이 내 먹은 패가 되고, 값은 <b>광 한 장에 ${R.salePrice ? R.salePrice + '점' : '공짜(0점)'}</b>을 쉬는 사람에게 줘요 (이기든 지든 똑같이). 아무도 안 사면 광은 더미로 돌아가요</li><li>쉬는 사람이 둘이면 광 묶음도 둘까지 나올 수 있어요. 점수 계산은 셋이 치는 고스톱과 똑같아요</li>`;
+    const bak = [
+      R.pibak && R.pibakX > 1 ? `<tr><td>피박</td><td>이긴 사람이 피로 점수를 냈고, 진 사람 피가 1~7장 (셋이는 1~5장) → ×${R.pibakX}</td></tr>` : '',
+      R.gwangbak && R.gwangbakX > 1 ? `<tr><td>광박</td><td>이긴 사람이 광으로 점수를 냈고, 진 사람 광이 0장 → ×${R.gwangbakX}</td></tr>` : '',
+      R.meongbak && R.meongbakX > 1 ? `<tr><td>멍박</td><td>이긴 사람 열끗이 7장 이상 (모두에게) → ×${R.meongbakX}</td></tr>` : '',
+      R.gobak ? `<tr><td>고박</td><td>고를 했다가 상대가 나면: 맞고는 ×${R.gobakX}, 셋이는 고한 사람이 진 사람 몫을 혼자 다 내요</td></tr>` : '',
+      R.shakeX > 1 ? `<tr><td>흔들기·폭탄</td><td>이긴 사람이 한 번마다 ×${R.shakeX}</td></tr>` : '',
+      R.nagariX > 1 && R.nagariMax > 0 ? `<tr><td>나가리 판</td><td>앞 판이 나가리였으면 ×${R.nagariX} (연달아 ×${R.nagariX * R.nagariX} …, ${R.nagariMax}번까지 쌓여요)</td></tr>` : '',
+    ].join('');
+    return `<div class="rules">
+    <div class="hr-active"><h3>🛠️ 지금 우리 집 규칙 · ${esc(presetName(R))}</h3>${diff.length ? `<ul>${diff.map(d => `<li><b>${esc(d.label)}</b> ${esc(d.text)}</li>`).join('')}</ul>` : '<p class="small">바꾼 규칙이 없어요. 원래 규칙 그대로예요</p>'}<p class="small">점수 1점 = 🪙 ${R.chipPer}칩 (친구랑 정산용)${R.maxPts ? ` · 한 판에 한 사람이 내는 점수는 ${R.maxPts}점까지` : ''}</p></div>
     <p>화투 48장(열두 달 × 네 장)으로 같은 달끼리 짝을 맞춰 가져오고, 모은 패로 점수를 내요. 둘이 하면 <b>맞고</b>, 셋이 하면 <b>고스톱</b>, 넷·다섯이 하면 셋이 치고 나머지는 돌아가며 쉬는 <b>광 팔기 고스톱</b>이에요.</p>
-    <h3>나누기</h3><ul><li>맞고: 한 사람 10장, 바닥 8장 · 셋이: 한 사람 7장, 바닥 6장, 나머지는 더미</li><li>바닥에 깔린 보너스 피는 선(먼저 하는 사람)이 가져가요</li></ul>
-    <h3>4~5명: 광 팔기</h3><ul><li>한 판에 3명이 쳐요. 4명이면 1명, 5명이면 2명이 쉬고, 판마다 순서대로 돌아가며 쉬어요 (모두 같은 횟수)</li><li>쉬는 사람은 더미 위에서 7장씩 받아 둬요. 그중 <b>광</b>이 있으면 판에 내놓아요 (다른 패는 안 보이고, 나중에 더미 아래로 돌아가요)</li><li>치는 사람이 선부터 차례로 "그 광을 살래요?" 에 답해요. 사면 그 광이 내 먹은 패가 되고, 값은 <b>광 한 장에 1점</b>을 쉬는 사람에게 줘요 (이기든 지든 똑같이). 아무도 안 사면 광은 더미로 돌아가요</li><li>쉬는 사람이 둘이면 광 묶음도 둘까지 나올 수 있어요. 점수 계산은 셋이 치는 고스톱과 똑같아요</li></ul>
+    <h3>나누기</h3><ul><li>맞고: 한 사람 10장, 바닥 8장 · 셋이: 한 사람 7장, 바닥 6장, 나머지는 더미</li><li>보너스 피: ${R.bonus ? R.bonus + '장 (쌍피' + (R.bonus === 3 ? ' 두 장' : '') + ' + 쓰리피). 바닥에 깔리면 선(먼저 하는 사람)이 가져가요' : '쓰지 않아요'}</li></ul>
+    <h3>4~5명: 광 팔기</h3><ul><li>한 판에 3명이 쳐요. 4명이면 1명, 5명이면 2명이 쉬고, 판마다 순서대로 돌아가며 쉬어요 (모두 같은 횟수)</li>${sale}</ul>
     <h3>내 차례</h3><ul><li>손패 한 장을 내요. 바닥에 같은 달이 있으면 그 위에, 없으면 그냥 바닥에</li><li>더미에서 한 장을 뒤집어 똑같이 해요</li><li>짝이 맞은 패(두 장씩)를 내 것으로 가져와요. 같은 달이 바닥에 두 장이면 하나를 골라요</li></ul>
-    <h3>특별한 일 (상대에게 피 한 장씩 받아요)</h3><table>
-      <tr><td>쪽</td><td>바닥에 짝 없이 낸 패를 뒤집은 패가 바로 맞힘</td></tr>
-      <tr><td>따닥</td><td>바닥 두 장 + 낸 패 + 뒤집은 패, 같은 달 네 장을 한꺼번에</td></tr>
-      <tr><td>싹쓸이</td><td>내 차례가 끝났을 때 바닥이 텅 빔</td></tr>
-      <tr><td>뻑</td><td>낸 패로 짝을 맞췄는데 뒤집은 패도 같은 달 → 세 장이 바닥에 남아요. 나중에 네 번째 패로 먹으면 피 한 장, 내가 싼 뻑(자뻑)을 먹으면 두 장</td></tr>
-      <tr><td>폭탄</td><td>손에 같은 달 세 장 + 바닥에 한 장 → 세 장을 한꺼번에 내서 네 장 다. 피 한 장 받고, 흔들기처럼 두 배, 그 뒤 두 번은 '뒤집기만' 해도 돼요</td></tr>
-      <tr><td>흔들기</td><td>손에 같은 달 세 장 → 보여 주고 내면, 이겼을 때 두 배</td></tr>
-      <tr><td>보너스 피</td><td>내면 바로 내 피가 되고 더미에서 한 장 더 받아요. 더미에서 나오면 먹고 한 장 더 뒤집어요 (설정에서 켬)</td></tr>
-      <tr><td>총통</td><td>처음 받은 손패에 같은 달 네 장 → 10점으로 바로 이김</td></tr>
-      <tr><td>쓰리뻑</td><td>한 판에 뻑을 세 번 → 바로 이김 (맞고 7점, 셋이 3점)</td></tr>
+    <h3>특별한 일</h3><table>
+      <tr><td>쪽</td><td>바닥에 짝 없이 낸 패를 뒤집은 패가 바로 맞힘 · ${pi(R.stealJjok)}</td></tr>
+      <tr><td>따닥</td><td>바닥 두 장 + 낸 패 + 뒤집은 패, 같은 달 네 장을 한꺼번에 · ${pi(R.stealTtadak)}</td></tr>
+      <tr><td>싹쓸이</td><td>내 차례가 끝났을 때 바닥이 텅 빔 · ${pi(R.stealSweep)}</td></tr>
+      <tr><td>뻑</td><td>낸 패로 짝을 맞췄는데 뒤집은 패도 같은 달 → 세 장이 바닥에 남아요. 나중에 네 번째 패로 먹으면 ${pi(R.stealEat)}, 내가 싼 뻑(자뻑)을 먹으면 ${pi(R.stealSelf)}</td></tr>
+      <tr><td>폭탄</td><td>손에 같은 달 세 장 + 바닥에 한 장 → 세 장을 한꺼번에 내서 네 장 다. ${pi(R.stealBomb)} · 흔들기처럼 ${R.shakeX > 1 ? '×' + R.shakeX : '배수 없이'} · 그 뒤 두 번은 '뒤집기만' 해도 돼요</td></tr>
+      <tr><td>흔들기</td><td>손에 같은 달 세 장 → 보여 주고 내면, 이겼을 때 ${R.shakeX > 1 ? '×' + R.shakeX : '배수 없음 (보여 주기만)'}</td></tr>
+      <tr><td>보너스 피</td><td>내면 바로 내 피가 되고 더미에서 한 장 더 받아요. 더미에서 나오면 먹고 한 장 더 뒤집어요 ${R.bonus ? '' : '(지금은 꺼 둠)'}</td></tr>
+      <tr><td>총통</td><td>처음 받은 손패에 같은 달 네 장 → ${chong}</td></tr>
+      <tr><td>쓰리뻑</td><td>한 판에 뻑을 세 번 → ${p3}</td></tr>
+      ${R.ppeokFirst ? `<tr><td>첫뻑</td><td>판의 첫 차례에 난 뻑을 먹으면 싼 사람에게서 <b>${R.ppeokFirst}점</b> (자뻑이면 나머지 모두에게서). 이기든 지든 따로 주고받아요</td></tr>` : ''}
+      ${R.ppeokYeon ? `<tr><td>연뻑</td><td>같은 사람이 연달아 두 번 뻑을 싸면, 두 번째 뻑을 먹은 사람이 싼 사람에게서 <b>${R.ppeokYeon}점</b> (자뻑이면 나머지 모두에게서)</td></tr>` : ''}
     </table><p class="small">마지막 차례의 쪽·따닥·싹쓸이·뻑 먹기는 피를 안 받아요. 피가 없는 사람에겐 못 받고, 쌍피만 있으면 쌍피를 받아요.</p>
     <h3>점수</h3><table>
       <tr><td>광</td><td>3장 3점 (비광이 끼면 2점) · 4장 4점 · 5장 15점</td></tr>
       <tr><td>열끗</td><td>5장 1점, 한 장마다 +1 · 고도리(2·4·8월 새 세 마리) 5점</td></tr>
       <tr><td>띠</td><td>5장 1점, 한 장마다 +1 · 홍단(1·2·3월) · 청단(6·9·10월) · 초단(4·5·7월) 각 3점</td></tr>
       <tr><td>피</td><td>10장 1점, 한 장마다 +1 · 쌍피는 2장, 보너스 쓰리피는 3장으로 셈</td></tr>
-      <tr><td>국진</td><td>9월 술잔(열끗)은 먹을 때 열끗으로 둘지 쌍피로 쓸지 골라요</td></tr>
+      <tr><td>국진</td><td>9월 술잔(열끗): ${kook}</td></tr>
     </table>
-    <h3>고 · 스톱</h3><ul><li>내 차례가 끝났을 때 맞고는 7점, 셋이는 3점이 넘으면 <b>고</b>(계속) 또는 <b>스톱</b>(끝내기)</li><li>고 한 번 +1점, 두 번 +2점, 세 번부터는 (점수 + 고 횟수)에 두 배씩</li><li>고한 뒤에는 그때보다 점수가 올라야 다시 고르고, 낼 패가 없으면 저절로 스톱</li><li>아무도 못 나고 패가 다 떨어지면 <b>나가리</b> → 다음 판 점수 두 배 (연달아면 네 배, 여덟 배까지)</li></ul>
-    <h3>박 (진 사람 점수 두 배)</h3><table>
-      <tr><td>피박</td><td>이긴 사람이 피로 점수를 냈고, 진 사람 피가 1~7장 (셋이는 1~5장)</td></tr>
-      <tr><td>광박</td><td>이긴 사람이 광으로 점수를 냈고, 진 사람 광이 0장</td></tr>
-      <tr><td>멍박</td><td>이긴 사람 열끗이 7장 이상 (모두에게)</td></tr>
-      <tr><td>고박</td><td>고를 했다가 상대가 나면: 맞고는 두 배, 셋이는 고한 사람이 진 사람 몫을 혼자 다 내요</td></tr>
-      <tr><td>흔들기·폭탄</td><td>이긴 사람이 한 번마다 두 배</td></tr>
-    </table>
-    <p class="small">점수는 놀이용 점과 🪙 냥코인으로만 쌓여요. 패 왼쪽 위 숫자는 달, 작은 동그라미는 광·끗(열끗)·띠·쌍(쌍피)이에요.</p>
+    <h3>고 · 스톱</h3><ul><li>내 차례가 끝났을 때 맞고는 <b>${R.goMatgo}점</b>, 셋이는 <b>${R.go3}점</b> 이상이면 <b>고</b>(계속) 또는 <b>스톱</b>(끝내기)</li><li>${goTxt}</li><li>고한 뒤에는 그때보다 점수가 올라야 다시 고르고, 낼 패가 없으면 저절로 스톱</li><li>아무도 못 나고 패가 다 떨어지면 <b>나가리</b> ${R.nagariX > 1 && R.nagariMax > 0 ? `→ 다음 판 점수 ×${R.nagariX} (연달아면 ${R.nagariMax}번까지 쌓여요)` : '→ 다음 판은 그대로 (배수 없음)'}</li></ul>
+    <h3>박 · 배수 (진 사람 점수에 곱해요)</h3>${bak ? `<table>${bak}</table>` : '<p class="small">이 집은 박과 배수를 쓰지 않아요</p>'}
+    <p class="small">총통·쓰리뻑은 정해진 점수 × 나가리 배수만 (박은 없음).${R.maxPts ? ` 한 사람이 한 판에 낼 수 있는 점수는 ${R.maxPts}점까지예요.` : ''} 점수는 놀이용 점과 🪙 냥코인으로만 쌓여요. 패 왼쪽 위 숫자는 달, 작은 동그라미는 광·끗(열끗)·띠·쌍(쌍피)이에요.</p>
   </div>`;
-  function showRules() { sfx('tap'); return C.modal({ title: '📖 고스톱 규칙', html: RULES_HTML, buttons: [{ label: '처음 안내', onClick: () => { setTimeout(() => showHowto(true), 30); } }, { label: '닫기', primary: true }], dismiss: true, cls: 'rulesov' }); }
+  }
+  // R 을 안 주면 지금 판의 규칙(없으면 이 기기에 저장한 규칙)
+  function showRules(R) {
+    sfx('tap');
+    R = R || (SES && SES.S && SES.S.rules) || houseRules;
+    const btns = [{ label: '처음 안내', onClick: () => { setTimeout(() => showHowto(true), 30); } }];
+    if (!SES) btns.push({ label: '🛠️ 규칙 바꾸기', onClick: () => { setTimeout(openRuleSheet, 30); } });
+    btns.push({ label: '닫기', primary: true });
+    return C.modal({ title: '📖 고스톱 규칙', html: rulesHtml(R), buttons: btns, dismiss: true, cls: 'rulesov' });
+  }
   function showHowto(force) {
+    const R = (SES && SES.S && SES.S.rules) || houseRules;
     return C.howto('gostop', '🎴 고스톱 하는 법', [
       '같은 달(같은 그림)끼리 짝을 맞춰 가져와요',
       '손패를 누르면 짝이 되는 바닥 패가 반짝여요. 한 번 더 누르면 내요 (바닥 패를 눌러도 돼요)',
       '내고 나면 더미에서 한 장이 저절로 뒤집혀요',
-      '광·열끗·띠·피를 모아 맞고는 7점, 셋이면 3점부터 <b>고</b>(계속)·<b>스톱</b>(끝내기)',
+      `광·열끗·띠·피를 모아 맞고는 ${R.goMatgo}점, 셋이면 ${R.go3}점부터 <b>고</b>(계속)·<b>스톱</b>(끝내기)`,
       '패 왼쪽 위 숫자는 달, 작은 동그라미는 광·끗·띠·쌍(쌍피). 노란 표가 붙은 손패는 바닥에 짝이 있어요',
+      '집마다 규칙이 달라서 <b>🛠️ 우리 집 규칙</b>에서 바꿀 수 있어요',
     ], { force: !!force });
   }
 
@@ -187,6 +314,7 @@
     if (SES) SES.dispose();
     SES = null;
     $('goBox').hidden = true; $('resBox').hidden = true; $('pop').hidden = true;
+    $('loanBtn').hidden = true; $('bankBtn').hidden = true;
     $('layer').innerHTML = '';
     $('stage').querySelectorAll('.hud').forEach(e => e.remove());
     show('home'); drawMenu();
@@ -196,7 +324,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=2');
+    worker = new Worker('ai-worker.js?v=3');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -234,6 +362,7 @@
       ses.alive = false;
       if (ses.panel) { try { ses.panel.destroy(); } catch (e) {} ses.panel = null; }
       hotClose();
+      if (ses.bank) { try { ses.bank.detach(); } catch (e) {} ses.bank = null; }
       if (ses.net) { try { ses.net.leave(); } catch (e) {} ses.net = null; }
       for (const t of ses.timers) clearTimeout(t);
       ses.timers.clear();
@@ -255,7 +384,8 @@
   function startGame({ watch }) {
     if (SES) SES.dispose();
     const n = watch ? opt.wMode : opt.mode;
-    const cfg = { watch, N: n, bonus: watch ? 2 : opt.bonus, seed: startSeed, me: watch ? -1 : 0 };
+    const rules = G.normRules(watch && !houseRules.bonus ? Object.assign({}, houseRules, { bonus: 2 }) : houseRules);   // AI 구경은 보너스 피를 안 골랐으면 2장 (예전처럼)
+    const cfg = { watch, N: n, rules, bonus: rules.bonus, seed: startSeed, me: watch ? -1 : 0 };
     startSeed = 0;
     const ses = SES = newSession(cfg);
     const used = {};
@@ -274,7 +404,8 @@
     const picks = hotSeats(), N = picks.length;
     if (N < 2 || N > 5 || !picks.some(s => s.human)) return C.toast('사람이 한 명은 있어야 해요');
     if (SES) SES.dispose();
-    const cfg = { watch: false, hot: true, N, bonus: opt.bonus, seed: startSeed, me: picks.findIndex(s => s.human) };
+    const rules = G.normRules(houseRules);
+    const cfg = { watch: false, hot: true, N, rules, bonus: rules.bonus, seed: startSeed, me: picks.findIndex(s => s.human) };
     startSeed = 0;
     const ses = SES = newSession(cfg);
     const used = {};
@@ -298,12 +429,17 @@
       .sort((x, y) => (y.uid === host) - (x.uid === host) || (x.t || 0) - (y.t || 0) || (x.uid < y.uid ? -1 : 1));
     const N = Math.max(2, Math.min(5, plist.length));
     const myIdx = plist.findIndex(p => p.uid === net.uid);
-    const sesCfg = { watch: false, online: true, role, N, bonus: (cfg && cfg.bonus) || 0, seed: (cfg && cfg.seed) || 12345, me: myIdx, coach: !!(cfg && cfg.coach) };
+    const rules = G.normRules(cfg && cfg.rules ? cfg.rules : { bonus: cfg && cfg.bonus });   // 방장이 정한 규칙 (옛 방은 보너스 피만)
+    const sesCfg = { watch: false, online: true, role, N, rules, bonus: rules.bonus, seed: (cfg && cfg.seed) || 12345, me: myIdx, coach: !!(cfg && cfg.coach) };
     const ses = SES = newSession(sesCfg);
     ses.net = net;
     const AV = ['🎴', '🌸', '🌕', '🍀', '🔥'];
     ses.seats = plist.slice(0, N).map((pl, i) => ({ ctrl: i === myIdx ? 'me' : 'remote', tier: null, name: i === myIdx ? (pl.name || '나') : (pl.name || `친구${i + 1}`), em: i === myIdx ? '나' : AV[i % AV.length], uid: pl.uid }));
     const pushAct = (m) => {
+      if (m && m.t === '_chips') {            // 방장이 알려 주는 장부 기준 칩 (친구 화면은 이걸 그대로 따름)
+        if (role !== 'host' && Array.isArray(m.coins) && m.round >= (ses.chipSync || 0)) { ses.chips = m.coins.slice(); ses.chipSync = m.round; drawCoinPill(); }
+        return;
+      }
       if (!m || m.t !== 'act') return;
       if (m.seq != null && m.seq < ses.seq) return;
       if (ses.actWaiters.length) {
@@ -324,17 +460,48 @@
     ses.coachOn = sesCfg.coach;
     show('play');
     setupCoach(ses);
+    // 🏦 은행 (방장이 모임을 고른 방만): 방장은 장부에 연결해 시작 칩을 받고, 친구는 빌리기만 요청
+    if (cfg && cfg.bank && window.Bank) {
+      const seatsB = ses.seats;
+      if (role === 'host') {
+        ses.bank = Bank.attach({ game: 'gostop', net, cfg, seats: seatsB, min: bankMin(rules), onEvent: ev => bankEvent(ses, ev) });
+        drawDock();
+        $('lbl').textContent = `👥 친구랑 (${net.code})`; $('sub').textContent = '🏦 은행 장부를 여는 중…';
+        ses.bank.ready.then(stacks => {
+          if (!ses.alive || SES !== ses) return;
+          ses.startChips = CHIPS.start('host', N).map((b, i) => (stacks && stacks[i] > 0 ? stacks[i] : b));   // 은행 쓰는 사람은 잔액, 나머지는 기본 칩
+          net.broadcast({ t: '_chips', round: 0, coins: ses.startChips }, true);
+          runMatch(ses);
+        });
+        return;
+      }
+      ses.bank = Bank.attach({ game: 'gostop', net, cfg, role: 'guest', onEvent: ev => bankEvent(ses, ev) });
+    }
     drawDock();
     runMatch(ses);
+  }
+  // 은행에서 자동으로 빌려 주는 기준: 이 칩보다 적으면 다음 판 전에 빌려요 (점당 칩의 20배)
+  const bankMin = rules => Math.max(1, (rules.chipPer || 10) * 20);
+  function bankEvent(ses, ev) {
+    if (!ses.alive || !ev) return;
+    const host = ses.cfg.role === 'host';
+    if (ev.op === 'queued') C.toast(ev.mine || !host ? `💰 다음 판에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님이 ${fmtN(ev.n)}칩 빌리기 (다음 판에)`, 2200);
+    else if (ev.op === 'loan') {
+      C.toast(`💰 ${ev.name} 님이 은행에서 ${fmtN(ev.n)}칩 빌렸어요`, 2200);
+      if (host && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
+    } else if (ev.op === 'no' || ev.op === 'error') C.toast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'), 2600);
   }
   Cozy.backGuard($('backBtn'), () => { sfx('tap'); goHome(); });
 
   async function runMatch(ses) {
     try {
       const baseSeed = (ses.cfg.seed || rand32()) >>> 0;
-      let s = G.create({ players: ses.cfg.N, bonus: ses.cfg.bonus, seed: baseSeed, first: 0 });
+      let s = G.create({ players: ses.cfg.N, bonus: ses.cfg.bonus, rules: ses.cfg.rules, seed: baseSeed, first: 0 });
+      ses.kind = ses.cfg.watch ? 'watch' : ses.hot ? 'hot' : ses.cfg.online ? (ses.cfg.role === 'host' ? 'host' : 'guest') : 'solo';
+      ses.chips = (ses.startChips || CHIPS.start(ses.kind, ses.cfg.N)).slice();
       for (;;) {
         await playRound(ses, s);
+        if (!ses.isDrill) reportChips(ses); else ses.lastDeltas = null;
         const next = await showResult(ses);
         if (next && typeof next === 'object' && next.drillState) {
           s = G.fastClone(next.drillState);
@@ -343,6 +510,14 @@
         }
         ses.isDrill = false;
         if (next !== 'next') { goHome(); return; }
+        // 은행: 빌리기 요청 + 칩이 모자란 사람은 은행에서 빌려 채움 (공짜 리필 없음). 새 칩은 친구 화면에도 알림
+        if (ses.bank && ses.cfg.role === 'host') {
+          $('sub').textContent = '🏦 장부에 쓰는 중…';
+          const r = await ses.bank.beforeNext({ coins: ses.chips, min: bankMin(ses.S.rules) });
+          ses.check();
+          ses.chips = r.coins.slice(); drawCoinPill();
+          if (ses.net) ses.net.broadcast({ t: '_chips', round: ses.S.round, coins: ses.chips }, true);
+        }
         const rSeed = ses.cfg.online ? ((baseSeed + (ses.S.round + 1) * 0x9e3779b9) >>> 0) : rand32();
         s = G.nextRound(ses.S, { seed: rSeed });
       }
@@ -351,6 +526,19 @@
       console.error(e);
       if (SES === ses) { C.toast('앗, 문제가 생겼어요. 메뉴로 돌아갈게요'); goHome(); }
     }
+  }
+
+  // 판이 끝날 때마다 칩 변화를 알림: 점수 변화 × 점당 칩 (합 0). 친구랑에서 손님은 방장이 보내니 알리지 않음 (섯다와 같음)
+  function reportChips(ses) {
+    const s = ses.S, r = s && s.result; if (!r) return;
+    const per = s.rules.chipPer, pts = G.pointDeltas(s), deltas = {};
+    pts.forEach((x, i) => { deltas[i] = x * per; });
+    ses.lastDeltas = deltas;
+    // 친구 화면: 방장이 이미 이 판 뒤의 칩을 알려 줬으면 거기에 또 더하지 않음
+    if (!(ses.kind === 'guest' && (ses.chipSync || 0) >= s.round)) ses.chips = (ses.chips || CHIPS.start(ses.kind, ses.cfg.N)).map((c, i) => c + (deltas[i] || 0));
+    drawCoinPill();
+    if (ses.kind === 'guest') return;
+    CHIPS.report(ses.kind, { round: s.round, over: false, deltas, coins: ses.chips.slice(), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid })), me: ses.cfg.me });
   }
 
   // ── 자리 · 이름표 (HUD) ───────────────────────────────────
@@ -393,7 +581,11 @@
     } else bb.hidden = true;
     drawCoinPill();
   }
-  function drawCoinPill() { $('coinPill').textContent = '🪙 ' + fmtN(coins); }
+  // 친구랑은 내 칩(방장이 알려 주는 장부 값), 나머지는 냥코인
+  function drawCoinPill() {
+    const ses = SES, i = ses && ses.cfg.online ? ses.cfg.me : -1;
+    $('coinPill').textContent = i >= 0 && ses.chips && ses.chips[i] != null ? '🪙 ' + fmtN(ses.chips[i]) + '칩' : '🪙 ' + fmtN(coins);
+  }
   function drawHud(ses) {
     const s = ses.S; if (!s || !ses.hud) return;
     const shown = { cap: VM ? VM.cap : s.cap, kook: s.kook };        // 움직임이 끝난 패 기준 (점수가 먼저 바뀌지 않게)
@@ -411,7 +603,7 @@
       h.last = t.base;
       const tags = [];
       if (s.go[p]) tags.push(`<span class="tag go">${s.go[p]}고</span>`);
-      if (s.shake[p]) tags.push(`<span class="tag sh">${s.shake[p] > 1 ? '×' + Math.pow(2, s.shake[p]) : '흔듦'}</span>`);
+      if (s.shake[p]) tags.push(`<span class="tag sh">${s.shake[p] > 1 && s.rules.shakeX > 1 ? '×' + Math.pow(s.rules.shakeX, s.shake[p]) : '흔듦'}</span>`);
       if (s.ppeok[p]) tags.push(`<span class="tag pp">뻑${s.ppeok[p]}</span>`);
       h.seat.querySelector('.tags').innerHTML = tags.join('');
       h.seat.classList.toggle('turn', s.phase !== 'end' && (ses.actor != null ? ses.actor === p : s.turn === p));
@@ -428,7 +620,7 @@
     else if (ses.actor != null) sub = ses.actor === me && !ses.hot ? '내 차례' : `${seatAt(ses, ses.actor).name} 차례`;   // 움직이는 동안은 지금 두는 사람
     else if (s.turn === me) sub = s.phase === 'goStop' ? '고? 스톱?' : s.phase === 'kook' ? '국진을 어디에?' : s.phase.startsWith('pick') ? '가져올 패를 골라요' : '내 차례 · 패를 골라요';
     else sub = `${seatAt(ses, s.turn).name} 차례`;
-    if (s.carry) sub += ` · 나가리 ×${Math.pow(2, s.carry)}`;
+    if (s.carry && G.carryMult(s) > 1) sub += ` · 나가리 ×${G.carryMult(s)}`;
     $('sub').textContent = `${s.round}판 · ${sub}`;
     $('passBtn').hidden = !(s.phase === 'play' && s.turn === me && me >= 0 && s.pass[me] > 0 && ses.pending && !ses.pending.isResult);
     if (!$('passBtn').hidden) $('passN').textContent = s.pass[me];
@@ -898,7 +1090,7 @@
         case 'shake': {
           sfx('shake');
           for (const c of e.cards) { const el = els[c]; if (el) el.classList.remove('down'); bounce(c); }
-          await popup('흔들기!', 'gold', `${nameOf(ses, e.p)} · ${e.m + 1}월 세 장 · 이기면 두 배`);
+          await popup('흔들기!', 'gold', `${nameOf(ses, e.p)} · ${e.m + 1}월 세 장${ses.S.rules.shakeX > 1 ? ` · 이기면 ×${ses.S.rules.shakeX}` : ''}`);
           await ses.wait(D(500));
           break;
         }
@@ -909,7 +1101,7 @@
           await Promise.all(e.cards.map((c, i) => moveTo(c, T[c], { dur: D(360), arc: 40, z: 450 + i, delay: i * D(50) })));
           for (const c of e.cards.concat(e.target)) bounce(c, true);
           sfx('slap');
-          await popup('폭탄!', '', `${e.m + 1}월 네 장 · 피 한 장씩`);
+          await popup('폭탄!', '', `${e.m + 1}월 네 장${e.steal ? ` · 피 ${e.steal}장씩` : ''}`);
           break;
         }
         case 'play': {
@@ -957,10 +1149,11 @@
         }
         case 'pick': flash(e.card); await ses.wait(D(140)); break;
         case 'ppeok': sfx('ppeok'); C.vibrate([20, 40, 20]); await popup('뻑!', 'sad', e.count >= 2 ? `${nameOf(ses, e.p)} 뻑 ${e.count}번째` : '세 장이 바닥에 남아요'); break;
-        case 'jjok': sfx('good'); await popup('쪽!', 'mint', '피 한 장씩 받아요'); break;
-        case 'ttadak': sfx('good'); await popup('따닥!', 'mint', '네 장 다 · 피 한 장씩'); break;
+        case 'jjok': sfx('good'); await popup('쪽!', 'mint', e.steal ? `피 ${e.steal}장씩 받아요` : ''); break;
+        case 'ttadak': sfx('good'); await popup('따닥!', 'mint', e.steal ? `네 장 다 · 피 ${e.steal}장씩` : '네 장 다'); break;
         case 'eat': sfx('good'); await popup(e.own ? '자뻑 먹기!' : '뻑 먹기!', 'mint', e.steal ? `피 ${e.steal}장씩 받아요` : '세 장 한꺼번에'); break;
-        case 'sweep': sfx('win'); await popup('싹쓸이!', 'gold', '피 한 장씩 받아요'); break;
+        case 'sweep': sfx('win'); await popup('싹쓸이!', 'gold', e.steal ? `피 ${e.steal}장씩 받아요` : ''); break;
+        case 'ppeokBonus': sfx('coin'); await popup(e.k + ' 보너스!', 'gold', `${e.own ? '모두에게서' : tname(ses, ses.who[e.from[0]]) + '에게서'} ${e.pts}점`); break;
         case 'capture': {
           for (const c of e.cards) flash(c);
           await ses.wait(D(170));
@@ -985,7 +1178,7 @@
         case 'kook': drawHud(ses); C.toast(`${nameOf(ses, e.p)}: 국진을 ${e.as === 'P' ? '쌍피로' : '열끗으로'} 써요`, 1300); await syncAll(ses, D(260)); break;
         case 'go': sfx('go'); if (e.p !== meSeat(ses)) sfx('mew'); await popup(e.count + '고!', '', `${nameOf(ses, e.p)} ${e.base}점에서 한 번 더`); drawHud(ses); break;
         case 'stop': sfx('count'); await popup(e.auto ? '나!' : '스톱!', 'gold', `${nameOf(ses, e.p)} ${e.base}점`); break;
-        case 'nagari': sfx('lose'); await popup('나가리', 'sad', '다음 판은 두 배'); break;
+        case 'nagari': sfx('lose'); await popup('나가리', 'sad', ses.S.rules.nagariX > 1 && ses.S.rules.nagariMax > 0 ? `다음 판은 ×${ses.S.rules.nagariX}` : '다음 판으로'); break;
         case 'pass': sfx('flip'); await popup('뒤집기만', 'mint', `남은 ${e.left}번`); break;
         case 'buy': {
           sfx('coin');
@@ -995,7 +1188,7 @@
           }
           const T = targets(ses);
           await Promise.all(e.cards.map((c, i) => moveTo(c, T[c], { dur: D(420), delay: i * D(60), arc: 30, z: 470 + i })));
-          await popup('광을 샀어요!', 'gold', `${nameOf(ses, e.p)} → ${tname(ses, e.seat)} · ${e.cards.length}점`);
+          await popup('광을 샀어요!', 'gold', `${nameOf(ses, e.p)} → ${tname(ses, e.seat)} · ${e.price}점`);
           break;
         }
         case 'nobuy': C.toast(`${nameOf(ses, e.p)}: 안 사요`, 900); await ses.wait(D(380)); break;
@@ -1158,14 +1351,14 @@
     if (sale.k !== 0 || ses.offerKey === key) return;
     ses.offerKey = key;
     sfx('pop');
-    await popup('광 팔기!', 'gold', `${tname(ses, o.seat)}: ${o.cards.map(c => G.cardName(c)).join(' · ')} (${o.cards.length}점)`);
+    await popup('광 팔기!', 'gold', `${tname(ses, o.seat)}: ${o.cards.map(c => G.cardName(c)).join(' · ')} (${o.cards.length * ses.S.rules.salePrice}점)`);
   }
   function askBuy(ses) {
     sfx('pop');
-    const s = ses.S, o = s.sale.offers[s.sale.i], n = o.cards.length, p = s.turn;
+    const s = ses.S, o = s.sale.offers[s.sale.i], n = o.cards.length, p = s.turn, cost = n * s.rules.salePrice;
     const own = s.hands[p].filter(c => c >= 0 && G.KIND[c] === G.GW).length + s.cap[p].filter(c => G.KIND[c] === G.GW).length;
-    ask(ses, '💰 광 팔기', `<p style="margin:0">${esc(iga(tname(ses, o.seat)))} 광 ${n}장을 팔아요.<br>사면 내 먹은 패가 되고, 값 <b>${n * G.SALE_PRICE}점</b>을 ${esc(tname(ses, o.seat))}에게 줘요 (이기든 지든 똑같이).</p><div class="cardrow" style="margin-top:8px">${o.cards.map(x => ART.use(x)).join('')}</div><p class="small" style="margin:6px 0 0">내가 가진 광 ${own}장</p>`,
-      [{ label: `광 사기 (${n}점)`, primary: true, a: G.A_BUY }, { label: '안 사요', a: G.A_NOBUY }]);
+    ask(ses, '💰 광 팔기', `<p style="margin:0">${esc(iga(tname(ses, o.seat)))} 광 ${n}장을 팔아요.<br>사면 내 먹은 패가 되고, 값 <b>${cost}점</b>을 ${esc(tname(ses, o.seat))}에게 줘요 (이기든 지든 똑같이).</p><div class="cardrow" style="margin-top:8px">${o.cards.map(x => ART.use(x)).join('')}</div><p class="small" style="margin:6px 0 0">내가 가진 광 ${own}장</p>`,
+      [{ label: `광 사기 (${cost}점)`, primary: true, a: G.A_BUY }, { label: '안 사요', a: G.A_NOBUY }]);
   }
 
   function select(ses, c) {
@@ -1179,11 +1372,11 @@
     if (G.isBonus(c)) return finishHuman(ses, G.A_PLAY + c);
     if (L.indexOf(G.A_BOMB + m) >= 0) {
       const tc = s.table.find(x => G.monthOf(x) === m);
-      return ask(ses, '💣 폭탄!', `<p style="margin:0">손에 ${m + 1}월이 세 장, 바닥에 한 장이 있어요.<br>세 장을 한꺼번에 내면 네 장을 다 가져오고 <b>피 한 장씩</b> 받아요. 이기면 <b>두 배</b>!</p><div class="cardrow" style="margin-top:8px">${s.hands[me].filter(x => G.monthOf(x) === m).concat(tc).map(x => ART.use(x)).join('')}</div>`,
+      return ask(ses, '💣 폭탄!', `<p style="margin:0">손에 ${m + 1}월이 세 장, 바닥에 한 장이 있어요.<br>세 장을 한꺼번에 내면 네 장을 다 가져오고 ${s.rules.stealBomb ? `<b>피 ${s.rules.stealBomb}장씩</b> 받아요.` : ''} ${s.rules.shakeX > 1 ? `이기면 <b>×${s.rules.shakeX}</b>!` : ''}</p><div class="cardrow" style="margin-top:8px">${s.hands[me].filter(x => G.monthOf(x) === m).concat(tc).map(x => ART.use(x)).join('')}</div>`,
         [{ label: '💣 폭탄', primary: true, a: G.A_BOMB + m }, { label: '한 장만 내기', a: G.A_PLAY + c }]);
     }
     if (L.indexOf(G.A_SHAKE + c) >= 0) {
-      return ask(ses, '👋 흔들까요?', `<p style="margin:0">손에 ${m + 1}월이 세 장 있어요. 보여 주고 내면 이겼을 때 점수가 <b>두 배</b>예요.<br><span class="small">(세 장을 상대도 보게 돼요)</span></p><div class="cardrow" style="margin-top:8px">${s.hands[me].filter(x => G.monthOf(x) === m).map(x => ART.use(x)).join('')}</div>`,
+      return ask(ses, '👋 흔들까요?', `<p style="margin:0">손에 ${m + 1}월이 세 장 있어요. 보여 주고 내면 ${s.rules.shakeX > 1 ? `이겼을 때 점수가 <b>×${s.rules.shakeX}</b>예요.` : '(이 집은 배수가 없어요)'}<br><span class="small">(세 장을 상대도 보게 돼요)</span></p><div class="cardrow" style="margin-top:8px">${s.hands[me].filter(x => G.monthOf(x) === m).map(x => ART.use(x)).join('')}</div>`,
         [{ label: '👋 흔들기', primary: true, a: G.A_SHAKE + c }, { label: '그냥 내기', a: G.A_PLAY + c }]);
     }
     finishHuman(ses, G.A_PLAY + c);
@@ -1222,7 +1415,7 @@
     for (const m of pre.mults) rows += `<tr class="x"><td>${esc(m.k)}</td><td class="n">×${m.x}</td></tr>`;
     const per = pre.per.map(l => `${esc(seatAt(ses, l.p).name)}${l.mults.length ? ' (' + l.mults.map(m => m.k).join('·') + ')' : ''}`).join(', ');
     const nextGo = s.go[p] + 1;
-    const goTxt = nextGo <= 2 ? `+${nextGo}점` : `점수 ×${Math.pow(2, nextGo - 2)}`;
+    const goTxt = s.rules.goBonus === 'none' ? '점수는 그대로' : `이 점수면 ${fmtN(G.goTotal(t.base, nextGo, s.rules.goBonus))}점`;
     const gc = (coachOn(ses) && AI.coachGoStop) ? AI.coachGoStop(G.view(s, p)) : null;
     const coachHtml = gc ? `
       <div class="go-coach">
@@ -1239,7 +1432,7 @@
     $('goTitle').textContent = `${t.base}점! 고? 스톱?`;
     $('goBody').innerHTML = `<table class="brk">${rows}<tr class="sum"><td>지금 스톱하면</td><td class="n">+${pre.points}점</td></tr></table>
       <p class="gonote">${per ? '진 사람: ' + per + '<br>' : ''}상대: ${opp} · 남은 손패 ${s.hands[p].length}장</p>
-      <p class="gonote">고 하면 ${nextGo}고(${goTxt}) — 대신 상대가 먼저 나면 <b>고박</b>이에요</p>
+      <p class="gonote">고 하면 ${nextGo}고(${goTxt}) — ${s.rules.gobak ? '대신 상대가 먼저 나면 <b>고박</b>이에요' : '고박은 없는 집이에요'}</p>
       ${coachHtml}`;
     $('goBtns').innerHTML = '';
     $('goBtns').className = 'gobtns';
@@ -1324,7 +1517,7 @@
       if (!r) return resolve('menu');
       let title, big = '', bigCls = '', coinLine = '';
       const nm = p => esc(seatAt(ses, p).name);
-      if (r.kind === 'nagari') { title = '🤝 나가리'; big = '다음 판 ×' + Math.pow(2, r.carryNext); bigCls = 'lose'; sfx('lose'); }
+      if (r.kind === 'nagari') { title = '🤝 나가리'; big = r.nextMult > 1 ? '다음 판 ×' + r.nextMult : ''; bigCls = 'lose'; sfx('lose'); }
       else if (spec) { title = `${seatAt(ses, r.winner).em} ${nm(r.winner)} 승리!`; big = '+' + fmtN(r.points) + '점'; sfx('win'); }
       else if (r.winner === me) {
         title = r.kind === 'chongtong' ? '🎴 총통으로 이겼어요!' : r.kind === 'ppeok3' ? '💥 쓰리뻑으로 이겼어요!' : '🎉 이겼어요!';
@@ -1346,9 +1539,10 @@
       }
       // 점수 내역
       const saleRows = (r.sale || []).map(x => `<tr><td>💰 광 팔기 <span class="small">${esc(tname(ses, x.buyerSeat))} → ${esc(tname(ses, x.seat))} · 광 ${x.cards.length}장</span></td><td class="n">${x.price}점</td></tr>`).join('');
+      const sideRows = (r.side || []).map(x => `<tr><td>🎴 ${esc(x.k)} 보너스 <span class="small">${esc(tname(ses, x.fromSeat))} → ${esc(tname(ses, x.toSeat))}</span></td><td class="n">${x.pts}점</td></tr>`).join('');
       let rows = '';
       if (r.kind !== 'nagari') {
-        for (const it of r.items) rows += `<tr><td>${esc(it.k)}</td><td class="n">${it.x ? '(+' + s.go[r.winner] + ')×' + it.x : '+' + it.pts}${it.x ? '' : '점'}</td></tr>`;
+        for (const it of r.items) rows += `<tr><td>${esc(it.k)}</td><td class="n">${it.x ? (it.add ? '(+' + it.add + ')' : '') + '×' + it.x : '+' + it.pts}${it.x ? '' : '점'}</td></tr>`;
         rows += `<tr class="sub"><td>${r.winner === me && !ses.hot ? '내' : nm(r.winner)} 점수</td><td class="n">${fmtN(r.total)}점</td></tr>`;
         for (const m of r.mults) rows += `<tr class="x"><td>${esc(m.k)}</td><td class="n">×${m.x}</td></tr>`;
         for (const l of r.per) {
@@ -1356,9 +1550,13 @@
           rows += `<tr class="${l.p === me ? 'x' : ''}"><td>${nm(l.p)}${ms ? ` <span class="small">${esc(ms)}</span>` : ''}</td><td class="n">${l.pay ? '-' + fmtN(l.pay) : '0'}점</td></tr>`;
         }
         rows += `<tr class="sum"><td>${esc(iga(nameOf(ses, r.winner)))} 받는 점</td><td class="n">+${fmtN(r.points)}</td></tr>`;
-        rows += saleRows;
+        rows += saleRows + sideRows;
       }
-      const sumLine = r.kind === 'nagari' ? `<p style="margin:0">아무도 못 났어요. 다음 판 점수는 <b>${Math.pow(2, r.carryNext)}배</b>!</p>${saleRows ? `<table class="brk">${saleRows}</table>` : ''}` : `<table class="brk">${rows}</table>`;
+      // 칩: 점수 변화 × 점당 칩 (친구랑 정산에 쓰는 값. 쉬는 사람 포함)
+      const dl = ses.lastDeltas || {};
+      const chipTxt = Object.keys(dl).map(i => ({ i: +i, v: dl[i] })).filter(x => x.v).map(x => `${esc(tname(ses, x.i))} <b class="${x.v > 0 ? 'cp' : 'cm'}">${x.v > 0 ? '+' : ''}${fmtN(x.v)}</b>`).join(' · ');
+      const chipLine = chipTxt ? `<p class="small chipline">🪙 칩 (점당 ${s.rules.chipPer}) ${chipTxt}</p>` : '';
+      const sumLine = r.kind === 'nagari' ? `<p style="margin:0">아무도 못 났어요. ${r.nextMult > 1 ? `다음 판 점수는 <b>${r.nextMult}배</b>!` : '다음 판은 배수 없이 그대로 해요'}</p>${saleRows || sideRows ? `<table class="brk">${saleRows}${sideRows}</table>` : ''}${chipLine}` : `<table class="brk">${rows}</table>${chipLine}`;
       // 🧑‍🏫 일타 강사 복기 노트 (가장 아쉬웠던 결정적 한 수 + 다시 쳐보기 Drill)
       let reviewHtml = '', worstTurn = null;
       if (!spec && ses.turnLog && ses.turnLog.length) {
@@ -1390,6 +1588,10 @@
       const mk = (label, cls, v) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = () => { sfx('tap'); done(v); }; $('resBtns').appendChild(b); return b; };
       const nb = mk(watch ? '다음 판 ▶' : '다음 판 ▶', 'primary', 'next');
       mk(watch ? '그만 보기' : '메뉴', '', 'menu');
+      if (ses.bank) {                                          // 결과 창이 아래 단추를 가리므로 여기에도
+        const lb = document.createElement('button'); lb.className = 'btn'; lb.textContent = '💰 빌리기'; lb.onclick = () => $('loanBtn').click(); $('resBtns').appendChild(lb);
+        if (ses.cfg.role === 'host') { const sb = document.createElement('button'); sb.className = 'btn'; sb.textContent = '🏦 정산'; sb.onclick = () => ses.bank.flush().then(() => Bank.panel({ game: 'gostop', gid: ses.bank.gid, tab: 'settle' })); $('resBtns').appendChild(sb); }
+      }
       let autoT = 0;
       if (watch && !ses.paused) autoT = setTimeout(() => { if (SES === ses && ses.alive) done('next'); }, FAST ? 30 : 4200);
       ses.pending = { resolve: v => done(v), reject: e => { clearTimeout(autoT); $('resBox').hidden = true; reject(e); } };
@@ -1408,6 +1610,7 @@
     cb.setAttribute('aria-pressed', String(coachOn(ses)));
     cb.innerHTML = `<span class="ic">🧑‍🏫</span><span>AI 선생님</span>`;
     $('pauseBtn').hidden = !watch;
+    $('loanBtn').hidden = !(ses && ses.bank); $('bankBtn').hidden = !(ses && ses.bank);
     if (ses) $('pauseBtn').innerHTML = `<span class="ic">${ses.paused ? '▶' : '⏸'}</span><span>${ses.paused ? '계속' : '멈춤'}</span>`;
     const sp = SPEEDS[opt[speedKey()]] || SPEEDS.normal;
     $('speedBtn').innerHTML = `<span class="ic">${sp.em}</span><span>${sp.label}</span>`;
@@ -1426,6 +1629,14 @@
   $('speedBtn').onclick = () => { const k = speedKey(); opt[k] = SPEED_ORDER[(SPEED_ORDER.indexOf(opt[k]) + 1) % 3]; saveOpt(k); sfx('tap'); drawDock(); C.toast('진행 속도: ' + SPEEDS[opt[k]].label, 1000); };
   $('pauseBtn').onclick = () => { const ses = SES; if (!ses) return; ses.paused = !ses.paused; sfx('tap'); drawDock(); if (!ses.paused) ses.wake(); };
   $('ruleBtn').onclick = () => showRules();
+  // 💰 빌리기 · 🏦 은행 창 (친구랑에서 방장이 모임을 고른 방만)
+  $('loanBtn').onclick = async () => {
+    const ses = SES; if (!ses || !ses.bank || !window.Bank) return;
+    sfx('tap');
+    if (!(await Bank.askLoan(ses.bank.gid)) || SES !== ses) return;
+    if (ses.cfg.role === 'host') ses.bank.requestLoan(ses.cfg.me); else ses.bank.requestLoan();
+  };
+  $('bankBtn').onclick = () => { if (SES && SES.bank && window.Bank) { sfx('tap'); Bank.panel({ game: 'gostop', gid: SES.bank.gid }); } };
   C.sfx.button($('sndBtn'));
   // ── 시험용 손잡이 (headless 시험에서 씀) ─────────────────────
   window.__gostop = {
@@ -1433,7 +1644,7 @@
     autoHuman: false,
     fast(on) { FAST = on ? 1 : 0; },
     startHot(o) { o = o || {}; startSeed = o.seed >>> 0; if (o.mode) opt.lMode = o.mode; if (o.seats) opt.lSeats = o.seats; if (lPick) lPick.set(o.picks || Array.from({ length: opt.lMode }, (_, i) => ((opt.lSeats[i] || 'normal') === 'human' ? { kind: 'human', name: '사람' + (i + 1) } : { kind: 'ai', tier: opt.lSeats[i] }))); startHotSeat(); },
-    start(o) { o = o || {}; startSeed = o.seed >>> 0; if (o.mode) opt.mode = o.mode; if (o.tier) opt.tier = o.tier; if (o.bonus != null) opt.bonus = o.bonus; if (o.wTiers) opt.wTiers = o.wTiers; if (o.wMode) opt.wMode = o.wMode; startGame({ watch: !!o.watch }); },
+    start(o) { o = o || {}; startSeed = o.seed >>> 0; if (o.mode) opt.mode = o.mode; if (o.tier) opt.tier = o.tier; if (o.bonus != null) setRules(Object.assign({}, houseRules, { bonus: o.bonus })); if (o.rules) setRules(o.rules); if (o.wTiers) opt.wTiers = o.wTiers; if (o.wMode) opt.wMode = o.wMode; startGame({ watch: !!o.watch }); },
     home: () => goHome(),
     act(a) { const ses = SES; if (ses && ses.pending && !ses.pending.isResult) finishHuman(ses, a); },
     legal() { return SES ? G.legal(SES.S) : []; },
