@@ -120,6 +120,35 @@
     chat.log.innerHTML = ""; chat.unread = 0; chat.badge(); chat.pan.hidden = true; chat.tab.hidden = false;
     chat.quietUntil = Date.now() + 1500;                      // 들어올 때 받는 지난 대화는 말풍선 없이 기록에만
   }
+  // ── 📊 방 기록 (모든 게임 공통, 관리자만 읽음): logs/{게임}/{날짜}/{세션} — 방 · 참가자 들어옴·나감 · 판 시작 · 채팅. 방장만 씀
+  let log = null, logSeen = new Set();
+  const logTS = () => firebase.database.ServerValue.TIMESTAMP;
+  const logSafe = p => { if (p && p.catch) p.catch(() => {}); };
+  function logStart() {
+    log = null; logSeen = new Set();
+    if (!net || !net.isHost || Arena.mock || Arena.GUEST || !window.firebase || !Arena.db) return;
+    try {
+      const t = new Date(Date.now() + 9 * 3600e3).toISOString();
+      const sid = `${t.slice(0, 10)}/${t.slice(11, 19).replace(/:/g, "")}_${net.code}`;
+      log = Arena.db().ref(`logs/${opt.game}/${sid}`);
+      logSafe(log.child("info").set({ game: opt.game, room: net.code, host: net.uid, hostName: (me && me.name) || "", created: logTS(), updated: logTS() }));
+    } catch (e) { log = null; }
+  }
+  function logPlayers(pl) {
+    if (!log) return;
+    const now = new Set(Object.keys(pl || {}));
+    for (const u of now) if (!logSeen.has(u)) logSafe(log.child(`players/${u}`).update({ name: (pl[u] && pl[u].name) || "?", role: u === net.uid ? "방장" : pl[u] && pl[u].watch ? "구경" : "참가", joined: logTS() }));
+    for (const u of logSeen) if (!now.has(u)) logSafe(log.child(`players/${u}`).update({ left: logTS() }));
+    logSeen = now;
+  }
+  function logMatch() {
+    if (!log || !net) return;
+    const pl = net.players || {};
+    logSafe(log.child("matches").push({ start: logTS(), players: Object.keys(pl).map(u => (pl[u] && pl[u].name) || "?").join(", "), cfg: opt.settings && opt.settings.label ? String(opt.settings.label(curCfg()) || "").slice(0, 80) : "" }));
+  }
+  function logChat(c) { if (log && c && c.m) logSafe(log.child("chat").push({ u: c.u || "", n: c.n || "", m: String(c.m).slice(0, 120), t: c.t || logTS() })); }
+  function logEnd() { if (log) logSafe(log.child("info").update({ closed: logTS(), updated: logTS() })); log = null; }
+
   function chatOff() { if (!chat) return; chat.tab.hidden = true; chat.pan.hidden = true; chat.bub.innerHTML = ""; }
   function onChat(c) {
     if (!chat || !c || !c.m) return;
@@ -284,11 +313,12 @@
   function wire() {
     offs.forEach(f => f()); offs = [];
     chatOn(); offs.push(net.on("chat", onChat));
+    if (net.isHost) { logStart(); offs.push(net.on("players", logPlayers)); offs.push(net.on("chat", logChat)); }
     offs.push(net.on("players", () => { if (!playing) drawPlayers(); }));
     if (net.isHost) offs.push(net.on("p2p", () => { if (!playing) drawPlayers(); }));
     offs.push(net.on("meta", m => {
       if (!m) return;
-      if (m.phase === "play" && !playing) { playing = true; hide(); opt.onStart && opt.onStart(ctx()); }
+      if (m.phase === "play" && !playing) { playing = true; hide(); logMatch(); opt.onStart && opt.onStart(ctx()); }
       else if (m.phase === "lobby" && playing) { playing = false; opt.onLobby && opt.onLobby(ctx()); lobby(); }
       else if (!playing) { drawSettings(); drawCoach(); }
     }));
@@ -299,6 +329,7 @@
     }
   }
   function end(why) {
+    logEnd();
     const was = net; net = null; playing = false; offs.forEach(f => f()); offs = []; chatOff();
     if (was) was.leave();
     setUrlRoom(null);

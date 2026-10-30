@@ -31,9 +31,9 @@ td.n{text-align:right;font-family:var(--mono)}
 <div class="wrap">
   <p class="crumb"><a href="./">← 게임 목록</a></p>
   <h1>게임 기록</h1>
-  <p class="lede">관리자만 볼 수 있어요. 방(세션)마다 누가 언제 들어왔는지, 판 결과, 사람마다 연결 품질(직접 연결·핑·화면 간격·끊김), 채팅이 남습니다.</p>
+  <p class="lede">관리자만 볼 수 있어요. 친구랑 방마다 누가 언제 들어오고 나갔는지, 판을 시작한 때, 채팅이 남아요 (지렁이·냥도쿠는 판 결과·연결 품질까지).</p>
   <div class="bar">
-    <select id="game"><option value="snake">🐍 지렁이</option><option value="sc">⚔️ 스타 대결</option><option value="nyang">🐱 냥도쿠</option></select>
+    <select id="game"><option value="gostop">🎴 고스톱</option><option value="seotda">🀄 섯다</option><option value="poker">♠️ 홀덤</option><option value="baduk">⚫ 바둑</option><option value="omok">⚪ 오목</option><option value="cube">🀫 베니큐브</option><option value="chess">♟️ 체스</option><option value="yut">🪵 윷놀이</option><option value="billiards">🎱 당구</option><option value="volley">🏐 냥냥 배구</option><option value="land">🟩 땅따먹기</option><option value="nyang">🐱 냥도쿠</option><option value="snake">🐍 지렁이</option><option value="sc">⚔️ 스타 대결</option></select>
     <select id="date"></select>
     <button id="csv">CSV 내려받기</button>
     <span class="help" id="msg">불러오는 중…</span>
@@ -80,7 +80,7 @@ function render() {
       const res = m.final || m.results || [];
       const top = Array.isArray(res) ? res.slice().sort((a, b) => (b.len ?? 0) - (a.len ?? 0)).slice(0, 4).map(r => `${esc(r.n || r.name)} ${r.len ?? ""}${r.kills != null ? "·잡" + r.kills : ""}`).join(" / ") : "";
       const sc = m.winner ? `${esc(m.winner)} 승 · 남은 유닛 ${m.left1 ?? "-"}:${m.left2 ?? "-"} · ${m.secs ?? "-"}초` : "";
-      return `<tr><td>${i + 1}</td><td>${tm(m.start)}</td><td>${dur(m.start, m.end || m.updated)}${m.aborted ? " (중단)" : ""}</td><td>${esc(m.mode || m.scn || "")}${m.ai ? " · AI " + esc(m.ai) : ""}</td><td>${esc(m.people || [m.team1, m.team2].filter(Boolean).join(" vs "))}</td><td>${sc || top}</td></tr>`;
+      return `<tr><td>${i + 1}</td><td>${tm(m.start)}</td><td>${dur(m.start, m.end || m.updated)}${m.aborted ? " (중단)" : ""}</td><td>${esc(m.mode || m.scn || m.cfg || "")}${m.ai ? " · AI " + esc(m.ai) : ""}</td><td>${esc(m.players || m.people || [m.team1, m.team2].filter(Boolean).join(" vs "))}</td><td>${sc || top}</td></tr>`;
     }).join("");
     const nRows = Object.entries(net).map(([uid, n]) => `<tr><td>${esc(n.name)}</td><td>${esc(n.role)}</td><td class="${n.conn === "Firebase" ? "bad" : "ok"}">${esc(n.conn || (n.role === "방장" ? `친구 ${n.friends ?? 0} (직접 ${n.direct ?? 0})` : "-"))}</td><td class="n">${n.ping ?? "-"}</td><td class="n">${n.pingMax ?? "-"}</td><td class="n">${n.gap ?? "-"}${n.jitter != null ? " ±" + n.jitter : ""}</td><td class="n">${n.react ?? "-"}</td><td class="n ${n.reconnects ? "bad" : ""}">${n.reconnects ?? 0}</td><td>${tm(n.updated)}</td></tr>`).join("");
     const cRows = chat.sort((a, b) => (a.t || 0) - (b.t || 0)).map(c => `<div><span class="help">${tm(c.t)}</span> <b>${esc(c.n)}</b>: ${esc(c.m)}</div>`).join("");
