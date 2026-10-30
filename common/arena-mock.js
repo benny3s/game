@@ -104,10 +104,14 @@ window.ArenaMock = util => {
     return rows.sort((a, b) => (b.t || 0) - (a.t || 0));
   }
 
+  // ?mock&nohost: 방 만들기 권한이 없는 기기 흉내 (Gate 허용 창 시험) — Gate.state.canHost 가 켜지면 권한 생김
+  let canHost = !new URLSearchParams(location.search).has("nohost");
   return {
     init: async () => null, host, join, listRooms, deleteRoom: async () => null,
     inviteUrl: util.inviteUrl, roomFromUrl: util.roomFromUrl, cleanCode: util.cleanCode,
     now: () => Date.now(), GUEST: false, ROOT: "mock/", mock: true, db: () => null, uid, ready: true,
-    canHost: true, isAdmin: true, createHostInvite: async () => ({ code: "MOCK77", url: location.href }), claimHostInvite: async () => true,
+    get canHost() { return canHost; }, get isAdmin() { return canHost; },
+    refreshPerms: async () => { if (window.Gate && Gate.state && Gate.state.canHost) canHost = true; },
+    createHostInvite: async () => ({ code: "MOCK77", url: location.href }), claimHostInvite: async () => true,
   };
 };

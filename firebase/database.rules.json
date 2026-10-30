@@ -158,7 +158,7 @@
       ".read": "auth != null && auth.token.admin === 1",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1)",
-        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && newData.child('ok').val() === true && newData.child('token').isString() && (root.child('arena_invites/' + newData.child('token').val()).exists() || root.child('game_passes/' + newData.child('token').val() + '/role').val() === 'host')))"
+        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && newData.child('ok').val() === true && newData.child('token').isString() && newData.child('token').val().matches(/^[A-Za-z0-9]{6}$/) && (root.child('arena_invites/' + newData.child('token').val()).exists() || root.child('game_passes/' + newData.child('token').val() + '/role').val() === 'host')))"
       }
     },
     "game_passes": {
@@ -173,7 +173,7 @@
       ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (auth.uid === $uid && ((newData.child('passCode').isString() && (root.child('game_passes/' + newData.child('passCode').val()).exists() || root.child('arena_invites/' + newData.child('passCode').val()).exists()) && newData.child('status').val() === 'active') || (data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('role').val() === data.child('role').val()))))",
+        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (auth.uid === $uid && ((newData.child('passCode').isString() && newData.child('passCode').val().matches(/^[A-Za-z0-9]{6}$/) && newData.child('status').val() === 'active' && ((root.child('game_passes/' + newData.child('passCode').val()).exists() && root.child('game_passes/' + newData.child('passCode').val() + '/revoked').val() !== true && (!((root.child('game_passes/' + newData.child('passCode').val() + '/hours').isNumber() && root.child('game_passes/' + newData.child('passCode').val() + '/hours').val() > 0) || root.child('game_passes/' + newData.child('passCode').val() + '/role').val() === 'temp24h') || (newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 90000000))) || root.child('arena_invites/' + newData.child('passCode').val()).exists())) || (data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('role').val() === data.child('role').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))))",
         ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString())"
       }
     },
@@ -194,7 +194,7 @@
             ".validate": "$code.length === 4",
             ".write": "auth != null && !newData.exists() && (root.child('arena/' + $game + '/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
             "meta": {
-              ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
+              ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))) || data.child('host').val() === auth.uid)",
               ".validate": "!newData.exists() || (newData.child('host').val() === auth.uid && newData.child('max').isNumber() && newData.child('max').val() >= 1 && newData.child('max').val() <= 16)"
             },
             "players": {

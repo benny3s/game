@@ -765,8 +765,8 @@ button { font: inherit; cursor: pointer; }
 
   <section class="info-strip">
     <div class="info-box">
-      <h4>👑 가족 전용 방장 초대 구조</h4>
-      <p>방 만들기(초대)는 <b>관리자(베니 님 · 와이프분)</b>만 할 수 있고, 초대 링크나 4자리 방 코드를 받은 친구는 별도 가입이나 권한 없이 바로 참가해 함께 즐길 수 있습니다.</p>
+      <h4>🏠 혼자는 누구나, 친구 방은 허용된 기기에서</h4>
+      <p>혼자 하기는 누구나 바로 할 수 있어요. 친구 방 만들기는 <b>허용된 기기</b>(오늘만 · 계속)에서 되고, 방 링크나 4자리 방 코드를 받은 친구는 등록 없이 그 방에 바로 들어와요.</p>
     </div>
     <div class="info-box">
       <h4>🧠 직접 학습한 신경망 & 규칙 엔진</h4>
@@ -779,10 +779,10 @@ button { font: inherit; cursor: pointer; }
   </section>
 </main>
 
-<!-- 프로필 & 가족 방장 설정 모달 -->
+<!-- 프로필 & 방 만들기 권한 모달 (Gate 가 없을 때만 쓰는 예비 창) -->
 <div class="modal-bg" id="hostModal" hidden>
   <div class="modal-card" role="dialog" aria-modal="true">
-    <h3>👑 프로필 & 가족 방장 권한</h3>
+    <h3>👤 프로필 & 방 만들기 권한</h3>
     <label>
       <span>내 별명 (친구랑 대결할 때 표시)</span>
       <input type="text" id="nickInput" maxlength="12" placeholder="예: 베니">
@@ -793,11 +793,11 @@ button { font: inherit; cursor: pointer; }
         <b id="hostStatusTxt" style="color:var(--gold)">확인 중…</b>
       </div>
       <p style="margin:0;color:var(--muted);font-size:12px">
-        관리자(베니 님) 또는 가족 호스트(와이프분)만 방을 만들 수 있습니다. 초대받은 친구는 권한 없이도 방 코드/링크로 바로 들어올 수 있습니다.
+        관리자와 허용된 기기만 방을 만들 수 있어요. 친구는 권한 없이도 방 코드·링크로 바로 들어와요.
       </p>
     </div>
     <label id="familyCodeBox">
-      <span>가족 방장 인증 코드 (와이프분 폰/PC에서 1회 입력)</span>
+      <span>예전 가족 방장 코드 (있으면 1회 입력)</span>
       <input type="password" id="familyCodeInput" placeholder="가족 코드 입력 (예: benny-family)">
     </label>
     <div class="modal-row">
@@ -810,9 +810,9 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=4"></script>
-<script src="common/me.js?v=4"></script>
-<script src="common/arena.js?v=4"></script>
+<script src="common/gate.js?v=5"></script>
+<script src="common/me.js?v=5"></script>
+<script src="common/arena.js?v=5"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -1126,13 +1126,13 @@ button { font: inherit; cursor: pointer; }
     const btn = $("hostBtn");
     if (isAdmin) {
       btn.classList.add("active");
-      btn.textContent = `👑 ${name} (관리자 방장)`;
+      btn.textContent = `👑 ${name} (관리자)`;
     } else if (canHost) {
       btn.classList.add("active");
-      btn.textContent = `💑 ${name} (가족 방장)`;
+      btn.textContent = `✅ ${name} (허용된 기기)`;
     } else {
       btn.classList.remove("active");
-      btn.textContent = `👤 ${name} · 방장 등록`;
+      btn.textContent = `👤 ${name} · 기기 허용`;
     }
   }
 
@@ -1316,6 +1316,9 @@ button { font: inherit; cursor: pointer; }
     renderCatalog();
   });
 
+  // 기기 허용이 바뀌면 배지도 바로 (Gate 가 나중에 확인을 끝내도)
+  if (window.Gate && Gate.onChange) Gate.onChange(s => { if (s.status !== "checking" && s.status !== "open" && !!s.canHost !== canHost && !isAdmin) { canHost = !!s.canHost; updateHostBadge(); } });
+
   // 방장 & 출입·기기 관리 모달 (Gate 연동)
   $("hostBtn").onclick = async () => {
     if (window.Gate && Gate.openAdminModal) {
@@ -1326,9 +1329,9 @@ button { font: inherit; cursor: pointer; }
     $("familyCodeInput").value = "";
     await checkPermissions();
     $("hostStatusTxt").textContent = isAdmin
-      ? "👑 관리자 방장 (모든 권한 활성)"
+      ? "👑 관리자 (모든 권한)"
       : canHost
-        ? "💑 가족 방장 (방 만들기 가능)"
+        ? "✅ 허용된 기기 (방 만들기 가능)"
         : "🔒 일반 손님 (초대받은 방 참가만 가능)";
     $("hostModal").hidden = false;
   };

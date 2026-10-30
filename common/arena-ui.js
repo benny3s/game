@@ -5,10 +5,15 @@
      ArenaUI.open({
        game: "volley", title: "냥냥 배구", max: 2, min: 2,
        settings: { defaults: { pts: 11 }, label: cfg => cfg.pts + "점", render(el, cfg, canEdit, update) { … update({ pts: 15 }) … } },
-       onStart(ctx) {},  // 경기 시작: ctx = { net, role: "host"|"guest", code, cfg, players, uid }
+       describe(count, cfg) { return count >= 3 ? "3명이면 고스톱" : "2명이면 맞고"; },   // (선택) 지금 인원이면 어떻게 되는지 한 줄
+       coach: true,      // (선택) 대기실에 'AI 선생님 (모두에게 보이기)' 켜기 — 방장만 바꿈, cfg.coach(true/false, 기본 false)
+       onStart(ctx) {},  // 경기 시작: ctx = { net, role: "host"|"guest", code, cfg, players, uid } — 실제 인원은 ctx.players 로
        onLobby(ctx) {},  // 방장이 모두를 대기실로 되돌림 (게임 화면 정리)
        onLeave(why) {},  // 방을 나감 (메뉴로)
      });
+   · 인원은 미리 정하지 않음: 방장이 방을 열면 최대(max) 인원까지 들어오고, min 명 이상이면 방장이 아무 때나 시작
+     describe 가 { text, ok: false } 를 돌려주면 시작 버튼을 잠금 (예: 이 설정은 4명이어야 해요)
+   · 방 만들기는 관리자·허용된 기기만. 권한이 없으면 Gate.requestHost() 창(기기 허용 / 방 링크 받기)을 띄움
      ArenaUI.toLobby()  — 방장: 판이 끝난 뒤 모두 대기실로 · ArenaUI.leave() · ArenaUI.net (지금 연결) */
 (() => {
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -50,6 +55,20 @@
 .arn-set{display:grid;gap:8px}
 .arn-msg{min-height:1.3em;font-size:13.5px;color:var(--bad,#e5536b)}
 .arn-wait{text-align:center;color:var(--soft,#8b7b70);font-size:14px;padding:4px 0}
+.arn-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:13px;color:var(--soft,#94a3b8)}
+.arn-desc{text-align:center;font:700 14px/1.4 var(--round,inherit);color:var(--ink,#f1f5f9);background:rgba(127,127,127,.12);border:1px dashed var(--line,rgba(255,255,255,.2));border-radius:12px;padding:8px 10px}
+.arn-desc.no{color:var(--bad,#e5536b)}
+.arn-coach{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;background:rgba(0,0,0,.2);border:1px solid var(--line,rgba(255,255,255,.1));font-size:14px;cursor:pointer;user-select:none}
+.arn-coach.ro{cursor:default}
+.arn-coach span{flex:1;min-width:0}
+.arn-coach small{display:block;font-size:12px;color:var(--soft,#94a3b8)}
+.arn-sw{position:relative;flex:none;width:44px;height:26px;border-radius:99px;background:rgba(127,127,127,.35);transition:background .15s}
+.arn-sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.35);transition:transform .15s}
+.arn-coach input{position:absolute;opacity:0;pointer-events:none}
+.arn-coach input:checked+.arn-sw{background:var(--accent,#10b981)}
+.arn-coach input:checked+.arn-sw::after{transform:translateX(18px)}
+.arn-coach input:focus-visible+.arn-sw{outline:2px solid var(--gold,#f59e0b);outline-offset:2px}
+.arn-coach .st{font-weight:800;font-size:13px}
 .arn-wait::after{content:"";display:inline-block;width:1.2em;text-align:left;animation:arn-dots 1.2s steps(4) infinite}
 @keyframes arn-dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}`;
   let styled = false;
@@ -73,22 +92,20 @@
     me = { name: n || "친구" + Math.floor(Math.random() * 90 + 10) }; return me.name;
   }
 
-  // ── 첫 화면: 방 만들기(관리자·가족 호스트만) · 코드로 들어가기 · 열린 방
+  // ── 첫 화면: 방 만들기(관리자·허용된 기기 — 아니면 누를 때 기기 허용 창) · 코드로 들어가기 · 열린 방
   function home(msg = "") {
     show(); clearList();
     const canHost = Arena.canHost !== false;
     const isAdmin = !!Arena.isAdmin;
     box.innerHTML = `<button class="arn-x" id="arLeave" data-x aria-label="닫기">✕</button>
       <h2>친구랑 ${esc(opt.title)}</h2>
-      <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${canHost ? '<span style="font-size:12px;background:rgba(63,174,122,.16);color:#2d8a5e;padding:3px 8px;border-radius:99px">👑 방장 권한</span>' : ''}${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
-      ${canHost
-        ? `<button class="arn-btn pri" id="arCreate" data-host>🏠 방 만들기 (친구 초대)</button>`
-        : `<div style="background:rgba(0,0,0,.04);border-radius:16px;padding:11px 13px;font-size:13.5px;color:var(--soft,#8b7b70);line-height:1.45">🔒 <b>방 만들기</b>는 관리자(베니·와이프) 전용이에요.<br>초대받은 <b>4자리 방 코드</b>를 입력해 입장하세요!</div>`}
+      <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${canHost ? '<span style="font-size:12px;background:rgba(63,174,122,.16);color:#2d8a5e;padding:3px 8px;border-radius:99px;white-space:nowrap">✅ 방 만들기 가능</span>' : ''}${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
+      <button class="arn-btn pri" id="arCreate" data-host>🏠 방 만들기 (친구 초대)</button>
+      ${canHost ? "" : `<p class="arn-soft" style="margin-top:-6px">방 만들기는 허용된 기기만 돼요. 친구가 보낸 <b>방 링크</b>나 <b>코드</b>로는 바로 들어갈 수 있어요.</p>`}
       <div class="arn-row"><input class="arn-code" maxlength="4" placeholder="방 코드" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
       <div class="arn-msg">${esc(msg)}</div>
       <p class="arn-soft">열린 방</p><div class="arn-list"><p class="arn-soft">찾는 중…</p></div>
-      ${isAdmin && !Arena.mock ? `<div style="border-top:1px solid var(--line,rgba(0,0,0,.08));padding-top:10px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="arn-soft" style="font-size:12.5px">👑 가족(와이프) 기기에 방 만들기 권한 주기</span><button class="arn-btn" data-mk-host-inv style="padding:8px 12px;font-size:13px">초대 코드 발급</button></div>` : ""}
-      ${!canHost ? `<details style="font-size:13px;color:var(--soft,#8b7b70)"><summary style="cursor:pointer">🔑 가족 호스트(방장) 등록 코드가 있나요?</summary><div class="arn-row" style="margin-top:8px"><input class="arn-code" id="arnHostIn" maxlength="6" placeholder="6자리" style="font-size:17px;letter-spacing:4px"><button class="arn-btn" data-claim-host style="padding:10px 14px;font-size:14px">등록</button></div></details>` : ""}`;
+      ${isAdmin && !Arena.mock && window.Gate && Gate.openAdminModal ? `<div style="border-top:1px solid var(--line,rgba(0,0,0,.08));padding-top:10px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="arn-soft" style="font-size:12.5px">👑 다른 기기 허용하기 (코드·요청)</span><button class="arn-btn" data-admin style="padding:8px 12px;font-size:13px">기기 관리</button></div>` : ""}`;
     const inp = box.querySelector(".arn-code");
     inp.addEventListener("input", () => { inp.value = Arena.cleanCode(inp.value); });
     inp.addEventListener("keydown", e => { if (e.key === "Enter") box.querySelector("[data-join]").click(); });
@@ -115,12 +132,30 @@
       <h2>${esc(opt.title)} 대기실</h2>
       <div class="arn-big"><span>방 코드</span><b id="arCode">${esc(net.code)}</b></div>
       <button class="arn-btn" data-share>🔗 초대 링크 보내기</button>
+      <div class="arn-head"><span>참가자</span><span data-count></span></div>
       <div class="arn-list" data-pl></div>
+      <div class="arn-desc" data-desc hidden></div>
       <div class="arn-set" data-set></div>
+      ${opt.coach ? `<div data-coach></div>` : ""}
       <div class="arn-msg" data-msg></div>
       ${isHost ? `<button class="arn-btn pri" id="arStart" data-start disabled>시작하기</button>` : `<p class="arn-wait">방장이 시작하면 바로 시작돼요</p>`}
       <button class="arn-btn" id="arLeave" data-leave>나가기</button>`;
-    drawPlayers(); drawSettings();
+    drawPlayers(); drawSettings(); drawCoach();
+  }
+  const maxOf = () => (net && net.meta && net.meta.max) || opt.max || opt.maxPlayers || 2;
+  const minOf = () => opt.min || opt.minPlayers || 2;
+  const curCfg = () => (net && net.meta && net.meta.cfg) || cfg || (opt.settings && opt.settings.defaults) || {};
+  // 게임이 새 설정을 만들 때도 공통 설정(AI 선생님)은 그대로 이어감
+  const keepCommon = next => { const c = curCfg(); next = { ...(next || {}) }; if (opt.coach && !("coach" in next)) next.coach = !!c.coach; return next; };
+  // 실제 인원 (구경꾼 제외)
+  const seatedIds = () => { const pl = (net && net.players) || {}; return Object.keys(pl).filter(u => !(pl[u] && pl[u].watch)); };
+  function describe(n) {
+    if (typeof opt.describe !== "function") return null;
+    try {
+      const r = opt.describe(n, curCfg());
+      if (r == null || r === "") return null;
+      return typeof r === "object" ? { text: String(r.text || ""), ok: r.ok !== false } : { text: String(r), ok: true };
+    } catch (e) { console.error(e); return null; }
   }
   function drawPlayers() {
     if (!box || !net) return; const el = box.querySelector("[data-pl]"); if (!el) return;
@@ -129,30 +164,60 @@
     el.innerHTML = ids.map(uid => {
       const p = pl[uid] || {}, mine = uid === net.uid;
       const dot = uid === host ? "" : peers ? `<span class="dot ${peers.get(uid) ? "ok" : "slow"}" title="${peers.get(uid) ? "직접 연결" : "서버 경유"}"></span>` : "";
-      return `<div class="arn-pl">${uid === host ? "👑" : "🙂"} <b>${esc(p.name || "?")}</b>${mine ? "<i>나</i>" : ""}${dot}${net.isHost && !mine ? `<button class="kick" data-kick="${esc(uid)}">내보내기</button>` : ""}</div>`;
+      return `<div class="arn-pl">${uid === host ? "👑" : "🙂"} <b>${esc(p.name || "?")}</b>${mine ? "<i>나</i>" : ""}${p.watch ? "<i>구경</i>" : ""}${dot}${net.isHost && !mine ? `<button class="kick" data-kick="${esc(uid)}">내보내기</button>` : ""}</div>`;
     }).join("");
+    const n = seatedIds().length, min = minOf(), max = maxOf();
+    const cnt = box.querySelector("[data-count]"); if (cnt) cnt.textContent = min === max ? `${n}/${max}명` : `${n}명 · ${min}~${max}명까지`;
+    const d = describe(n), dEl = box.querySelector("[data-desc]");
+    if (dEl) { dEl.hidden = !d || !d.text; if (d) { dEl.textContent = d.text; dEl.classList.toggle("no", !d.ok); } }
     const btn = box.querySelector("[data-start]");
-    if (btn) { const n = ids.length, min = opt.min || opt.minPlayers || 2; btn.disabled = n < min; btn.textContent = n < min ? `친구를 기다리는 중 (${n}/${min}명)` : "시작하기"; }
+    if (btn) {
+      const okDesc = !d || d.ok;
+      btn.disabled = n < min || !okDesc;
+      btn.textContent = n < min ? `친구를 기다리는 중 (${n}/${min}명)` : !okDesc ? "지금 인원으로는 못 해요" : `시작하기 (${n}명)`;
+    }
   }
   function drawSettings() {
     if (!box || !net) return; const el = box.querySelector("[data-set]"); if (!el) return;
-    const c = (net.meta && net.meta.cfg) || cfg || (opt.settings && opt.settings.defaults) || {};
-    el.innerHTML = "";
+    const c = curCfg();
     if (opt.settings && opt.settings.render) {
+      el.innerHTML = "";
       opt.settings.render(el, c, net.isHost, patch => { if (!net.isHost) return; cfg = { ...c, ...patch }; net.setPhase("lobby", cfg); drawSettings(); });
     } else if (opt.buildConfig && opt.buildConfig.length >= 1 && net.isHost) {
+      if (el._built) return;                                  // 한 번만 그림 (다시 그리면 고른 값이 처음으로 돌아가고 듣기가 겹침)
+      el._built = true; el.innerHTML = "";
       const fn = opt.buildConfig(el);
       if (typeof fn === "function") {
         opt._getBuiltCfg = fn;
-        el.addEventListener("click", () => { cfg = fn(); net.setPhase("lobby", cfg); });
+        const upd = () => setTimeout(() => { if (!net || !net.isHost || playing) return; cfg = keepCommon(fn()); net.setPhase("lobby", cfg); }, 0);
+        el.addEventListener("click", upd); el.addEventListener("change", upd);
+        upd();                                                // 보이는 값 = 쓰는 값 (대기실로 돌아왔을 때도)
       }
     } else if (opt.extraOptionsHtml && net.isHost) {
-      el.innerHTML = opt.extraOptionsHtml;
+      if (el._built) return;
+      el._built = true; el.innerHTML = opt.extraOptionsHtml;
       el.addEventListener("change", () => {
-        if (opt.buildConfig) { cfg = opt.buildConfig(); net.setPhase("lobby", cfg); }
+        if (opt.buildConfig) { cfg = keepCommon(opt.buildConfig()); net.setPhase("lobby", cfg); }
       });
     } else if (opt.renderConfig) {
       el.innerHTML = `<p class="arn-soft" style="text-align:center">${esc(opt.renderConfig(c))}</p>`;
+    } else el.innerHTML = "";
+    drawPlayers();                                            // 설정이 바뀌면 describe 글도 다시
+  }
+  // 'AI 선생님 (모두에게 보이기)' — 방장만 바꾸고, 친구는 보기만
+  function drawCoach() {
+    if (!box || !net || !opt.coach) return; const el = box.querySelector("[data-coach]"); if (!el) return;
+    const on = !!curCfg().coach;
+    if (net.isHost) {
+      const inp = el.querySelector("input");
+      if (inp) { inp.checked = on; return; }
+      el.innerHTML = `<label class="arn-coach"><span>🧑‍🏫 AI 선생님 (모두에게 보이기)<small>켜면 모두의 화면에 추천 수와 까닭이 떠요</small></span><input type="checkbox" data-coach-sw ${on ? "checked" : ""}><i class="arn-sw" aria-hidden="true"></i></label>`;
+      el.querySelector("input").addEventListener("change", e => {
+        if (!net || !net.isHost) return;
+        cfg = { ...curCfg(), coach: !!e.target.checked }; net.setPhase("lobby", cfg);
+      });
+    } else {
+      el.innerHTML = `<div class="arn-coach ro"><span>🧑‍🏫 AI 선생님 (모두에게 보이기)<small>방장이 정해요</small></span><b class="st" style="color:${on ? "var(--good,#3fae7a)" : "var(--soft,#94a3b8)"}">${on ? "켜짐" : "꺼짐"}</b></div>`;
     }
   }
   const ctx = () => ({ net, role: net.isHost ? "host" : "guest", code: net.code, cfg: (net.meta && net.meta.cfg) || cfg, players: net.players, uid: net.uid, name: me && me.name });
@@ -165,7 +230,7 @@
       if (!m) return;
       if (m.phase === "play" && !playing) { playing = true; hide(); opt.onStart && opt.onStart(ctx()); }
       else if (m.phase === "lobby" && playing) { playing = false; opt.onLobby && opt.onLobby(ctx()); lobby(); }
-      else if (!playing) drawSettings();
+      else if (!playing) { drawSettings(); drawCoach(); }
     }));
     if (!net.isHost) {
       offs.push(net.on("closed", () => end("방장이 방을 닫았어요")));
@@ -196,9 +261,22 @@
         }
       }
       cfg = { ...(opt.settings && opt.settings.defaults || {}), ...built, ...(cfg || {}) };
+      if (opt.coach) cfg.coach = false;                       // 새 방은 AI 선생님 꺼진 채로 시작
       net = await Arena.host(opt.game, { name: me.name, cfg, max: opt.max || opt.maxPlayers || 2, label: (opt.settings && opt.settings.label) || opt.renderConfig });
       playing = false; wire(); setUrlRoom(net.code); lobby();
     } catch (e) { home("방을 못 만들었어요: " + e.message); }
+  }
+  // 방 만들기 권한이 없으면 기기 허용 창(Gate) → 허용되면 바로 방 만들기
+  async function tryHost() {
+    if (Arena.canHost !== false) return doHost();
+    if (!window.Gate || !Gate.requestHost) { home("방 만들기는 허용된 기기만 돼요. 친구에게 방 링크를 받아 주세요"); return; }
+    if (ov) ov.hidden = true;
+    let ok = false;
+    try { ok = await Gate.requestHost({ game: opt.game, title: opt.title }); } catch (e) { console.warn(e); }
+    if (ok && Arena.refreshPerms) { try { await Arena.refreshPerms(); } catch (e) {} }
+    if (net) return;                                          // 그 사이 다른 방에 들어감
+    if (ok && Arena.canHost !== false) { show(); doHost(); }
+    else home(ok ? "허용은 됐는데 확인이 늦어요. 잠시 뒤 다시 눌러 주세요" : "");
   }
   async function doJoin(code) {
     code = Arena.cleanCode(code);
@@ -223,20 +301,9 @@
     const t = e.target.closest("button"); if (!t || !ov || !ov.contains(t)) return;
     if (t.matches("[data-x]")) { hide(); opt.onLeave && opt.onLeave(""); }
     else if (t.matches("[data-rename]")) { if (ov) ov.hidden = true; GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
-    else if (t.matches("[data-host]")) doHost();
+    else if (t.matches("[data-host]")) tryHost();
     else if (t.matches("[data-join]")) doJoin(box.querySelector(".arn-code").value);
-    else if (t.matches("[data-mk-host-inv]")) {
-      t.disabled = true; t.textContent = "발급 중…";
-      Arena.createHostInvite().then(async ({ code, url }) => {
-        try { await navigator.clipboard.writeText(url); } catch (e) {}
-        home(`가족 호스트 코드 [${code}] 발급 완료! (링크가 복사되었어요)`);
-      }).catch(err => home("발급 실패: " + err.message));
-    }
-    else if (t.matches("[data-claim-host]")) {
-      const v = box.querySelector("#arnHostIn") && box.querySelector("#arnHostIn").value;
-      t.disabled = true;
-      Arena.claimHostInvite(v, me && me.name).then(() => home("👑 가족 호스트 권한이 등록되었어요! 이제 방을 만들 수 있어요.")).catch(err => home("등록 실패: " + err.message));
-    }
+    else if (t.matches("[data-admin]")) { if (window.Gate && Gate.openAdminModal) Gate.openAdminModal(); }
     else if (t.dataset.code) doJoin(t.dataset.code);
     else if (t.dataset.del) { t.disabled = true; Arena.deleteRoom(opt.game, t.dataset.del).catch(() => {}).then(() => home()); }
     else if (t.matches("[data-share]")) share();

@@ -48,15 +48,20 @@ const Arena = (() => {
       if (localStorage.getItem("game.gate.admin") === "1") adminFlag = true;
     } catch (e) {}
     if (adminFlag || GUEST || LOCAL) { hostFlag = true; return; }
-    try {
-      const snap = await Promise.race([app.database().ref("arena_hosts/" + user.uid + "/ok").get(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000))]);
-      hostFlag = snap.val() === true;
-    } catch (e) {
-      hostFlag = localStorage.getItem("game.arena.host_ok") === user.uid;
+    // 방 만들기 = 관리자 · 허용된 기기(game_devices 활성·안 끝남) · 옛 가족 방장(arena_hosts — 계속 허용으로 침)
+    const get = path => Promise.race([app.database().ref(path).get(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000))]);
+    let ok = false;
+    try { ok = (await get("arena_hosts/" + user.uid + "/ok")).val() === true; }
+    catch (e) { try { ok = localStorage.getItem("game.arena.host_ok") === user.uid; } catch (_) {} }
+    if (!ok) {
+      try {
+        const d = (await get("game_devices/" + user.uid)).val();
+        const exp = Number((d && d.expiresAt) || 0);
+        ok = !!d && d.status === "active" && (!exp || exp > now());
+      } catch (e) {}
     }
-    if (!hostFlag && window.Gate && Gate.state && (Gate.state.role === "admin" || Gate.state.role === "family")) {
-      hostFlag = true;
-    }
+    if (!ok && window.Gate && Gate.state && (Gate.state.canHost || Gate.state.role === "admin")) ok = true;
+    hostFlag = ok;
   }
 
   async function init() {
