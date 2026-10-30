@@ -242,8 +242,10 @@
   function nextRound(prev, opts) {
     const s = fastClone(prev);
     const seed = (opts && opts.seed) ? (opts.seed >>> 0) : ((s.seed + 0x85ebca6b) >>> 0);
-    // 파산한 사람 리필
+    // 파산한 사람 리필 (opts.refill: false = 안 함, 배열 = true 인 자리만 — 은행 쓰는 방은 사람 자리를 은행에서 빌려 채움)
+    const rf = opts && opts.refill;
     for (let p = 0; p < s.n; p++) {
+      if (rf === false || (Array.isArray(rf) && !rf[p])) continue;
       if (s.coins[p] < s.ante * 3) s.coins[p] = 500;
     }
     if (s.result && s.result.winner != null) s.first = s.result.winner;

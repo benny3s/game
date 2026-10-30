@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#071e18">
 <title>♠️ 텍사스 홀덤 포커 · 놀이터</title>
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <div class="app">
@@ -47,6 +47,9 @@
           <div class="name" id="myName">나</div>
           <div class="coins">칩 <b id="myCoins">1000</b> · 이번 거리 <b id="myBet">0</b></div>
         </div>
+        <!-- 🏦 은행 (은행 쓰는 친구랑 방만) -->
+        <button id="loanBtn" class="pill-btn bank-btn" type="button" title="은행에서 빌리기" aria-label="은행에서 빌리기" hidden>💰</button>
+        <button id="bankBtn" class="pill-btn bank-btn" type="button" title="은행 잔액·정산" aria-label="은행 잔액·정산" hidden>🏦</button>
         <span class="jokbo-pill" id="myHandBadge">대기 중</span>
       </div>
 
@@ -155,12 +158,14 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="../common/me.js?v=6"></script>
+<script src="../common/arena-mock.js?v=6"></script>
 <script src="../common/arena.js?v=6"></script>
 <script src="../common/arena-ui.js?v=6"></script>
+<script src="../common/bank.js?v=1"></script>
 <script src="../common/coach.js?v=2"></script>
 <script src="../common/hotseat.js?v=2"></script>
 <script src="core.js?v=2"></script>
 <script src="ai.js?v=2"></script>
-<script src="main.js?v=2"></script>
+<script src="main.js?v=3"></script>
 </body>
 </html>

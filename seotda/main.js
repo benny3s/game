@@ -32,6 +32,8 @@
     hotSeats: C.store(KEY + 'hotSeats', ['h', 'h', 'h', 'a', 'a', 'a']),   // 한 기기: 자리별 사람(h)/AI(a)
     wMode: Math.max(2, Math.min(MAXP, +C.store(KEY + 'wMode', 3) || 3)),
     fill: +C.store(KEY + 'fill', 0) || 0,        // 친구랑: 빈자리를 AI 로 채울 목표 인원 (0 = 안 채움)
+    bank: C.store(KEY + 'bank', null),           // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
+    bankName: C.store(KEY + 'bankName', null),
   };
   const saveOpt = k => C.save(KEY + k, opt[k]);
   let stats = C.store(KEY + 'stats', { played: 0, won: 0, coins: 500 });
@@ -126,12 +128,15 @@
     game: 'seotda', title: '정통 섯다', max: MAXP, min: 2, coach: true,
     describe: n => `${n}명 · 화투 20장 중 ${Math.min(20, n * 2)}장을 나눠요`,
     buildConfig: hostEl => {
-      hostEl.innerHTML = `<div class="optrow"><span class="small">빈자리</span><div class="seg" id="fFillSeg"></div></div>`;
+      hostEl.innerHTML = `<div class="optrow"><span class="small">빈자리</span><div class="seg" id="fFillSeg"></div></div><div data-bank></div>`;
       const drawF = () => segBtns(hostEl.querySelector('#fFillSeg'), [[0, '온 사람끼리'], [4, 'AI로 4명까지'], [MAXP, `AI로 ${MAXP}명까지`]], opt.fill, v => { opt.fill = +v; saveOpt('fill'); drawF(); });
       drawF();
-      return () => ({ fill: opt.fill });
+      // 🏦 은행 모임 고르기 (대기실에 보일 때만 — 방 만들 때 임시로 부르는 건 건너뜀)
+      const bx = hostEl.querySelector('[data-bank]');
+      if (window.Bank && bx && hostEl.isConnected) Bank.lobbyPicker(bx, { bank: opt.bank, bankName: opt.bankName }, true, p => { opt.bank = p.bank || null; opt.bankName = p.bankName || null; saveOpt('bank'); saveOpt('bankName'); });
+      return () => ({ fill: opt.fill, bank: opt.bank || null, bankName: opt.bank ? opt.bankName || null : null });
     },
-    renderConfig: cfg => `${cfg && cfg.fill ? `빈자리는 AI로 ${cfg.fill}명까지` : '온 사람끼리'}${cfg && cfg.coach ? ' · AI 선생님' : ''}`,
+    renderConfig: cfg => `${cfg && cfg.fill ? `빈자리는 AI로 ${cfg.fill}명까지` : '온 사람끼리'}${cfg && cfg.coach ? ' · AI 선생님' : ''}${window.Bank && Bank.label(cfg) ? ' · ' + Bank.label(cfg) : ''}`,
     onStart: ({ net, role, cfg, players }) => startOnline({ net, role, cfg, players }),
     onLobby: () => { endSession(); showScreen('home'); drawMenu(); },
     onLeave: () => { endSession(); showScreen('home'); drawMenu(); },
@@ -159,10 +164,35 @@
       if (window.HotSeat && HotSeat.close) { try { HotSeat.close(); } catch (e) {} }
       document.querySelectorAll('.hsx-cover').forEach(e => e.remove());
       if (SES.offs) SES.offs.forEach(f => { try { f(); } catch (e) {} });
+      if (SES.bank) { try { SES.bank.detach(); } catch (e) {} }
     }
     SES = null;
     $('resBox').hidden = true;
+    drawBankBtns(null);
   }
+
+  // 🏦 은행 (친구랑에서 방장이 모임을 고른 방만): 💰 빌리기 · 🏦 잔액·정산 창
+  function drawBankBtns(ses) {
+    const on = !!(ses && ses.bank);
+    $('loanBtn').hidden = !on;
+    $('bankBtn').hidden = !on;
+  }
+  function bankEvent(ses, ev) {
+    if (!ses.alive || !ev) return;
+    if (ev.op === 'queued') C.toast(ev.mine || ses.mode === 'guest' ? `💰 다음 판에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님이 ${fmtN(ev.n)}칩 빌리기 (다음 판에)`, 2200);
+    else if (ev.op === 'loan') {
+      C.toast(`💰 ${ev.name} 님이 은행에서 ${fmtN(ev.n)}칩 빌렸어요`, 2200);
+      if (ses.mode === 'host' && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
+    } else if (ev.op === 'no' || ev.op === 'error') C.toast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'), 2600);
+  }
+  $('loanBtn').onclick = async () => {
+    const ses = SES;
+    if (!ses || !ses.bank || !window.Bank) return;
+    sfx('tap');
+    if (!(await Bank.askLoan(ses.bank.gid)) || SES !== ses) return;
+    if (ses.mode === 'guest') ses.bank.requestLoan(); else ses.bank.requestLoan(ses.me);
+  };
+  $('bankBtn').onclick = () => { if (SES && SES.bank && window.Bank) { sfx('tap'); Bank.panel({ game: 'seotda', gid: SES.bank.gid }); } };
   function goHome() {
     const online = SES && SES.net;
     if (online && window.ArenaUI && ArenaUI.net) { ArenaUI.leave(); return; }   // onLeave 가 정리함
@@ -291,7 +321,7 @@
   }
 
   function renderGame(ses) {
-    if (!ses.alive) return;
+    if (!ses.alive || !(ses.mode === 'guest' ? ses.V : ses.S)) return;   // 방장: 은행 장부를 여는 동안은 아직 판 없음
     const v = getView(ses), me = ses.me, s = v;
     const spect = me < 0;                               // 한 기기에서 다음 사람을 기다리는 동안 (아무 패도 안 보임)
     const mi = spect ? 0 : me;
@@ -435,20 +465,34 @@
       while (seats.length < target) { seats.push({ ctrl: 'ai', name: AI_NAMES[ai % AI_NAMES.length] + '(AI)', em: AI_EMS[ai % AI_EMS.length], tier: 'normal' }); ai++; }
       const n = Math.max(2, seats.length);
       while (seats.length < n) { seats.push({ ctrl: 'ai', name: AI_NAMES[ai % AI_NAMES.length] + '(AI)', em: AI_EMS[ai % AI_EMS.length], tier: 'normal' }); ai++; }
-      const s = S.create({ players: n, stacks: CHIPS.start('online', n), seed: rand32() });     // 씨앗은 방 설정에 싣지 않음 (덱을 거꾸로 계산 못 하게)
       const me = Math.max(0, seats.findIndex(x => x.ctrl === 'me'));
       const uidSeat = {};
       seats.forEach((x, i) => { if (x.uid && x.uid !== net.uid) uidSeat[x.uid] = i; });
-      const ses = SES = { alive: true, mode: 'host', n, me, S: s, seats, net, cfg, uidSeat, pending: null, remoteWait: null, turnLog: [], coachAvail, coachOn, offs: [] };
+      const ses = SES = { alive: true, mode: 'host', n, me, S: null, seats, net, cfg, uidSeat, pending: null, remoteWait: null, turnLog: [], coachAvail, coachOn, offs: [], bank: null };
       ses.offs.push(net.on('msg', (uid, m) => onHostMsg(ses, uid, m)));
       ses.offs.push(net.on('leave', uid => onHostLeave(ses, uid)));
       showScreen('play');
-      ensureCoach(ses);
-      runLoop(ses);
+      // 시작 칩: 은행 모임이 있으면 각자 잔액(없으면 자동으로 빌림), AI 자리·은행 안 씀은 기본 칩
+      const base = CHIPS.start('online', n);
+      const go = stacks => {
+        if (!ses.alive) return;
+        ses.S = S.create({ players: n, stacks: base.map((b, i) => (stacks && stacks[i] > 0 ? stacks[i] : b)), seed: rand32() });     // 씨앗은 방 설정에 싣지 않음 (덱을 거꾸로 계산 못 하게)
+        ensureCoach(ses);
+        drawBankBtns(ses);
+        runLoop(ses);
+      };
+      if (cfg.bank && window.Bank) {
+        ses.bank = Bank.attach({ game: 'seotda', net, cfg, seats, min: 30, onEvent: ev => bankEvent(ses, ev) });
+        $('lbl').textContent = `👥 친구랑 섯다 (${net.code})`;
+        $('sub').textContent = '🏦 은행 장부를 여는 중…';
+        ses.bank.ready.then(go);
+      } else go(null);
     } else {
-      const ses = SES = { alive: true, mode: 'guest', n: 2, me: 0, V: null, seats: [], net, cfg, turnLog: [], coachAvail, coachOn, waiting: false, offs: [], lastRound: 0 };
+      const ses = SES = { alive: true, mode: 'guest', n: 2, me: 0, V: null, seats: [], net, cfg, turnLog: [], coachAvail, coachOn, waiting: false, offs: [], lastRound: 0, bank: null };
       ses.offs.push(net.on('msg', m => onGuestMsg(ses, m)));
+      if (cfg.bank && window.Bank) ses.bank = Bank.attach({ game: 'seotda', net, cfg, role: 'guest', onEvent: ev => bankEvent(ses, ev) });
       showScreen('play');
+      drawBankBtns(ses);
       ensureCoach(ses);
       $('lbl').textContent = `👥 친구랑 섯다 (${net.code})`;
       $('sub').textContent = '방장이 판을 준비하는 중…';
@@ -461,7 +505,7 @@
 
   // 방장: 손님 메시지
   function onHostMsg(ses, uid, m) {
-    if (!ses.alive || !m) return;
+    if (!ses.alive || !m || !ses.S) return;                 // 판 준비 전 인사는 판이 시작될 때 publish 로 대신
     const i = ses.uidSeat[uid];
     if (m.t === 'hi') {
       if (i == null) { ses.net.send(uid, { t: 'full' }, true); return; }
@@ -488,7 +532,7 @@
     try { ses.net.send(uid, { t: 'st', me: i, v: S.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail }, true); } catch (e) { console.error(e); }
   }
   function publish(ses) {
-    if (ses.mode !== 'host') return;
+    if (ses.mode !== 'host' || !ses.S) return;
     for (const [uid, i] of Object.entries(ses.uidSeat)) sendTo(ses, uid, i);
   }
 
@@ -582,7 +626,16 @@
           goHome();
           return;
         }
-        ses.S = S.nextRound(ses.S, { seed: rand32() });
+        // 은행: 빌리기 요청 + 칩이 모자란 사람(학교비 3번 미만)은 은행에서 빌려 채움, 공짜 리필은 AI 자리만
+        let refill;
+        if (ses.bank) {
+          $('sub').textContent = '🏦 장부에 쓰는 중…';
+          const r = await ses.bank.beforeNext({ coins: ses.S.coins, min: ses.S.ante * 3 });
+          if (!ses.alive) return;
+          ses.S.coins = r.coins;
+          refill = ses.seats.map((x, i) => !ses.bank.tracks(i));
+        }
+        ses.S = S.nextRound(ses.S, { seed: rand32(), refill });
       }
     } catch (e) {
       console.error(e);
@@ -600,7 +653,8 @@
       const solo = ses.mode === 'solo';
       const myPay = (r.payouts && r.payouts[me]) || 0;
       const iWon = r.kind !== 'rematch' && (r.winners || [r.winner]).includes(me);
-      if (ses.mode !== 'guest') CHIPS.report(ses.mode, { round: v.round, coins: S.fastClone(v.coins), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl })), me });
+      // 재경기(사구파토)는 판돈이 다음 판으로 넘어가 칩이 아직 탁자 위 → 알리지 않음 (다음 판 결과에 합쳐짐)
+      if (ses.mode !== 'guest' && r.kind !== 'rematch') CHIPS.report(ses.mode, { round: v.round, coins: S.fastClone(v.coins), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid })), me });
       if (solo) {
         stats.played++;
         if (iWon) stats.won++;
@@ -653,9 +707,14 @@
       if (ses.mode === 'guest') {
         const p = document.createElement('p'); p.className = 'small'; p.textContent = '방장이 다음 판을 시작하면 이어서 해요'; p.style.width = '100%'; p.style.margin = '0';
         $('resBtns').append(p);
+        if (ses.bank) mk('💰 빌리기', '', () => $('loanBtn').click());      // 결과 창이 아래 단추를 가리므로 여기에도
         mk('나가기', '', () => { $('resBox').hidden = true; goHome(); });
       } else {
         mk(r.kind === 'rematch' ? '🔥 묻고 더블 재경기 ▶' : '다음 판 ▶', 'primary', () => done('next'));
+        if (ses.mode === 'host' && ses.bank && window.Bank) {
+          mk('💰 빌리기', '', () => $('loanBtn').click());
+          mk('🏦 정산', '', () => ses.bank.flush().then(() => Bank.panel({ game: 'seotda', gid: ses.bank.gid, tab: 'settle' })));
+        }
         if (ses.mode === 'host') mk('대기실로', '', () => done('lobby'));
         else mk('메뉴', '', () => done('menu'));
       }

@@ -155,6 +155,7 @@ button { font: inherit; cursor: pointer; }
   color: var(--ink-bright);
   transition: all 0.14s;
 }
+.host-badge[hidden] { display: none; }
 .host-badge:hover {
   border-color: var(--steam-blue);
   background: #22384f;
@@ -731,6 +732,7 @@ button { font: inherit; cursor: pointer; }
         <span class="ic">🔍</span>
         <input type="search" id="searchInput" placeholder="게임, 태그, AI 검색..." aria-label="게임 검색">
       </div>
+      <button class="host-badge active" id="bankBtn" type="button" title="모임 칩 은행 · 잔액 · 정산" hidden>🏦 은행</button>
       <button class="host-badge" id="hostBtn" type="button">👑 출입·기기 관리</button>
     </div>
   </div>
@@ -812,7 +814,9 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="common/gate.js?v=6"></script>
 <script src="common/me.js?v=6"></script>
+<script src="common/arena-mock.js?v=6"></script>
 <script src="common/arena.js?v=6"></script>
+<script src="common/bank.js?v=1"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -1124,6 +1128,8 @@ button { font: inherit; cursor: pointer; }
   function updateHostBadge() {
     const name = getSavedName();
     const btn = $("hostBtn");
+    // 🏦 은행: 관리자·허용된 기기만 (모임 만들기·빌려주기·정산)
+    $("bankBtn").hidden = !(window.Bank && (isAdmin || canHost || Bank.canManage()));
     if (isAdmin) {
       btn.classList.add("active");
       btn.textContent = `👑 ${name} (관리자)`;
@@ -1336,6 +1342,7 @@ button { font: inherit; cursor: pointer; }
     $("hostModal").hidden = false;
   };
   $("hostCloseBtn").onclick = () => { $("hostModal").hidden = true; };
+  $("bankBtn").onclick = () => { if (window.Bank) Bank.panel({}); };
   $("hostSaveBtn").onclick = async () => {
     const nick = $("nickInput").value.trim();
     if (nick) {

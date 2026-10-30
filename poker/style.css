@@ -425,3 +425,6 @@ html, body {
 .tbl.compact .t-center .pcard{width:31px;height:44px}
 .tbl.compact .call-info,.tbl.compact .side-info{display:none}
 .tbl.compact .toast{top:calc(50% + 62px)}
+
+/* 🏦 은행 단추 (내 자리 줄) */
+.seat.me .bank-btn{flex:none;white-space:nowrap;padding:5px 9px}

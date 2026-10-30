@@ -260,6 +260,189 @@
         }
       }
     },
+    "bank": {
+      "_list": {
+        ".read": "auth != null",
+        "$gid": {
+          ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          ".validate": "!newData.exists() || ($gid.matches(/^g[A-Za-z0-9_-]{3,31}$/) && newData.hasChildren(['name', 't']))",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      },
+      "$gid": {
+        ".validate": "$gid.matches(/^g[A-Za-z0-9_-]{3,31}$/)",
+        ".write": "auth != null && !newData.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+        "meta": {
+          ".read": "auth != null",
+          ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          ".validate": "!newData.exists() || newData.hasChildren(['name', 'chipWon', 'loanUnit'])",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
+          },
+          "chipWon": {
+            ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000"
+          },
+          "loanUnit": {
+            ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10000000"
+          },
+          "created": {
+            ".validate": "newData.isNumber()"
+          },
+          "by": {
+            ".validate": "newData.isString() && newData.val().length <= 20"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "members": {
+          ".read": "auth != null",
+          "$pid": {
+            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".validate": "!newData.exists() || ($pid.length <= 40 && newData.hasChildren(['name', 'borrowed', 'balance']))",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12"
+            },
+            "borrowed": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+            },
+            "balance": {
+              ".validate": "newData.isNumber() && newData.val() >= -1000000000 && newData.val() <= 1000000000"
+            },
+            "updated": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "ledger": {
+          ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          "$id": {
+            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".validate": "!newData.exists() || ($id.length <= 40 && newData.hasChildren(['t', 'type', 'amount']))",
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "type": {
+              ".validate": "newData.isString() && newData.val().matches(/^(loan|game|adjust|reset|ai)$/)"
+            },
+            "pids": {
+              ".validate": "newData.isString() && newData.val().length <= 600"
+            },
+            "pid": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "amount": {
+              ".validate": "newData.isNumber() && newData.val() >= -1000000000 && newData.val() <= 1000000000"
+            },
+            "game": {
+              ".validate": "newData.isString() && newData.val().length <= 16"
+            },
+            "round": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+            },
+            "room": {
+              ".validate": "newData.isString() && newData.val().length <= 8"
+            },
+            "by": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "note": {
+              ".validate": "newData.isString() && newData.val().length <= 60"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "settlements": {
+          ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          "$id": {
+            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".validate": "!newData.exists() || ($id.length <= 40 && newData.hasChildren(['t', 'by']))",
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "by": {
+              ".validate": "newData.isString() && newData.val().length <= 20"
+            },
+            "chipWon": {
+              ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000"
+            },
+            "residualWon": {
+              ".validate": "newData.isNumber() && newData.val() >= -100000000000000 && newData.val() <= 100000000000000"
+            },
+            "reset": {
+              ".validate": "newData.isBoolean()"
+            },
+            "lines": {
+              "$i": {
+                ".validate": "$i.length <= 3 && newData.hasChildren(['from', 'to', 'won'])",
+                "from": {
+                  ".validate": "newData.isString() && newData.val().length <= 40"
+                },
+                "to": {
+                  ".validate": "newData.isString() && newData.val().length <= 40"
+                },
+                "won": {
+                  ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 100000000000000"
+                },
+                "fn": {
+                  ".validate": "newData.isString() && newData.val().length <= 12"
+                },
+                "tn": {
+                  ".validate": "newData.isString() && newData.val().length <= 12"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "nets": {
+              "$pid": {
+                ".validate": "$pid.length <= 40 && newData.isNumber() && newData.val() >= -100000000000000 && newData.val() <= 100000000000000"
+              }
+            },
+            "members": {
+              "$pid": {
+                ".validate": "$pid.length <= 40 && newData.hasChildren(['name', 'borrowed', 'balance'])",
+                "name": {
+                  ".validate": "newData.isString() && newData.val().length <= 12"
+                },
+                "borrowed": {
+                  ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000000"
+                },
+                "balance": {
+                  ".validate": "newData.isNumber() && newData.val() >= -1000000000 && newData.val() <= 1000000000"
+                },
+                "$other": {
+                  ".validate": false
+                }
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
     "test": {
       ".read": "auth != null",
       ".write": "auth != null"

@@ -20,6 +20,8 @@
     count: Math.max(2, Math.min(MAXP, +store('poker.count', 4) || 4)),     // 혼자·구경·한 기기 인원
     fill: +store('poker.fill', 0) || 0,                // 친구랑: 빈자리를 AI 로 채울 목표 인원
     hotSeats: store('poker.hotSeats', ['h', 'h', 'h', 'a', 'a', 'a', 'a', 'a']),
+    bank: store('poker.bank', null),                   // 친구랑: 은행 모임(gid) — null = 은행 안 씀 (연습 칩)
+    bankName: store('poker.bankName', null),
   };
   const TIER_META = {
     easy:   { name: '캐주얼 루키', avatar: '🌱' },
@@ -45,6 +47,9 @@
       try { window.dispatchEvent(new CustomEvent('chips:report', { detail: Object.assign({ game: 'poker', kind }, info) })); } catch (e) {}
     },
   };
+  // 은행 잔액(사람 자리)으로 시작 칩 덮어쓰기 — null(AI·은행 안 씀) 은 기본 칩
+  const withBank = (base, stacks) => base.map((b, i) => (stacks && stacks[i] > 0 ? stacks[i] : b));
+  const seatsInfo = ses => ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid }));
 
   const STATS_KEY = 'poker_stats_v1';
   function loadStats() {
@@ -89,11 +94,35 @@
       if (SES.cp) { try { SES.cp.destroy(); } catch (e) {} }
       $('coachBtn').onclick = null;
       if (SES.offs) SES.offs.forEach(f => { try { f(); } catch (e) {} });
+      if (SES.bank) { try { SES.bank.detach(); } catch (e) {} }
     }
     SES = null;
     $('endModal').hidden = true;
     $('coachPanel').hidden = true;
+    drawBankBtns(null);
   }
+
+  // 🏦 은행 (친구랑에서 방장이 모임을 고른 방만): 💰 빌리기 · 🏦 잔액·정산 창
+  function drawBankBtns(ses) {
+    const on = !!(ses && ses.bank);
+    $('loanBtn').hidden = !on;
+    $('bankBtn').hidden = !on;
+  }
+  function bankEvent(ses, ev) {
+    if (!ses.alive || !ev) return;
+    if (ev.op === 'queued') showToast(ev.mine || ses.mode === 'guest' ? `💰 다음 핸드에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님 ${fmtN(ev.n)}칩 빌리기 (다음 핸드에)`);
+    else if (ev.op === 'loan') {
+      showToast(`💰 ${ev.name} 님이 은행에서 ${fmtN(ev.n)}칩 빌렸어요`);
+      if (ses.mode === 'host' && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
+    } else if (ev.op === 'no' || ev.op === 'error') showToast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'));
+  }
+  $('loanBtn').addEventListener('click', async () => {
+    const ses = SES;
+    if (!ses || !ses.bank || !window.Bank) return;
+    if (!(await Bank.askLoan(ses.bank.gid)) || SES !== ses) return;
+    if (ses.mode === 'guest') ses.bank.requestLoan(); else ses.bank.requestLoan(ses.me);
+  });
+  $('bankBtn').addEventListener('click', () => { if (SES && SES.bank && window.Bank) Bank.panel({ game: 'poker', gid: SES.bank.gid }); });
   function openMenu() {
     endSession();
     $('startModal').hidden = false;
@@ -216,7 +245,7 @@
 
   // ─────────────────────────────────────────────────────────────
   function renderGame(ses) {
-    if (!ses || !ses.alive) return;
+    if (!ses || !ses.alive || !(ses.mode === 'guest' ? ses.V : ses.S)) return;   // 방장: 은행 장부를 여는 동안은 아직 판 없음
     const v = getView(ses), me = ses.me;
     const spect = me < 0;                              // 한 기기에서 다음 사람을 기다리는 동안
     const watch = ses.mode === 'watch';
@@ -395,9 +424,13 @@
         seg.onclick = e => { const b = e.target.closest('button'); if (!b) return; cfg.fill = +b.dataset.v; save('poker.fill', cfg.fill); draw(); };
       };
       draw();
-      return () => ({ fill: cfg.fill });
+      // 🏦 은행 모임 고르기 (대기실에 보일 때만 — 방 만들 때 임시로 부르는 건 건너뜀)
+      const bx = document.createElement('div');
+      hostEl.appendChild(bx);
+      if (window.Bank && hostEl.isConnected) Bank.lobbyPicker(bx, { bank: cfg.bank, bankName: cfg.bankName }, true, p => { cfg.bank = p.bank || null; cfg.bankName = p.bankName || null; save('poker.bank', cfg.bank); save('poker.bankName', cfg.bankName); });
+      return () => ({ fill: cfg.fill, bank: cfg.bank || null, bankName: cfg.bank ? cfg.bankName || null : null });
     },
-    renderConfig: c => `${c && c.fill ? `빈자리는 AI로 ${c.fill}명까지` : '온 사람끼리'}${c && c.coach ? ' · AI 선생님' : ''}`,
+    renderConfig: c => `${c && c.fill ? `빈자리는 AI로 ${c.fill}명까지` : '온 사람끼리'}${c && c.coach ? ' · AI 선생님' : ''}${window.Bank && Bank.label(c) ? ' · ' + Bank.label(c) : ''}`,
     onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
     onLobby: () => { endSession(); $('coachBtn').hidden = true; },         // 대기실이 위에 뜸 (시작 창은 띄우지 않음)
     onLeave: () => openMenu(),
@@ -424,18 +457,30 @@
       let ai = 0;
       while (seats.length < target) { seats.push({ ctrl: 'ai', name: AI_NAMES[ai % AI_NAMES.length] + '(AI)', em: AI_EMS[ai % AI_EMS.length], tier: 'normal' }); ai++; }
       const n = seats.length;
-      const S0 = P.create({ players: n, stacks: CHIPS.start('online', n), seed: rand32() });   // 씨앗은 방 설정에 싣지 않음
       const me = Math.max(0, seats.findIndex(x => x.ctrl === 'me'));
       const uidSeat = {};
       seats.forEach((x, i) => { if (x.uid && x.uid !== net.uid) uidSeat[x.uid] = i; });
-      const ses = SES = { alive: true, mode: 'host', n, me, S: S0, seats, net, cfgR: c, uidSeat, pending: null, remoteWait: null, coachLog: [], coachAvail, coachOn: coachAvail, offs: [], spectating: false };
+      const ses = SES = { alive: true, mode: 'host', n, me, S: null, seats, net, cfgR: c, uidSeat, pending: null, remoteWait: null, coachLog: [], coachAvail, coachOn: coachAvail, offs: [], spectating: false, bank: null };
       ses.offs.push(net.on('msg', (uid, m) => onHostMsg(ses, uid, m)));
       ses.offs.push(net.on('leave', uid => onHostLeave(ses, uid)));
-      ensureCoach(ses);
-      runLoop(ses);
+      // 시작 칩: 은행 모임이 있으면 각자 잔액(없으면 자동으로 빌림), AI 자리·은행 안 씀은 기본 칩
+      const go = stacks => {
+        if (!ses.alive) return;
+        ses.S = P.create({ players: n, stacks: withBank(CHIPS.start('online', n), stacks), seed: rand32() });   // 씨앗은 방 설정에 싣지 않음
+        ensureCoach(ses);
+        drawBankBtns(ses);
+        runLoop(ses);
+      };
+      if (c.bank && window.Bank) {
+        ses.bank = Bank.attach({ game: 'poker', net, cfg: c, seats, min: 1, onEvent: ev => bankEvent(ses, ev) });
+        $('subTitle').textContent = '🏦 은행 장부를 여는 중…';
+        ses.bank.ready.then(go);
+      } else go(null);
     } else {
-      const ses = SES = { alive: true, mode: 'guest', n: 2, me: 0, V: null, seats: [], net, cfgR: c, coachLog: [], coachAvail, coachOn: coachAvail, waiting: false, offs: [], lastKey: '' };
+      const ses = SES = { alive: true, mode: 'guest', n: 2, me: 0, V: null, seats: [], net, cfgR: c, coachLog: [], coachAvail, coachOn: coachAvail, waiting: false, offs: [], lastKey: '', bank: null };
       ses.offs.push(net.on('msg', m => onGuestMsg(ses, m)));
+      if (c.bank && window.Bank) ses.bank = Bank.attach({ game: 'poker', net, cfg: c, role: 'guest', onEvent: ev => bankEvent(ses, ev) });
+      drawBankBtns(ses);
       ensureCoach(ses);
       $('subTitle').textContent = '방장이 준비하는 중…';
       net.send({ t: 'hi' }, true);
@@ -445,7 +490,7 @@
   }
 
   function onHostMsg(ses, uid, m) {
-    if (!ses.alive || !m) return;
+    if (!ses.alive || !m || !ses.S) return;                 // 판 준비 전 인사는 판이 시작될 때 publish 로 대신
     const i = ses.uidSeat[uid];
     if (m.t === 'hi') {
       if (i == null) { ses.net.send(uid, { t: 'full' }, true); return; }
@@ -472,7 +517,7 @@
     try { ses.net.send(uid, { t: 'st', me: i, v: P.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail }, true); } catch (e) { console.error(e); }
   }
   function publish(ses) {
-    if (ses.mode !== 'host') return;
+    if (ses.mode !== 'host' || !ses.S) return;
     for (const [uid, i] of Object.entries(ses.uidSeat)) sendTo(ses, uid, i);
   }
 
@@ -559,21 +604,31 @@
         if (!ses.alive) return;
         publish(ses);
         renderGame(ses);
-        CHIPS.report(ses.mode, { round: ses.S.round, over: false, coins: ses.S.coins.slice(), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl })), me: ses.me });
+        CHIPS.report(ses.mode, { round: ses.S.round, over: false, coins: ses.S.coins.slice(), seats: seatsInfo(ses), me: ses.me });
         const next = await showEnd(ses);
         if (!ses.alive) return;
         if (next === 'lobby') { if (window.ArenaUI) ArenaUI.toLobby(); return; }
         if (next === 'menu') { openMenu(); return; }
+        // 은행: 빌리기 요청 + 칩이 바닥난 사람은 은행에서 빌려 다시 앉음 (탈락 대신)
+        if (ses.bank) {
+          $('subTitle').textContent = '🏦 장부에 쓰는 중…';
+          const r = await ses.bank.beforeNext({ coins: ses.S.coins, min: 1 });
+          if (!ses.alive) return;
+          ses.S.coins = r.coins;
+          ses.S.coins.forEach((v, i) => { if (v > 0 && ses.S.out[i] && ses.bank.tracks(i)) ses.S.out[i] = false; });
+        }
         // 다음 핸드 (칩이 바닥난 자리는 여기서 탈락)
         ses.S = P.nextRound(ses.S, rand32());
         if (ses.S.over) {
           publish(ses); renderGame(ses);
-          CHIPS.report(ses.mode, { round: ses.S.round, over: true, champion: ses.S.champion, coins: ses.S.coins.slice(), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl })), me: ses.me });
+          CHIPS.report(ses.mode, { round: ses.S.round, over: true, champion: ses.S.champion, coins: ses.S.coins.slice(), seats: seatsInfo(ses), me: ses.me });
           const o = await showOver(ses);
           if (!ses.alive) return;
           if (o === 'again') {
             const n = ses.S.n;
-            ses.S = P.create({ players: n, stacks: CHIPS.start(ses.mode, n), seed: rand32() });
+            const stacks = ses.bank ? await ses.bank.restart() : null;
+            if (!ses.alive) return;
+            ses.S = P.create({ players: n, stacks: withBank(CHIPS.start(ses.mode, n), stacks), seed: rand32() });
             ses.spectating = false;
             continue;
           }
@@ -666,9 +721,16 @@
 
       const done = val => { $('endModal').hidden = true; resolve(val); };
       if (ses.mode === 'guest') {
-        setEndButtons([{ note: '방장이 다음 핸드를 시작하면 이어서 해요' }, { label: '나가기', onClick: () => { $('endModal').hidden = true; if (window.ArenaUI) ArenaUI.leave(); else openMenu(); } }]);
+        const list = [{ note: '방장이 다음 핸드를 시작하면 이어서 해요' }];
+        if (ses.bank) list.push({ label: '💰 빌리기', onClick: () => $('loanBtn').click() });
+        list.push({ label: '나가기', onClick: () => { $('endModal').hidden = true; if (window.ArenaUI) ArenaUI.leave(); else openMenu(); } });
+        setEndButtons(list);
       } else {
         const list = [{ label: '다음 핸드 진행', primary: true, onClick: () => done('next') }];
+        if (ses.mode === 'host' && ses.bank && window.Bank) {
+          list.push({ label: '💰 빌리기', onClick: () => $('loanBtn').click() });
+          list.push({ label: '🏦 정산', onClick: () => ses.bank.flush().then(() => Bank.panel({ game: 'poker', gid: ses.bank.gid, tab: 'settle' })) });
+        }
         list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });
         setEndButtons(list);
         if (ses.mode === 'watch' || ses.spectating) setTimeout(() => { if (!$('endModal').hidden && ses.alive) done('next'); }, 4200);
@@ -693,7 +755,10 @@
       if (ses.mode === 'guest') {
         setEndButtons([{ note: '방장이 새 게임을 시작하면 이어서 해요' }, { label: '나가기', onClick: () => { $('endModal').hidden = true; if (window.ArenaUI) ArenaUI.leave(); else openMenu(); } }]);
       } else {
-        setEndButtons([{ label: '새 게임', primary: true, onClick: () => done('again') }, ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') }]);
+        const list = [{ label: '새 게임', primary: true, onClick: () => done('again') }];
+        if (ses.mode === 'host' && ses.bank && window.Bank) list.push({ label: '🏦 정산', onClick: () => ses.bank.flush().then(() => Bank.panel({ game: 'poker', gid: ses.bank.gid, tab: 'settle' })) });
+        list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });
+        setEndButtons(list);
       }
       $('endModal').hidden = false;
     });
@@ -764,7 +829,8 @@
   // 처음 화면: 배경용 빈 테이블
   drawMenu();
   $('coachBtn').hidden = true;
-  if (window.ArenaUI) ArenaUI.checkUrl(FRIEND);
+  // 초대 링크(?room=코드)로 오면 시작 창을 닫고 바로 대기실 (시작 창이 대기실을 가리지 않게)
+  if (window.ArenaUI) ArenaUI.checkUrl(() => { $('startModal').hidden = true; ArenaUI.open(FRIEND); });
   (function idleTable() {
     const S0 = P.create({ players: 4, seed: 2026 });
     const seats = seatNames(4, ['me', 'ai', 'ai', 'ai'], 'normal');
