@@ -199,7 +199,7 @@
             },
             "players": {
               "$uid": {
-                ".write": "auth != null && (root.child('arena/' + $game + '/rooms/' + $code + '/meta/host').val() === auth.uid || (auth.uid === $uid && (root.child('arena/' + $game + '/rooms/' + $code + '/meta/lock').val() !== true || data.exists() || (root.child('arena/' + $game + '/pass/' + $code + '/' + auth.uid).exists() && (root.child('arena/' + $game + '/pass/' + $code + '/' + auth.uid).val() === root.child('arena/' + $game + '/gate/' + $code + '/h').val() || root.child('arena/' + $game + '/pass/' + $code + '/' + auth.uid).val() === root.child('arena/' + $game + '/gate/' + $code + '/k').val()))))",
+                ".write": "auth != null && (root.child('arena/' + $game + '/rooms/' + $code + '/meta/host').val() === auth.uid || (auth.uid === $uid && (root.child('arena/' + $game + '/rooms/' + $code + '/meta/lock').val() !== true || data.exists() || (root.child('arena/' + $game + '/pass/' + $code + '/' + auth.uid).exists() && (root.child('arena/' + $game + '/pass/' + $code + '/' + auth.uid).val() === root.child('arena/' + $game + '/gate/' + $code + '/h').val() || root.child('arena/' + $game + '/pass/' + $code + '/' + auth.uid).val() === root.child('arena/' + $game + '/gate/' + $code + '/k').val())))))",
                 ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 12)"
               }
             },
