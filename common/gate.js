@@ -961,14 +961,24 @@ const Gate = (() => {
     let val = {};
     const draw = () => {
       const now = Date.now(), d0 = new Date(); d0.setHours(0, 0, 0, 0);
-      const all = Object.entries(val || {}).map(([uid, p]) => Object.assign({ uid }, p)).filter(p => p && p.t);
+      const raw = Object.entries(val || {}).map(([uid, p]) => Object.assign({ uid }, p)).filter(p => p && p.t);
+      // 같은 이름(같은 사람)은 한 칸으로 — 폰·PC·다른 브라우저여도 (손님은 이름이 없어 기기마다)
+      const RANK = { admin: 3, allowed: 2, bridge: 1, guest: 0 }, by = new Map();
+      for (const p of raw) {
+        const k = p.name && p.name !== "손님" ? "n:" + p.name : "u:" + p.uid, o = by.get(k);
+        if (!o) { by.set(k, Object.assign({}, p, { devs: [p.ua || "?"] })); continue; }
+        o.devs.push(p.ua || "?");
+        if ((RANK[p.mode] || 0) > (RANK[o.mode] || 0)) o.mode = p.mode;
+        if (p.t > o.t) { o.t = p.t; o.game = p.game; }
+      }
+      const all = [...by.values()];
       const live = all.filter(p => now - p.t < 6 * 60000), today = all.filter(p => p.t >= d0.getTime()), week = all.filter(p => now - p.t < 7 * DAY);
       const rows = today.sort((a, b) => b.t - a.t).slice(0, 16).map(p =>
-        `<span class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" title="${esc(p.ua || "")}">${MODE[p.mode] || "👀"} ${esc(p.name || "손님")} <small>${esc(GAME_KO[p.game] || p.game || "")} · ${fmtTimeAgo(p.t)}</small></span>`).join("");
+        `<span class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" title="${esc(p.devs.join(" · "))}">${MODE[p.mode] || "👀"} ${esc(p.name || "손님")} <small>${esc(GAME_KO[p.game] || p.game || "")} · ${fmtTimeAgo(p.t)}${p.devs.length > 1 ? ` · ${p.devs.length}기기` : ""}</small></span>`).join("");
       el.hidden = false;
       el.innerHTML = `<div class="bgate-sec" style="margin:0"><h4><span>👥 방문자 · 🟢 지금 ${live.length} · 오늘 ${today.length} · 7일 ${week.length}</span><a href="logs.html" style="color:#93c5fd;font-size:12.5px;text-decoration:none">📊 자세히 ›</a></h4>
         <div class="bgate-visl">${rows || '<span class="bgate-meta">오늘은 아직 아무도 안 왔어요.</span>'}</div>
-        <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 회원 · 👀 둘러보기 · 🟢 테두리 = 지금 · 기기마다 한 줄 (10-31부터 모음)</div></div>`;
+        <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 회원 · 👀 둘러보기 · 🟢 테두리 = 지금 · 같은 이름은 한 칸 (여러 기기면 'N기기') · 10-31부터 모음</div></div>`;
     };
     const fn = snap => { val = snap.val() || {}; draw(); };
     ref.on("value", fn, () => { el.hidden = true; });
