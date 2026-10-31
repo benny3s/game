@@ -619,14 +619,14 @@
 
   // ── 친구랑 판 묶음: 방장 판 상태 + 자리(uid 순서) + 차례 번호 + 칩
   const AVS = ['🎴', '🌸', '🌕', '🍀', '🔥'];
-  const roundPack = (ses, S) => ({ S: S || ses.S, seq: ses.seq, uids: ses.seats.map(x => x.uid), names: ses.seats.map(x => x.name), chips: ses.chips, score: ses.score || null, rel: ses.rel || null });
+  const roundPack = (ses, S) => ({ S: S || ses.S, seq: ses.seq, uids: ses.seats.map(x => x.uid), names: ses.seats.map(x => x.name), chips: ses.chips, score: ses.score || null, rel: ses.rel || null, subs: ses.seats.map(x => !!x.sub) });
   // 손님: 묶음대로 자리 맞추기. 내 uid 가 없으면 구경 (me = -1)
   function adoptPack(ses, d) {
     const idx = d.uids.indexOf(ses.net.uid);
     ses.seats = d.uids.map((u, i) => {
       const old = ses.seats.find(x => x.uid === u);
       const name = (d.names && d.names[i]) || (old && old.name) || `친구${i + 1}`;
-      return { ctrl: i === idx ? 'me' : 'remote', tier: null, name, em: i === idx ? '나' : AVS[i % AVS.length], uid: u };
+      return { ctrl: i === idx ? 'me' : 'remote', tier: null, name, em: i === idx ? '나' : AVS[i % AVS.length], uid: u, sub: !!(d.subs && d.subs[i]) };
     });
     ses.cfg.me = idx; ses.cfg.N = d.uids.length; ses.seq = d.seq;
     if (d.score) ses.score = { w: d.score.w || [], l: d.score.l || [] };
@@ -859,13 +859,13 @@
     const turnSeat = s.phase === 'end' ? -1 : ses.who[ses.actor != null ? ses.actor : s.turn];
     $('scoreBar').hidden = false;
     $('scoreBar').innerHTML = ses.seats.map((x, rs) => {
-      const nmx = rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, mi = ses.cfg.watch ? -1 : ses.cfg.me;
+      const nmx = (rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name) + (x.sub ? '🤖' : ''), mi = ses.cfg.watch ? -1 : ses.cfg.me;   // 🤖 = 나간 사람 자리를 AI 가 대신 침
       if (relOn(ses, rs)) {                                    // 은행 방: 이번 게임 손익 · 나랑 상대 전적 (구경이면 통산 승패)
         const vs = mi >= 0 && mi !== rs && relOn(ses, mi) ? ` · 나랑 ${ses.rel.pw[mi][rs]}승${ses.rel.pw[rs][mi]}패` : mi < 0 ? ` · ${ses.rel.w[rs]}승${ses.rel.l[rs]}패` : '';
         return `<span class="sbi${rs === turnSeat ? ' on' : ''}${ses.who.indexOf(rs) < 0 ? ' rest' : ''}"><b>${esc(nmx)}</b> ${sgnN(gainWon(ses, rs))}원${vs}</span>`;
       }
       const W = (ses.score && ses.score.w[rs]) || 0, L = (ses.score && ses.score.l[rs]) || 0, ch = ses.chips && ses.chips[rs], money = ch == null ? '' : ses.chipWon ? fmtN(Math.round(ch * ses.chipWon)) + '원' : '🪙' + fmtN(ch);
-      const nm = rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name;
+      const nm = (rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name) + (x.sub ? '🤖' : '');
       return `<span class="sbi${rs === turnSeat ? ' on' : ''}${ses.who.indexOf(rs) < 0 ? ' rest' : ''}"><b>${esc(nm)}</b> ${W}승${L}패${money ? ' ' + money : ''}</span>`;
     }).join('') + (() => {
       const pl = ses.cfg.online && ses.net && ses.net.players; if (!pl) return '';
@@ -1661,6 +1661,7 @@
         for (const close of ses.modals.splice(0)) { try { close(); } catch (e) {} }
         $('goBox').hidden = true;
         C.toast('⏱ 시간이 지나서 AI 가 대신 냈어요', 2400);
+        try { if (ses.net && ses.net.chat) ses.net.chat('🤖 시간이 지나서 이번 수는 AI 가 대신 냈어요'); } catch (e) {}   // 친구들 화면에도 (말풍선·채팅 기록)
         const a = AI.choose(G.view(ses.S, ses.S.turn), 'normal', { seed: rand32() });
         finishHuman(ses, a);
       }
