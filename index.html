@@ -603,6 +603,13 @@ button { font: inherit; cursor: pointer; }
   margin-top: 4px;
 }
 
+.cost-note { margin: 18px 0 8px; text-align: center; font-size: 13px; color: var(--muted); }
+.cost-note button {
+  margin-left: 6px; border: 1px solid rgba(245,158,11,0.55); background: rgba(245,158,11,0.14); color: #fcd34d;
+  border-radius: 99px; padding: 7px 13px; font: 700 13px/1.2 inherit; cursor: pointer;
+}
+.brand { cursor: default; -webkit-user-select: none; user-select: none; }
+
 @media (max-width: 860px) {
   .hero { grid-template-columns: 1fr; }
   .hero-art { min-height: 200px; }
@@ -661,8 +668,8 @@ button { font: inherit; cursor: pointer; }
 
   <section class="info-strip">
     <div class="info-box">
-      <h4>🔐 허용된 기기에서 혼자 · 친구랑</h4>
-      <p>가족·지인 기기만 열려요. 처음이면 이름과 기간(하루·1주·1달·계속)을 적어 허용을 요청하세요. 방 링크나 4자리 방 코드를 받은 친구는 허용 없이 그 방에 바로 들어와요.</p>
+      <h4>🔑 둘러보기는 누구나 · 게임은 로그인</h4>
+      <p>가족·지인 전용이에요. 게임을 누르면 로그인 창이 떠요 — 이름과 기간(하루·1주·1달·계속)을 적어 허용을 요청하면, 베니가 허용한 뒤로는 그 기기에서 계속 할 수 있어요. 💞 베니브릿지 회원은 허용 전에도 하루 10분 무료. 방 링크를 받은 친구는 허용 없이 그 방에 바로 들어와요.</p>
     </div>
     <div class="info-box">
       <h4>🧠 직접 학습한 신경망 & 규칙 엔진</h4>
@@ -673,6 +680,7 @@ button { font: inherit; cursor: pointer; }
       <p>휴대폰 세로·가로 화면과 데스크톱 키보드·마우스를 모두 지원합니다. 게임에 들어가서 <b>혼자 · 한 기기 · 친구랑</b> 중에 고르면 돼요.</p>
     </div>
   </section>
+  <p class="cost-note">🖥️ 서버·통신 비용은 베니가 내고 있어요. 재밌게 하셨다면 <button type="button" id="coffeeBtn">☕ 커피 사 주기</button></p>
 </main>
 
 <!-- 프로필 & 방 만들기 권한 모달 (Gate 가 없을 때만 쓰는 예비 창) -->
@@ -706,8 +714,8 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=9"></script>
-<script src="common/me.js?v=7"></script>
+<script src="common/gate.js?v=10"></script>
+<script src="common/me.js?v=8"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=9"></script>
 <script src="common/bank.js?v=3"></script>
@@ -1180,11 +1188,31 @@ button { font: inherit; cursor: pointer; }
     } else if (canHost) {
       btn.classList.add("active");
       btn.textContent = `✅ ${name} (허용된 기기)`;
+    } else if (window.Gate && Gate.state.role === "bridge_free") {
+      btn.classList.add("active");
+      btn.textContent = `💞 ${name} · 오늘 무료 ${Math.ceil(Gate.state.freeLeft / 60)}분`;
     } else {
       btn.classList.remove("active");
-      btn.textContent = `👤 ${name} · 기기 허용`;
+      btn.textContent = `🔑 로그인`;
     }
   }
+  const allowedNow = () => isAdmin || canHost || !!(window.Gate && Gate.state.allowed);
+
+  // 둘러보기는 누구나 — 허용 안 된 기기가 게임을 누르면 그 자리에서 로그인 창 (확인 중이면 그냥 감: 게임 화면이 다시 확인)
+  document.addEventListener("click", e => {
+    const a = e.target.closest("a.capsule, a.hero-art, a.btn-play");
+    if (!a || !window.Gate || !Gate.showLogin) return;
+    const s = Gate.state;
+    if (s.unlocked || s.status === "checking" || e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+    Gate.showLogin({ next: a.href });
+  });
+  // 👑 숨은 관리자 입구: 'BENNY ARCADE' 3번 누르기 (Benny 포털과 같은 방식)
+  let brandTaps = 0, brandT = 0;
+  document.querySelector(".brand").addEventListener("click", () => {
+    clearTimeout(brandT); brandT = setTimeout(() => { brandTaps = 0; }, 900);
+    if (++brandTaps >= 3) { brandTaps = 0; if (window.Gate && Gate.adminLoginPrompt) Gate.adminLoginPrompt(); }
+  });
 
   function renderFeatured() {
     const featuredList = games.filter(g => g.featured || g.id === "gostop");
@@ -1283,12 +1311,14 @@ button { font: inherit; cursor: pointer; }
   });
 
   // 기기 허용이 바뀌면 배지도 바로 (Gate 가 나중에 확인을 끝내도)
-  if (window.Gate && Gate.onChange) Gate.onChange(s => { if (s.status !== "checking" && s.status !== "open" && !!s.canHost !== canHost && !isAdmin) { canHost = !!s.canHost; updateHostBadge(); } });
+  if (window.Gate && Gate.onChange) Gate.onChange(s => { if (s.status !== "checking" && s.status !== "open" && !isAdmin) { canHost = !!s.canHost; updateHostBadge(); } });
+  $("coffeeBtn").onclick = () => { if (window.Gate && Gate.openCoffee) Gate.openCoffee(); };
 
   // 방장 & 출입·기기 관리 모달 (Gate 연동)
   $("hostBtn").onclick = async () => {
     if (window.Gate && Gate.openAdminModal) {
-      Gate.openAdminModal();
+      if (allowedNow() || Gate.state.role === "bridge_free") Gate.openAdminModal();
+      else Gate.showLogin({});
       return;
     }
     $("nickInput").value = getSavedName();

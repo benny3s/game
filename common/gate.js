@@ -1,6 +1,8 @@
 /* 베니 프라이빗 게임 포털 — 출입 게이트 & 기기 허용 관리 (common/gate.js)
-   · OPEN_SOLO(아래, 기본 true): 혼자 하기는 누구나 바로. 잠금 화면은 '친구 방 만들기'를 누른 허용 안 된 기기에만 떠요
-     (false 면 예전처럼 허용 안 된 기기는 모든 게임 페이지가 잠김)
+   · 10-31: 아케이드(포털)는 누구나 둘러봄. 허용 안 된 기기가 게임을 열면 '로그인' 창 (허용 요청 · 💞 베니브릿지 · 허용 코드)
+     관리자 로그인은 창에 없음 — 아케이드 'BENNY ARCADE' 3번 누르기(adminLoginPrompt) 또는 Benny 포털에서 로그인(같은 주소라 이어짐)
+   · 💞 베니브릿지 회원(같은 주소라 로그인이 이어짐, 토큰 m:1)은 허용 전에도 하루 FREE_MIN 분 무료 (화면을 보는 시간만, 이 기기에 저장)
+   · OPEN_SOLO(아래): true = 혼자 하기는 누구나 바로 · false = 허용된 기기(+브릿지 무료 시간)만 게임 페이지가 열림
    · 방 초대 링크(?room=ABCD): 등록 없이 그 방에만 들어감 (그대로)
    · 기기 허용 = 혼자 하기 + 친구 방 만들기. 기간은 두 가지: '오늘만'(24시간) · '계속'
      1) 허용 요청: game_requests/{uid} → 베니비서 앱 알림 / 포털 관리 창에서 [계속]·[오늘만]·[거절]
@@ -17,6 +19,13 @@
 const Gate = (() => {
   // ── 설정: true = 혼자 하기는 누구나 (잠금은 방 만들기 때만) · false = 허용된 기기만 게임 페이지가 열림
   const OPEN_SOLO = false;   // 10-30 베니 님: 혼자 하기도 허용된 기기만 (방 링크로 초대받은 손님은 그 방에서만)
+  const FREE_MIN = 10;       // 💞 베니브릿지 회원 하루 무료 (분, 게임 화면을 보고 있는 시간만 — 고스톱 3판쯤)
+  const FREE_KEY = "game.gate.free.v1";
+  const MEMBER_KEY = "game.gate.member";
+  // ☕ 커피 사 주기 = 베니브릿지 '개발자 응원하기'와 같은 카카오페이
+  const COFFEE_URL = "https://qr.kakaopay.com/281006011000080950628454";
+  const COFFEE_QR = "https://benny3s.github.io/bridge/coffee-qr.png";
+  const BRIDGE_URL = /github\.io$/.test(location.hostname) ? "/bridge/" : "https://benny3s.github.io/bridge/";
 
   const FB = {
     apiKey: "AIzaSyCSueePQfiHaRxUSZxoropiFjiq9arAaTs",
@@ -45,8 +54,10 @@ const Gate = (() => {
   const roomParam = (qs.get("room") || "").trim().toUpperCase();
   const IS_ROOM_GUEST = !FORCE_GATE && /^[A-Z0-9]{4}$/.test(roomParam) && roomParam !== "HOST";
   const SOLO_OPEN = OPEN_SOLO || IS_LOCAL || IS_ROOM_GUEST;   // 혼자 하기가 열려 있나
+  const IS_PORTAL = /(?:^|\/game)\/(?:index\.html)?$/.test(location.pathname);   // 아케이드 첫 화면 = 잠그지 않음 (둘러보기)
+  const PORTAL_URL = /\/game\//.test(location.pathname) ? location.pathname.replace(/(\/game\/).*$/, "$1") : "../";
 
-  let app = null, loading = null, user = null, offset = 0, watching = false, legacyHost = false;
+  let app = null, loading = null, user = null, offset = 0, watching = false, legacyHost = false, devWatch = null;
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
   let state = {
@@ -59,12 +70,32 @@ const Gate = (() => {
     reason: "",
     name: lsGet(NAME_KEY) || "",
     isAdmin: false,
+    isMember: false,        // 💞 베니브릿지 회원 (토큰 m:1) — 허용 전에도 하루 FREE_MIN 분 (role "bridge_free")
+    freeLeft: 0,            // 오늘 남은 무료 초
     isHost: false,          // 예전 이름 — 지금은 canHost 와 같음
     expiresAt: 0,
     uid: "",
   };
   const listeners = new Set();
-  const notify = () => { state.isHost = state.canHost; for (const fn of listeners) { try { fn(state); } catch (e) {} } };
+  const notify = () => {
+    state.isHost = state.canHost;
+    for (const fn of listeners) { try { fn(state); } catch (e) {} }
+    // 로그인 창이 떠 있는 중에 브릿지 로그인(다른 탭)·허용이 바뀌면 창 내용도 (입력 중이 아닐 때)
+    if (lockRender && lockEl && !lockEl.hidden && lockSig !== sigOf() && !lockEl.contains(document.activeElement)) lockRender();
+  };
+  const sigOf = () => [state.uid, state.isMember, state.allowed, state.reason].join("|");
+  const dayKST = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  function freeUsed(uid) {
+    try { const d = JSON.parse(lsGet(FREE_KEY) || "null"); return d && d.uid === uid && d.d === dayKST() ? Math.max(0, +d.s || 0) : 0; } catch (e) { return 0; }
+  }
+  const freeLeft = uid => Math.max(0, FREE_MIN * 60 - freeUsed(uid));
+  let toastEl = null, toastT = 0;
+  function gToast(msg, ms = 3200) {
+    injectStyle();
+    if (!toastEl) { toastEl = document.createElement("div"); toastEl.className = "bgate-toast"; document.body.appendChild(toastEl); }
+    toastEl.textContent = msg; toastEl.hidden = false;
+    clearTimeout(toastT); toastT = setTimeout(() => { toastEl.hidden = true; }, ms);
+  }
 
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const loadScript = src => {
@@ -146,6 +177,9 @@ const Gate = (() => {
       if (!user) user = (await app.auth().signInAnonymously()).user;
       state.uid = user.uid;
       app.database().ref(".info/serverTimeOffset").on("value", s => { offset = s.val() || 0; });
+      // 다른 탭에서 베니브릿지에 로그인·로그아웃하면 (같은 주소라 로그인이 이어짐) 이 기기 판단을 새로
+      app.auth().onAuthStateChanged(u => { if (u && user && u.uid !== user.uid) switchUser(u); });
+      document.addEventListener("visibilitychange", () => { const u = app.auth().currentUser; if (!document.hidden && u && user && u.uid !== user.uid) switchUser(u); });
       return app;
     })();
     try { return await loading; } catch (e) { loading = null; throw e; }
@@ -192,20 +226,59 @@ const Gate = (() => {
   function applyNotAllowed(status, reason) {
     state.allowed = false;
     state.canHost = state.isAdmin || legacyHost;
-    state.unlocked = SOLO_OPEN || state.canHost;
+    state.freeLeft = state.isMember ? freeLeft(state.uid) : 0;
+    const free = !state.canHost && state.freeLeft > 0;      // 💞 브릿지 회원 무료 시간
+    state.unlocked = SOLO_OPEN || state.canHost || free;
+    state.role = free ? "bridge_free" : state.role === "bridge_free" ? "none" : state.role;
     state.status = status;
     state.reason = reason || "";
     writeCachedPass(null);
-    if (!state.unlocked) showLockOverlay({ mode: "lock" });
+    if (free) {
+      if (lockEl && !lockEl.hidden && lockMode === "lock") lockEl.hidden = true;
+      startFreeClock();
+      startPresence();
+    }
+    if (!state.unlocked && !IS_PORTAL) showLockOverlay({ mode: "lock" });
     notify();
   }
 
-  async function checkPermissionsAndWatch() {
+  // 💞 무료 시간: 게임 화면을 보고 있는 동안 5초씩 (아케이드 첫 화면·숨긴 탭은 안 셈)
+  let freeTimer = null, freeWarned = false;
+  function startFreeClock() {
+    if (freeTimer || IS_PORTAL || IS_LOCAL || IS_ROOM_GUEST) return;
+    freeTimer = setInterval(() => {
+      if (state.role !== "bridge_free") { clearInterval(freeTimer); freeTimer = null; return; }
+      if (document.hidden) return;
+      lsSet(FREE_KEY, JSON.stringify({ uid: state.uid, d: dayKST(), s: freeUsed(state.uid) + 5 }));
+      state.freeLeft = freeLeft(state.uid);
+      if (state.freeLeft <= 60 && !freeWarned) { freeWarned = true; gToast("💞 오늘 무료 시간이 1분 남았어요"); }
+      if (state.freeLeft <= 0) {
+        clearInterval(freeTimer); freeTimer = null;
+        applyNotAllowed("free_over", `⏰ 오늘 무료 ${FREE_MIN}분을 다 썼어요. 허용을 요청하면 시간 제한 없이 할 수 있어요.`);
+      }
+    }, 5000);
+  }
+
+  // 로그인한 사람이 바뀜 (다른 탭에서 브릿지 로그인 등) → 새 uid 로 처음부터 판단
+  async function switchUser(u) {
+    user = u;
+    state.uid = u.uid;
+    state.isAdmin = false; state.isMember = false; state.canApprove = false; legacyHost = false;
+    if (devWatch) { try { devWatch.off(); } catch (e) {} devWatch = null; }
+    watching = false;
+    try { if (checkP) await checkP.catch(() => {}); await checkPermissionsAndWatch(); } catch (e) { console.warn("Gate switch error:", e); }
+  }
+
+  let checkP = null;                                         // 같은 때 여러 곳에서 불러도 확인은 한 번
+  function checkPermissionsAndWatch() { return checkP || (checkP = checkPerm1().finally(() => { checkP = null; })); }
+  async function checkPerm1() {
     await ensureFirebase();
     try {
       const tr = await user.getIdTokenResult();
       state.isAdmin = !!(tr && tr.claims && tr.claims.admin === 1);
-    } catch (e) { state.isAdmin = false; }
+      state.isMember = !!(tr && tr.claims && tr.claims.m === 1);   // 💞 베니브릿지 승인 회원 (uid = 회원 id)
+    } catch (e) { state.isAdmin = false; state.isMember = false; }
+    lsSet(MEMBER_KEY, state.isMember ? user.uid : null);
     try {
       const cached = readCachedPass();
       if (lsGet("game.gate.admin") === "1" || (cached && cached.role === "admin")) state.isAdmin = true;
@@ -249,7 +322,8 @@ const Gate = (() => {
     if (watching) return;
     watching = true;
     // 내 기기 상태 실시간 감시 (베니 님이 허용하거나 일시정지/차단하면 바로 반영)
-    db().ref("game_devices/" + user.uid).on("value", snap => {
+    devWatch = db().ref("game_devices/" + user.uid);
+    devWatch.on("value", snap => {
       const d = snap.val();
       if (state.isAdmin || legacyHost) return;
       if (d && typeof d === "object") {
@@ -328,6 +402,7 @@ const Gate = (() => {
       status: "pending",
       t: TS(),
     };
+    if (state.isMember) payload.bm = 1;                      // 💞 베니브릿지 회원 (관리 창에 표시)
     await db().ref("game_requests/" + user.uid).set(payload);
     if (onStatus) onStatus("pending");
     // 허용되면 game_devices 감시가 바로 열어 줌
@@ -466,15 +541,16 @@ const Gate = (() => {
       }
       .bgate-tab {
         border: 0; background: transparent; color: #94a3b8;
-        font: 600 12.5px/1.2 inherit; padding: 9px 6px; border-radius: 7px; cursor: pointer;
+        font: 600 12.5px/1.2 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif; padding: 9px 6px; border-radius: 7px; cursor: pointer;
       }
       .bgate-tab.active { background: #243b55; color: #fff; }
+      .bgate-tab { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .bgate-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
       .bgate-field label, .bgate-field .lb { font-size: 12.5px; font-weight: 600; color: #cbd5e1; }
       .bgate-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
       .bgate-seg button {
         border: 1px solid #334155; background: #0c131d; color: #cbd5e1; border-radius: 10px;
-        padding: 10px 8px; font: 700 13.5px/1.2 inherit; cursor: pointer;
+        padding: 10px 8px; font: 700 13.5px/1.2 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif; cursor: pointer;
       }
       .bgate-seg button.on { border-color: #66c0f4; background: #17304a; color: #fff; }
       .bgate-seg small { display: block; font-weight: 500; font-size: 11px; color: #94a3b8; margin-top: 2px; }
@@ -482,13 +558,13 @@ const Gate = (() => {
         width: 100%; box-sizing: border-box;
         padding: 11px 13px; border-radius: 10px;
         border: 1px solid #334155; background: #0c131d; color: #fff;
-        font: 600 15px/1.2 inherit; outline: none;
+        font: 600 15px/1.2 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif; outline: none;
       }
       .bgate-inp:focus { border-color: #66c0f4; }
       .bgate-inp.code { text-align: center; letter-spacing: 5px; text-transform: uppercase; font-size: 18px; }
       .bgate-btn {
         width: 100%; border: 0; border-radius: 10px; padding: 12px 16px;
-        font: 700 14.5px/1.2 inherit; cursor: pointer;
+        font: 700 14.5px/1.2 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif; cursor: pointer;
         display: inline-flex; align-items: center; justify-content: center; gap: 7px;
         transition: filter 0.15s, transform 0.08s;
       }
@@ -504,7 +580,7 @@ const Gate = (() => {
         display: grid; gap: 8px; font-size: 12.5px; color: #94a3b8; text-align: center;
       }
       .bgate-more { display: flex; justify-content: center; gap: 14px; margin-top: 12px; }
-      .bgate-more button { border: 0; background: none; color: #94a3b8; font: 600 12.5px inherit; text-decoration: underline; cursor: pointer; padding: 4px; }
+      .bgate-more button { border: 0; background: none; color: #94a3b8; font: 600 12.5px 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif; text-decoration: underline; cursor: pointer; padding: 4px; }
       .bgate-wait {
         margin-top: 12px; padding: 14px; border-radius: 12px;
         background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35);
@@ -529,49 +605,69 @@ const Gate = (() => {
       .bgate-pill.paused { background: rgba(245,158,11,0.2); color: #fcd34d; }
       .bgate-pill.revoked { background: rgba(239,68,68,0.2); color: #fca5a5; }
       .bgate-pill.want { background: rgba(102,192,244,0.16); color: #93c5fd; }
+      .bgate-foot {
+        margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.08);
+        display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap;
+        font-size: 12px; color: #94a3b8; text-align: center;
+      }
+      .bgate-coffee {
+        border: 1px solid rgba(245,158,11,0.55); background: rgba(245,158,11,0.14); color: #fcd34d;
+        border-radius: 99px; padding: 7px 12px; font: 700 12.5px/1.2 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif; cursor: pointer;
+      }
+      .bgate-toast {
+        position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 12px); transform: translateX(-50%);
+        z-index: 100001; background: rgba(10,14,22,0.94); color: #fde68a; border: 1px solid rgba(245,158,11,0.45);
+        padding: 9px 16px; border-radius: 99px; font: 700 13.5px/1.3 system-ui, sans-serif;
+        max-width: calc(100vw - 32px); text-align: center; pointer-events: none;
+      }
+      .bgate-toast[hidden] { display: none; }
+      a.bgate-btn { text-decoration: none; box-sizing: border-box; }
     `;
     document.head.appendChild(s);
   }
 
-  // ── 허용 창 (mode "lock" = 게임 잠금 · "host" = 방 만들기 권한 받기, 닫을 수 있음) ─────
-  let lockEl = null, lockMode = "lock", hostWaiters = [];
+  // ── 로그인 창 (mode "lock" = 게임 화면 잠금 · "login" = 아케이드에서 연 창(닫기 됨, next = 허용되면 갈 곳) · "host" = 방 만들기 권한 받기(닫기 됨))
+  //    탭: 📲 허용 요청 · 💞 베니브릿지(회원이면 하루 FREE_MIN 분 무료) · 🔑 허용 코드. 관리자 로그인은 여기 없음 (adminLoginPrompt)
+  let lockEl = null, lockMode = "lock", lockNext = "", lockRender = null, lockSig = "", hostWaiters = [];
   const settleHost = ok => { const w = hostWaiters.splice(0); for (const f of w) { try { f(ok); } catch (e) {} } };
-  function showLockOverlay({ mode = "lock", title = "" } = {}) {
+  function showLockOverlay({ mode = "lock", title = "", next = "" } = {}) {
     injectStyle();
-    if (lockEl && !lockEl.hidden && lockMode === "lock" && mode === "host") mode = "lock";
+    if (lockEl && !lockEl.hidden && lockMode === "lock" && mode !== "lock") mode = "lock";
     lockMode = mode;
+    lockNext = next || "";
     if (!lockEl) {
       lockEl = document.createElement("div");
       lockEl.id = "bennyGateOverlay";
       lockEl.className = "bgate-ov";
       document.body.appendChild(lockEl);
     }
-    let curTab = "req", want = "week";
-    const isHostMode = mode === "host";
+    const isHostMode = mode === "host", canClose = mode !== "lock";
+    let curTab = state.isMember && !state.allowed && !isHostMode ? "bridge" : "req", want = "week";
     const render = () => {
+      const sig = sigOf();
+      if (lockSig && sig !== lockSig && state.isMember && !state.allowed && !isHostMode) curTab = "bridge";   // 다른 탭에서 브릿지 로그인하고 옴
+      lockSig = sig;
+      const left = Math.ceil(freeLeft(state.uid) / 60);
       lockEl.innerHTML = `
-        <div class="bgate-card" role="dialog" aria-modal="true" aria-label="기기 허용">
-          ${isHostMode ? `<button class="bgate-x" data-close aria-label="닫기">✕</button>` : ""}
-          <div class="bgate-badge">${isHostMode ? "🏠 친구 방 만들기" : "🔒 베니 게임 라운지"}</div>
-          <h2 class="bgate-title">${isHostMode ? "이 기기를 허용받으면 방을 만들 수 있어요" : "기기를 허용받아 주세요"}</h2>
+        <div class="bgate-card" role="dialog" aria-modal="true" aria-label="로그인">
+          ${canClose ? `<button class="bgate-x" data-close aria-label="닫기">✕</button>` : ""}
+          <div class="bgate-badge">${isHostMode ? "🏠 친구 방 만들기" : "🎮 베니 아케이드"}</div>
+          <h2 class="bgate-title">${isHostMode ? "이 기기를 허용받으면 방을 만들 수 있어요" : "로그인하고 같이 해요"}</h2>
           <p class="bgate-sub">${isHostMode
             ? `허용된 기기는 <b>혼자 하기</b>와 <b>친구 방 만들기</b>를 다 할 수 있어요.${title ? ` (${esc(title)})` : ""}`
-            : `가족·지인 전용이에요. 한 번 허용받으면 이 기기에서 바로 열려요.`}</p>
+            : `가족·지인 전용이에요. 베니가 한 번 허용하면 <b>이 기기에서 계속</b> 할 수 있어요. 둘러보기는 로그인 없이 돼요.`}</p>
           ${state.reason ? `<div class="bgate-warn">${esc(state.reason)}</div>` : ""}
           ${isHostMode ? `<div class="bgate-alt"><span>같이 하기만 할 거면 <b style="color:#e2e8f0">허용이 필요 없어요.</b><br>방장이 보낸 <b style="color:#e2e8f0">방 링크</b>를 누르거나 방 목록에서 들어가세요.</span><button class="bgate-btn ghost" data-close>👍 그냥 들어갈게요</button></div>` : ""}
-          ${isHostMode && curTab === "req" ? "" : `<div class="bgate-tabs">
+          <div class="bgate-tabs">
             <button class="bgate-tab ${curTab === "req" ? "active" : ""}" data-tab="req">📲 허용 요청</button>
+            <button class="bgate-tab ${curTab === "bridge" ? "active" : ""}" data-tab="bridge">💞 베니브릿지</button>
             <button class="bgate-tab ${curTab === "code" ? "active" : ""}" data-tab="code">🔑 허용 코드</button>
-            <button class="bgate-tab ${curTab === "admin" ? "active" : ""}" data-tab="admin">👑 관리자</button>
-          </div>`}
+          </div>
           <div id="bgateTabBody"></div>
-          ${isHostMode && curTab === "req" ? `<div class="bgate-more"><button type="button" data-tab="code">🔑 허용 코드가 있어요</button><button type="button" data-tab="admin">👑 관리자</button></div>` : ""}
+          <div class="bgate-foot"><span>🖥️ 서버·통신 비용은 베니가 내고 있어요.</span><button type="button" class="bgate-coffee" data-coffee>☕ 커피 사 주기</button></div>
+          ${mode === "lock" ? `<a class="bgate-btn ghost" href="${esc(PORTAL_URL)}" style="margin-top:12px">← 아케이드 둘러보기</a>` : ""}
         </div>
       `;
-      lockEl.querySelectorAll(".bgate-tab, .bgate-more [data-tab]").forEach(b => {
-        b.onclick = () => { curTab = b.dataset.tab; render(); };
-      });
-      lockEl.querySelectorAll("[data-close]").forEach(b => { b.onclick = () => hideLockOverlay(false); });
       const body = lockEl.querySelector("#bgateTabBody");
       if (curTab === "req") {
         body.innerHTML = `
@@ -621,7 +717,28 @@ const Gate = (() => {
             reqBtn.textContent = "📲 베니에게 허용 요청";
           }
         };
-      } else if (curTab === "code") {
+      } else if (curTab === "bridge") {
+        if (!state.isMember) {
+          body.innerHTML = `
+            <p class="bgate-sub">베니브릿지 회원이면 <b>로그인만 해도 하루 ${FREE_MIN}분 무료</b>예요 (허용을 기다리지 않고 바로).</p>
+            <a class="bgate-btn primary" href="${esc(BRIDGE_URL)}" target="_blank" rel="noopener">💞 베니브릿지에서 로그인하기</a>
+            <p class="bgate-hint">같은 브라우저에서 로그인하고 이 화면으로 돌아오면 저절로 열려요.</p>`;
+        } else if (state.allowed) {
+          body.innerHTML = `<div class="bgate-wait">💞 베니브릿지 회원 · 이미 허용된 계정이에요.</div>`;
+        } else if (isHostMode) {
+          body.innerHTML = `<p class="bgate-sub">💞 베니브릿지 회원은 혼자 하기를 하루 ${FREE_MIN}분 무료로 해요. <b>친구 방 만들기</b>는 허용받은 뒤에 돼요 — 📲 허용 요청에서 요청해 주세요.</p>
+            <button class="bgate-btn green" data-tab="req">📲 허용 요청하기</button>`;
+        } else if (left > 0) {
+          body.innerHTML = `
+            <div class="bgate-wait"><b>💞 베니브릿지 회원이에요!</b><br>허용 전에도 하루 <b>${FREE_MIN}분</b> 무료로 할 수 있어요.<br>오늘 남은 시간 <b>${left}분</b></div>
+            <button class="bgate-btn green" id="bgFreeGo" style="margin-top:12px">▶ 무료로 하기</button>
+            <p class="bgate-hint">허용 요청을 보내 두면, 허용된 뒤로는 시간 제한이 없어요.</p>`;
+          body.querySelector("#bgFreeGo").onclick = () => hideLockOverlay(true);
+        } else {
+          body.innerHTML = `<div class="bgate-warn">⏰ 오늘 무료 ${FREE_MIN}분을 다 썼어요. 내일 다시 생겨요.</div>
+            <button class="bgate-btn green" data-tab="req">📲 허용 요청하고 계속 하기</button>`;
+        }
+      } else {
         body.innerHTML = `
           <div class="bgate-field">
             <label for="bgCodeName">내 이름 / 별명</label>
@@ -646,35 +763,80 @@ const Gate = (() => {
             codeBtn.disabled = false;
           }
         };
-      } else {
-        body.innerHTML = `
-          <div class="bgate-field">
-            <label for="bgAdminPw">관리자 비밀번호 (베니 님 전용)</label>
-            <input class="bgate-inp" type="password" id="bgAdminPw" placeholder="비밀번호" autocomplete="current-password">
-          </div>
-          <button class="bgate-btn primary" id="bgAdminBtn">👑 관리자로 들어가기</button>
-        `;
-        const pwInp = body.querySelector("#bgAdminPw");
-        const admBtn = body.querySelector("#bgAdminBtn");
-        admBtn.onclick = async () => {
-          admBtn.disabled = true;
-          try {
-            await loginAdminWithPassword(pwInp.value);
-          } catch (e) {
-            alert(e.message || "관리자 비밀번호가 맞지 않아요.");
-            admBtn.disabled = false;
-          }
-        };
       }
+      lockEl.querySelectorAll("[data-tab]").forEach(b => {
+        b.onclick = () => { curTab = b.dataset.tab; render(); };
+      });
+      lockEl.querySelectorAll("[data-close]").forEach(b => { b.onclick = () => hideLockOverlay(false); });
+      lockEl.querySelector("[data-coffee]").onclick = openCoffee;
     };
+    lockRender = render;
     render();
+    lockEl.onclick = e => { if (e.target === lockEl && canClose) hideLockOverlay(false); };
     lockEl.hidden = false;
+    // 아케이드에서 연 창: 아직 확인 전이면 서버 확인 (브릿지 회원·허용된 기기면 창이 바뀜)
+    if (!IS_LOCAL && !watching) checkPermissionsAndWatch().catch(e => console.warn("Gate check error:", e));
   }
 
-  // ok: true = 허용됨, false = 닫음 (방 만들기 기다리는 쪽에 알려 줌)
+  // ☕ 커피 사 주기 (카카오페이 QR · 열기 · 링크 복사)
+  function openCoffee() {
+    injectStyle();
+    const ov = document.createElement("div");
+    ov.className = "bgate-ov";
+    ov.style.zIndex = "100000";
+    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+    ov.innerHTML = `
+      <div class="bgate-card" role="dialog" aria-modal="true" aria-label="커피 사 주기" style="text-align:center">
+        <button class="bgate-x" data-x aria-label="닫기">✕</button>
+        <div class="bgate-badge">☕ 베니에게 커피 사 주기</div>
+        <p class="bgate-sub">게임 서버·통신 비용은 베니가 내고 있어요.<br>재밌게 하셨다면 커피 한 잔이면 충분해요 🙏</p>
+        <img src="${COFFEE_QR}" alt="카카오페이 QR" style="width:210px;max-width:75%;border-radius:12px;background:#fff;padding:6px">
+        <p class="bgate-hint">${mobile ? "아래 단추를 누르거나 QR 을 찍으면 카카오페이로 보내져요." : "휴대폰 카메라로 QR 을 찍으면 카카오페이로 보내져요."}</p>
+        <div style="display:grid;gap:8px;margin-top:12px">
+          ${mobile ? `<a class="bgate-btn green" href="${COFFEE_URL}" target="_blank" rel="noopener">☕ 카카오페이 열기</a>` : ""}
+          <button class="bgate-btn ghost" data-copy>🔗 링크 복사</button>
+        </div>
+      </div>`;
+    ov.onclick = e => {
+      if (e.target === ov || e.target.closest("[data-x]")) { ov.remove(); return; }
+      const c = e.target.closest("[data-copy]");
+      if (c) navigator.clipboard.writeText(COFFEE_URL).then(() => { c.textContent = "✅ 링크를 복사했어요"; }, () => { window.prompt("카카오페이 링크", COFFEE_URL); });
+    };
+    document.body.appendChild(ov);
+  }
+
+  // 👑 관리자 로그인 (숨은 입구: 아케이드 'BENNY ARCADE' 3번 누르기) — 이미 관리자면 관리 창
+  function adminLoginPrompt() {
+    if (state.isAdmin) { openAdminModal(); return; }
+    injectStyle();
+    const ov = document.createElement("div");
+    ov.className = "bgate-ov";
+    ov.style.zIndex = "100000";
+    ov.innerHTML = `
+      <div class="bgate-card" role="dialog" aria-modal="true" aria-label="관리자">
+        <button class="bgate-x" data-x aria-label="닫기">✕</button>
+        <div class="bgate-badge">👑 관리자</div>
+        <div class="bgate-field"><label for="bgAdmPw2">비밀번호</label><input class="bgate-inp" type="password" id="bgAdmPw2" autocomplete="current-password"></div>
+        <button class="bgate-btn primary" data-go>들어가기</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const inp = ov.querySelector("input"), go = ov.querySelector("[data-go]");
+    const run = async () => {
+      go.disabled = true;
+      try { await loginAdminWithPassword(inp.value); ov.remove(); openAdminModal(); }
+      catch (e) { alert(e.message || "비밀번호가 맞지 않아요."); go.disabled = false; inp.select(); }
+    };
+    go.onclick = run;
+    inp.onkeydown = e => { if (e.key === "Enter") run(); };
+    ov.onclick = e => { if (e.target === ov || e.target.closest("[data-x]")) ov.remove(); };
+    setTimeout(() => inp.focus(), 40);
+  }
+
+  // ok: true = 허용됨(또는 무료로 하기), false = 닫음 (방 만들기 기다리는 쪽에 알려 줌)
   function hideLockOverlay(ok) {
     if (lockEl) lockEl.hidden = true;
-    settleHost(ok === true || state.canHost);
+    settleHost(!!state.canHost);
+    if (ok === true && lockNext && state.unlocked) { const n = lockNext; lockNext = ""; location.href = n; }
   }
 
   // ── 방 만들기 권한 받기: 이미 있으면 true, 없으면 허용 창 → 허용되면 true · 닫으면 false
@@ -727,7 +889,8 @@ const Gate = (() => {
 
   function myPill() {
     if (state.isAdmin) return "👑 관리자(베니)";
-    if (state.allowed) return state.expiresAt > 0 ? `⏳ 오늘만 허용 · ${leftHours(state.expiresAt)}시간 남음` : "♾️ 계속 허용된 기기";
+    if (state.allowed) return state.expiresAt > 0 ? `⏳ 기간 허용 · ${leftHours(state.expiresAt)}시간 남음` : "♾️ 계속 허용된 기기";
+    if (state.role === "bridge_free") return `💞 브릿지 회원 · 오늘 무료 ${Math.ceil(freeLeft(state.uid) / 60)}분 남음`;
     return "🔒 허용 안 된 기기";
   }
 
@@ -741,7 +904,7 @@ const Gate = (() => {
           <button class="bgate-btn ghost sm" id="bgAdmClose">✕ 닫기</button>
         </div>
         <h2 class="bgate-title">출입 · 기기 허용</h2>
-        <p class="bgate-sub">혼자 하기는 누구나 돼요. <b>허용된 기기</b>는 친구 방도 만들 수 있어요. 친구는 방 링크로 등록 없이 그 방에만 들어와요.</p>
+        <p class="bgate-sub">둘러보기는 누구나, 게임은 <b>허용된 기기</b>만 (💞 베니브릿지 회원은 허용 전에도 하루 ${FREE_MIN}분). 허용된 기기는 친구 방도 만들 수 있어요. 친구는 방 링크로 등록 없이 그 방에만 들어와요.</p>
 
         <div class="bgate-sec">
           <h4><span>🙋 내 이름 · 이 기기</span> <span class="bgate-pill active">${myPill()}</span></h4>
@@ -770,7 +933,7 @@ const Gate = (() => {
             <h4><span>📱 허용된 기기</span> <span class="bgate-meta" id="bgDevCount">0대</span></h4>
             <div id="bgDevList"><div class="bgate-meta">기기를 불러오는 중...</div></div>
           </div>
-        ` : `
+        ` : state.allowed ? "" : `
           <div class="bgate-sec">
             <h4><span>🔑 허용 코드가 있나요?</span></h4>
             <div style="display:flex;gap:8px">
@@ -782,16 +945,11 @@ const Gate = (() => {
             <h4><span>📲 코드가 없으면</span></h4>
             <button class="bgate-btn green" id="bgModalReq">베니에게 허용 요청하기</button>
           </div>
-          <div class="bgate-sec">
-            <h4><span>👑 관리자 로그인 (베니 님)</span></h4>
-            <div style="display:flex;gap:8px">
-              <input class="bgate-inp" type="password" id="bgModalAdminPw" placeholder="관리자 비밀번호" style="flex:1">
-              <button class="bgate-btn ghost sm" id="bgModalAdminBtn" style="padding:11px 16px">인증</button>
-            </div>
-          </div>
         `}
+        <div class="bgate-foot"><span>🖥️ 서버·통신 비용은 베니가 내고 있어요.</span><button type="button" class="bgate-coffee" data-coffee>☕ 커피 사 주기</button></div>
       </div>
     `;
+    adminEl.querySelector("[data-coffee]").onclick = openCoffee;
 
     adminEl.querySelector("#bgAdmClose").onclick = closeAdminModal;
     adminEl.querySelector("#bgSaveMyName").onclick = () => {
@@ -814,13 +972,6 @@ const Gate = (() => {
       };
       const qBtn = adminEl.querySelector("#bgModalReq");
       if (qBtn) qBtn.onclick = () => { closeAdminModal(); requestHost({}).then(ok => { if (ok) openAdminModal(); }); };
-      const aBtn = adminEl.querySelector("#bgModalAdminBtn");
-      if (aBtn) aBtn.onclick = async () => {
-        try {
-          await loginAdminWithPassword(adminEl.querySelector("#bgModalAdminPw").value);
-          renderAdminModal();
-        } catch (e) { alert(e.message); }
-      };
       return;
     }
 
@@ -875,7 +1026,7 @@ const Gate = (() => {
       listEl.innerHTML = pendings.map(r => `
         <div class="bgate-row">
           <div>
-            <b>${esc(r.name || "이름없음")}</b> ${r.want ? `<span class="bgate-pill want">${r.want === "today" ? "⏳ 오늘만 원함" : "♾️ 계속 원함"}</span>` : ""}
+            <b>${esc(r.name || "이름없음")}</b> ${r.want ? `<span class="bgate-pill want">${r.want === "today" || r.want === "day" ? "⏳ 하루 원함" : r.want === "week" ? "📅 1주 원함" : r.want === "month" ? "🗓️ 1달 원함" : "♾️ 계속 원함"}</span>` : ""}${r.bm ? ` <span class="bgate-pill active">💞 브릿지 회원</span>` : ""}
             <div class="bgate-meta">${esc(r.ua || "기기")} · ${esc(r.game || "portal")} · ${fmtTimeAgo(r.t)}</div>
           </div>
           <div style="display:flex;gap:5px;flex-wrap:wrap">
@@ -968,19 +1119,24 @@ const Gate = (() => {
       state.name = cached.name || state.name;
       state.isHost = true;
     } else if (!OPEN_SOLO) {
-      // 허용된 기기가 아니면 바로 잠금 화면을 띄우고 Firebase 확인
-      if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => { if (!state.unlocked) showLockOverlay({ mode: "lock" }); });
-      } else {
-        showLockOverlay({ mode: "lock" });
+      const memUid = lsGet(MEMBER_KEY);
+      if (memUid && freeLeft(memUid) > 0) {
+        // 지난번 브릿지 회원 + 오늘 무료 시간 남음 → 서버 확인 전까지 열어 둠 (확인되면 그대로 또는 로그인 창)
+        Object.assign(state, { unlocked: true, isMember: true, uid: memUid, role: "bridge_free", freeLeft: freeLeft(memUid) });
+      } else if (!IS_PORTAL) {
+        // 게임 화면: 허용된 기기가 아니면 바로 로그인 창을 띄우고 Firebase 확인 (아케이드 첫 화면은 둘러보기라 안 띄움)
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", () => { if (!state.unlocked) showLockOverlay({ mode: "lock" }); });
+        } else {
+          showLockOverlay({ mode: "lock" });
+        }
       }
     } else {
       state.status = "open";
     }
     // OPEN_SOLO 면 꼭 필요할 때만 서버 확인 (허용 코드 링크 · 허용됐던 기기 · 포털 · 관리자)
     const urlPass = qs.get("pass") || qs.get("host_invite");
-    const isPortal = /\/game\/(?:index\.html)?$/.test(location.pathname);
-    if (!OPEN_SOLO || cached || urlPass || isPortal || lsGet("game.gate.admin") === "1") {
+    if (!OPEN_SOLO || cached || urlPass || IS_PORTAL || lsGet("game.gate.admin") === "1") {
       checkPermissionsAndWatch().catch(e => console.warn("Gate init error:", e));
     }
   }
@@ -998,6 +1154,11 @@ const Gate = (() => {
       return !(state.expiresAt > 0 && now() > state.expiresAt);
     },
     requestHost,
+    FREE_MIN,
+    // 아케이드에서 로그인 창 (next = 허용되면/무료로 하기 누르면 갈 주소)
+    showLogin(o = {}) { showLockOverlay({ mode: "login", next: o.next || "" }); },
+    adminLoginPrompt,
+    openCoffee,
     openAdminModal,
     closeAdminModal,
     createPass,
