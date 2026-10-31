@@ -21,6 +21,7 @@
     wMode: C.store(KEY + 'wMode', 2), wTiers: C.store(KEY + 'wTiers', ['hard', 'normal', 'easy']), wSpeed: C.store(KEY + 'wSpeed', 'normal'),
     bank: C.store(KEY + 'bank', 'gbasic'), bankName: C.store(KEY + 'bankName', '기본 은행'),     // 친구랑: 은행 모임(gid) — 처음엔 🏦 기본 은행, null = 은행 안 씀 (연습 칩)
     lMode: C.store(KEY + 'lMode', 2), lSeats: C.store(KEY + 'lSeats', ['human', 'human', 'normal', 'normal', 'normal']),
+    foe: C.store(KEY + 'foe', {}),                              // 혼자 하기 상대 이름 (단계마다 고른 번호)
   };
   const saveOpt = k => C.save(KEY + k, opt[k]);
   let coins = C.store(KEY + 'coins', 0);
@@ -51,9 +52,9 @@
   };
 
   const TIER = {
-    easy:   { em: '🌱', name: '동네 하수', cls: 't-easy',   desc: '패를 솔직하게 내는 입문자', names: ['김씨', '박씨', '정씨', '한씨'] },
-    normal: { em: '🎴', name: '사랑방 고수', cls: 't-normal', desc: '피 계산과 견제가 탄탄한 실력자', names: ['이생원', '최주사', '강서방', '윤참봉'] },
-    hard:   { em: '👑', name: '전설의 타짜', cls: 't-hard',   desc: '숨은 패까지 읽는 일류 타짜', names: ['고광렬', '평경장', '아귀', '짝귀'] },
+    easy:   { em: '🌱', name: '초짜', cls: 't-easy',   desc: '패를 솔직하게 내는 입문자', names: ['김씨', '박씨', '정씨', '한씨'] },
+    normal: { em: '🎴', name: '꾼', cls: 't-normal', desc: '피 계산과 견제가 탄탄한 실력자', names: ['이생원', '최주사', '강서방', '윤참봉'] },
+    hard:   { em: '👑', name: '타짜', cls: 't-hard',   desc: '나온 패를 하나도 안 놓치고 세는 일류 — 🧑‍🏫 선생님이랑 치면 해 볼 만해요', names: ['평경장', '고광렬', '아귀', '짝귀'] },
   };
   const SPEEDS = { slow: { label: '느긋하게', em: '🐢', mul: 1.45, think: 950 }, normal: { label: '보통', em: '⚡', mul: 1, think: 560 }, fast: { label: '빠르게', em: '🚀', mul: 0.55, think: 230 } };
   const SPEED_ORDER = ['slow', 'normal', 'fast'];
@@ -63,6 +64,7 @@
     el.innerHTML = items.map(([v, label]) => `<button class="btn" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}">${label}</button>`).join('');
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); onPick(b.dataset.v); };
   }
+  const foeIdx = t => { const i = (opt.foe && opt.foe[t]) | 0; return i >= 0 && i < TIER[t].names.length ? i : 0; };
   function drawMenu() {
     const tab = ['solo', 'watch', 'local'].includes(opt.tab) ? opt.tab : 'solo';
     $('tabSolo').setAttribute('aria-pressed', String(tab === 'solo')); $('tabWatch').setAttribute('aria-pressed', String(tab === 'watch')); $('tabLocal').setAttribute('aria-pressed', String(tab === 'local'));
@@ -74,10 +76,11 @@
     $('modeNote').hidden = !mo.bench;
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })),
       id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
+    if ($('foeSeg')) segBtns($('foeSeg'), TIER[opt.tier].names.map((nm, i) => [i, nm]), foeIdx(opt.tier), v => { opt.foe = Object.assign({}, opt.foe, { [opt.tier]: +v }); saveOpt('foe'); drawMenu(); });
     segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], houseRules.bonus, v => { setRules(Object.assign({}, houseRules, { bonus: +v })); drawMenu(); });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     if ($('coachSeg')) segBtns($('coachSeg'), [[1, '🧑‍🏫 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
-    $('startBtn').textContent = `🎴 ${mo.name} 대국 시작 (${TIER[opt.tier].name})`;
+    $('startBtn').textContent = `🎴 ${mo.name} 대국 시작 (${TIER[opt.tier].em} ${TIER[opt.tier].names[foeIdx(opt.tier)]})`;
     segBtns($('wModeSeg'), [[2, '2인 맞고'], [3, '3인 고스톱']], opt.wMode, v => { opt.wMode = +v; saveOpt('wMode'); drawMenu(); });
     const seatName = ['아래 자리', opt.wMode === 2 ? '맞은편 자리' : '오른쪽 자리', '왼쪽 자리'];
     $('wSeats').innerHTML = Array.from({ length: opt.wMode }, (_, i) => `<div class="wseat"><b>${seatName[i]}</b><div class="seg" data-i="${i}"></div></div>`).join('');
@@ -405,7 +408,7 @@
     startSeed = 0;
     const ses = SES = newSession(cfg);
     const used = {};
-    const mk = (tier) => { const t = TIER[tier]; used[tier] = (used[tier] || 0) + 1; return { ctrl: 'ai', tier, name: t.names[(used[tier] - 1) % t.names.length], em: t.em }; };
+    const mk = (tier) => { const t = TIER[tier]; used[tier] = (used[tier] || 0) + 1; return { ctrl: 'ai', tier, name: t.names[((watch ? 0 : foeIdx(tier)) + used[tier] - 1) % t.names.length], em: t.em }; };
     if (watch) ses.seats = Array.from({ length: n }, (_, i) => mk(opt.wTiers[i] || 'normal'));
     else ses.seats = [{ ctrl: 'me', tier: null, name: '나', em: '나' }].concat(Array.from({ length: n - 1 }, () => mk(opt.tier)));
     ses.coachOn = !!opt.coach;
@@ -574,7 +577,11 @@
         }
       }
       if (!s && ses.startState) { s = ses.startState; ses.startState = null; }   // 🎮 복기에서 '여기서부터 내가 치기'
-      if (!s) s = G.create({ players: ses.cfg.N, bonus: ses.cfg.bonus, rules: ses.cfg.rules, seed: baseSeed, first: 0, seon: seonMode(ses.cfg.rules) });
+      if (!s) {
+        let seon = seonMode(ses.cfg.rules), first = 0;
+        if (seon && !FAST && !ses.cfg.watch && !ses.cfg.online && !G.modeOf(ses.cfg.N).bench) { first = await pickSeon(ses, seon); ses.check(); seon = null; }   // 👑 엎은 패에서 직접 뽑기
+        s = G.create({ players: ses.cfg.N, bonus: ses.cfg.bonus, rules: ses.cfg.rules, seed: baseSeed, first, seon });
+      }
       ses.kind = ses.cfg.watch ? 'watch' : ses.hot ? 'hot' : ses.cfg.online ? (ses.cfg.role === 'host' ? 'host' : 'guest') : 'solo';
       ses.chips = (ses.startChips || CHIPS.start(ses.kind, ses.cfg.N)).slice();
       for (;;) {
@@ -726,6 +733,102 @@
       ses.modals.push(close);
       sfx('pop');
       t = setTimeout(() => close(), ses.cfg.watch ? 2200 : 4200);
+    });
+  }
+
+  // 🎭 AI 대사 (11-01 베니 님: 타짜 분위기로 한 번씩) — 영화 대사를 옮기지 않고 새로 지은 말. 혼자·한 기기만 (친구 방은 사람 채팅이 있어서)
+  const SAY = {
+    평경장: { start: ['자, 손 풀고 시작해 볼까', '오늘도 배우는 마음으로 한 판'], brag: ['봤지? 나온 패를 세면 길이 보여', '서두르지 않으니 패가 알아서 오는구먼', '이 정도는 기본이야'], ouch: ['허허, 오늘은 패가 장난을 치네', '이런 날도 있어야 겸손해지지'], go: ['아직 배가 덜 찼어. 한 번 더', '판이 내 편일 때 밀어야지'], taunt: ['급하면 손이 먼저 나가는 법이야', '패를 보지 말고 판을 봐'] },
+    고광렬: { start: ['자자 판 깔아 봅시다~', '오늘은 내가 쏜다! 돈은 니들이 내고'], brag: ['아이고 이거 미안해서 어쩌나~', '내가 또 해냈네? 박수 좀 쳐 줘', '오늘 손이 아주 그냥 불이야'], ouch: ['어어? 이건 반칙이지 이거', '패가 나를 싫어하네 오늘'], go: ['여기서 멈추면 사나이가 아니지! 고!', '간다간다 쭉쭉 간다~'], taunt: ['어이쿠, 그거 아프겠다~', '괜찮아 괜찮아, 다음 판도 있잖아'] },
+    아귀: { start: ['조용히 치자', '판 돌려'], brag: ['...가져간다', '눈 깜빡하면 끝이야', '계산 끝났어'], ouch: ['...운이 좋았다고 생각해', '이번만이야'], go: ['고. 멈출 이유가 없지', '더 간다. 겁나면 지금 말해'], taunt: ['손이 떨리는군', '그렇게 쳐서 남는 게 있겠어?'] },
+    짝귀: { start: ['시작하지', '잘 부탁해'], brag: ['됐다', '이 정도면 충분하지', '깔끔하게'], ouch: ['흠', '그럴 수도 있지'], go: ['한 번 더', '고'], taunt: ['천천히 해', '패는 도망 안 가'] },
+    _easy: { start: ['잘 부탁드려요!', '살살 해 주세요~'], brag: ['우와 먹었다!', '이게 되네?', '오 나 잘하는데?'], ouch: ['어? 이거 왜 안 붙어요?', '아 뻑이다 ㅠㅠ'], go: ['고...해도 되는 거 맞죠?', '에라 모르겠다 고!'], taunt: ['어? 그쪽도 뻑이네요 ㅎㅎ'] },
+    _normal: { start: ['자, 한 판 하세', '오랜만에 손맛 좀 보세'], brag: ['허허, 이걸 가져가는구먼', '어디 한번 보세나', '이 맛에 치는 거지'], ouch: ['에잉, 패가 고약하네', '허참, 이런 일이'], go: ['한 번 더 가 보세', '여기서 그만두면 섭하지'], taunt: ['젊은이, 서두르지 말게', '허허, 그럴 때도 있지'] },
+  };
+  function aiSay(ses, p, kind, always) {
+    if (FAST || ses.cfg.online || ses.replaying || p == null || p < 0) return;
+    const st = seatAt(ses, p);
+    if (!st || st.ctrl !== 'ai') return;
+    const now = Date.now();
+    if (!always && (now - (ses.sayAt || 0) < 9000 || Math.random() > 0.55)) return;
+    const bank = SAY[st.name] || SAY['_' + st.tier] || SAY._normal, lines = bank[kind];
+    const h = ses.hud && ses.hud[p];
+    if (!lines || !lines.length || !h || !h.seat) return;
+    ses.sayAt = now;
+    const b = document.createElement('div'); b.className = 'sayb'; b.textContent = lines[Math.floor(Math.random() * lines.length)];
+    h.seat.appendChild(b);
+    setTimeout(() => b.classList.add('out'), D(2600)); setTimeout(() => b.remove(), D(3100));
+  }
+  const firstAi = ses => { for (let p = 0; p < ses.S.n; p++) if (seatAt(ses, p).ctrl === 'ai') return p; return -1; };
+  function sayFor(ses, e) {
+    const ai = p => p != null && p >= 0 && seatAt(ses, p).ctrl === 'ai';
+    if (['jjok', 'ttadak', 'sweep', 'eat', 'bomb'].includes(e.t) && ai(e.p)) aiSay(ses, e.p, 'brag');
+    else if (e.t === 'ppeok') { if (ai(e.p)) aiSay(ses, e.p, 'ouch'); else aiSay(ses, firstAi(ses), 'taunt'); }
+    else if (e.t === 'go' && ai(e.p)) aiSay(ses, e.p, 'go', true);
+  }
+
+  // 🔀 섞는 모습 (11-01 베니 님: 짧게라도 보여 주기 · 화면을 누르면 건너뜀) — 더미 위 몇 장을 좌우로 갈라 번갈아 겹침
+  async function shuffleAnim(ses) {
+    if (FAST || !VM || !VM.deck.length) return;
+    const T = targets(ses), ids = VM.deck.slice(-16);
+    if (!ids.every(c => T[c])) return;
+    let skip = false;
+    const stage = $('stage'), onTap = () => { skip = true; };
+    stage.addEventListener('pointerdown', onTap, { once: true });
+    const sub = $('sub'), old = sub.textContent;
+    sub.textContent = '🔀 패를 섞는 중… (누르면 건너뛰어요)';
+    for (let r = 0; r < 3 && !skip; r++) {
+      await Promise.all(ids.map((c, i) => { const t = T[c], side = (i + r) % 2 ? 1 : -1; return moveTo(c, Object.assign({}, t, { x: t.x + side * (30 + (i % 4) * 7), y: t.y - (i % 3) * 3, r: side * (7 + r * 3), z: 420 + i }), { dur: D(170), arc: 6 }); }));
+      sfx('flip');
+      if (skip) break;
+      await Promise.all(ids.map((c, i) => { const z = 400 + ((i * 7 + r * 5) % ids.length); return moveTo(c, Object.assign({}, T[c], { z }), { dur: D(160), arc: 0 }); }));
+      sfx('slap');
+    }
+    stage.removeEventListener('pointerdown', onTap);
+    sub.textContent = old;
+    await syncAll(ses, 0);
+  }
+
+  // 👑 선 뽑기 (11-01 베니 님: 바닥에 엎어 둔 패에서 각자 한 장) — 혼자·한 기기 첫 판. 사람이 고르고 AI 는 남은 데서, 다 뒤집어 월이 높은(낮은) 사람이 선
+  function pickSeon(ses, mode) {
+    return new Promise(res => {
+      const k = Math.min(12, ses.seats.length + 4);
+      const rnd = () => rand32() / 4294967296;
+      const months = Array.from({ length: 12 }, (_, i) => i);
+      for (let i = 11; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); const t = months[i]; months[i] = months[j]; months[j] = t; }
+      const cards = months.slice(0, k).map(m => m * 4 + Math.floor(rnd() * 4));
+      const owner = new Array(k).fill(-1), humans = [], ais = [];
+      ses.seats.forEach((st, p) => (st.ctrl === 'ai' ? ais : humans).push(p));
+      let hi = 0, first = -1, done = false, t = 0;
+      const nm = p => ses.seats[p].name;
+      const close = C.modal({
+        title: '👑 선 뽑기', cls: 'seonbox', buttons: [],
+        html: '<p class="small seonmsg" style="margin:0 0 8px"></p><div class="seonpick"></div>',
+        onClose: () => { clearTimeout(t); ses.modals = ses.modals.filter(x => x !== close); res(first >= 0 ? first : 0); },
+      });
+      ses.modals.push(close);
+      const box = document.querySelector('.seonbox .seonpick'), msg = document.querySelector('.seonbox .seonmsg');
+      const draw = () => {
+        box.innerHTML = cards.map((c, i) => { const o = owner[i]; return `<button type="button" class="sp${o >= 0 ? ' own' : ''}${done && o === first ? ' win' : ''}" data-k="${i}"${o >= 0 || done ? ' disabled' : ''}>${done && o >= 0 ? ART.use(c) : ART.use(-1, 'b')}<b>${o >= 0 ? esc(nm(o)) : '&nbsp;'}</b><span>${done && o >= 0 ? (G.monthOf(c) + 1) + '월' : '&nbsp;'}</span></button>`; }).join('')
+          + (done ? `<div class="spgo"><button type="button" class="btn primary" data-go>${nm(first) === '나' ? '내가 선! 시작' : esc(nm(first)) + ' 선으로 시작'}</button></div>` : '');
+        msg.textContent = done ? `👑 ${nm(first) === '나' ? '내가' : nm(first)} 선! 월이 가장 ${mode === 'low' ? '낮아요' : '높아요'}`
+          : humans.length > 1 ? `${nm(humans[hi])} 님, 엎어 둔 패에서 한 장 골라 주세요` : '엎어 둔 패에서 한 장 골라 주세요';
+      };
+      const finish = () => {
+        for (const p of ais) { const free = owner.map((o, i) => (o < 0 ? i : -1)).filter(i => i >= 0); owner[free[Math.floor(rnd() * free.length)]] = p; }
+        let best = -1;
+        owner.forEach((o, i) => { if (o < 0) return; const m = G.monthOf(cards[i]); if (best < 0 || (mode === 'low' ? m < G.monthOf(cards[best]) : m > G.monthOf(cards[best]))) best = i; });
+        first = owner[best]; done = true; sfx('pop'); draw();
+        t = setTimeout(() => close(), D(3200));
+      };
+      box.addEventListener('click', e => {
+        if (e.target.closest('[data-go]')) { close(); return; }
+        const b = e.target.closest('[data-k]'); if (!b || done) return;
+        const i = +b.dataset.k; if (owner[i] >= 0) return;
+        owner[i] = humans[hi++]; sfx('flip');
+        if (hi >= humans.length) finish(); else draw();
+      });
+      draw();
     });
   }
 
@@ -1225,7 +1328,9 @@
       VM = { hand: s.hands.map(() => []), deck: G.gameCards(s.bonus).slice(), cap: s.hands.map(() => []), slots: new Array(GEO.slots.length).fill(null), fly: {} };
       await syncAll(ses, 0);
       if (s.seonDraw) { await showSeon(ses, s.seonDraw); ses.check(); }
+      await shuffleAnim(ses); ses.check();
       await dealAnim(ses);
+      if (s.round === 1 || Math.random() < 0.3) aiSay(ses, firstAi(ses), 'start', true);
     }
     while (ses.S.phase !== 'end') {
       await ses.ready();
@@ -1593,6 +1698,7 @@
     for (const e of evs) {
       ses.check();
       await ses.ready();
+      sayFor(ses, e);
       switch (e.t) {
         case 'shake': {
           sfx('shake');

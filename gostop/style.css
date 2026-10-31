@@ -505,3 +505,19 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .bombtok b{font-size:46px;line-height:1}
 .bombtok span{font:800 21px/1 var(--round,system-ui,sans-serif);letter-spacing:-.02em}
 .bombtok.can{cursor:pointer;border-color:#fde68a;box-shadow:0 0 0 5px rgba(251,191,36,.85),0 6px 14px rgba(0,0,0,.5)}
+/* 🎭 AI 대사 말풍선 (자리 이름표 아래) */
+.sayb{position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%);background:#fffbeb;color:#1c1917;border-radius:12px;padding:6px 10px;font:700 13px/1.35 var(--text,system-ui,sans-serif);width:max-content;max-width:min(220px,60vw);white-space:normal;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:40;pointer-events:none;animation:sayin .22s ease-out;transition:opacity .4s}
+.sayb::before{content:"";position:absolute;left:50%;top:-6px;margin-left:-6px;border:6px solid transparent;border-top:0;border-bottom-color:#fffbeb}
+.sayb.out{opacity:0}
+@keyframes sayin{from{opacity:0;transform:translate(-50%,-4px) scale(.92)}to{opacity:1;transform:translateX(-50%) scale(1)}}
+/* 👑 선 뽑기: 엎어 둔 패에서 한 장 */
+.seonpick{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+.seonpick .sp{display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:none;padding:4px;border-radius:10px;cursor:pointer;color:inherit;font:inherit;-webkit-tap-highlight-color:transparent}
+.seonpick .sp svg{width:46px;height:74px;border-radius:6px;box-shadow:0 2px 0 #7f1d1d,0 3px 8px rgba(0,0,0,.3);transition:transform .15s}
+.seonpick .sp:not([disabled]):hover svg,.seonpick .sp:not([disabled]):active svg{transform:translateY(-4px)}
+.seonpick .sp b{font-size:12px;max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:15px}
+.seonpick .sp span{font-size:11.5px;opacity:.85;min-height:14px}
+.seonpick .sp[disabled]{cursor:default}
+.seonpick .sp.own svg{outline:3px solid #60a5fa;outline-offset:1px}
+.seonpick .sp.win{background:rgba(253,224,71,.22);box-shadow:0 0 0 2px #facc15 inset}
+.seonpick .spgo{flex-basis:100%;display:flex;justify-content:center;margin-top:6px}
