@@ -128,7 +128,7 @@
   let lastTap = { k: -1, t: 0 }, drag = null;
   const cellAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest("#board .c"); };
   $("board").addEventListener("pointerdown", e => {
-    if (!G || G.over) return;
+    if (!G || G.over || (ctx && ctx.spec)) return;
     const el = cellAt(e.clientX, e.clientY); if (!el) return;
     e.preventDefault();
     const k = +el.dataset.k, t = performance.now();
@@ -633,7 +633,8 @@
     }
     await R.clearProg();
     if (glog) glog.matchStart({ mode: "vs-" + mode, tier: meta.cfg.tier, round, n: list[pid].n, hint: meta.cfg.hint, people: Object.values(players).map(p => p.name).join(", ") });
-    await R.setMeta({ phase: "play", round, pid, vs: NY.rseed(), startAt, used: [...used].slice(-40), scored: 0, ...extra, ...(next ? {} : { wins: {} }) });
+    const who = Object.keys(players);                                       // 이번 판에 하는 사람 (판 도중에 들어온 사람은 구경 → 다음 판부터)
+    await R.setMeta({ phase: "play", round, pid, vs: NY.rseed(), startAt, used: [...used].slice(-40), scored: 0, who, ...extra, ...(next ? {} : { wins: {} }) });
   }
   $("startVs").onclick = () => startRound(false);
 
@@ -646,6 +647,12 @@
       $("resBox").hidden = true;
       const mode = MODE(), tierName = (TIERS.find(t => t.id === meta.cfg.tier) || {}).name || "";
       countdown(meta.startAt, () => {
+        if (isSpec()) {                                                      // 판 도중에 들어옴: 이번 판은 구경 (판 끝 기다림에 안 들어감), 친구 판을 바로 보여 줌
+          startPuzzle(p, { kind: "vs", spec: true, coop: mode === "coop", hintRule: "off", startAt: meta.startAt, label: "👀 구경 중 · 다음 판부터 같이 해요", onProgress: () => {}, onEnd: () => {} });
+          const first = ranking()[0]; if (first && mode !== "coop") spyOpen(first.u);
+          toast("판 도중에 들어와서 이번 판은 구경해요. 다음 판부터 같이 해요", 3500);
+          return;
+        }
         if (mode === "ta") {
           TA = { kind: "vs", tier: meta.cfg.tier, seq: meta.seq, vs: meta.vs, endAt: meta.endAt, clock: () => NET.now(), solved: 0, failed: 0, i: 0, hintRule: meta.cfg.hint, over: false };
           nextTA();
@@ -678,7 +685,7 @@
   // b = 판 모양 한 줄 (관전·협동용): 0 빈칸 · x ✕ · c 고양이 · b 틀린 칸
   const boardStr = () => Array.from({ length: G.n * G.n }, (_, k) => G.cats.has(k) ? "c" : G.bad.has(k) ? "b" : G.xs.has(k) ? "x" : "0").join("");
   function sendProg() {
-    if (!R || !G || ctx.kind !== "vs") return;
+    if (!R || !G || ctx.kind !== "vs" || ctx.spec) return;              // 구경꾼은 진행을 안 올림 (판 끝 기다림에 안 들어감)
     const b = boardStr();
     if (ctx.ta) {
       const ta = ctx.ta;
@@ -723,10 +730,12 @@
     if (hint && stateKey() !== hintKey) closeHint();
     paint();
   }
-  const iFinished = () => MODE() === "ta" ? !!(TA && TA.over) : !!(G && G.over);
+  const iFinished = () => (ctx && ctx.spec) || (MODE() === "ta" ? !!(TA && TA.over) : !!(G && G.over));
+  const isSpec = () => !!(meta && Array.isArray(meta.who) && R && !meta.who.includes(R.uid));
   const score = q => q.done ? (q.secs || 0) + (meta.cfg.hint === "penalty" ? (q.hints || 0) * PENALTY : 0) : null;
   function ranking() {
-    const rows = Object.entries(players).map(([u, p]) => ({ u, name: p.name, q: prog[u] && prog[u].round === meta.round ? prog[u] : null }));
+    const inRound = u => !Array.isArray(meta.who) || meta.who.includes(u) || (prog[u] && prog[u].round === meta.round);
+    const rows = Object.entries(players).filter(([u]) => inRound(u)).map(([u, p]) => ({ u, name: p.name, q: prog[u] && prog[u].round === meta.round ? prog[u] : null }));
     const mode = MODE();
     if (mode === "ta") return rows.sort((a, b) => ((b.q && b.q.solved) || 0) - ((a.q && a.q.solved) || 0) || ((b.q && b.q.placed) || 0) - ((a.q && a.q.placed) || 0));
     if (mode === "coop") return rows.sort((a, b) => ((b.q && b.q.mine) || 0) - ((a.q && a.q.mine) || 0));
@@ -874,7 +883,7 @@
       <table class="rank"><tr><th>이름</th><th>찾은 🐱</th><th>실수</th></tr>${rows.map(r => `<tr><td>${esc(r.name)}${r.u === R.uid ? " (나)" : ""}</td><td class="n">${r.c}</td><td class="n">${r.b}</td></tr>`).join("")}</table>`;
     if (isHost && glog) try { glog.matchEnd({ mode: "coop", won: G.won, secs: Math.round(secs * 10) / 10, results: rows.map(r => ({ n: r.name, cats: r.c, mistakes: r.b })) }); } catch (e) {}
     const key = `${R.code}:${meta.round}:${meta.startAt}`;
-    if (!counted.has(key)) { counted.add(key); REC.match(G.won ? 1 : 0, false);
+    if (!counted.has(key) && !ctx.spec) { counted.add(key); REC.match(G.won ? 1 : 0, false);   // 구경꾼은 기록 안 함
       // 🏆 공용 랭킹: 협동 (같이 이기고 지는 판이라 상대 전적 없음)
       if (window.GRank && rows.length > 1) try { GRank.result("nyang", { mode: "friend", res: G.won ? "w" : "l", beat: 0 }); } catch (e) {}
       if (G.won) { REC.solved(1); REC.cnt("coopWin"); REC.coop(meta.cfg.tier, secs, G.n); } setTimeout(checkBadges, 1500); }
