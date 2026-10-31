@@ -315,9 +315,9 @@ section('폭탄 · 흔들기 · 보너스 피 · 국진');
   ev = act(s, P(0));
   eq([sorted(s.cap[0]), s.table], [[0, 2, 49], [20]], '더미의 보너스 피: 먹고 한 장 더 뒤집음');
 
-  s = S({ hands: [[34, 44], [36, 38]], table: [32], deck: [24, 25] });
+  s = S({ rules: { kook: 'choose' }, hands: [[34, 44], [36, 38]], table: [32], deck: [24, 25] });
   act(s, P(34));
-  eq(s.phase, 'kook', '국진을 먹으면 어디에 쓸지 물어봄');
+  eq(s.phase, 'kook', '국진 \'먹을 때 고르기\' 규칙: 어디에 쓸지 물어봄');
   ev = act(s, G.A_KOOK_P);
   eq([s.kook, G.tally(s, 0).pi, G.tally(s, 0).y], ['P', 3, 0], '국진 → 쌍피');
   s = S({ hands: [[0, 44], [36, 38]], table: [20], deck: [2, 24], cap: [[], [32]], kook: 'P' });
@@ -572,7 +572,7 @@ section('우리 집 규칙: 검증 · 기본값 · 묶음');
   eq(G.matchPreset({ pibak: false }), '', '하나만 바꾸면 어느 묶음도 아님');
   eq(G.matchPreset({ chipPer: 50 }), 'basic', '점당 칩은 묶음 판별에 안 들어감');
   eq(G.diffRules({}), [], '기본이면 바뀐 규칙 없음');
-  eq(G.diffRules({ pibak: false, shakeX: 3, chongtong: 'win', ppeokFirst: 3 }).map(x => x.label + ':' + x.text), ['피박:끔', '흔들기·폭탄 배수:3배', '총통:승리', '첫뻑 보너스:3점'], '바뀐 규칙만 글로');
+  eq(G.diffRules({ pibak: false, shakeX: 3, chongtong: 'win', ppeokFirst: 5 }).map(x => x.label + ':' + x.text), ['피박:끔', '흔들기·폭탄 배수:3배', '총통:승리', '첫뻑 위로금:5점'], '바뀐 규칙만 글로');
   const s0 = G.create({ players: 2, seed: 5 });
   eq(s0.rules, D, '새 판의 규칙은 기본값 (옛 호출 그대로)');
   eq(G.create({ players: 2, seed: 5, rules: { pibak: false } }).rules.pibak, false, '새 판에 규칙을 실어 보냄');
@@ -656,7 +656,17 @@ section('우리 집 규칙: 총통 · 쓰리뻑 · 국진 · 보너스 피');
   eq([s.phase, s.result, s.ppeok[0]], ['play', null, 3], '쓰리뻑 안 씀: 뻑 세 번째여도 계속');
 
   const kk = rules => { const s = S({ rules, hands: [[34, 44], [36, 38]], table: [32], deck: [24, 25] }); act(s, P(34)); return s; };
-  eq([kk({}).phase, kk({}).kook], ['kook', ''], '국진 기본: 고르기');
+  eq([kk({}).phase, kk({}).kook], ['play', ''], '국진 기본: 자동 (안 물어봄, 정하지 않은 채로)');
+  eq(kk({ kook: 'choose' }).phase, 'kook', '국진 먹을 때 고르기: 물어봄');
+  // 자동: 점수 셀 때 가진 사람에게 나은 쪽 — 열끗 4장 + 국진이면 열끗 5장(1점), 피 8장 + 국진이면 쌍피로 피 10장(1점)
+  eq(G.tally(S({ cap: [[32, 4, 12, 16, 20], []] }), 0).kookAs, 'Y', '국진 자동: 열끗이 나으면 열끗');
+  eq([G.tally(S({ cap: [[32, ...PIS.slice(0, 8)], []] }), 0).kookAs, G.tally(S({ cap: [[32, ...PIS.slice(0, 8)], []] }), 0).base], ['P', 1], '국진 자동: 쌍피가 나으면 쌍피 (피 10장 1점)');
+  // 진 사람: 피박을 피하는 쪽으로 (피 6장 + 국진 → 쌍피로 8장이면 피박 아님)
+  {
+    const t = S({ cap: [[...PIS, 22, 23, 26, 27], [32, 34, 35, 38, 39, 42, 43]] });
+    const r = G.settle(t, 0, 'stop');
+    eq([r.kookAs && r.kookAs.as, r.per[0].mults.some(m => m.k === '피박')], ['P', false], '국진 자동: 진 사람은 피박을 피하는 쪽 (쌍피)');
+  }
   s = kk({ kook: 'yeol' });
   eq([s.phase, s.kook, G.tally(s, 0).y, G.tally(s, 0).pi], ['play', 'Y', 1, 1], '국진 열끗 고정: 안 물어봄 (국진은 열끗, 피 1장은 다른 패)');
   s = kk({ kook: 'ssang' });
@@ -672,47 +682,40 @@ section('우리 집 규칙: 총통 · 쓰리뻑 · 국진 · 보너스 피');
   eq(G.nextRound(G.create({ players: 2, seed: 77, rules: { bonus: 2 } })).bonus, 2, '다음 판도 보너스 피 유지');
 }
 
-section('우리 집 규칙: 첫뻑 · 연뻑 보너스');
+section('우리 집 규칙: 첫뻑 · 연뻑 위로금 (뻑한 사람이 받음)');
 {
   const mk = (rules, o) => S(Object.assign({ rules, hands: [[0, 44], [1, 38]], table: [2], deck: [3, 24, 25, 26], cap: [[6], [7]] }, o));
-  let s = mk({ ppeokFirst: 3 });
+  let s = mk({});
   let ev = act(s, P(0));
-  eq([s.ptag[0], ev.find(e => e.t === 'ppeok').tag], ['first', 'first'], '첫 차례의 뻑에 첫뻑 표시');
-  ev = act(s, P(1));
-  eq(s.side, [{ from: 0, to: 1, pts: 3, k: '첫뻑' }], '남의 첫뻑을 먹으면 싼 사람이 3점을 줌');
-  ok(ev.some(e => e.t === 'ppeokBonus' && e.pts === 3 && e.k === '첫뻑'), '첫뻑 보너스 알림');
-  eq(s.ptag[0], '', '먹으면 표시가 지워짐');
+  eq(s.side, [{ from: 1, to: 0, pts: 3, k: '첫뻑' }], '첫 차례에 뻑: 다른 사람이 위로금 3점(기본)을 줌');
+  ok(ev.some(e => e.t === 'ppeok' && e.tag === '첫뻑' && e.pay === 3), '뻑 알림에 첫뻑 위로금');
+  act(s, P(1));
+  eq(s.side.length, 1, '그 뻑 더미를 먹어도 위로금은 더 안 생김');
   const fin = G.settle(s, 1, 'stop');
-  eq(fin.side, [{ from: 0, to: 1, fromSeat: 0, toSeat: 1, pts: 3, k: '첫뻑' }], '정산에 따로 남음');
+  eq(fin.side, [{ from: 1, to: 0, fromSeat: 1, toSeat: 0, pts: 3, k: '첫뻑' }], '정산에 따로 남음 (판 점수와 별개)');
 
-  s = mk({ ppeokFirst: 3 }, { hands: [[0, 1, 44], [36, 38, 39]], deck: [3, 24, 25, 26, 27], cap: [[], [6, 7]] });
-  act(s, P(0)); act(s, P(38)); act(s, P(1));
-  eq(s.side, [{ from: 1, to: 0, pts: 3, k: '첫뻑' }], '자뻑 먹기: 나머지 모두에게서 받음');
-
-  // 첫 차례가 아닌 뻑은 첫뻑이 아님
-  s = S({ rules: { ppeokFirst: 3 }, hands: [[44, 40], [1, 38]], table: [2], deck: [30, 3, 24, 25, 26], cap: [[6], [7]] });
-  act(s, P(44)); act(s, P(1));
-  eq([s.ptag[0], s.owner[0]], ['', 1], '두 번째 차례의 뻑은 첫뻑 아님');
-  act(s, P(40));
-  eq(s.side, [], '보너스 없음');
-
-  // 보너스 0점(기본)이면 표시도 보너스도 없음
-  s = mk({}); act(s, P(0)); act(s, P(1));
-  eq([s.side, s.ptag[0]], [[], ''], '기본: 첫뻑 보너스 없음');
-
-  // 연뻑: p0 뻑 → p1 평범 → p0 또 뻑 → p1 이 먹음
-  const yeon = rules => S({ rules, hands: [[0, 4, 44], [36, 6, 38]], table: [2, 5], deck: [3, 24, 7, 25, 26, 27], cap: [[], [9, 10]] });
-  s = yeon({ ppeokYeon: 5 });
+  s = mk({ ppeokFirst: 5 }, { players: 3, hands: [[0, 44], [36, 38], [40, 42]], cap: [[], [6], [7]] });
   act(s, P(0));
-  eq([s.ptag[0], s.streak[0]], ['', 1], '첫 뻑은 연뻑이 아님 (표시 없음, 연속 1)');
+  eq(s.side, [{ from: 1, to: 0, pts: 5, k: '첫뻑' }, { from: 2, to: 0, pts: 5, k: '첫뻑' }], '3인: 나머지 두 사람이 5점씩');
+
+  // 첫 바퀴가 지난 뒤의 뻑은 첫뻑이 아님
+  s = S({ hands: [[44, 40, 0], [37, 38, 39]], table: [2], deck: [30, 31, 3, 24, 25, 26], cap: [[6], [7]] });
+  act(s, P(44)); act(s, P(38)); act(s, P(0));
+  eq([s.ppeok[0], s.side], [1, []], '두 번째 차례의 뻑은 첫뻑 아님');
+
+  s = mk({ ppeokFirst: 0 }); act(s, P(0));
+  eq(s.side, [], '첫뻑 0점이면 위로금 없음');
+
+  // 연뻑: p0 뻑 → p1 평범 → p0 또 뻑 (첫뻑은 끄고 봄)
+  const yeon = rules => S({ rules, hands: [[0, 4, 44], [36, 6, 38]], table: [2, 5], deck: [3, 24, 7, 25, 26, 27], cap: [[], [9, 10]] });
+  s = yeon({ ppeokFirst: 0, ppeokYeon: 5 });
+  act(s, P(0));
+  eq([s.side, s.streak[0]], [[], 1], '첫 뻑은 연뻑이 아님 (연속 1)');
   act(s, P(36));
   eq(s.streak[0], 1, '남의 차례가 끼어도 내 연속은 그대로');
   act(s, P(4));
-  eq([s.ptag[1], s.ppeok[0]], ['yeon', 2], '연달아 두 번째 뻑에 연뻑 표시');
-  act(s, P(6));
-  eq(s.side, [{ from: 0, to: 1, pts: 5, k: '연뻑' }], '연뻑을 먹으면 싼 사람이 5점을 줌');
-  // 중간에 뻑이 아닌 차례가 끼면 연뻑 아님
-  s = yeon({ ppeokYeon: 5 });
+  eq([s.ppeok[0], s.side], [2, [{ from: 1, to: 0, pts: 5, k: '연뻑' }]], '연달아 두 번째 뻑: 연뻑 위로금 5점');
+  s = yeon({ ppeokFirst: 0, ppeokYeon: 5 });
   act(s, P(0)); act(s, P(36)); act(s, P(44));
   eq([s.streak[0], s.phase], [0, 'play'], '뻑 없는 차례가 끼면 연속이 끊김');
 }

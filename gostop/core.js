@@ -85,9 +85,9 @@
     { k: 'chongtong', g: 'special', t: 'enum', d: 'score', label: '총통', note: '처음 손패에 같은 월 네 장', opts: [['score', '10점', '바로 이기고 10점'], ['win', '승리', '바로 이기고 고/스톱 기준 점수'], ['off', '안 씀', '그냥 계속 쳐요']] },
     { k: 'ppeok3', g: 'special', t: 'enum', d: 'win', label: '쓰리뻑 (뻑 3번)', note: '한 판에 뻑을 세 번 하면', opts: [['win', '바로 승리'], ['off', '안 씀']] },
     { k: 'ppeok3Pts', g: 'special', t: 'num', d: 0, min: 0, max: 50, unit: '점', zero: '기준 점수', label: '쓰리뻑 점수', note: '0이면 고/스톱 기준 점수' },
-    { k: 'ppeokFirst', g: 'special', t: 'num', d: 0, min: 0, max: 20, unit: '점', zero: '없음', label: '첫뻑 보너스', note: '판의 첫 차례에 난 뻑을 먹으면 싼 사람에게서 받아요 (자뻑이면 모두에게서)' },
-    { k: 'ppeokYeon', g: 'special', t: 'num', d: 0, min: 0, max: 20, unit: '점', zero: '없음', label: '연뻑 보너스', note: '같은 사람이 연달아 싼 두 번째 뻑을 먹으면 받아요' },
-    { k: 'kook', g: 'special', t: 'enum', d: 'choose', label: '국진 (9월 열끗)', note: '쌍피로 고를 수 있는지', opts: [['choose', '고르기', '먹을 때 열끗 / 쌍피 선택'], ['yeol', '열끗 고정'], ['ssang', '쌍피 고정']] },
+    { k: 'ppeokFirst', g: 'special', t: 'num', d: 3, min: 0, max: 20, unit: '점', zero: '없음', label: '첫뻑 위로금', note: '자기 첫 차례에 뻑을 하면 다른 사람마다 이만큼 받아요 (판 점수와 따로 · 나가리여도)' },
+    { k: 'ppeokYeon', g: 'special', t: 'num', d: 6, min: 0, max: 20, unit: '점', zero: '없음', label: '연뻑 위로금', note: '같은 사람이 뻑을 연달아 하면 다른 사람마다 이만큼 받아요' },
+    { k: 'kook', g: 'special', t: 'enum', d: 'auto', label: '국진 (9월 열끗)', note: '9월 술잔 한 장은 열끗도 되고 쌍피(피 2장)도 돼요', opts: [['auto', '자동', '점수 셀 때마다 가진 사람에게 나은 쪽으로'], ['choose', '먹을 때 고르기', '먹는 순간 열끗 / 쌍피를 정함'], ['yeol', '열끗 고정'], ['ssang', '쌍피 고정']] },
     { k: 'bonus', g: 'special', t: 'enum', d: 2, label: '보너스 쌍피', note: '덱에 넣는 보너스 피 장수', opts: [[0, '없음'], [2, '2장', '쌍피 두 장'], [3, '3장', '쌍피 두 장 + 쓰리피']] },
     { k: 'stealJjok', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '쪽' },
     { k: 'stealTtadak', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '따닥' },
@@ -334,6 +334,10 @@
   // ── 점수 ───────────────────────────────────────────────────
   // p 가 먹은 패로 점수 계산 (고 보너스 전)
   function tally(s, p, kookAs) {
+    if (!kookAs && !s.kook && s.cap[p].indexOf(KOOK) >= 0) {        // 국진 '자동': 열끗·쌍피 둘 다 세어 보고 점수가 큰 쪽 (같으면 열끗)
+      const y = tally(s, p, 'Y'), q = tally(s, p, 'P');
+      return q.base > y.base ? Object.assign(q, { kookAs: 'P' }) : Object.assign(y, { kookAs: 'Y' });
+    }
     const ka = kookAs || s.kook || 'Y';
     let g = 0, rain = 0, y = 0, birds = 0, t = 0, hong = 0, cheong = 0, cho = 0, pi = 0, piCards = 0;
     for (const c of s.cap[p]) {
@@ -366,6 +370,17 @@
 
   // 판 끝 정산 (점 계산). kind: stop | chongtong | ppeok3 | nagari
   function settle(s, w, kind, extra) {
+    let h = -1;
+    if (!s.kook && kind !== 'nagari') for (let q = 0; q < s.n; q++) if (s.cap[q].indexOf(KOOK) >= 0) h = q;
+    if (h < 0) return settle1(s, w, kind, extra);
+    const keep = s.kook, as = k => { s.kook = k; try { return settle1(s, w, kind, extra); } finally { s.kook = keep; } };
+    const ry = as('Y'), rp = as('P');
+    const val = r => (h === w ? r.points : -((r.per.find(l => l.p === h) || {}).pay || 0));
+    const res = val(rp) > val(ry) ? rp : ry;
+    res.kookAs = { p: h, as: res === rp ? 'P' : 'Y' };
+    return res;
+  }
+  function settle1(s, w, kind, extra) {
     const n = s.n, R = rulesOf(s), carryX = carryMult(s);
     const res = { kind, winner: w, round: s.round, carry: s.carry, items: [], mults: [], per: [], points: 0, base: 0, go: 0, total: 0, extra: extra || {} };
     // 광 팔기 값: 판 결과와 상관없이 산 사람 → 판 사람(쉬는 사람)
@@ -618,9 +633,11 @@
         if (ev) ev.push({ t: 'jjok', p, m, cards: [cur.c, d], steal: rulesOf(s).stealJjok });
       } else if (cur.ht === 1) {                           // 뻑: 세 장이 바닥에 남음
         s.table.push(d); cur.hp = -1; cur.ppeok = true;
-        s.owner[m] = p; s.ppeok[p]++;
-        s.ptag[m] = s.turnNo === 0 && rulesOf(s).ppeokFirst > 0 ? 'first' : s.streak[p] >= 1 && rulesOf(s).ppeokYeon > 0 ? 'yeon' : '';   // 첫뻑 · 연뻑 표시
-        if (ev) ev.push({ t: 'ppeok', p, m, count: s.ppeok[p], cards: tableOf(s, m), tag: s.ptag[m] });
+        s.owner[m] = p; s.ppeok[p]++; s.ptag[m] = '';
+        // 첫뻑(자기 첫 차례) · 연뻑(바로 전 차례도 뻑) 위로금 — 뻑한 사람이 다른 사람마다 받음 (11-01, 예전엔 그 더미를 먹은 사람이 받던 방식)
+        const R = rulesOf(s), pay = s.turnNo < s.n && R.ppeokFirst > 0 ? ['첫뻑', R.ppeokFirst] : s.streak[p] >= 1 && R.ppeokYeon > 0 ? ['연뻑', R.ppeokYeon] : null;
+        if (pay) for (let q = 0; q < s.n; q++) if (q !== p) s.side.push({ from: q, to: p, pts: pay[1], k: pay[0] });
+        if (ev) ev.push({ t: 'ppeok', p, m, count: s.ppeok[p], cards: tableOf(s, m), tag: pay ? pay[0] : '', pay: pay ? pay[1] : 0 });
       } else {                                             // 따닥: 네 장 다
         const all = tableOf(s, m);
         for (const x of all) removeFrom(s.table, x);
@@ -667,7 +684,7 @@
     // 3뻑이면 바로 이김
     if (cur.ppeok && s.ppeok[p] >= 3 && rulesOf(s).ppeok3 === 'win') { combos(s, p, ev); return finish(s, p, 'ppeok3', ev); }
     combos(s, p, ev);
-    if (s.kook === '' && s.cap[p].indexOf(KOOK) >= 0) { s.phase = 'kook'; return; }
+    if (s.kook === '' && rulesOf(s).kook === 'choose' && s.cap[p].indexOf(KOOK) >= 0) { s.phase = 'kook'; return; }
     return scoreCheck(s, ev);
   }
 
