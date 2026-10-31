@@ -3,14 +3,20 @@
    · 장부 주인 = 모임(gid). 방은 열고 닫혀도 잔액은 그대로, 초기화(새 회차)는 관리자·허용 기기만
    · 10-31 베니 님: 장부는 하나(🏦 기본 은행 gbasic, 저절로 생김 — 새 모임 만들기 없앰). '정산하고 새로 시작' = 누가 누구에게 얼마 + 돈만 0,
      🏆 승패(records)·장부·정산 기록은 계속 쌓임. 📈 누적 손익 = 'reset' 정산들의 nets 합 (loadTotals)
-   · 데이터 bank/{gid}: meta {name, chipWon(1칩=원), loanUnit(한 번 빌리는 칩), created, by}
+   · 11-01 💵 오늘 내기 장부 (진짜 돈 내기, 24시간): 대기실 은행 고르기에서 '➕ 오늘 내기 장부 새로' (방장, 점당 원 입력, 기본 100) →
+     gid `gbet-YYYYMMDD-HHMM-xxxx` (규칙이 gid 를 g 로 시작하게 요구) · meta {name:"💵 내기 MM/DD HH:MM", chipWon, loanUnit, kind:'bet', expires: 만든 때 + 24h}.
+     판 결과는 기존 attach()/chips:report 길 그대로 그 gid 에 씀 (게임 코드 변경 없음) — 처음 앉은 사람은 첫 판에 저절로 멤버로 생김 · 정산은 같은 🧾 패널(방 손님은 '정산 보기' 읽기 전용).
+     24시간 뒤: attach 의 load/판 결과/borrow/applyDeltas 가 assertOpen 에서 막고 onEvent({op:'error'}) · 대기실에선 안 보임 · 은행 창 장부 고르기엔 '(끝남)' 으로 남아 보기·정산 가능.
+     kind·expires 는 규칙에 없으면 빼고 저장 (createGroup 재시도) — 판별은 gid 모양으로도 되므로(calc.isBet·expiresOf) 규칙 배포 전에도 동작.
+   · 데이터 bank/{gid}: meta {name, chipWon(1칩=원), loanUnit(한 번 빌리는 칩), created, by, kind?('bet'), expires?}
        members/{pid} {name, borrowed, balance, updated} · ledger/{id} {t, type: loan|game|adjust|reset|ai, pid, amount, game, round, room, by, name, note, pids(ai: 그 판 사람들)}
        settlements/{id} {t, by, lines:[{from,to,won,fn,tn}], nets:{pid:원}, members(그때 잔액), chipWon, residualWon}
      모임 목록: bank/_list/{gid} {name, t}.  ?guest = test/bank/ · ?mock = 이 브라우저 localStorage (탭끼리 같이 씀, 시험용)
    · 읽기: meta·members 는 누구나(로그인), ledger·settlements 는 관리자·허용 기기만. 쓰기는 관리자·허용 기기만 (친구랑은 방장이 씀)
    API (window.Bank) — arena.js(연결)·me.js(이름) 다음에 넣음
      panel({ game, gid, tab })               은행 창: 모임 고르기·만들기, 잔액, 빌려주기·조정, 정산(카톡 복사), 기록
-     lobbyPicker(el, cfg, canEdit, update)   대기실 설정 줄: update({ bank: gid|null, bankName })
+     lobbyPicker(el, cfg, canEdit, update)   대기실 설정 줄: update({ bank: gid|null, bankName }) · 방장은 💵 내기 장부 새로 만들기도
+     createBetLedger({ chipWon })            💵 24시간 내기 장부 만들기 → { gid, name, chipWon, kind, expires }
      label(cfg)                              방 목록·손님 대기실용 짧은 글 ("🏦 금요 모임")
      attach({ game, net, cfg, seats, min, onEvent })  친구랑 판: 방장이면 장부 연결, 손님이면 빌리기 요청만
        방장: s.ready → 자리별 시작 칩 [잔액|null(AI)] · 'chips:report' 를 들어 판마다 장부에 씀 · s.beforeNext({coins,min}) → 빌린 칩 더한 coins
@@ -147,7 +153,23 @@ const BankCalc = (() => {
     if (res.split === "split") L.push(`(AI·조정 몫 ${sfmt(-res.residualWon)}원은 같이 한 사람끼리 똑같이 나눴어요)`);
     return L.join("\n");
   }
-  return { num, int, fmt, sfmt, norm, loan, delta, reset, roundZeroSum, minTransfers, greedy, settle, poolsFromLedger, text };
+  // 💵 오늘 내기 장부 (진짜 돈 내기, 24시간): gid = gbet-YYYYMMDD-HHMM-xxxx (규칙이 gid 를 g 로 시작하게 요구 → 'bet-' 가 아니라 'gbet-')
+  //   종류·끝나는 때는 meta {kind:'bet', expires} 에 적되, 규칙 배포 전·옛 기기도 되게 gid 만으로도 알 수 있음 (시작 + 24시간)
+  const BET_MS = 24 * 3600 * 1000;
+  const p2 = v => String(v).padStart(2, "0");
+  const betGid = (d, rnd) => `gbet-${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}-${String(rnd || "x").replace(/[^a-z0-9]/gi, "").toLowerCase().padEnd(4, "0").slice(0, 4)}`;
+  const betName = d => `💵 내기 ${p2(d.getMonth() + 1)}/${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const isBet = (gid, meta) => (meta && meta.kind === "bet") || /^gbet-\d{8}-\d{4}-/.test(String(gid || ""));
+  const betStart = gid => { const m = /^gbet-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-/.exec(String(gid || "")); return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime() : 0; };
+  const expiresOf = (gid, meta) => (!isBet(gid, meta) ? 0 : num(meta && meta.expires) > 0 ? num(meta.expires) : betStart(gid) ? betStart(gid) + BET_MS : 0);
+  const isExpired = (gid, meta, now) => { const e = expiresOf(gid, meta); return e > 0 && num(now) >= e; };
+  const leftText = (gid, meta, now) => {                       // "11시간 남음" | "40분 남음" | "끝남"
+    const e = expiresOf(gid, meta), ms = e - num(now);
+    if (!e) return "";
+    if (ms <= 0) return "끝남";
+    return ms >= 3600000 ? `${Math.floor(ms / 3600000)}시간 남음` : `${Math.max(1, Math.ceil(ms / 60000))}분 남음`;
+  };
+  return { num, int, fmt, sfmt, norm, loan, delta, reset, roundZeroSum, minTransfers, greedy, settle, poolsFromLedger, text, BET_MS, betGid, betName, isBet, expiresOf, isExpired, leftText };
 })();
 if (typeof module !== "undefined" && module.exports) module.exports = BankCalc;
 
@@ -263,18 +285,39 @@ if (typeof window !== "undefined") (() => {
     const w = won(chips, meta);
     return fmt(w) + "원";
   }
-  async function createGroup({ name, chipWon, loanUnit, gid }) {
+  async function createGroup({ name, chipWon, loanUnit, gid, kind, expires }) {
     await S.ready();
     name = clean(name, 20) || "우리 모임";
     chipWon = Math.min(100000, Math.max(0.01, Number(chipWon) || 10));
     loanUnit = Math.min(1e7, Math.max(10, Math.round(Number(loanUnit) || 1000)));
     gid = gid && /^g[A-Za-z0-9_-]{3,23}$/.test(gid) ? gid : ("g" + S.key().replace(/[^A-Za-z0-9_-]/g, "")).slice(0, 24);
     const t = S.now();
-    await S.update("bank", { [gid + "/meta"]: { name, chipWon, loanUnit, created: t, by: byName() }, ["_list/" + gid]: { name, t } });
-    return { gid, name, chipWon, loanUnit };
+    const meta = { name, chipWon, loanUnit, created: t, by: byName() };
+    if (kind) { meta.kind = clean(kind, 8); if (expires) meta.expires = int(expires); }
+    const put = m => S.update("bank", { [gid + "/meta"]: m, ["_list/" + gid]: { name, t } });
+    try { await put(meta); }
+    catch (e) { if (!kind) throw e; delete meta.kind; delete meta.expires; await put(meta); }   // 규칙(meta kind·expires)이 아직 안 올라갔으면 빼고 — 내기 장부는 gid 만으로도 알아봄
+    return { gid, name, chipWon, loanUnit, kind: meta.kind || null, expires: meta.expires || 0 };
+  }
+  // 💵 오늘 내기 장부 만들기: 점당 원(chipWon) 하나만 받음. 24시간 뒤엔 새 결과를 안 씀 (보기·정산만)
+  async function createBetLedger({ chipWon } = {}) {
+    await S.ready();
+    const now = S.now(), d = new Date(now);
+    const cw = Math.round(Number(chipWon));
+    if (!(cw >= 1 && cw <= 100000)) throw new Error("점당 원은 1~100,000 사이로 적어 주세요");
+    const rnd = Math.random().toString(36).replace(/[^a-z0-9]/g, "").padEnd(4, "0").slice(0, 4);
+    return createGroup({ gid: C.betGid(d, rnd), name: C.betName(d), chipWon: cw, loanUnit: 50, kind: "bet", expires: now + C.BET_MS });
+  }
+  // 끝난 내기 장부엔 판 결과·자동 채움을 못 씀 (meta 를 이미 읽었으면 넘겨 줌)
+  const closedMsg = "💵 내기 장부(24시간)가 끝났어요 — 이 판은 장부에 안 남고 연습 칩으로 해요. 새 장부는 대기실에서 만들어요";
+  async function assertOpen(gid, meta) {
+    if (!C.isBet(gid)) return;
+    if (!meta) meta = await getMeta(gid);
+    if (C.isExpired(gid, meta, S.now())) throw new Error(closedMsg);
   }
   async function borrow(gid, pid, name, n, info) {
     const meta = await getMeta(gid);
+    await assertOpen(gid, meta);
     n = int(n || meta.loanUnit);
     if (n <= 0) throw new Error("빌릴 칩이 0이에요");
     const m = await S.txn(G(gid) + "/members/" + pid, cur => {
@@ -286,6 +329,7 @@ if (typeof window !== "undefined") (() => {
   }
   // 판 결과 쓰기. table = 그 판에 앉은 사람 pid 들 — 사람 칩 합이 0 이 아니면(AI 와 주고받음) 'ai' 줄로 남겨 정산 때 그 사람들끼리 나눔
   async function applyDeltas(gid, rows, info, table) {
+    await assertOpen(gid);
     let sum = 0;
     for (const r of rows) {
       const d = int(r.delta);
@@ -384,6 +428,7 @@ if (typeof window !== "undefined") (() => {
 .bk-btn.sm{padding:7px 9px;font-size:12.5px;border-radius:9px}
 .bk-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .bk-row>*{min-width:0}
+.bk-row[hidden]{display:none}
 .bk-grow{flex:1 1 0}
 .bk-in,.bk-sel{font:600 15px var(--text,inherit);background:rgba(0,0,0,.32);color:var(--ink,#f1f5f9);border:1.5px solid var(--line,rgba(255,255,255,.18));border-radius:11px;padding:9px 11px;outline:none;width:100%;min-width:0}
 .bk-in:focus,.bk-sel:focus{border-color:var(--gold,#f59e0b)}
@@ -508,7 +553,7 @@ if (typeof window !== "undefined") (() => {
       if (st.tab === "hist") return drawHist(head);
       // 장부는 하나(🏦 기본 은행, 저절로 생김). 예전에 따로 만든 모임 장부가 있으면 관리자만 골라 볼 수 있게
       const pick = M && st.groups.length > 1
-        ? `<label class="bk-pick">📂 장부 <select class="bk-sel" data-g aria-label="장부 고르기">${st.groups.map(g => `<option value="${esc(g.gid)}" ${g.gid === st.gid ? "selected" : ""}>${esc(g.name)}${g.gid === DEFAULT.gid ? "" : " (예전)"}</option>`).join("")}</select></label>`
+        ? `<label class="bk-pick">📂 장부 <select class="bk-sel" data-g aria-label="장부 고르기">${st.groups.map(g => `<option value="${esc(g.gid)}" ${g.gid === st.gid ? "selected" : ""}>${esc(g.name)}${g.gid === DEFAULT.gid ? "" : C.isBet(g.gid) ? (C.isExpired(g.gid, null, S.now()) ? " (끝남)" : "") : " (예전)"}</option>`).join("")}</select></label>`
         : "";
       let body = "";
       if (st.gid && st.meta) {
@@ -519,7 +564,9 @@ if (typeof window !== "undefined") (() => {
           .sort((a, b) => b.chips - a.chips || (a.name < b.name ? -1 : 1));
         const sumB = rows.reduce((a, r) => a + r.balance, 0), sumL = rows.reduce((a, r) => a + r.borrowed, 0);
         // 11-01 베니 님: 화면은 '원'만 · 빌리기 없음 — 각자 0원에서 시작해 마이너스로도 감 (장부 안의 시작 돈·빌린 칩은 그대로 두고 손익 = 잔액 − 빌린 칩 으로만 보여 줌)
-        body = `<p class="bk-soft">큰 글씨 = <b>정산 전 손익</b> (지난 정산 뒤로 따고 잃은 돈, 정산하면 0) · 📈 통산 = 처음부터 모두 · 🏆 승패도 계속 쌓여요</p>
+        const bet = C.isBet(st.gid, m), over = bet && C.isExpired(st.gid, m, S.now());
+        const betNote = bet ? `<p class="bk-note">💵 <b>진짜 돈 내기 장부</b> · 1점 = ${fmt(m.chipWon)}원 · ${over ? "<b>끝났어요</b> (24시간 지남) — 새 결과는 안 쓰고 보기·정산만 돼요" : esc(C.leftText(st.gid, m, S.now()))}</p>` : "";
+        body = betNote + `<p class="bk-soft">큰 글씨 = <b>정산 전 손익</b> (지난 정산 뒤로 따고 잃은 돈, 정산하면 0) · 📈 통산 = 처음부터 모두 · 🏆 승패도 계속 쌓여요</p>
           <div class="bk-list" data-members>${rows.length ? rows.map(r => {
             const cls = r.chips > 0 ? "bk-up" : r.chips < 0 ? "bk-down" : "";
             const ed = M && st.edit === r.pid;
@@ -535,6 +582,7 @@ if (typeof window !== "undefined") (() => {
           ${res.residualChips ? `<p class="bk-soft">AI·조정 몫 ${sfmt(-res.residualChips * m.chipWon)}원 (정산 때 같이 한 사람끼리 나눠요)</p>` : ""}
           ${M ? `<div class="bk-row"><input class="bk-in bk-grow" data-addn maxlength="12" placeholder="사람 추가 (이름)"><button class="bk-btn" data-add>추가</button></div>
           <div class="bk-row"><button class="bk-btn pri bk-grow" data-settle>🧾 정산하고 새로 시작</button><button class="bk-btn" data-hist>📜 기록</button></div>`
+          : bet ? `<p class="bk-note">정산 확정은 방장(관리자·허용된 기기)이 해요. 아래에서 누가 누구에게 보낼지는 미리 볼 수 있어요.</p><div class="bk-row"><button class="bk-btn pri bk-grow" data-settle>🧾 정산 보기</button></div>`
           : `<p class="bk-note">각자 0원에서 시작해 잃으면 마이너스로 가요. 정산·기록은 방장(관리자·허용된 기기)이 해요.</p>`}`;
       } else if (st.gid) body = `<p class="bk-soft">장부를 불러오는 중…</p>`;
       else body = `<p class="bk-soft">${M ? "장부를 준비하는 중…" : "아직 장부가 없어요. 돈 거는 게임을 친구랑 하면 저절로 생겨요."}</p>`;
@@ -554,6 +602,7 @@ if (typeof window !== "undefined") (() => {
         <textarea class="bk-txt" data-txt readonly>${esc(txt)}</textarea>
         <div class="bk-row"><button class="bk-btn bk-grow" data-copy>📋 카톡용 복사</button></div>
         ${st.settled ? `<div class="bk-row"><button class="bk-btn pri bk-grow" data-back>장부 보기</button></div>`
+          : !mgr() ? `<p class="bk-soft">미리 보기예요 (AI 와 한 판이 있으면 방장 화면과 조금 다를 수 있어요). 확정은 방장이 해요.</p><div class="bk-row"><button class="bk-btn bk-grow" data-back>← 뒤로</button></div>`
           : `<p class="bk-soft">확정하면 모두의 손익만 0원이 되고, 🏆 승패·📈 누적·장부 기록은 그대로 남아요.</p>
              <div class="bk-row"><button class="bk-btn" data-back>← 뒤로</button><button class="bk-btn pri bk-grow" data-reset>✅ 정산 확정하고 새로 시작</button></div>`}
         <div class="bk-msg${st.ok ? " ok" : ""}" data-msg>${esc(st.msg)}</div>`;
@@ -621,6 +670,7 @@ if (typeof window !== "undefined") (() => {
           return;
         }
         if (b.matches("[data-reset]")) {
+          if (!mgr()) return;                                  // 읽기 전용(방 손님)은 확정 못 함 — 규칙도 막음
           if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "한 번 더 누르면 돈만 0으로 (기록은 남아요)"; return; }
           b.disabled = true;
           st.settled = await saveSettlement(gid, { reset: true });
@@ -644,34 +694,62 @@ if (typeof window !== "undefined") (() => {
       el.innerHTML = `<div class="bk-pick ro">🏦 은행 <b>${cfg.bank ? esc(cfg.bankName || "모임") : "안 씀 (연습 칩)"}</b></div>`;
       return;
     }
-    el.innerHTML = `<label class="bk-pick">🏦 은행 <select class="bk-sel" data-bk-pick aria-label="은행 모임"><option value="">은행 안 씀 (연습 칩)</option></select></label><div class="bk-pick-sub" data-bk-sub></div>`;
-    const sel = el.querySelector("select"), sub = el.querySelector("[data-bk-sub]");
+    const NEW = "__newbet";
+    el.innerHTML = `<label class="bk-pick">🏦 은행 <select class="bk-sel" data-bk-pick aria-label="은행 모임"><option value="">은행 안 씀 (연습 칩)</option></select></label>
+      <div class="bk-row" data-bk-new hidden style="margin-top:6px"><label class="bk-soft bk-grow">💵 점당 몇 원<input class="bk-in" data-bk-won type="number" inputmode="numeric" min="1" step="any" value="100"></label><button class="bk-btn pri" data-bk-go type="button">시작</button><button class="bk-btn" data-bk-no type="button">취소</button></div>
+      <div class="bk-pick-sub" data-bk-sub></div>`;
+    const sel = el.querySelector("select"), sub = el.querySelector("[data-bk-sub]"), nw = el.querySelector("[data-bk-new]");
     let groups = [];
-    // 장부는 하나(🏦 기본 은행) — 이 방이 예전 모임 장부를 쓰던 중이면 그것도 보여 줌
+    // 장부: 🏦 기본 은행(게임 돈) + 💵 아직 안 끝난 내기 장부(진짜 돈, 24시간) — 끝난 내기 장부는 안 보여 줌 (보기·정산은 은행 창에서). 이 방이 예전 모임 장부를 쓰던 중이면 그것도.
+    const open = g => !C.isBet(g.gid) || !C.isExpired(g.gid, null, S.now());
     const fill = () => {
-      const shown = groups.filter(g => g.gid === DEFAULT.gid || g.gid === cfg.bank);
-      sel.innerHTML = `<option value="">은행 안 씀 (연습 칩)</option>${shown.map(g => `<option value="${esc(g.gid)}">🏦 ${esc(g.gid === DEFAULT.gid ? "은행 장부" : g.name + " (예전)")}</option>`).join("")}`;
+      const shown = groups.filter(g => g.gid === DEFAULT.gid || (open(g) && (g.gid === cfg.bank || C.isBet(g.gid))));
+      sel.innerHTML = `<option value="">은행 안 씀 (연습 칩)</option>${shown.map(g => `<option value="${esc(g.gid)}">${C.isBet(g.gid) ? `${esc(g.name)} · ${esc(C.leftText(g.gid, null, S.now()))}` : `🏦 ${esc(g.gid === DEFAULT.gid ? "은행 장부" : g.name + " (예전)")}`}</option>`).join("")}${canManage() ? `<option value="${NEW}">➕ 💵 오늘 내기 장부 새로 (24시간)</option>` : ""}`;
     };
     const desc = async gid => {
       if (!gid) { sub.textContent = "연습용 — 장부에 안 남아요"; return; }
-      try { const m = await getMeta(gid); sub.textContent = `1점(칩) = ${fmt(m.chipWon)}원 · 각자 0원에서 시작해 잃으면 마이너스로 · 정산 때 한꺼번에`; } catch (e) { sub.textContent = ""; }
+      try {
+        const m = await getMeta(gid);
+        sub.textContent = C.isBet(gid, m)
+          ? `💵 진짜 돈 내기 · 1점 = ${fmt(m.chipWon)}원 · ${C.leftText(gid, m, S.now())} · 중간에 와도 첫 판부터 자동으로 들어가요 · 정산은 방장이 🏦 정산에서`
+          : `1점(칩) = ${fmt(m.chipWon)}원 · 각자 0원에서 시작해 잃으면 마이너스로 · 정산 때 한꺼번에`;
+      } catch (e) { sub.textContent = ""; }
     };
     const set = (gid, name) => { update({ bank: gid || null, bankName: gid ? name || "모임" : null }); desc(gid); el.dispatchEvent(new Event("change", { bubbles: true })); };
     sel.disabled = true;
     try { groups = await ensureDefault(await listGroups()); } catch (e) { groups = []; }
     fill(); sel.disabled = false;
     const found = cfg.bank && groups.find(g => g.gid === cfg.bank);
-    sel.value = found ? cfg.bank : "";
-    if (cfg.bank && !found) set(null); else desc(sel.value);
+    const ended = found && !open(found);                      // 이 방에 걸어 둔 내기 장부가 24시간 지났으면 기본 은행으로 (지난 장부는 은행 창에서 보기·정산)
+    sel.value = found && !ended ? cfg.bank : "";
+    if (ended) { const d = groups.find(g => g.gid === DEFAULT.gid); fill(); if (d) { sel.value = d.gid; set(d.gid, d.name); } else set(null); toast("💵 지난 내기 장부(24시간)는 끝났어요 — 기본 은행으로 바꿨어요", 3200); }
+    else if (cfg.bank && !found) set(null); else desc(sel.value);
+    let prev = sel.value;
     sel.addEventListener("change", async e => {
       e.stopPropagation();
       const v = sel.value;
+      if (v === NEW) { nw.hidden = false; const i = nw.querySelector("input"); try { i.focus(); i.select(); } catch (x) {} return; }
+      nw.hidden = true; prev = v;
       const g = groups.find(x => x.gid === v);
       cfg = { ...cfg, bank: v || null };
       set(v, g && g.name);
     });
+    nw.addEventListener("click", async e => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.hasAttribute("data-bk-no")) { nw.hidden = true; sel.value = prev; return; }
+      b.disabled = true;
+      try {
+        const g = await createBetLedger({ chipWon: nw.querySelector("input").value });
+        groups = [{ gid: g.gid, name: g.name, t: S.now() }].concat(groups);
+        fill(); sel.value = g.gid; prev = g.gid; nw.hidden = true;
+        cfg = { ...cfg, bank: g.gid };
+        set(g.gid, g.name);
+        toast("💵 오늘 내기 장부를 시작했어요 (24시간)");
+      } catch (err) { toast("🏦 " + errText(err), 3200); }
+      b.disabled = false;
+    });
   }
-  const label = cfg => (cfg && cfg.bank ? `🏦 ${cfg.bankName || "은행"}` : "");
+  const label = cfg => (cfg && cfg.bank ? (C.isBet(cfg.bank) ? String(cfg.bankName || "💵 내기") : `🏦 ${cfg.bankName || "은행"}`) : "");
 
   // ── 친구랑 판에 장부 꽂기
   //  방장: seats = 판 자리 [{ ctrl: 'me'|'remote'|'hot'|'ai', uid, name }] (같은 배열을 그대로 넘기면 됨)
@@ -699,6 +777,8 @@ if (typeof window !== "undefined") (() => {
     async function load() {
       ses.meta = await getMeta(gid);
       ses.bankName = ses.meta.name;
+      await assertOpen(gid, ses.meta);                        // 끝난 내기 장부면 여기서 멈춤 → onEvent({op:'error', msg}) + 모두 연습 칩
+
       const pids = await Promise.all((seats || []).map(s => (s && s.ctrl !== "ai" && s.name ? pidFor(s.name) : null)));
       const ps = [...new Set(pids.filter(Boolean))], pks = [];
       for (let a = 0; a < ps.length; a++) for (let b = a + 1; b < ps.length; b++) pks.push(pairKey(ps[a], ps[b]));
@@ -732,6 +812,7 @@ if (typeof window !== "undefined") (() => {
       const coins = d.coins.slice();
       if (ses.reload) return;                                 // 새 회차로 0 이 됐으면 이 판 칩은 버리고 다음 판에 새로 시작
       run(async () => {
+        await assertOpen(gid, ses.meta);                      // 판 도중 24시간이 지났으면 이 결과는 안 씀 (승패·전적 포함)
         const rows = [];
         ses.track.forEach((t, i) => { if (!t || coins[i] == null) return; const c = int(coins[i]), dl = c - t.last; t.last = c; if (dl) rows.push({ pid: t.pid, name: t.name, delta: dl }); });
         if (rows.length) await applyDeltas(gid, rows, info({ round: d.round }), ses.track.filter(Boolean).map(t => t.pid));
@@ -833,7 +914,7 @@ if (typeof window !== "undefined") (() => {
 
   window.Bank = {
     MOCK, calc: C, store: S, canManage, pidFor, toast,
-    DEFAULT, chipText, listGroups, createGroup, getMeta, getMembers, stackFor, borrow, applyDeltas, adjust, addMember, saveSettlement,
+    DEFAULT, chipText, listGroups, createGroup, createBetLedger, getMeta, getMembers, stackFor, borrow, applyDeltas, adjust, addMember, saveSettlement,
     panel, lobbyPicker, label, attach, askLoan, createDialog,
   };
 })();
