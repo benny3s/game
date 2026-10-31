@@ -153,7 +153,11 @@
       hide() { visible = false; apply(); return api; },
       toggle(on) { visible = on === undefined ? !visible : !!on; apply(); return api; },
       collapse(on) {
+        const was = collapsed;
         collapsed = on === undefined ? !collapsed : !!on;
+        // 접기·펴기는 같은 자리에서 (11-01 베니 님: 따로 놀면 흐름이 끊김) — 동그라미는 창 머리줄 오른쪽(− 단추 자리), 펼친 창은 동그라미 자리에 오른쪽을 맞춤
+        if (visible && collapsed && !was && !el.hidden) { const r = el.getBoundingClientRect(); st.c = clampXY(chip, r.right - 48, r.top); }
+        else if (visible && !collapsed && was && !chip.hidden) { const r = chip.getBoundingClientRect(), w = el.offsetWidth || Math.min(320, vw() * 0.86); st.p = clampXY(el, r.right - w, r.top); }
         st.z = collapsed ? 1 : 0; persist();
         if (!collapsed) chip.classList.remove("new");
         apply();
