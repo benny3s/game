@@ -194,8 +194,9 @@ const Gate = (() => {
   };
   // 예전 role(host·friend) → 기간은 expiresAt 으로만 판단: 0 = 계속, 숫자 = 오늘만
   const roleOf = hours => (hours > 0 ? "temp24h" : "friend");
-  const durLabel = exp => (exp > 0 ? "⏳ 오늘만" : "♾️ 계속");
+  const durLabel = exp => (exp > 0 ? "⏳ 기간 허용" : "♾️ 계속");
   const leftHours = exp => Math.max(1, Math.ceil((exp - now()) / 3600000));
+  const leftTxt = exp => { const h = leftHours(exp); return h > 48 ? `${Math.ceil(h / 24)}일 남음` : `${h}시간 남음`; };
 
   // ── 허용됨 / 허용 안 됨 상태 반영
   let presenceOn = false;
@@ -459,10 +460,13 @@ const Gate = (() => {
     return { code, role, hours, url: u.toString() };
   }
 
-  async function approveRequest(targetUid, { role = "friend", name = "친구", ua = "" } = {}) {
+  // days: 1·7·30 = 그만큼, 0 = 계속 (예전 role "temp24h" = 1일)
+  async function approveRequest(targetUid, { role = "friend", name = "친구", ua = "", days } = {}) {
     await ensureFirebase();
-    if (role !== "temp24h") role = "friend";
-    const expiresAt = role === "temp24h" ? now() + DAY : 0;
+    if (days == null) days = role === "temp24h" ? 1 : 0;
+    days = [1, 7, 30].includes(Number(days)) ? Number(days) : 0;
+    role = days ? "temp24h" : "friend";
+    const expiresAt = days ? now() + days * DAY : 0;
     await db().ref("game_devices/" + targetUid).set({
       name: String(name || "친구").slice(0, 12),
       role,
@@ -851,6 +855,66 @@ const Gate = (() => {
     return p;
   }
 
+  // ── 허용 요청 줄 (관리 창 · 아케이드 첫 화면 목록이 같이 씀) — 원하는 기간 단추를 맨 앞·초록으로
+  const REQ_DUR = [["day", 1, "⏳ 하루"], ["week", 7, "📅 1주"], ["month", 30, "🗓️ 1달"], ["always", 0, "♾️ 계속"]];
+  const wantKey = w => (w === "today" ? "day" : REQ_DUR.some(d => d[0] === w) ? w : "always");
+  function pendingReqs(val) {
+    return Object.entries(val || {})
+      .map(([uid, r]) => Object.assign({ uid }, r))
+      .filter(r => r && r.status === "pending" && now() - (r.t || 0) < 7 * DAY)   // 일주일 넘은 요청은 안 보임 (비서와 같은 기준)
+      .sort((a, b) => (b.t || 0) - (a.t || 0));
+  }
+  function fillReqList(listEl, pendings) {
+    if (!pendings.length) { listEl.innerHTML = `<div class="bgate-meta">기다리는 요청이 없어요.</div>`; return; }
+    listEl.innerHTML = pendings.map(r => {
+      const w = wantKey(r.want);
+      const durs = REQ_DUR.filter(d => d[0] === w).concat(REQ_DUR.filter(d => d[0] !== w));
+      const btns = durs.map(([k, days, label], i) =>
+        `<button class="bgate-btn ${i ? "ghost" : "green"} sm" data-days="${days}" data-uid="${esc(r.uid)}" data-name="${esc(r.name || "")}" data-ua="${esc(r.ua || "")}">${label}</button>`).join("");
+      return `
+        <div class="bgate-row">
+          <div>
+            <b>${esc(r.name || "이름없음")}</b> <span class="bgate-pill want">${REQ_DUR.find(d => d[0] === w)[2]} 원함</span>${r.bm ? ` <span class="bgate-pill active">💞 브릿지 회원</span>` : ""}
+            ${r.note ? `<div style="font-size:12.5px;color:#e2e8f0;margin-top:2px">💬 ${esc(r.note)}</div>` : ""}
+            <div class="bgate-meta">${esc(r.ua || "기기")} · ${esc(r.game || "portal")} · ${fmtTimeAgo(r.t)}</div>
+          </div>
+          <div style="display:flex;gap:5px;flex-wrap:wrap">${btns}
+            <button class="bgate-btn ghost sm" data-rej="1" data-uid="${esc(r.uid)}" style="color:#fca5a5">🚫 거절</button>
+          </div>
+        </div>`;
+    }).join("");
+    listEl.querySelectorAll("button[data-uid]").forEach(b => {
+      b.onclick = async () => {
+        const { uid, name, ua, days, rej } = b.dataset;
+        b.disabled = true;
+        try {
+          if (rej) await rejectRequest(uid);
+          else await approveRequest(uid, { days: Number(days), name, ua });
+        } catch (e) { b.disabled = false; alert("처리하지 못했어요: " + (e.message || e)); }
+      };
+    });
+  }
+
+  // 아케이드 첫 화면 '🔔 허용 요청' 목록 — 허용할 수 있는 사람(관리자·예전 가족 방장)만, 요청이 있을 때만 보임
+  // el 안을 채우고 onCount(n) 로 개수를 알림. 돌려주는 함수 = 구독 끊기
+  async function mountRequests(el, onCount) {
+    injectStyle();
+    await ensureFirebase();
+    if (!(state.isAdmin || state.canApprove)) return () => {};
+    const ref = db().ref("game_requests");
+    const fn = snap => {
+      const p = pendingReqs(snap.val());
+      el.hidden = !p.length;
+      if (p.length) {
+        el.innerHTML = `<div class="bgate-sec" style="margin:0"><h4><span>🔔 허용 요청 ${p.length}건</span><span class="bgate-meta">누르면 바로 허용돼요</span></h4><div data-list></div></div>`;
+        fillReqList(el.querySelector("[data-list]"), p);
+      }
+      if (onCount) onCount(p.length);
+    };
+    ref.on("value", fn, () => { el.hidden = true; });
+    return () => ref.off("value", fn);
+  }
+
   // ── 포털 [👑 출입·기기 관리] 모달 ─────────────────────────────────
   let adminEl = null, adminSubs = [];
   function clearAdminSubs() {
@@ -889,7 +953,7 @@ const Gate = (() => {
 
   function myPill() {
     if (state.isAdmin) return "👑 관리자(베니)";
-    if (state.allowed) return state.expiresAt > 0 ? `⏳ 기간 허용 · ${leftHours(state.expiresAt)}시간 남음` : "♾️ 계속 허용된 기기";
+    if (state.allowed) return state.expiresAt > 0 ? `⏳ 기간 허용 · ${leftTxt(state.expiresAt)}` : "♾️ 계속 허용된 기기";
     if (state.role === "bridge_free") return `💞 브릿지 회원 · 오늘 무료 ${Math.ceil(freeLeft(state.uid) / 60)}분 남음`;
     return "🔒 허용 안 된 기기";
   }
@@ -1007,43 +1071,15 @@ const Gate = (() => {
       };
     });
 
-    // 허용 요청 목록 구독
+    // 허용 요청 목록 구독 (아케이드 첫 화면 목록과 같은 줄)
     const reqRef = db().ref("game_requests");
     const onReq = snap => {
-      const val = snap.val() || {};
-      const pendings = Object.entries(val)
-        .map(([uid, r]) => Object.assign({ uid }, r))
-        .filter(r => r.status === "pending")
-        .sort((a, b) => (b.t || 0) - (a.t || 0));
+      const pendings = pendingReqs(snap.val());
       const cntEl = adminEl.querySelector("#bgReqCount");
       const listEl = adminEl.querySelector("#bgReqList");
       if (!cntEl || !listEl) return;
       cntEl.textContent = `${pendings.length}건`;
-      if (!pendings.length) {
-        listEl.innerHTML = `<div class="bgate-meta">기다리는 요청이 없어요.</div>`;
-        return;
-      }
-      listEl.innerHTML = pendings.map(r => `
-        <div class="bgate-row">
-          <div>
-            <b>${esc(r.name || "이름없음")}</b> ${r.want ? `<span class="bgate-pill want">${r.want === "today" || r.want === "day" ? "⏳ 하루 원함" : r.want === "week" ? "📅 1주 원함" : r.want === "month" ? "🗓️ 1달 원함" : "♾️ 계속 원함"}</span>` : ""}${r.bm ? ` <span class="bgate-pill active">💞 브릿지 회원</span>` : ""}
-            <div class="bgate-meta">${esc(r.ua || "기기")} · ${esc(r.game || "portal")} · ${fmtTimeAgo(r.t)}</div>
-          </div>
-          <div style="display:flex;gap:5px;flex-wrap:wrap">
-            <button class="bgate-btn green sm" data-act="app-friend" data-uid="${esc(r.uid)}" data-name="${esc(r.name)}" data-ua="${esc(r.ua)}">♾️ 계속</button>
-            <button class="bgate-btn primary sm" data-act="app-24h" data-uid="${esc(r.uid)}" data-name="${esc(r.name)}" data-ua="${esc(r.ua)}">⏳ 오늘만</button>
-            <button class="bgate-btn ghost sm" data-act="app-rej" data-uid="${esc(r.uid)}">🚫 거절</button>
-          </div>
-        </div>
-      `).join("");
-      listEl.querySelectorAll("[data-act]").forEach(b => {
-        b.onclick = async () => {
-          const { act, uid, name, ua } = b.dataset;
-          if (act === "app-rej") await rejectRequest(uid);
-          else if (act === "app-24h") await approveRequest(uid, { role: "temp24h", name, ua });
-          else await approveRequest(uid, { role: "friend", name, ua });
-        };
-      });
+      fillReqList(listEl, pendings);
     };
     reqRef.on("value", onReq);
     adminSubs.push([reqRef, "value", onReq]);
@@ -1068,7 +1104,7 @@ const Gate = (() => {
         const expired = exp > 0 && now() > exp;
         const st = expired ? "revoked" : (d.status || "active");
         const stLabel = expired ? "끝남" : st === "active" ? "허용" : st === "paused" ? "멈춤" : "차단";
-        const expTxt = exp > 0 && !expired ? ` · ${leftHours(exp)}시간 남음` : "";
+        const expTxt = exp > 0 && !expired ? ` · ${leftTxt(exp)}` : "";
         return `
           <div class="bgate-row">
             <div>
@@ -1161,6 +1197,7 @@ const Gate = (() => {
     openCoffee,
     openAdminModal,
     closeAdminModal,
+    mountRequests,
     createPass,
     redeemPassCode,
     requestDeviceApproval,

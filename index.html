@@ -645,6 +645,8 @@ button { font: inherit; cursor: pointer; }
 </header>
 
 <main class="container">
+  <!-- 🔔 허용 요청 (관리자만, 요청이 있을 때만 보임 — Gate.mountRequests) -->
+  <section id="reqBox" hidden style="margin:0 0 18px"></section>
   <div class="section-head">
     <h2>🔥 추천 & 대표 게임 (FEATURED & RECOMMENDED)</h2>
     <span id="featuredHint">카드를 눌러 미리보기 · 모든 게임 혼자 & 친구랑 지원</span>
@@ -714,8 +716,8 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=10"></script>
-<script src="common/me.js?v=9"></script>
+<script src="common/gate.js?v=11"></script>
+<script src="common/me.js?v=10"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=9"></script>
 <script src="common/bank.js?v=6"></script>
@@ -1184,7 +1186,7 @@ button { font: inherit; cursor: pointer; }
     $("bankBtn").hidden = !(window.Bank && (isAdmin || canHost || Bank.canManage()));
     if (isAdmin) {
       btn.classList.add("active");
-      btn.textContent = `👑 ${name} (관리자)`;
+      btn.textContent = `👑 ${name} (관리자)` + (reqCount ? ` · 🔔${reqCount}` : "");
     } else if (canHost) {
       btn.classList.add("active");
       btn.textContent = `✅ ${name} (허용된 기기)`;
@@ -1195,6 +1197,13 @@ button { font: inherit; cursor: pointer; }
       btn.classList.remove("active");
       btn.textContent = `🔑 로그인`;
     }
+  }
+  // 🔔 허용 요청 목록: 관리자(·예전 가족 방장)가 첫 화면에서 바로 허용 — 베니비서는 알림만
+  let reqCount = 0, reqMounted = false;
+  function mountReqs() {
+    if (reqMounted || !window.Gate || !Gate.mountRequests || !(isAdmin || Gate.state.isAdmin || Gate.state.canApprove)) return;
+    reqMounted = true;
+    Gate.mountRequests($("reqBox"), n => { reqCount = n; updateHostBadge(); }).catch(() => { reqMounted = false; });
   }
   const allowedNow = () => isAdmin || canHost || !!(window.Gate && Gate.state.allowed);
 
@@ -1311,7 +1320,7 @@ button { font: inherit; cursor: pointer; }
   });
 
   // 기기 허용이 바뀌면 배지도 바로 (Gate 가 나중에 확인을 끝내도)
-  if (window.Gate && Gate.onChange) Gate.onChange(s => { if (s.status !== "checking" && s.status !== "open" && !isAdmin) { canHost = !!s.canHost; updateHostBadge(); } });
+  if (window.Gate && Gate.onChange) Gate.onChange(s => { if (s.status !== "checking" && s.status !== "open" && !isAdmin) { canHost = !!s.canHost; updateHostBadge(); } mountReqs(); });
   $("coffeeBtn").onclick = () => { if (window.Gate && Gate.openCoffee) Gate.openCoffee(); };
 
   // 방장 & 출입·기기 관리 모달 (Gate 연동)
@@ -1361,6 +1370,7 @@ button { font: inherit; cursor: pointer; }
       }
       renderFeatured();
       renderCatalog();
+      mountReqs();
     });
 })();
 </script>
