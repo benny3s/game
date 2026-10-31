@@ -406,7 +406,7 @@
     try {
       coachBox = CoachPanel.create({ game: "baduk", title: "AI 선생님", startHidden: true });
       CoachPanel.button($("coachBtn"), coachBox);
-      coachBox.onChange(() => { if (coachOpen()) coachTurn(); else coachClear(); });
+      coachBox.onChange(() => { if (coachOpen()) coachTurn(); else coachClear(); rvSync(); });
     } catch (e) { coachBox = null; }
   }
   const coachAvail = () => !!(G && G.mode !== "watch" && (G.mode !== "online" || G.coach));
@@ -441,7 +441,8 @@
     const P = coachBox, st = G.st, game = G;
     if (G.phase === "score") { if (P) P.set("집을 세는 중이에요 · 죽은 돌을 눌러 산 돌 ↔ 죽은 돌을 바꿀 수 있어요"); return; }
     if (G.phase === "done" || st.over) { if (P) P.set("이번 판은 끝났어요"); return; }
-    const mine = canHumanMove(), spec = amSpectator();
+    const rev = G.mode === "review", mine = canHumanMove(), spec = amSpectator() || rev;
+    if (rev) rvSync();
     if (!mine && !spec) {
       if (P) P.set(G.thinking && G.mode === "solo" ? "AI가 생각하는 중이에요 · 내 차례가 되면 알려 드릴게요" : "상대 차례예요 · 상대가 두면 다시 알려 드릴게요");
       else say("내 차례가 되면 알려 드릴게요", 1800);
@@ -460,7 +461,9 @@
     const who = G.mode === "duo" ? `${stoneEm(c)} ${colorName(c)} 차례 · ` : spec ? `${stoneEm(c)} ${esc(sideName(c))} 차례라면 ` : "";
     const msg = r.move === N * N ? `💡 ${who}지금은 <b>패스</b>해도 괜찮아 보여요` : `💡 ${who}<b>${ptName(r.move, N)}</b> 자리 (반짝이는 곳) 어때요?`;
     let why = ""; try { why = coachWhy(st, r.move); } catch (e) {}
-    const foot = spec ? "👀 구경 중 · " : G.mode === "duo" ? "" : `${stoneEm(c)} 내 차례 · `;
+    const real = rev && G.rv ? G.rv.full.moves[G.rv.k] : undefined;   // 🎞️ 복기: 그때 실제로 둔 곳
+    const foot = rev ? (real == null ? "🎞️ 복기 · " : `🎞️ 실제로 둔 곳: <b>${real === N * N ? "패스" : ptName(real, N)}</b>${real === r.move ? " 👑 추천과 같아요" : ""} · `)
+      : spec ? "👀 구경 중 · " : G.mode === "duo" ? "" : `${stoneEm(c)} 내 차례 · `;
     G.coachRes = { key, move: r.move, msg, html: `${msg}${why ? `<br>👉 ${why}` : ""}<br><span style="opacity:.75;font-size:12px">${foot}정답은 아니고 참고만 해요</span>` };
     if (coachBox ? coachOpen() : tapped) coachShow(G.coachRes, tapped);
   }
@@ -493,7 +496,7 @@
     $("resumeGo").onclick = () => { sfx("tap"); resumeGame(cur); };
   }
   function autosave() {
-    if (!G || G.mode === "watch" || G.mode === "online") return;
+    if (!G || G.mode === "watch" || G.mode === "online" || G.mode === "review") return;
     if (G.st.over && G.phase === "done") { save("cur", null); return; }
     save("cur", { mode: G.mode, human: G.human, players: G.players, tiers: G.tiers, st: B.toJSON(G.st) });
   }
@@ -577,7 +580,7 @@
     $("estBtn").setAttribute("aria-pressed", "false");
     $("scoreBox").hidden = true; $("dock").hidden = false;
     // 내 칩은 판 아래, 상대 칩은 판 위 (둘이서·구경은 흑이 아래)
-    const meBottom = (G.mode === "solo" || G.mode === "online") && G.human ? G.human : BLACK;
+    const meBottom = (G.mode === "solo" || G.mode === "online" || G.mode === "review") && G.human ? G.human : BLACK;
     $("rowBot").appendChild(meBottom === BLACK ? $("sideB") : $("sideW"));
     $("rowTop").appendChild(meBottom === BLACK ? $("sideW") : $("sideB"));
     R.key = ""; requestAnimationFrame(() => fit(true));
@@ -675,7 +678,7 @@
   const passTip = c => (G.players[3 - c] === "human" && (G.mode === "solo" || G.mode === "online") ? " 더 둘 곳이 없으면 나도 패스해요" : "");
   function sideName(c) {
     if (!G) return colorName(c);
-    if (G.mode === "online") return (G.names && G.names[c]) || colorName(c);
+    if (G.mode === "online" || G.mode === "review") return (G.names && G.names[c]) || colorName(c);
     if (G.mode === "solo") return G.players[c] === "human" ? "나" : `${TIERS[G.tiers[c]].em} ${TIERS[G.tiers[c]].name}`;
     if (G.mode === "watch") return `${TIERS[G.tiers[c]].em} ${TIERS[G.tiers[c]].name}`;
     return colorName(c);
@@ -739,6 +742,7 @@
   /* ── 상태줄 · 칩 · 단추 ───────────────────────────────────── */
   function label() {
     const N = G.st.size;
+    if (G.mode === "review") return `🎞️ 복기 · ${N}줄`;
     if (G.mode === "online") return G.human ? `👥 친구랑 (${G.net ? G.net.code : ""}) · ${N}줄` : `${G.net ? G.net.code : ""} · ${N}줄`;
     if (G.mode === "solo") { const T = TIERS[G.tiers[3 - G.human]]; return `${T.em} ${T.name} · ${N}줄`; }
     if (G.mode === "watch") return `${TIERS[G.tiers[1]].em} vs ${TIERS[G.tiers[2]].em} · ${N}줄`;
@@ -746,6 +750,7 @@
   }
   function statusText() {
     const st = G.st;
+    if (G.mode === "review") return `${G.rv.k} / ${G.rv.n}수 · ${st.over ? "끝" : `${stoneEm(st.toPlay)} ${esc(sideName(st.toPlay))} 차례`}`;
     if (G.phase === "score") return "죽은 돌을 확인해요";
     if (G.phase === "done") return "끝났어요";
     if (G.mode === "watch" && G.paused) return "⏸ 멈춤";
@@ -781,7 +786,8 @@
     $("resignBtn").disabled = !playing || G.mode === "solo" && !mine && !G.thinking;
     $("undoBtn").disabled = !(G.phase === "play" && st.moves.length > (G.mode === "solo" && G.players[B.first(st)] === "ai" ? 1 : 0));
     $("estBtn").disabled = G.phase !== "play";
-    $("scoreBox").hidden = G.phase !== "score"; $("dock").hidden = G.phase === "score";
+    $("scoreBox").hidden = G.phase !== "score"; $("dock").hidden = G.phase === "score" || G.mode === "review";
+    if (rvDock) rvDock.hidden = G.mode !== "review";
     canvas.classList.toggle("wait", !mine && G.phase !== "score");
     if (G.mode === "online") { turnSync(); drawRoomBar(); }
     kick();
@@ -963,7 +969,7 @@
       showResult(title, `<div class="resbig${humanWon === false ? " lose" : ""}">${esc(big)}</div><p class="small" style="margin:0">${esc(detail)}</p>${chips}${cheer ? `<p class="cheer">${cheer}</p>` : ""}${online ? '<div class="rdy" id="rdyBox"></div>' : ""}`,
         online   // 친구랑: 준비 · 시작은 결과 창 안 준비 칸에서 (손님은 ✋ 준비, 방장이 시작) — 판을 보고 싶으면 '판 보기'
           ? [["기보 복사", () => copySGF(rec.sgf), ""], ["판 보기", () => { $("resPill").hidden = false; }, ""]].concat(ON.host && window.ArenaUI ? [["대기실", () => ArenaUI.toLobby(), ""]] : [], [["나가기", exitToMenu, "ghost"]])
-          : [["한 판 더", () => again(game), "primary"], ["기보 복사", () => copySGF(rec.sgf), ""], ["메뉴", exitToMenu, "ghost"]]);
+          : [["한 판 더", () => again(game), "primary"], ["🎞️ 복기", () => startReview(rec), ""], ["기보 복사", () => copySGF(rec.sgf), ""], ["메뉴", exitToMenu, "ghost"]]);
       if (online) { const box = document.getElementById("rdyBox"); if (box) { wireReady(box); drawReady(); } }
     }, winner && humanWon !== false ? 700 : 300);
     return true;
@@ -1001,10 +1007,78 @@
     if (!recs.length) { Z.toast("아직 끝낸 대국이 없어요"); return; }
     const d = t => { const x = new Date(t); return `${x.getMonth() + 1}/${x.getDate()} ${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}`; };
     const who = r => r.mode === "duo" ? "👥 한 기기 둘이서" : r.mode === "watch" ? "🤖 AI 구경" : (() => { const T = TIERS[r.tiers && r.tiers[3 - r.human]]; return T ? `${T.em} ${T.name}` : "혼자"; })();
-    const html = `<ul class="list reclist">${recs.slice(0, 60).map((r, i) => `<li><div class="inf"><b>${esc(r.result)}${r.mode === "solo" ? (r.winner === r.human ? " · 🎉" : "") : ""}</b><span class="small">${d(r.t)} · ${who(r)} · ${r.size}줄 · ${r.moves}수</span></div><button class="btn" data-i="${i}">기보 복사</button></li>`).join("")}</ul><p class="small" style="margin:0">최근 ${Math.min(60, recs.length)}판 (전체 ${recs.length}판 저장)</p>`;
-    Z.modal({ title: "📜 지난 대국", html, buttons: [{ label: "닫기", primary: true }], dismiss: true });
+    const html = `<ul class="list reclist">${recs.slice(0, 60).map((r, i) => `<li><div class="inf"><b>${esc(r.result)}${r.mode === "solo" ? (r.winner === r.human ? " · 🎉" : "") : ""}</b><span class="small">${d(r.t)} · ${who(r)} · ${r.size}줄 · ${r.moves}수</span></div><button class="btn mint" data-rv="${i}">🎞️ 복기</button><button class="btn" data-i="${i}">기보 복사</button></li>`).join("")}</ul><p class="small" style="margin:0">최근 ${Math.min(60, recs.length)}판 (전체 ${recs.length}판 저장)</p>`;
+    const close = Z.modal({ title: "📜 지난 대국", html, buttons: [{ label: "닫기", primary: true }], dismiss: true });
     const list = document.querySelector(".reclist");
-    if (list) list.onclick = e => { const b = e.target.closest("button[data-i]"); if (b) copySGF(recs[+b.dataset.i].sgf); };
+    if (list) list.onclick = e => {
+      const v = e.target.closest("button[data-rv]"); if (v) { close(); startReview(recs[+v.dataset.rv]); return; }
+      const b = e.target.closest("button[data-i]"); if (b) copySGF(recs[+b.dataset.i].sgf);
+    };
+  }
+
+  /* ── 🎞️ 복기: 지난 대국을 한 수씩 · 🧑‍🏫 선생님(그 장면이라면 어디? + 실제로 둔 곳) · 🎮 여기서부터 내가 두기(상대는 AI) ── */
+  let rvDock = null;
+  const rvBtn = (id, ic, lab) => `<button id="${id}"><span class="ic">${ic}</span><span class="lab">${lab}</span></button>`;
+  function startReview(rec) {
+    let full = null;
+    try { full = B.fromSGF(rec.sgf); } catch (e) {}
+    if (!full || !full.moves.length) { Z.toast("둔 수가 없거나 기보를 읽지 못했어요"); return; }
+    const nm = k => { const m = new RegExp("[^A-Z]" + k + "\\[((?:\\\\.|[^\\]])*)\\]").exec(rec.sgf); return m ? m[1].replace(/\\(.)/g, "$1") : ""; };
+    leaveGame();
+    G = baseG({ mode: "review", size: full.size, human: rec.human || null, players: {}, tiers: rec.tiers || {},
+      names: { [BLACK]: nm("PB") || "흑", [WHITE]: nm("PW") || "백" }, rv: { rec, full, n: full.moves.length, k: 0 } }, B.replay(full, []));
+    if (!rvDock) {
+      rvDock = document.createElement("div"); rvDock.className = "dock"; rvDock.id = "rvDock"; rvDock.hidden = true;
+      rvDock.innerHTML = rvBtn("rvStart", "⏮", "처음") + rvBtn("rvPrev", "◀", "한 수 뒤") + rvBtn("rvNext", "▶", "한 수 앞") + rvBtn("rvEnd", "⏭", "끝")
+        + rvBtn("rvCoach", "🧑‍🏫", "선생님") + rvBtn("rvGo", "🎮", "여기서 두기");
+      $("dock").after(rvDock);
+      rvDock.onclick = e => {
+        const b = e.target.closest("button"); if (!b || !G || !G.rv) return;
+        sfx("tap");
+        const k = G.rv.k;
+        if (b.id === "rvStart") rvGoto(0);
+        else if (b.id === "rvPrev") rvGoto(k - 1);
+        else if (b.id === "rvNext") rvGoto(k + 1);
+        else if (b.id === "rvEnd") rvGoto(G.rv.n);
+        else if (b.id === "rvCoach") { if (coachBox) $("coachBtn").click(); else coachTurn(true); rvSync(); }
+        else if (b.id === "rvGo") rvBranch();
+      };
+    }
+    enterPlay();
+    rvGoto(0);
+    say("🎞️ 복기 · ▶ 로 한 수씩, 🧑‍🏫 선생님을 켜면 그 장면의 추천 자리와 실제로 둔 곳을 알려 줘요", 3600);
+  }
+  function rvSync() {
+    if (!rvDock || !G || !G.rv) return;
+    const { k, n } = G.rv;
+    $("rvStart").disabled = $("rvPrev").disabled = k <= 0;
+    $("rvNext").disabled = $("rvEnd").disabled = k >= n;
+    $("rvCoach").setAttribute("aria-pressed", String(coachOpen()));
+  }
+  function rvGoto(k) {
+    if (!G || !G.rv) return;
+    const rv = G.rv;
+    rv.k = Math.max(0, Math.min(rv.n, k));
+    G.st = B.replay(rv.full, rv.full.moves.slice(0, rv.k));
+    G.est = null; G.hintP = -1; G.pending = -1; G.coachRes = null;
+    updateAll(); rvSync(); coachTurn();
+  }
+  function rvBranch() {
+    const rv = G && G.rv; if (!rv) return;
+    const st = B.replay(rv.full, rv.full.moves.slice(0, rv.k)), k = rv.k;
+    if (st.over) { Z.toast("끝난 장면이에요. ◀ 로 앞으로 가서 눌러 주세요"); return; }
+    const go = human => {
+      const t = rv.rec.tiers && rv.rec.tiers[3 - human], tier = TIERS[t] ? t : TIERS[cfg.tier] ? cfg.tier : "normal";
+      leaveGame();
+      G = baseG({ mode: "solo", size: st.size, komi: st.komi, handicap: st.handicap, human, players: { [human]: "human", [3 - human]: "ai" }, tiers: { [3 - human]: tier } }, st);
+      enterPlay(); autosave();
+      if (coachBox) coachBox.show();
+      say(`🎮 ${k}수째부터 ${stoneEm(human)} 내가 둬요 — 🧑‍🏫 선생님을 켜고 끄며 해 보세요`, 3200);
+      later(afterMove, 350);
+    };
+    if (rv.rec.mode === "solo" && rv.rec.human) return go(rv.rec.human);
+    Z.modal({ title: "🎮 어느 쪽을 둘까요?", html: "<p class='small' style='margin:0'>고른 쪽은 내가, 다른 쪽은 AI 가 이어서 둬요.</p>", dismiss: true,
+      buttons: [{ label: `⚫ 흑 (${G.names[BLACK]})`, primary: st.toPlay === BLACK, onClick: () => go(BLACK) }, { label: `⚪ 백 (${G.names[WHITE]})`, primary: st.toPlay === WHITE, onClick: () => go(WHITE) }] });
   }
 
   /* ── 화면 전환 · 크기 ─────────────────────────────────────── */

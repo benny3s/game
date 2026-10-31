@@ -569,6 +569,7 @@
           if (ses.cfg.me < 0) C.toast('지금 판은 구경해요. 다음 판부터 같이 해요', 3000);
         }
       }
+      if (!s && ses.startState) { s = ses.startState; ses.startState = null; }   // 🎮 복기에서 '여기서부터 내가 치기'
       if (!s) s = G.create({ players: ses.cfg.N, bonus: ses.cfg.bonus, rules: ses.cfg.rules, seed: baseSeed, first: 0, seon: seonMode(ses.cfg.rules) });
       ses.kind = ses.cfg.watch ? 'watch' : ses.hot ? 'hot' : ses.cfg.online ? (ses.cfg.role === 'host' ? 'host' : 'guest') : 'solo';
       ses.chips = (ses.startChips || CHIPS.start(ses.kind, ses.cfg.N)).slice();
@@ -578,7 +579,7 @@
         let next;
         for (;;) {                                           // 🎞️ 다시 보기를 보고 오면 결과 창을 다시
           next = await showResult(ses);
-          if (next && typeof next === 'object' && next.replay) { await runReplay(ses, next.replay, true); continue; }
+          if (next && typeof next === 'object' && next.replay) { await runReplay(ses, next.replay, true); ses.check(); continue; }   // 🎮 여기서부터 치기로 갔으면 이 판은 끝
           break;
         }
         if (next && typeof next === 'object' && next.drillState) {
@@ -1166,7 +1167,7 @@
       vmFromState(s);
       await syncAll(ses, 0);
       if (ses.resume) { ses.resume = false; C.toast('방장 화면과 맞췄어요. 이어서 해요', 1800); }
-      else C.toast('🧑‍🏫 결정적 장면으로 돌아왔어요! 추천 수를 내 보세요', 2400);
+      else { C.toast(ses.drillMsg || '🧑‍🏫 결정적 장면으로 돌아왔어요! 추천 수를 내 보세요', 2400); ses.drillMsg = null; }
     } else {
       // 처음엔 모두 더미에
       VM = { hand: s.hands.map(() => []), deck: G.gameCards(s.bonus).slice(), cap: s.hands.map(() => []), slots: new Array(GEO.slots.length).fill(null), fly: {} };
@@ -1267,7 +1268,26 @@
     show('play'); drawDock();
     runReplay(ses, rec, false).then(() => { if (SES === ses) goHome(); }, e => { if (!(e instanceof Cancel)) { console.error(e); if (SES === ses) goHome(); } });
   }
+  // 🎮 복기 → '여기서부터 내가 치기': k 수째 장면(같은 패·같은 더미)에서 seat 자리를 내가, 나머지는 AI 가 이어서. 선생님은 켜고 시작 (단추로 끔)
+  function startBranch(rec, k, seat) {
+    let st = G.fastClone(rec.start);
+    for (let j = 0; j < k; j++) st = G.step(st, rec.acts[j]).state;
+    if (st.phase === 'end') return C.toast('이미 끝난 장면이에요. 앞으로 돌아가서 눌러 주세요');
+    if (SES) SES.dispose();
+    const cfg = { watch: false, N: rec.start.N, rules: rec.start.rules, bonus: rec.start.bonus, seed: 0, me: seat, branch: true };
+    const ses = SES = newSession(cfg);
+    const tier = TIER[opt.tier] ? opt.tier : 'normal';
+    ses.seats = rec.seats.map((x, i) => (i === seat ? { ctrl: 'me', tier: null, name: '나', em: '나' } : { ctrl: 'ai', tier, name: x.name === '나' ? '그때의 나' : x.name, em: x.em === '나' ? '🙂' : x.em }));
+    ses.startState = st; ses.isDrill = true;
+    ses.drillMsg = `🎮 ${k}수째 장면부터 내가 쳐요 — 🧑‍🏫 선생님을 켜고 끄며 해 보세요`;
+    ses.coachOn = true;
+    show('play');
+    setupCoach(ses);
+    drawDock();
+    runMatch(ses);
+  }
   // 다시 두기: 처음 ⏮ · 한 수 ◀ ▶ · 재생/멈춤. inline = 결과 창에서 (끝나면 결과로 돌아감)
+  //   위 줄: 🧑‍🏫 선생님(이 장면 추천 vs 실제로 낸 패) · 🎮 여기서부터 내가 치기
   async function runReplay(ses, rec, inline) {
     const keep = { watch: ses.cfg.watch, S: ses.S, seats: ses.seats, hide: ses.hide, spec: ses.spec, who: ses.who, bench: ses.bench };
     const acts = rec.acts || [];
@@ -1284,7 +1304,54 @@
     const bar = document.createElement('div'); bar.className = 'rpbar'; bar.id = 'rpBar';
     bar.innerHTML = `<button data-rp="start" aria-label="처음으로">⏮</button><button data-rp="prev" aria-label="한 수 뒤로">◀</button><button data-rp="play" class="pp" aria-label="재생 · 멈춤"></button><button data-rp="next" aria-label="한 수 앞으로">▶</button><span class="rpn"></span><button data-rp="exit" class="rpx">${inline ? '결과로' : '닫기'}</button>`;
     $('play').appendChild(bar);
-    const draw = () => { bar.querySelector('.pp').textContent = rp.play ? '⏸' : '⏵'; bar.querySelector('.rpn').textContent = `${i} / ${acts.length}수`; };
+    const draw = () => { bar.querySelector('.pp').textContent = rp.play ? '⏸' : '⏵'; bar.querySelector('.rpn').textContent = `${i} / ${acts.length}수`; rpCoach(); };
+    // 🧑‍🏫 복기 선생님: 패를 내는 장면마다 그 차례 사람 눈으로 본 추천 vs 실제로 낸 패
+    const canBranch = !ses.cfg.online;                       // 친구 방 결과 창에서는 방을 떠나게 되니 안 보임 (지난 판 목록에서는 됨)
+    const rg = document.createElement('div'); rg.className = 'rpgo';
+    rg.innerHTML = `<button data-rg="coach" aria-pressed="false">🧑‍🏫 선생님</button>${canBranch ? '<button data-rg="branch" class="br">🎮 여기서부터 내가 치기</button>' : ''}`;
+    $('play').appendChild(rg);
+    { const hb = $('play').querySelector('.bar'); if (hb) { rg.style.top = Math.round(hb.getBoundingClientRect().bottom + 6) + 'px'; rg.style.bottom = 'auto'; } }   // 위쪽(승패 줄 자리)에 — 아래는 내 패가 가려져서
+    let rpPanel = null, rpOn = false;
+    const cardOfAct = (st, p, a) => (a < G.A_SHAKE ? a - G.A_PLAY : a < G.A_BOMB ? a - G.A_SHAKE : a < G.A_PASS ? (st.hands[p].find(x => G.monthOf(x) === a - G.A_BOMB) ?? -1) : -1);
+    function rpCoach() {
+      if (!rpOn || !rpPanel) return;
+      const st = ses.S, p = st.turn, a = acts[i];
+      let html = '<span class="small">패를 내는 장면에서 선생님 추천을 보여 드려요 (▶ 로 한 수씩)</span>';
+      const c = st.phase === 'play' && i < acts.length && AI.coachHand ? AI.coachHand(G.view(st, p)) : null;
+      if (c && c.bestCard >= 0) {
+        const who = (rec.seats[st.who[p]] || {}).name || '?', ch = cardOfAct(st, p, a), info = ch >= 0 ? c.byCard[ch] : null;
+        const mark = info ? (info.tier === 'best' ? '👑 최선' : (info.tier === 'good' ? '🟢 ' : info.tier === 'ok' ? '🟡 ' : '🔴 ') + esc(info.deltaText || '')) : '';
+        html = `<b>${esc(who)}</b> 차례 · <span class="cb-tag">👑 추천</span> <b>[${esc(c.bestName)}]</b> — ${esc(c.bestWhy)}`
+          + (info ? `<br>실제로 낸 패: <b>[${esc(info.name)}]</b> ${mark}` : '');
+      }
+      rpPanel.set(html);
+      if (!rpPanel.visible) rpPanel.show();
+    }
+    const pickSeat = () => new Promise(res => {
+      const mine = rec.seats.findIndex(x => x.name === '나');
+      if (mine >= 0) return res(mine);
+      C.modal({ title: '🎮 어느 자리를 칠까요?', html: '<p class="small" style="margin:0">고른 자리는 내가, 나머지는 AI 가 이어서 쳐요.</p>', dismiss: true,
+        buttons: rec.seats.map((x, k) => ({ label: `${x.em || ''} ${x.name}`, primary: k === 0, onClick: () => res(k) })), onClose: () => res(-1) });
+    });
+    rg.onclick = async e => {
+      const b = e.target.closest('[data-rg]'); if (!b) return;
+      sfx('tap');
+      if (b.dataset.rg === 'coach') {
+        rpOn = !rpOn; b.setAttribute('aria-pressed', String(rpOn)); b.classList.toggle('on', rpOn);
+        if (rpOn && !rpPanel && window.CoachPanel) {
+          // 복기 창은 따로 기억 — 처음엔 위 단추 줄 바로 아래 (단추·내 패를 안 가림)
+          try { if (!localStorage.getItem('game.coach.gostop-rp')) { const pw = Math.min(320, innerWidth * 0.86), t = Math.round(rg.getBoundingClientRect().bottom + 6); localStorage.setItem('game.coach.gostop-rp', JSON.stringify({ c: [Math.max(4, innerWidth - 56), t], p: [Math.max(4, Math.round((innerWidth - pw) / 2)), t], z: 0 })); } } catch (err) {}
+          try { rpPanel = CoachPanel.create({ game: 'gostop-rp', title: 'AI 선생님 · 복기', startHidden: true }); } catch (err) { rpPanel = null; }
+        }
+        if (rpOn) { rpCoach(); if (rpPanel && rpPanel.collapsed) rpPanel.collapse(false); } else if (rpPanel) rpPanel.hide();
+        return;
+      }
+      if (ses.S.phase === 'end' || i >= acts.length) return C.toast('끝난 장면이에요. ◀ 로 앞으로 가서 눌러 주세요');
+      rp.play = false; draw();
+      const seat = await pickSeat();
+      if (seat < 0) return;
+      rp.branch = { k: i, seat }; rp.cmd = 'exit'; ses.wake();
+    };
     bar.onclick = e => {
       const b = e.target.closest('[data-rp]'); if (!b) return;
       sfx('tap');
@@ -1318,8 +1385,10 @@
         }
       }
     } finally {
-      bar.remove(); ses.replaying = false;
+      bar.remove(); rg.remove(); ses.replaying = false;
+      if (rpPanel) { try { rpPanel.destroy(); } catch (e) {} }
     }
+    if (rp.branch) { startBranch(rec, rp.branch.k, rp.branch.seat); return; }
     if (inline && ses.alive) {                                // 결과 창으로 돌아감 (판 상태 그대로)
       ses.cfg.watch = keep.watch; ses.seats = keep.seats; ses.hide = keep.hide;
       ses.S = keep.S; ses.who = keep.who; ses.bench = keep.bench; ses.spec = keep.spec;

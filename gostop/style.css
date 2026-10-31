@@ -490,3 +490,8 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .overlay.peek.peeking{background:transparent;pointer-events:none}
 .overlay.peek.peeking>div{display:none}
 .overlay.peek.peeking .peekbtn{pointer-events:auto}
+/* 🎞️ 복기 위 줄: 🧑‍🏫 선생님 · 🎮 여기서부터 내가 치기 */
+.rpgo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 124px);z-index:40;display:flex;gap:6px;max-width:calc(100vw - 16px)}
+.rpgo button{height:36px;padding:0 13px;border-radius:99px;border:1px solid rgba(255,255,255,.22);background:rgba(10,18,14,.86);color:#fff;font:700 13.5px/1 var(--round,inherit);cursor:pointer;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.rpgo button.on{background:#065f46;border-color:#34d399}
+.rpgo button.br{background:#b45309;border-color:#fbbf24}
