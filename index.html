@@ -722,7 +722,7 @@ button { font: inherit; cursor: pointer; }
 <script src="common/gate.js?v=13"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=12"></script>
-<script src="common/rank.js?v=1"></script>
+<script src="common/rank.js?v=2"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=10"></script>
 <script src="common/bank.js?v=6"></script>
@@ -1360,8 +1360,7 @@ button { font: inherit; cursor: pointer; }
     const pl = d => d && d.played ? { n: d.played, w: d.won || 0, l: Math.max(0, d.played - (d.won || 0)) } : null;
     const MIG = {
       gostop: () => { const d = J("gostop.stats"); return d && d.played ? { ...pl(d), b: d.best || 0 } : null; },
-      seotda: () => pl(J("seotda.stats")), poker: () => pl(J("poker.stats")),
-      baduk: () => wl(J("baduk.rec.v1")), omok: () => wl(J("omok_stats_v1")), volley: () => wl(J("volley.rec")),
+      seotda: () => pl(J("seotda.stats")), volley: () => wl(J("volley.rec")),   // 바둑·오목·포커 등은 게임 안에서 (키가 게임마다 달라서)
       cube: () => { const d = J("cube_stats_v1"); return d && d.games ? { n: d.games, w: d.wins || 0, l: Math.max(0, d.games - (d.wins || 0)) } : null; },
     };
     for (const [g, f] of Object.entries(MIG)) GRank.migrateLocal(g, f);

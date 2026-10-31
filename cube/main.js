@@ -162,6 +162,7 @@
     $("tabWatch").onclick = () => { setTab("watch"); sfx.play("tap"); };
     if ($("tabFriend")) $("tabFriend").onclick = () => { sfx.play("tap"); openFriendModal(); };
     $("startBtn").onclick = () => startGame("solo");
+    $("rankBtn").onclick = () => { if (window.GRank) try { GRank.open("cube"); } catch (e) {} };
     $("watchBtn").onclick = () => startGame("watch");
     $("rulesBtn").onclick = () => howto("cube", "베니큐브 하는 법", HOWTO, { force: true });
   }
@@ -898,7 +899,26 @@
     } else {
       sfx.play("bad");
     }
+    rankReport(st, me);
     setTimeout(() => { if (G && G.over) showResult(); }, 700);
+  }
+
+  // 🏆 공용 랭킹: 내 기기에서 뛴 한 판만 (한 폰으로·AI 구경·구경꾼·AI 가 대신 친 자리는 제외), 같은 판은 한 번만
+  let rankedSeed = null;
+  function rankReport(st, me) {
+    try {
+      if (!window.GRank || G.spec || G.roundSeed === rankedSeed) return;
+      const res = st.winner < 0 ? "d" : st.winner === me ? "w" : "l", n = st.n;
+      if (G.mode === "solo") {
+        rankedSeed = G.roundSeed;
+        GRank.result("cube", { mode: "ai", res, beat: res === "w" ? n - 1 : 0 });
+      } else if (G.mode === "online" && G.net && !G.subs[me]) {
+        rankedSeed = G.roundSeed;
+        const opp = [];
+        G.seatUids.forEach((u, s) => { if (u && s !== me && !G.subs[s]) opp.push({ uid: u, res }); });
+        GRank.result("cube", { mode: "friend", res, beat: res === "w" ? opp.length : 0, opp });
+      }
+    } catch (e) {}
   }
 
   function showResult() {
@@ -1453,6 +1473,8 @@
 
   // ── 시작 ───────────────────────────────────────────────
   function init() {
+    // 🏆 예전 기기 기록을 공용 랭킹에 한 번 올림
+    if (window.GRank) try { GRank.migrateLocal("cube", () => { const d = JSON.parse(localStorage.getItem("cube_stats_v1") || "null"); return d && d.games ? { n: d.games, w: d.wins || 0, l: Math.max(0, d.games - (d.wins || 0)) } : null; }); } catch (e) {}
     backGuard($("back"), () => goMenu());
     $("deckBtn").onclick = () => doDraw("deck");
     $("prevBtn").onclick = () => doDraw("take");

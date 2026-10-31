@@ -1,5 +1,6 @@
 /* 냥도쿠 — 화면·조작·혼자 하기·친구 대결 */
 (() => {
+  window.NET = NET;                                        // 공용 랭킹(rank.js)이 같은 DB 앱·로그인을 쓰게
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const store = { get(k, d) { try { const v = localStorage.getItem("nyang." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -424,6 +425,7 @@
       onEnd(won) {
         const secs = G.secs; ctx.finalSecs = secs;
         if (glog) glog.matchEnd({ won, secs: Math.round(secs * 10) / 10, mistakes: G.mistakes, hints: G.hints });
+        if (window.GRank) try { GRank.result("nyang", { mode: "ai", res: won ? "w" : "l", beat: won ? 1 : 0 }); } catch (e) {}   // 🏆 공용 랭킹: 혼자 퍼즐 (포기·처음부터는 안 셈)
         if (won) {
           REC.solved(1); if (!G.hints) REC.best(tier, secs, G.n);
           const st = starsOf(G, secs);
@@ -482,11 +484,12 @@
   let R = null, isHost = false, meta = null, players = {}, prog = {}, myRound = 0, shownRound = 0;
   // 이름 = 게임 사이트 공통 이름 (common/me.js). 처음엔 이름 고르는 창
   const myName = () => ((GME.me && GME.me.name) || "").slice(0, 12);
+  const meInfo = () => (GME.me && GME.me.pid ? { name: myName(), pid: GME.me.pid } : { name: myName() });   // pid = 공용 랭킹 상대 전적용
   async function askName(change) {
     await NET.init();
     await (change ? GME.pick(NET.db(), { canClose: true, title: "누구로 할까요?" }) : GME.ensure(NET.db()));
     drawMe(); drawSoloProg(true);
-    if (R && myName()) R.setMe({ name: myName() });
+    if (R && myName()) R.setMe(meInfo());
     return myName();
   }
   const needName = async () => !!(myName() || await askName());
@@ -514,6 +517,7 @@
   $("tabVs").onclick = () => tab("vs");
   $("tabWatch").onclick = () => tab("watch");
   $("tabRank").onclick = () => tab("rank");
+  $("gRankBtn").onclick = () => { if (window.GRank) NET.init().then(() => GRank.open("nyang")).catch(() => {}); };   // 🏆 전체 게임 공용 랭킹
 
   const hooks = {
     meta(m) { if (leaving) return; meta = m; onMeta(); },
@@ -539,7 +543,7 @@
       const cfg = store.get("cfg", { tier: "normal", hint: "penalty", rounds: 3 });
       const sid = lg ? lg.start({ kind: "대결", hostName: myName() }, NET.uid) : null;
       hooks.logSid = sid;
-      isHost = true; R = await NET.host({ name: myName() }, cfg, hooks);
+      isHost = true; R = await NET.host(meInfo(), cfg, hooks);
       if (lg) lg.info({ room: R.code });
       enterLobby();
     } catch (e) { toast("방을 못 만들었어요: " + e.message, 4000); }
@@ -549,8 +553,8 @@
     code = String(code || "").toUpperCase().trim();
     if (code.length !== 4) { toast("방 코드는 4자리예요"); return; }
     leaving = false;
-    if (R) { if (R.code === code && !isHost) { R.setMe({ name: myName() }); return; } R.leave(); R = null; }   // 이미 들어와 있으면 이름만 바꾸거나, 다른 방이면 먼저 나감
-    try { isHost = false; R = await NET.join(code, { name: myName() }, hooks); enterLobby(); const lg = logInit(); if (lg && R.meta && R.meta.log) { lg.attach(R.meta.log); lg.net(R.uid, { name: myName(), role: "참가" }); } }
+    if (R) { if (R.code === code && !isHost) { R.setMe(meInfo()); return; } R.leave(); R = null; }   // 이미 들어와 있으면 이름만 바꾸거나, 다른 방이면 먼저 나감
+    try { isHost = false; R = await NET.join(code, meInfo(), hooks); enterLobby(); const lg = logInit(); if (lg && R.meta && R.meta.log) { lg.attach(R.meta.log); lg.net(R.uid, { name: myName(), role: "참가" }); } }
     catch (e) { toast(e.message, 4000); }
   }
   $("mkRoom").onclick = makeRoom;
@@ -870,7 +874,10 @@
       <table class="rank"><tr><th>이름</th><th>찾은 🐱</th><th>실수</th></tr>${rows.map(r => `<tr><td>${esc(r.name)}${r.u === R.uid ? " (나)" : ""}</td><td class="n">${r.c}</td><td class="n">${r.b}</td></tr>`).join("")}</table>`;
     if (isHost && glog) try { glog.matchEnd({ mode: "coop", won: G.won, secs: Math.round(secs * 10) / 10, results: rows.map(r => ({ n: r.name, cats: r.c, mistakes: r.b })) }); } catch (e) {}
     const key = `${R.code}:${meta.round}:${meta.startAt}`;
-    if (!counted.has(key)) { counted.add(key); REC.match(G.won ? 1 : 0, false); if (G.won) { REC.solved(1); REC.cnt("coopWin"); REC.coop(meta.cfg.tier, secs, G.n); } setTimeout(checkBadges, 1500); }
+    if (!counted.has(key)) { counted.add(key); REC.match(G.won ? 1 : 0, false);
+      // 🏆 공용 랭킹: 협동 (같이 이기고 지는 판이라 상대 전적 없음)
+      if (window.GRank && rows.length > 1) try { GRank.result("nyang", { mode: "friend", res: G.won ? "w" : "l", beat: 0 }); } catch (e) {}
+      if (G.won) { REC.solved(1); REC.cnt("coopWin"); REC.coop(meta.cfg.tier, secs, G.n); } setTimeout(checkBadges, 1500); }
     showRoundRes(G.won ? "🎉 같이 다 찾았어요!" : "😿 물고기를 다 썼어요", body);
     S(G.won ? "win" : "fail");
   }
@@ -922,6 +929,15 @@
     if (mode === "ta") beat = rk.filter(r => r.u !== R.uid && ((r.q && r.q.solved) || 0) < (q.solved || 0)).length;
     else if (q.done) beat = rk.length - 1 - rk.indexOf(mine);
     REC.match(beat, beat > 0 && beat === rk.length - 1);
+    if (window.GRank && rk.length > 1) try {                                 // 🏆 공용 랭킹: 사람끼리 한 판 (둘 이상일 때만)
+      const dn = r => !!(r.q && r.q.done), sv = r => (r.q && r.q.solved) || 0, pl = r => (r.q && r.q.placed) || 0, mi = rk.indexOf(mine);
+      const vs = o => mode === "ta"
+        ? (sv(mine) === sv(o) ? (sv(mine) ? (pl(mine) === pl(o) ? "d" : pl(mine) > pl(o) ? "w" : "l") : "d") : sv(mine) > sv(o) ? "w" : "l")
+        : (dn(mine) && !dn(o) ? "w" : !dn(mine) && dn(o) ? "l" : dn(mine) ? (mi < rk.indexOf(o) ? "w" : "l") : "d");
+      const opp = rk.filter(r => r.u !== R.uid).map(r => ({ pid: (players[r.u] || {}).pid, uid: r.u, res: vs(r) }));
+      const res = opp.every(o => o.res === "w") && (mode === "ta" ? sv(mine) > 0 : dn(mine)) ? "w" : opp.some(o => o.res === "l") ? "l" : "d";
+      GRank.result("nyang", { mode: "friend", res, beat: res === "w" ? opp.length : beat, score: mode === "ta" ? sv(mine) : undefined, opp: opp.filter(o => o.pid) });
+    } catch (e) {}
     if (mode === "ta") { REC.ta(tier, meta.cfg.mins || 3, q.solved || 0); REC.solved(q.solved || 0); }
     else if (q.done) { REC.solved(1); if (!q.hints) REC.best(tier, q.secs, q.n); }
     setTimeout(checkBadges, 1500);

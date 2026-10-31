@@ -95,6 +95,13 @@
   $('startBtn').onclick = () => { sfx('tap'); startFromMenu(); };
   $('helpBtn').onclick = () => rulesSheet();
   $('recBtn').onclick = () => openRecords();
+  $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open('janggi'); } catch (e) {} };
+  // 🏆 예전에 이 기기에만 있던 AI 대국 전적을 랭킹에 한 번 올림
+  if (window.GRank) try { GRank.migrateLocal('janggi', () => {
+    let w = 0, l = 0, d = 0;
+    Object.values(stats() || {}).forEach(v => { w += v.w || 0; l += v.l || 0; d += v.d || 0; });
+    return { n: w + l + d, w, l };
+  }); } catch (e) {}
   $('mstBtn').onclick = () => { sfx('tap'); if (window.Mistakes) Mistakes.open({ game: 'janggi' }); };
   $('setBtn').onclick = openSettings;
   $('ruleBtn').onclick = () => openRules(pref.rules, r => { pref.rules = r; savePref(); drawMenu(); });
@@ -558,8 +565,24 @@
   $('againBtn').onclick = () => { if (G) { sfx('tap'); newGame(G.cfg); } };
 
   // ── 끝 ──
+  // 🏆 랭킹: 판이 끝나면 내 기기 몫만 한 번 (구경 · 둘이서 · AI 구경 · 복기에서 이어 둔 연습 판은 안 셈, 새로 고침으로 다시 받은 끝난 판도 한 번만)
+  function rankReport(g) {
+    try {
+      if (!window.GRank || g.me == null || g.branch != null || (g.mode !== 'ai' && g.mode !== 'online')) return;
+      const w = g.s.winner, res = w == null ? 'd' : w === g.me ? 'w' : 'l', r = { mode: 'ai', res, beat: res === 'w' ? 1 : 0 };
+      if (g.mode === 'online' && ON) {
+        const key = ON.net.code + ':' + g.round + ':' + C.toJSON(g.s).moves.join(' ') + ':' + g.s.reason;
+        let seen = []; try { seen = JSON.parse(sessionStorage.getItem('janggi.rk') || '[]'); } catch (e) {}
+        if (seen.includes(key)) return;
+        try { sessionStorage.setItem('janggi.rk', JSON.stringify(seen.concat(key).slice(-12))); } catch (e) {}
+        const ou = g.seats && g.seats[1 - g.me];
+        if (ou && !(ON.sub && ON.sub[ou])) { r.mode = 'friend'; r.opp = [{ uid: ou, res }]; }   // AI 가 대신 앉았으면 AI 판
+      }
+      GRank.result('janggi', r);
+    } catch (e) {}
+  }
   function finish() {
-    const g = G; g.over = true; cancelAI(); board.setArrow(null); $('setupBox').hidden = true; $('moves').hidden = false;
+    const g = G; g.over = true; cancelAI(); board.setArrow(null); $('setupBox').hidden = true; $('moves').hidden = false; rankReport(g);
     if (g.mode === 'online') { turnStop(); if (ON && ON.goneAsk) { try { ON.goneAsk(); } catch (e) {} } countScore(g); }
     const s = g.s, w = s.winner;
     let res = 'd';

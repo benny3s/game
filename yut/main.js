@@ -85,6 +85,7 @@
   $('tabFriend').onclick = () => { sfx('tap'); openFriend(); };
   $('startBtn').onclick = () => { sfx('pop'); startLocal(); };
   $('rulesBtn').onclick = () => showRules();
+  $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open('yut'); } catch (e) {} };
 
   const splitPeople = s => String(s || '').split(/[,，、\/\n]+/).map(x => x.trim().slice(0, 10)).filter(Boolean).slice(0, 8);
 
@@ -230,6 +231,7 @@
           const a = await getAction(ses);
           await doAction(ses, a);
         }
+        rankReport(ses);
         const again = await showResult(ses);
         if (!again) {
           if (ses.cfg.mode === 'online') { if (window.ArenaUI) ArenaUI.toLobby(); }
@@ -905,6 +907,19 @@
   const playResultSound = k => sfx('res', { k });
 
   // ── 결과 ─────────────────────────────────────────────────
+  // 🏆 랭킹: 혼자(AI)·친구랑 판만 — 각자 자기 기기에서 한 번. 이기면 w, 아니면 l, beat = 난 말이 나보다 적은 팀 수
+  function rankReport(ses) {
+    try {
+      const S = ses.S, mode = ses.cfg.mode;
+      if (!window.GRank || !S || S.phase !== 'end' || ses.rankG === ses.games || (mode !== 'ai' && mode !== 'online')) return;
+      ses.rankG = ses.games;
+      const mt = ses.teams.findIndex(tm => tm.members.some(m => m.kind === 'human' && (mode === 'ai' || m.uid === ses.cfg.net.uid)));
+      if (mt < 0) return;                                            // 구경만 함
+      const hc = t => Y.homeCount(S, t), mine = hc(mt), opp = [];
+      if (mode === 'online') ses.teams.forEach((tm, t) => { if (t !== mt) tm.members.forEach(m => { if (m.kind === 'human' && m.uid && !m.sub) opp.push({ uid: m.uid, res: t === S.winner ? 'l' : mt === S.winner ? 'w' : mine > hc(t) ? 'w' : mine < hc(t) ? 'l' : 'd' }); }); });
+      GRank.result('yut', { mode: mode === 'ai' ? 'ai' : 'friend', res: S.winner === mt ? 'w' : 'l', beat: ses.teams.filter((_, t) => t !== mt && hc(t) < mine).length, opp: mode === 'online' ? opp : undefined });
+    } catch (e) { console.warn('[rank]', e); }
+  }
   function closeResult() { document.querySelectorAll('.overlay.yres').forEach(o => o.remove()); }
   function resultHtml(ses) {
     const S = ses.S, w = ses.teams[S.winner];
@@ -1130,6 +1145,7 @@
     }
     renderAll(ses);
     if (myTurn(ses)) autoSelect(ses);
+    if (ses.S.phase === 'end' && prev && prev.phase !== 'end') rankReport(ses);   // 끝나는 걸 본 판만 (끝난 판에 다시 들어온 건 제외)
     if (ses.S.phase === 'end' && !document.querySelector('.overlay.yres')) guestResult(ses);
   }
   // 친구·구경꾼의 결과 창: 준비(구경꾼은 '다음 판에 낄래요')만 누르고 시작은 방장이

@@ -89,6 +89,14 @@
   $('helpBtn').onclick = () => howto(true);
   $('setBtn').onclick = openSettings;
   $('recBtn').onclick = openRecords;
+  $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open('omok'); } catch (e) {} };
+  // 🏆 예전에 이 기기에만 있던 AI 대국 전적을 랭킹에 한 번 올림
+  if (window.GRank) try { GRank.migrateLocal('omok', () => {
+    let w = 0, l = 0, d = 0;
+    const sum = o => Object.values(o || {}).forEach(v => { w += v.w || 0; l += v.l || 0; d += v.d || 0; });
+    sum(stats()); if (!(w || l || d)) sum(Cozy.store('omok_stats_v1', null));
+    return { n: w + l + d, w, l };
+  }); } catch (e) {}
 
   // ════════ 친구랑: 방 최대 16명 — 2명(상담이면 4명)이 두고 나머지는 실시간 구경 ════════
   // 방장이 판의 주인: 손님 수는 방장에게 보내고, 방장이 확인해 모두에게 (수 번호 n 으로 순서 맞춤). 늦게 온 사람은 'hello' → 방장이 판 전체(sync)
@@ -761,8 +769,24 @@
   function cancelAI() { reqId++; clearTimeout(aiTimer); if (G) G.thinking = false; }
 
   // ── 끝 ──
+  // 🏆 랭킹: 판이 끝나면 내 기기 몫만 한 번 (구경 · 둘이서 · AI 구경 · 복기에서 이어 둔 판은 안 셈, 새로 고침으로 다시 받은 끝난 판도 한 번만)
+  function rankReport(g) {
+    try {
+      if (!window.GRank || !g.me || (g.mode !== 'ai' && g.mode !== 'online') || g.branch) return;
+      const w = g.s.winner, res = !w ? 'd' : w === g.me ? 'w' : 'l', r = { mode: 'ai', res, beat: res === 'w' ? 1 : 0 };
+      if (g.mode === 'online' && g.net) {
+        const key = g.net.code + ':' + g.round + ':' + O.encode(g.s);
+        let seen = []; try { seen = JSON.parse(sessionStorage.getItem('omok.rk') || '[]'); } catch (e) {}
+        if (seen.includes(key)) return;
+        try { sessionStorage.setItem('omok.rk', JSON.stringify(seen.concat(key).slice(-12))); } catch (e) {}
+        const ou = ((g.seats && g.seats[3 - g.me]) || []).filter(u => !(ON && ON.sub[u]));       // AI 가 대신 앉은 자리는 빼고
+        if (ou.length) { r.mode = 'friend'; r.opp = ou.map(uid => ({ uid, res })); }
+      }
+      GRank.result('omok', r);
+    } catch (e) {}
+  }
   function finish(won) {
-    const g = G; g.over = true; clearInterval(tickT); cancelAI();
+    const g = G; g.over = true; clearInterval(tickT); cancelAI(); rankReport(g);
     if (g.mode === 'online') { turnStop(); if (ON && ON.goneAsk) { try { ON.goneAsk(); } catch (e) {} } countScore(g); }   // 친구랑: 내 차례 시계 끄기 · '나갔어요' 창 닫기 · 이 방 전적 +1
     if (askClose) askClose();                                         // 기권·처음부터 묻는 창이 열려 있었으면 닫음 (결과 창과 겹치지 않게)
     board.setForbidden(null); board.setGhost(null);

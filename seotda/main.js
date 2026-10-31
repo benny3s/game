@@ -892,6 +892,25 @@
     return draw;
   }
 
+  // 🏆 랭킹: 한 판(승부) 끝날 때 내 기기에서 내 결과만 알림 (혼자=AI 판 · 친구 방=친구 판, 한 기기·AI 구경·구경꾼·재경기·연습은 안 보냄)
+  function rankReport(ses, v, r) {
+    try {
+      if (!window.GRank || ses.drill || ses.spec || r.kind === 'rematch') return;
+      if (ses.mode !== 'solo' && ses.mode !== 'host' && ses.mode !== 'guest') return;
+      const me = ses.me, ws = r.winners || [r.winner];
+      if (!(me >= 0) || !ws.length) return;
+      const myUid = ses.net && ses.net.uid;
+      const humans = ses.mode === 'solo' ? [] : ses.seats.map((x, i) => ({ x, i })).filter(o => o.i !== me && o.x.uid && o.x.uid !== myUid && !o.x.sub);
+      const won = ws.includes(me);
+      const score = ((r.payouts && r.payouts[me]) || 0) - ((v.bets && v.bets[me]) || 0);      // 이번 판 순이익 (딴 돈 - 낸 돈)
+      GRank.result('seotda', {
+        mode: humans.length ? 'friend' : 'ai', res: won ? 'w' : 'l',
+        beat: won ? Math.max(0, v.n - ws.length) : 0, score,
+        opp: humans.map(o => ({ uid: o.x.uid, res: won === ws.includes(o.i) ? 'd' : won ? 'w' : 'l' })),
+      });
+    } catch (e) { console.warn('[rank]', e); }
+  }
+
   // 판 결과 창 — 방장/혼자는 '다음 판', 손님은 '준비' 를 누르고 방장을 기다림
   function showRoundResult(ses) {
     return new Promise(resolve => {
@@ -902,6 +921,7 @@
       const iWon = r.kind !== 'rematch' && (r.winners || [r.winner]).includes(me);
       // 재경기(사구파토)는 판돈이 다음 판으로 넘어가 칩이 아직 탁자 위 → 알리지 않음 (다음 판 결과에 합쳐짐)
       if (ses.mode !== 'guest' && r.kind !== 'rematch' && !drill) CHIPS.report(ses.mode, { round: v.round, coins: S.fastClone(v.coins), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid })), me });
+      if (!drill) rankReport(ses, v, r);
       if (solo && !drill) {
         stats.played++;
         if (iWon) stats.won++;
@@ -1277,6 +1297,8 @@
     const ses = SES; if (!ses || !ses.mdrill || !ses.mdrill.hide) return;
     sfx('tap'); ses.mdrill.hide = false; renderGame(ses);
   });
+  $('gRankBtn').onclick = () => { sfx('tap'); if (window.GRank) GRank.open('seotda'); else C.toast('랭킹을 불러오지 못했어요'); };
+  try { if (window.GRank) GRank.migrateLocal('seotda', () => ({ n: stats.played, w: stats.won, l: Math.max(0, stats.played - stats.won) })); } catch (e) {}   // 예전 기기 기록 한 번 올림
   drawMenu();
   showScreen('home');
   const mDrill = window.Mistakes ? Mistakes.fromUrl('seotda') : null;

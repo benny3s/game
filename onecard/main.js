@@ -1627,6 +1627,19 @@
   }
 
   // ── 판 결과 ──────────────────────────────────────────────
+  // 🏆 랭킹에 내 결과 올리기 (각자 자기 기기에서 한 번): 1등만 승, 나보다 아래 등수 수 = beat
+  function rankReport(ses, r, me) {
+    try {
+      if (!window.GRank || me < 0 || (ses.kind !== 'solo' && ses.kind !== 'host' && ses.kind !== 'guest')) return;
+      const at = q => r.order.indexOf(q), mine = at(me);
+      if (mine < 0) return;
+      const friend = ses.kind !== 'solo';
+      GRank.result('onecard', {
+        mode: friend ? 'friend' : 'ai', res: r.winner === me ? 'w' : 'l', beat: r.order.length - 1 - mine, score: r.pts[me],
+        opp: friend ? ses.seats.map((x, q) => ({ x, q })).filter(o => o.q !== me && !o.x.bot && !o.x.sub && o.x.uid && !String(o.x.uid).startsWith('ai:')).map(o => ({ uid: o.x.uid, res: at(o.q) < 0 || mine < at(o.q) ? 'w' : 'l' })) : undefined,
+      });
+    } catch (e) { console.warn('[rank]', e); }
+  }
   async function showResult(ses) {
     await Promise.race([popQ, sleep(1500)]);
     await ses.wait(FAST ? 0 : 400);
@@ -1668,6 +1681,7 @@
       $('resBtns').innerHTML = '';
       const done = v => { clearTimeout(autoT); $('resBox').hidden = true; ses.drawReady = null; resolve(v); };
       const mk = (label, cls, v) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = () => { sfx('tap'); done(v); }; $('resBtns').appendChild(b); return b; };
+      if (!spec && !ses.resCounted && !ses.isDrill) rankReport(ses, r, me);   // 🏆 랭킹: 혼자(AI)·친구랑 판만 (한 기기·구경 제외)
       ses.resCounted = true;
       const online = !!ses.cfg.online, host = online && ses.cfg.role === 'host';
       let nb;
@@ -1791,6 +1805,8 @@
     sfx('tap'); ses.mdrill.hide = false; ses.coachHtml = null;
     render(ses); coachRender(ses); if (ses.mReveal) { ses.mReveal(); ses.mReveal = null; }
   });
+  $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open('onecard'); } catch (e) {} };
+  try { if (window.GRank) GRank.migrateLocal('onecard', () => ({ n: stats.played, w: stats.won, l: Math.max(0, stats.played - stats.won), b: stats.best })); } catch (e) {}   // 기기에만 있던 통산 기록 한 번 올리기
   drawMenu();
   show('home');
   const mDrill = window.Mistakes ? Mistakes.fromUrl('onecard') : null;

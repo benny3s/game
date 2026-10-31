@@ -86,6 +86,7 @@
     startLocal(opt.tab);
   };
   $('rulesBtn').onclick = () => showRules(opt.game);
+  $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open('billiards'); } catch (e) {} };
   $('rpListBtn').onclick = () => { sfx('tap'); openReplayList(); };
   $('noteBtn').onclick = () => { sfx('tap'); if (window.Mistakes) Mistakes.open({ game: 'billiards' }); };
   if (window.Mistakes && Mistakes.onChange) Mistakes.onChange(() => drawHomeBtns());
@@ -312,7 +313,7 @@
     }
     flash(r.msg || '', 2600);
     updateHud();
-    if (s.phase === 'end') { saveReplay(ses); const g0 = ses.gid; stopShotTimer(); setTimeout(() => { if (SES === ses && ses.gid === g0) showResult(); }, 900); return; }
+    if (s.phase === 'end') { rankReport(ses); saveReplay(ses); const g0 = ses.gid; stopShotTimer(); setTimeout(() => { if (SES === ses && ses.gid === g0) showResult(); }, 900); return; }
     startTurn();
   }
 
@@ -545,6 +546,21 @@
   }
 
   // ── 결과
+  // 🏆 랭킹: AI 대결·친구랑 판만 (혼자 연습·한 기기·복기 연습·구경 제외) — 각자 자기 기기에서 한 번. 8볼은 팀이 이기면 같이 승
+  function rankReport(ses) {
+    try {
+      const s = ses.s;
+      if (!window.GRank || !s || s.phase !== 'end' || ses.rankGid === ses.gid || ses.isDrill || ses.rp || (ses.kind !== 'ai' && ses.kind !== 'online')) return;
+      const mi = ses.seats.findIndex(x => x.ctrl === 'me'); if (mi < 0) return;      // 구경만 함
+      ses.rankGid = ses.gid;
+      const won = i => (s.mode === '8ball' ? B.teamOf(s, i) === s.winTeam : i === s.winner), w = won(mi);
+      const others = ses.seats.map((x, i) => ({ x, i })).filter(o => o.i !== mi && (s.mode !== '8ball' || B.teamOf(s, o.i) !== B.teamOf(s, mi)));   // 같은 팀은 상대 아님
+      GRank.result('billiards', {
+        mode: ses.kind === 'ai' ? 'ai' : 'friend', res: w ? 'w' : 'l', beat: w ? others.length : 0,
+        opp: ses.kind === 'online' ? others.filter(o => o.x.uid && o.x.ctrl === 'remote' && !o.x.sub && (w || won(o.i))).map(o => ({ uid: o.x.uid, res: w ? 'w' : 'l' })) : undefined,
+      });
+    } catch (e) { console.warn('[rank]', e); }
+  }
   function showResult() {
     if (!SES) return;
     const s = SES.s, w = s.winner;
@@ -1167,12 +1183,14 @@
   }
   function applySnap(sn) {
     const ses = SES, first = !ses.s, g = sn.gid | 0, fresh = first || g > ses.gid;
+    const live = !!(ses.s && ses.s.phase === 'play' && g === ses.gid);   // 지켜보던 판이 끝난 것만 랭킹에 (끝난 판에 늦게 들어온 건 제외)
     if (ses.rp) rpClose('silent');                                // 복기 보는 중에 판이 바뀌면 복기를 닫음
     ses.s = sn.s; ses.no = sn.no; ses.gid = g;
     if (fresh) { ses.anim = null; ses.last = null; ses.lastTurn = -1; ses.waiting = false; ses.rdy = new Set(); ses.pick = {}; ses.drawReady = null; $('resBox').hidden = true; }   // 새 판: 결과 창·준비 목록 치움
     if (sn.wins) ses.wins = sn.wins;
     ses.seats = sn.seats.map(x => ({ uid: x.uid, name: x.name, em: '🙂', ctrl: x.uid && x.uid === ses.net.uid ? 'me' : 'remote', sub: !!x.sub }));
     ses.spectator = !ses.seats.some(x => x.ctrl === 'me');
+    if (live) rankReport(ses);
     if (fresh) { ses.rec = ses.s.phase === 'play' ? mkRec(ses) : null; ses.lastRec = null; } else ses.rec = null;
     if (fresh) enterPlay(); else startTurn();
     if (ses.s.phase === 'end') showResult();

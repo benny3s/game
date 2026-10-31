@@ -90,6 +90,14 @@
   $("duoBtn").onclick = () => startDuo();
   $("watchBtn").onclick = () => startWatch();
   $("recBtn").onclick = () => showRecords();
+  $("rankBtn").onclick = () => { sfx("tap"); try { if (window.GRank) GRank.open("baduk"); } catch (e) {} };
+  // 🏆 예전에 이 기기에만 있던 AI 대국 전적을 랭킹에 한 번 올림
+  if (window.GRank) try { GRank.migrateLocal("baduk", () => {
+    let n = 0, w = 0, l = 0;
+    for (const r of store("records", [])) if (r && r.mode === "solo" && r.human) { n++; if (r.winner === r.human) w++; else if (r.winner) l++; }
+    if (!n) { const d = Z.store("baduk.rec.v1", null); if (d) Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); }); n = w + l; }
+    return { n, w, l };
+  }); } catch (e) {}
 
   // ── 친구랑: 두 사람이 두고 나머지는 모두 구경 (방 최대 16명). 방장이 판을 쥐고(수 확인·전달), 늦게 온 사람에겐 판 묶음을 보냄
   const RM = window.BadukRoom;
@@ -208,7 +216,7 @@
     if (r.phase === "done" && !same) {
       const resign = !!(G.st.end && G.st.end.reason === "resign");
       G.phase = resign ? "play" : "score"; if (!resign) { if (!G.dead) G.dead = new Uint8Array(G.st.size * G.st.size); rescore(); }
-      const game = G; later(() => { if (G === game) finish(true); }, 300);
+      const game = G; later(() => { if (G === game) finish(true, true); }, 300);
     }
     turnSync();
   }
@@ -1048,7 +1056,18 @@
   }
 
   /* ── 결과 ─────────────────────────────────────────────────── */
-  function finish(remote) {
+  // 🏆 랭킹: 판이 끝나면 내 기기 몫만 한 번 (구경 · 한 기기 둘이서 · AI 구경 · 새로 받은 끝난 판은 안 셈)
+  function rankReport(game, winner, sc) {
+    try {
+      if (!window.GRank || !game.human || (game.mode !== "solo" && game.mode !== "online")) return;
+      const res = !winner ? "d" : winner === game.human ? "w" : "l", r = { res, beat: res === "w" ? 1 : 0 };
+      if (res === "w" && sc) r.score = Math.abs(sc.margin);
+      const ou = game.mode === "online" ? game.seats[3 - game.human] : null;
+      if (ou && ON && !ON.sub[ou]) { r.mode = "friend"; r.opp = [{ uid: ou, res }]; } else r.mode = "ai";   // AI 가 대신 앉았으면 AI 판
+      GRank.result("baduk", r);
+    } catch (e) {}
+  }
+  function finish(remote, restored) {
     if (!G || G.phase === "done") return false;
     if (G.mode === "online" && !remote && amSpectator() && !(G.st.end && G.st.end.reason === "resign")) return false;
     if (G.mode === "online" && G.net && !remote && !(G.st.end && G.st.end.reason === "resign")) netSend({ t: "confirm", g: G.g });
@@ -1062,6 +1081,7 @@
       detail = `흑 ${sc.black}집 · 백 ${sc.white}집 + 덤 ${st.komi}`;
     }
     G.phase = "done"; G.gen++; hideBubble();
+    if (!restored) rankReport(game, winner, sc);
     if (G.mode === "online") { turnStop(); if (ON && ON.goneAsk) { try { ON.goneAsk(); } catch (e) {} } countScore(G, winner); }   // 친구랑: 내 차례 시계 끄기 · '나갔어요' 창 닫기 · 이 방 전적 +1
     updateAll(); coachTurn();
     const humanWon = G.mode === "solo" ? winner === G.human : null;

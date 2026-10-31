@@ -35,6 +35,9 @@
   let touchUI = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches);
   addEventListener('touchstart', () => { if (!touchUI) { touchUI = true; drawMenu(); applyMode(); } }, { passive: true, capture: true });
 
+  // 🏆 예전 기기 기록(1:1 AI 판)을 공용 랭킹에 한 번 올림
+  if (window.GRank) try { GRank.migrateLocal('volley', () => { let n = 0, w = 0, l = 0, b = null; for (const r of Object.values(rec)) { if (!r) continue; w += r.w || 0; l += r.l || 0; if (r.best && (b == null || r.best[0] > b)) b = r.best[0]; } n = w + l; return { n, w, l, b }; }); } catch (e) {}
+
   const R = ART.create($('cv'));
 
   // ════════ 메뉴 ════════
@@ -56,6 +59,7 @@
     $('startBtn').textContent = `▶ ${Cozy.TIERS[cfg.mode].name} 고양이와 시작!`;
     drawLocal();
   }
+  $('rankBtn').addEventListener('click', () => { if (window.GRank) try { GRank.open('volley'); } catch (e) {} });
   $('tiers').addEventListener('click', e => {
     const b = e.target.closest('.tier'); if (!b) return; Cozy.sfx.play('tap');
     if (b.dataset.id === 'local') cfg.tab = 'local'; else cfg.mode = b.dataset.id;
@@ -562,6 +566,20 @@
     if (sc[0] === t - 1 || sc[1] === t - 1) banner('매치 포인트!', `${sc[0]} : ${sc[1]}`, 1000, '#f2647e');
     else hideBanner();
   }
+  // 🏆 공용 랭킹: 내 기기에서 뛴 판만 (한 기기·AI 구경·구경꾼·AI 가 대신 친 자리는 제외)
+  function rankReport(w) {
+    try {
+      const g = G, o = g.o; if (!window.GRank) return;
+      if (o.kind === 'ai') {
+        const won = w === 0;
+        GRank.result('volley', { mode: 'ai', res: won ? 'w' : 'l', beat: won ? g.team : 0, score: g.s.score[0] });
+      } else if (o.kind === 'online' && g.myCat >= 0 && !g.sub[g.myCat]) {
+        const mt = g.myCat & 1, won = w === mt, opp = [];
+        o.seats.forEach((u, k) => { if (u && (k & 1) !== mt && !g.sub[k]) opp.push({ uid: u, res: won ? 'w' : 'l' }); });
+        GRank.result('volley', { mode: 'friend', res: won ? 'w' : 'l', beat: won ? opp.length : 0, score: g.s.score[mt], opp });
+      }
+    } catch (er) {}
+  }
   function onOver(e) {
     G.over = true;
     if (G.o.kind === 'online') G.o.seats.forEach((u, k) => { if (u && (k & 1) === e.w) RM.wins[u] = (RM.wins[u] || 0) + 1; });   // 이긴 편 사람마다 +1 (모든 화면이 같은 순간에)
@@ -573,6 +591,7 @@
       if (won) { r.w++; if (!r.best || sc[0] - sc[1] > r.best[0] - r.best[1]) r.best = [sc[0], sc[1]]; } else r.l++;
       Cozy.save('volley.rec', rec);
     }
+    rankReport(e.w);
     SND.play(won ? 'matchWin' : 'matchLose');
     if (won) later(() => Cozy.confetti(), 200);
     later(() => showResult(e.w), 1700);

@@ -682,12 +682,15 @@
     const pl = (ses.net && ses.net.players) || {}, have = new Set(ses.seats.map(x => x.uid));
     const prev = ses.S, r = prev.result, old = ses.seats;
     const prevUid = old[prev.who[r && r.winner >= 0 ? r.winner : prev.first]].uid;
-    const keep = old.map((x, i) => i).filter(i => !old[i].drop);
+    // 빠지는 자리: '다음 판부터 빼기' + 나가서 AI 가 대신 치던 자리(방에 없으면) — 은행 방도 판 사이엔 뺌 (안 빼면 4명이 돼 사람이 쉬는 차례가 됨)
+    let out = x => x.drop || (x.sub && x.uid && !pl[x.uid]);
+    if (old.filter(x => !out(x)).length < 2) out = x => x.drop;   // 둘이서(맞고)라 빼면 혼자가 되면 AI 가 계속 침
+    const keep = old.map((x, i) => i).filter(i => !out(old[i]));
     const fresh = Object.keys(pl).filter(u => !have.has(u) && !(pl[u] && pl[u].watch) && ses.joinPick[u]).sort((a, b) => ((pl[a] && pl[a].t) || 0) - ((pl[b] && pl[b].t) || 0));
     const add = fresh.slice(0, Math.max(0, 5 - keep.length));
     let s;
     if (add.length || keep.length !== old.length) {
-      const gone = old.filter(x => x.drop).map(x => x.name);
+      const gone = old.filter(out).map(x => x.name);
       ses.seats = keep.map(i => old[i]); ses.chips = keep.map(i => ses.chips[i]);
       if (ses.score) { ses.score.w = keep.map(i => ses.score.w[i]); ses.score.l = keep.map(i => ses.score.l[i]); }
       if (ses.rel) relRemap(ses, keep, add.length);
@@ -2230,6 +2233,23 @@
   }
 
   // ── 판 결과 ──────────────────────────────────────────────
+  // 🏆 랭킹: 한 판(승부) 끝날 때 내 기기에서 내 결과만 알림 (혼자=AI 판 · 친구 방=친구 판, 한 기기·AI 구경·구경꾼·나가리·연습은 안 보냄)
+  //   손님도 자기 화면에서 이 결과 창이 뜨니 각자 한 번씩 (방장 대신 알리지 않음)
+  function rankReport(ses, s, r) {
+    try {
+      if (!window.GRank || ses.isDrill || r.kind === 'nagari' || r.winner < 0) return;
+      if (ses.kind !== 'solo' && ses.kind !== 'host' && ses.kind !== 'guest') return;
+      const mr = ses.cfg.me, myUid = ses.net && ses.net.uid, won = r.winner === meSeat(ses);
+      if (!(mr >= 0)) return;
+      const wr = s.who[r.winner];                                                   // 이긴 사람의 방 자리
+      const humans = ses.kind === 'solo' ? [] : s.who.filter(rs => rs !== mr && ses.seats[rs] && ses.seats[rs].uid && ses.seats[rs].uid !== myUid && !ses.seats[rs].sub);
+      GRank.result('gostop', {
+        mode: humans.length ? 'friend' : 'ai', res: won ? 'w' : 'l', beat: won ? s.n - 1 : 0,
+        score: ses.lastDeltas && ses.lastDeltas[mr] != null ? ses.lastDeltas[mr] : undefined,       // 이번 판 칩 손익
+        opp: humans.map(rs => ({ uid: ses.seats[rs].uid, res: won ? 'w' : rs === wr ? 'l' : 'd' })),
+      });
+    } catch (e) { console.warn('[rank]', e); }
+  }
   async function showResult(ses) {
     await Promise.race([popQ, sleep(1500)]);
     await ses.wait(FAST ? 0 : 350);
@@ -2258,6 +2278,7 @@
       if (!spec && r.kind !== 'nagari' && !ses.resCounted) {
         stats.played++; if (r.winner === me) { stats.won++; stats.best = Math.max(stats.best, r.points); }
         C.save(KEY + 'stats', stats); drawCoinPill();
+        rankReport(ses, s, r);
       }
       // 점수 내역
       const saleRows = (r.sale || []).map(x => `<tr><td>💰 광 팔기 <span class="small">${esc(tname(ses, x.buyerSeat))} → ${esc(tname(ses, x.seat))} · 광 ${x.cards.length}장</span></td><td class="n">${x.price}점</td></tr>`).join('');
@@ -2433,6 +2454,8 @@
   };
   if (window.Mistakes) Mistakes.onChange(drawMistakeBtn);
   drawMistakeBtn();
+  $('gRankBtn').onclick = () => { sfx('tap'); if (window.GRank) GRank.open('gostop'); else C.toast('랭킹을 불러오지 못했어요'); };
+  try { if (window.GRank) GRank.migrateLocal('gostop', () => ({ n: stats.played, w: stats.won, l: Math.max(0, stats.played - stats.won), b: stats.best || null })); } catch (e) {}   // 예전 기기 기록 한 번 올림
   document.addEventListener('click', e => {                 // 💡 답 보기 (노트 연습 첫 장면)
     if (!e.target.closest('[data-mreveal]')) return;
     const ses = SES; if (!ses || !ses.mdrill || !ses.mdrill.hide) return;

@@ -754,6 +754,7 @@
     ses.V = m.v; ses.me = m.me; ses.n = m.v.n; ses.waiting = false; ses.spec = m.me < 0;
     ses.seats = m.ro.map(r => ({ name: r.name, em: r.em, ctrl: r.ctrl === 'a' ? 'ai' : 'remote', uid: r.u || null, sub: !!r.b }));
     if (m.sc) ses.score = m.sc;
+    rankNote(ses, m.v, m.me);
     if (!prev || prev.round !== m.v.round) ses.coachLog = [];
     if (prev && m.v.round < prev.round) { ses.readyMap = {}; ses.lastKey = ''; }      // 새 게임 (핸드 번호가 처음으로)
     $('startModal').hidden = true;
@@ -806,6 +807,7 @@
     try {
       while (ses.alive) {
         ses.coachLog = [];
+        rankNote(ses, ses.S, ses.me);
         // 🎞️ 복기용 기록: 이 핸드 처음 상태 + 행동 차례 (같은 규칙 엔진으로 그대로 다시 둠)
         //   혼자·한 기기만 (친구랑은 기록 안 함 — 아래 saveReplay 설명), 연습 판·탈락 뒤 구경은 안 남김
         ses.rec = (ses.mode === 'solo' || ses.mode === 'hot') && !ses.practice && !ses.spectating && ses.S.phase === 'bet'
@@ -1062,11 +1064,34 @@
     });
   }
 
+  // 🏆 랭킹: 한 게임(우승자가 가려질 때까지)이 끝날 때 내 기기에서 내 결과만 알림 (혼자=AI 판 · 친구 방=친구 판, 한 기기·AI 구경·구경꾼·연습은 안 보냄)
+  //   rankNote: 새 게임 첫 핸드에서 내 시작 칩 기록 (이번 게임 칩 손익 = 지금 칩 - 시작 칩) · 블라인드 낸 뒤라 낸 돈을 더해 둠
+  function rankNote(ses, v, me) {
+    if (v && v.round === 1 && v.phase === 'bet' && me >= 0) { ses.rankStart = v.coins[me] + (v.totalBets ? v.totalBets[me] : 0); ses.rankDone = false; }
+  }
+  function rankReport(ses, v, bust) {
+    try {
+      if (!window.GRank || ses.practice || ses.rankDone || ses.spec) return;
+      if (ses.mode !== 'solo' && ses.mode !== 'host' && ses.mode !== 'guest') return;
+      const me = ses.me;
+      if (!(me >= 0)) return;
+      ses.rankDone = true;
+      const myUid = ses.net && ses.net.uid, won = !bust && v.champion === me;
+      const humans = ses.mode === 'solo' ? [] : ses.seats.map((x, i) => ({ x, i })).filter(o => o.i !== me && o.x.uid && o.x.uid !== myUid && !o.x.sub);
+      GRank.result('poker', {
+        mode: humans.length ? 'friend' : 'ai', res: won ? 'w' : 'l', beat: won ? v.n - 1 : 0,
+        score: ses.rankStart != null ? v.coins[me] - ses.rankStart : undefined,
+        opp: humans.map(o => ({ uid: o.x.uid, res: v.coins[me] > v.coins[o.i] ? 'w' : v.coins[me] < v.coins[o.i] ? 'l' : 'd' })),
+      });
+    } catch (e) { console.warn('[rank]', e); }
+  }
+
   // 게임 끝 (한 명만 남음)
   function showOver(ses) {
     return new Promise(resolve => {
       const v = getView(ses), champ = v.champion, me = ses.me;
       const iWon = champ === me;
+      if (!ses.spectating) rankReport(ses, v);
       if (ses.mode === 'solo' && !ses.spectating) { const st = loadStats(); st.games += 1; if (iWon) st.wins += 1; saveStats(st); }
       $('endTitle').textContent = iWon ? '🏆 우승! 끝까지 살아남았어요' : `🏆 ${esc(nameOf(ses, champ))} 우승!`;
       $('endSub').textContent = `${fmtN(v.coins[champ])}칩으로 테이블을 차지했어요 · ${v.round}번째 핸드`;
@@ -1095,6 +1120,7 @@
   function showBust(ses) {
     return new Promise(resolve => {
       const st = loadStats(); st.games += 1; saveStats(st);
+      rankReport(ses, getView(ses), true);
       $('endTitle').textContent = '😵 칩이 바닥나 탈락!';
       $('endSub').textContent = '남은 AI들의 승부를 구경하거나, 새 게임을 시작할 수 있어요';
       $('endPots').hidden = true; $('endCoachBox').hidden = true; $('endShowdown').innerHTML = '';
@@ -1403,6 +1429,8 @@
     else startLocal();
   });
   $('replayBtn').addEventListener('click', openReplayList);
+  $('gRankBtn').addEventListener('click', () => { if (window.GRank) GRank.open('poker'); else showToast('랭킹을 불러오지 못했어요'); });
+  try { if (window.GRank) GRank.migrateLocal('poker', () => { const st = loadStats(); return { n: st.games, w: st.wins, l: Math.max(0, st.games - st.wins) }; }); } catch (e) {}   // 예전 기기 기록 한 번 올림
   // 📒 아쉬운 장면: 시작 창 단추(없으면 숨김) · 목록을 닫으면 숫자 다시 · 노트에서 온 주소(?drill=)면 그 장면부터 연습 (맨 아래)
   $('mistakeBtn').addEventListener('click', () => {
     if (!window.Mistakes) return;

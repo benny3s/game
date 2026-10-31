@@ -83,6 +83,11 @@
   $('p2Btn').onclick = () => { sfx('pop'); let a = (p2Animal() + 1) % A.ANIMALS.length; if (a === opts.animal) a = (a + 1) % A.ANIMALS.length; opts.animal2 = a; saveOpts(); drawMenu(); };
   $('startBtn').onclick = () => start(opts.tab);
   $('helpBtn').onclick = () => howto(true);
+  $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open('land'); } catch (e) {} };
+  // 기기에만 있던 기록 한 번 올리기: 'land.best' 는 설정(모드·실력·마리 수)마다 최고 기록 하나뿐이라 판 수는 알 수 없어 '설정 수 / 그중 1등'을 최소치로 (혼자 1마리 설정은 제외)
+  try {
+    // 예전 기록(land.best)은 설정마다 최고 기록 하나뿐이라 판 수를 알 수 없어 랭킹에 올리지 않음
+  } catch (e) {}
 
   // ══ 친구랑 (온라인 2~12명) ═════════════════════════════════
   //  · 방장 기기가 판을 돌림(봇도 방장이). 틱마다 모두의 행동을 꼭 전하기(rel)로 보내고, 친구 기기는 같은 규칙으로 따라 돌림
@@ -712,8 +717,21 @@
   function resume() { if (!S || !S.paused) return; countdown(() => { if (S) S.paused = false; }, true); }
   document.addEventListener('visibilitychange', () => { if (document.hidden && S && S.kind !== 'online' && !S.ended && (S.counting || (S.running && !S.paused))) pause(); });
 
+  // 🏆 랭킹: 혼자(AI)·친구랑 판만 — 각자 자기 기기에서 한 번 (둘이서·구경 제외). 1등만 승, 점수 = 칠한 땅 %
+  function rankReport() {
+    try {
+      const res = S.st.results, online = S.kind === 'online';
+      if (!window.GRank || !res || S.me < 0 || (!online && S.kind !== 'solo') || res.length < 2) return;
+      const r = res.find(x => x.id === S.me); if (!r) return;
+      GRank.result('land', {
+        mode: online ? 'friend' : 'ai', res: r.rank === 1 ? 'w' : 'l', beat: res.filter(x => x.rank > r.rank).length, score: r.pct,
+        opp: online ? res.filter(x => x.id !== S.me && x.id < S.seats.length && !S.subs.has(x.id)).map(x => ({ uid: S.seats[x.id], res: r.rank < x.rank ? 'w' : 'l' })) : undefined,
+      });
+    } catch (e) { console.warn('[rank]', e); }
+  }
   function endGame() {
     S.ended = true; S.running = false; S.ff = false;
+    rankReport();
     if (S.kind === 'online' && S.st.results) {                          // 1등인 사람 +1승 (모든 화면이 같은 순간에 세므로 방장 기록과 같음)
       const w = S.st.results.find(r => r.rank === 1), u = w && S.seats[w.id];
       if (u) RM.wins[u] = (RM.wins[u] || 0) + 1;

@@ -334,9 +334,9 @@
   // ── 점수 ───────────────────────────────────────────────────
   // p 가 먹은 패로 점수 계산 (고 보너스 전)
   function tally(s, p, kookAs) {
-    if (!kookAs && !s.kook && s.cap[p].indexOf(KOOK) >= 0) {        // 국진 '자동': 열끗·쌍피 둘 다 세어 보고 점수가 큰 쪽 (같으면 열끗)
+    if (!kookAs && !s.kook && s.cap[p].indexOf(KOOK) >= 0) {        // 국진 '자동': 열끗·쌍피 둘 다 세어 보고 점수가 큰 쪽 (같으면 쌍피 — 11-01 베니 님: 보통 쌍피로 쓰고 피 숫자에 보이게)
       const y = tally(s, p, 'Y'), q = tally(s, p, 'P');
-      return q.base > y.base ? Object.assign(q, { kookAs: 'P' }) : Object.assign(y, { kookAs: 'Y' });
+      return q.base >= y.base ? Object.assign(q, { kookAs: 'P' }) : Object.assign(y, { kookAs: 'Y' });
     }
     const ka = kookAs || s.kook || 'Y';
     let g = 0, rain = 0, y = 0, birds = 0, t = 0, hong = 0, cheong = 0, cho = 0, pi = 0, piCards = 0;

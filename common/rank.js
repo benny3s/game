@@ -69,7 +69,7 @@
       const m = me(); if (!m) return;
       const flag = `rank.mig1.${game}.${m.pid}`;
       if (localStorage.getItem(flag)) return;
-      const v = sum && sum(); if (!v || !(num(v.n) || num(v.w) || num(v.l))) { localStorage.setItem(flag, "0"); return; }
+      const v = sum && sum(); if (!v || !(num(v.n) || num(v.w) || num(v.l))) return;   // 비었으면 표시 안 함 (다른 곳에서 맞는 키로 다시 올릴 수 있게)
       const d = await db(); if (!d) return;
       const o = { n: Math.max(num(v.n), num(v.w) + num(v.l)), w: num(v.w), l: num(v.l) };
       if (v.b != null && Number.isFinite(+v.b)) o.b = Math.round(+v.b);
