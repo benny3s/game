@@ -371,6 +371,7 @@
     ses.wake = () => { const w = ses.waiters.splice(0); w.forEach(f => f()); };
     ses.dispose = () => {
       ses.alive = false;
+      clearInterval(ses.turnT); turnClock(null);
       if (ses.panel) { try { ses.panel.destroy(); } catch (e) {} ses.panel = null; }
       hotClose();
       if (ses.bank) { try { ses.bank.detach(); } catch (e) {} ses.bank = null; }
@@ -525,13 +526,13 @@
       if (Bank.getMeta) Bank.getMeta(cfg.bank).then(m => { if (SES === ses && m && m.chipWon) { ses.chipWon = m.chipWon; drawCoinPill(); if (ses.S && ses.hud) drawHud(ses); } }, () => {});
       const seatsB = ses.seats;
       if (role === 'host') {
-        ses.bank = Bank.attach({ game: 'gostop', net, cfg, seats: seatsB, min: bankMin(rules), onEvent: ev => bankEvent(ses, ev) });
+        ses.bank = Bank.attach({ game: 'gostop', net, cfg, seats: seatsB, min: bankMin(rules), start: START_WON, negative: true, onEvent: ev => bankEvent(ses, ev) });   // 시작 돈 만원 · 마이너스 됨
         drawDock();
         $('lbl').textContent = `👥 친구랑 (${net.code})`; $('sub').textContent = '🏦 은행 장부를 여는 중…';
         ses.bank.ready.then(stacks => {
           if (!ses.alive || SES !== ses) return;
           ses.startChips = CHIPS.start('host', N).map((b, i) => (stacks && stacks[i] > 0 ? stacks[i] : b));   // 은행 쓰는 사람은 잔액, 나머지는 기본 칩
-          if (ses.bank.records) { const rec = ses.bank.records(); ses.score = { w: rec.map(x => (x ? x.w : 0)), l: rec.map(x => (x ? x.l : 0)) }; }   // 승패도 장부에서 (방을 다시 열어도 이어짐)
+          if (ses.bank.records) { const rec = ses.bank.records(); ses.score = { w: rec.map(x => (x ? x.cw : 0)), l: rec.map(x => (x ? x.cl : 0)) }; ses.tot = { w: rec.map(x => (x ? x.w : 0)), l: rec.map(x => (x ? x.l : 0)) }; }   // 승패도 장부에서: 점수판 = 이 조합(같이 친 사람들), ses.tot = 통산
           net.broadcast({ t: '_chips', round: 0, coins: ses.startChips }, true);
           runMatch(ses);
         });
@@ -543,13 +544,14 @@
     runMatch(ses);
   }
   // 은행에서 자동으로 빌려 주는 기준: 이 칩보다 적으면 다음 판 전에 빌려요 (점당 칩의 20배)
+  const START_WON = 10000;                                 // 🏦 회차 처음 앉으면 만원씩 받고 시작, 그 뒤엔 마이너스로 내려가도 됨 (10-31 베니 님)
   const bankMin = () => 1;                                 // 바닥나면(1칩 아래) 다음 판 전에 은행이 자동으로 더 빌려 줌
   function bankEvent(ses, ev) {
     if (!ses.alive || !ev) return;
     const host = ses.cfg.role === 'host';
     if (ev.op === 'queued') C.toast(ev.mine || !host ? `💰 다음 판에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님이 ${fmtN(ev.n)}칩 빌리기 (다음 판에)`, 2200);
     else if (ev.op === 'loan') {
-      C.toast(`💰 ${ev.name} 님이 은행에서 ${ses.chipWon ? fmtN(Math.round(ev.n * ses.chipWon)) + '원' : fmtN(ev.n) + '칩'} 빌렸어요${ev.auto ? ' (바닥나서 자동)' : ''}`, 2600);
+      C.toast(ev.start ? `💰 ${ev.name} 님 시작 돈 ${ses.chipWon ? fmtN(Math.round(ev.n * ses.chipWon)) + '원' : fmtN(ev.n) + '칩'} (마이너스로 가도 돼요)` : `💰 ${ev.name} 님이 은행에서 ${ses.chipWon ? fmtN(Math.round(ev.n * ses.chipWon)) + '원' : fmtN(ev.n) + '칩'} 빌렸어요${ev.auto ? ' (바닥나서 자동)' : ''}`, 2600);
       if (host && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
     } else if (ev.op === 'no' || ev.op === 'error') C.toast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'), 2600);
   }
@@ -615,7 +617,7 @@
 
   // ── 친구랑 판 묶음: 방장 판 상태 + 자리(uid 순서) + 차례 번호 + 칩
   const AVS = ['🎴', '🌸', '🌕', '🍀', '🔥'];
-  const roundPack = (ses, S) => ({ S: S || ses.S, seq: ses.seq, uids: ses.seats.map(x => x.uid), names: ses.seats.map(x => x.name), chips: ses.chips, score: ses.score || null });
+  const roundPack = (ses, S) => ({ S: S || ses.S, seq: ses.seq, uids: ses.seats.map(x => x.uid), names: ses.seats.map(x => x.name), chips: ses.chips, score: ses.score || null, tot: ses.tot || null });
   // 손님: 묶음대로 자리 맞추기. 내 uid 가 없으면 구경 (me = -1)
   function adoptPack(ses, d) {
     const idx = d.uids.indexOf(ses.net.uid);
@@ -626,6 +628,7 @@
     });
     ses.cfg.me = idx; ses.cfg.N = d.uids.length; ses.seq = d.seq;
     if (d.score) ses.score = { w: d.score.w || [], l: d.score.l || [] };
+    if (d.tot) ses.tot = { w: d.tot.w || [], l: d.tot.l || [] };
     return d.S;
   }
   // 방장: 다음 판 열기. 구경하던 사람(새로 온 사람)은 5명까지 자리에 넣고, 인원이 바뀌면 방식도 바뀜 (2 맞고 → 3 고스톱 …)
@@ -641,6 +644,7 @@
       const gone = old.filter(x => x.drop).map(x => x.name);
       ses.seats = keep.map(i => old[i]); ses.chips = keep.map(i => ses.chips[i]);
       if (ses.score) { ses.score.w = keep.map(i => ses.score.w[i]); ses.score.l = keep.map(i => ses.score.l[i]); }
+      if (ses.tot) { ses.tot.w = keep.map(i => ses.tot.w[i]); ses.tot.l = keep.map(i => ses.tot.l[i]); }
       for (const u of add) { const i = ses.seats.length; ses.seats.push({ ctrl: 'remote', tier: null, name: (pl[u] && pl[u].name) || `친구${i + 1}`, em: AVS[i % AVS.length], uid: u }); ses.chips.push(CHIPS.start('host', 1)[0]); delete ses.joinPick[u]; }
       const N = ses.seats.length, plan = G.tablePlan(N, prev.round);
       const fi = Math.max(0, ses.seats.findIndex(x => x.uid === prevUid));
@@ -725,7 +729,7 @@
   function reportChips(ses) {
     const s = ses.S, r = s && s.result; if (!r) return;
     ses.score = ses.score || { w: [], l: [] };
-    if (r.kind !== 'nagari' && r.winner >= 0) s.who.forEach((rs, p) => { const k = p === r.winner ? 'w' : 'l'; ses.score[k][rs] = (ses.score[k][rs] || 0) + 1; });
+    if (r.kind !== 'nagari' && r.winner >= 0) s.who.forEach((rs, p) => { const k = p === r.winner ? 'w' : 'l'; ses.score[k][rs] = (ses.score[k][rs] || 0) + 1; if (ses.tot) ses.tot[k][rs] = (ses.tot[k][rs] || 0) + 1; });
     const per = s.rules.chipPer, pts = G.pointDeltas(s), deltas = {};
     pts.forEach((x, i) => { deltas[i] = x * per; });
     ses.lastDeltas = deltas;
@@ -808,7 +812,7 @@
       const hot = [t.gwang > 0, t.yeol > 0 || t.godori > 0, t.tti > 0 || t.dan > 0, t.piPts > 0];
       h.labels.forEach((l, gi) => { l.innerHTML = `${GROUP_NAME[gi]} <b>${cnt[gi]}</b>`; l.classList.toggle('hot', hot[gi]); });
     }
-    for (let p = 0; p < s.n; p++) { if (seatPos(ses, p) === 'bottom') continue; const hc = ses.hud[p].hc, k = VM ? VM.hand[p].length : s.hands[p].length; hc.hidden = !!(ses.cfg.watch || ses.spec) || !k; hc.textContent = k; }
+    for (let p = 0; p < s.n; p++) { if (seatPos(ses, p) === 'bottom') continue; const hc = ses.hud[p].hc, k = (VM ? VM.hand[p].length : s.hands[p].length) + ((s.pass && s.pass[p]) || 0); /* 남은 장 수 = 손패 + 💣 폭탄패 */ hc.hidden = !!(ses.cfg.watch || ses.spec) || !k; hc.textContent = k; }
     $('deckN').textContent = s.deck.length ? `더미 ${s.deck.length}` : '';
     const me = meSeat(ses);
     let sub = '';
@@ -819,7 +823,7 @@
     else sub = s.phase === 'goStop' ? `🤔 ${seatAt(ses, s.turn).name} 님이 고? 스톱? 고르는 중` : s.phase === 'kook' ? `🍶 ${seatAt(ses, s.turn).name} 님이 국진 고르는 중` : s.phase.startsWith('pick') ? `${seatAt(ses, s.turn).name} 님이 가져올 패 고르는 중` : s.phase === 'buy' ? `💰 ${seatAt(ses, s.turn).name} 님이 광 살지 고르는 중` : `${seatAt(ses, s.turn).name} 차례`;
     if (s.carry && G.carryMult(s) > 1) sub += ` · 나가리 ×${G.carryMult(s)}`;
     $('sub').textContent = `${s.round}판 · ${sub}${ses.turnLeft != null && s.turn === me ? ` · ⏱${ses.turnLeft}` : ''}`;
-    $('passBtn').hidden = !(s.phase === 'play' && s.turn === me && me >= 0 && s.pass[me] > 0 && ses.pending && !ses.pending.isResult);
+    $('passBtn').hidden = true;                                // 💣 폭탄패는 손패 줄에 카드로 (단추는 키보드 P 용으로만 남김)
     const myTurn = me >= 0 && s.phase !== 'end' && s.turn === me && !!ses.pending && !ses.pending.isResult && !ses.hide && !ses.replaying;
     $('sub').classList.toggle('myturn', myTurn);
     $('stage').classList.toggle('myturn', myTurn);
@@ -836,7 +840,6 @@
       return n ? `<span class="sbi">👀 구경 ${n}</span>` : '';
     })();
     if (myTurn && ses.turnBell !== ses.seq) { ses.turnBell = ses.seq; if (ses.cfg.online || ses.hot) { sfx('pop'); C.vibrate(40); } }
-    if (!$('passBtn').hidden) $('passN').textContent = s.pass[me];
   }
   function setThinking(ses, p, on) { const h = ses.hud && ses.hud[p]; if (!h) return; h.seat.querySelector('.nm').classList.toggle('thinking', on); h.seat.classList.toggle('busy', on); }
 
@@ -986,9 +989,21 @@
   // VM: 각 패가 지금 화면 어디에 있는지 (규칙 상태와 따로, 움직임 중간 모습까지)
   let VM = null;
   const els = {};
+  // 💣 폭탄패 (10-31 베니 님): 폭탄 뒤 받는 '뒤집기만' 차례를 손패 줄 끝에 카드로 — 누르면 더미만 뒤집음
+  let toks = [];
+  function drawTokens(T) {
+    const layer = $('layer'); if (!layer) return;
+    while (toks.length > T.length) toks.pop().remove();
+    while (toks.length < T.length) {
+      const el = document.createElement('div'); el.className = 'bombtok'; el.innerHTML = '<b>💣</b><span>폭탄패</span>';
+      el.onclick = () => { const ses = SES; if (!ses || !ses.pending || ses.pending.isResult) return; if (G.legal(ses.S).indexOf(G.A_PASS) >= 0) { sfx('tap'); finishHuman(ses, G.A_PASS); } };
+      layer.appendChild(el); toks.push(el);
+    }
+    T.forEach((t, i) => { const el = toks[i]; el.style.transform = TF(t); el.style.zIndex = t.z; el.classList.toggle('can', !!t.can); });
+  }
   function buildCards(ses) {
     const layer = $('layer');
-    layer.innerHTML = '';
+    layer.innerHTML = ''; toks = [];
     for (const k in els) delete els[k];
     for (const id of G.gameCards(ses.S.bonus)) {
       const el = document.createElement('div');
@@ -1038,7 +1053,7 @@
     for (let p = 0; p < s.n; p++) {
       const h = VM.hand[p];
       if (seatPos(ses, p) === 'bottom') {
-        const H = geo.hand, cw = H.cw, n = h.length;
+        const nt = (s.pass && s.pass[p]) || 0, H = geo.hand, cw = H.cw, n = h.length + nt;   // 💣 폭탄패도 손패 줄에 자리
         const myTurn = !!ses.pending && !ses.pending.isResult && s.phase === 'play' && s.turn === me;
         const tm = new Set(); VM.slots.forEach(sl => { if (sl) tm.add(sl.m); });
         const step = n > 1 ? Math.min(cw * 1.05, (H.w - cw - 8) / (n - 1)) : 0;
@@ -1047,6 +1062,8 @@
           const lift = id === ses.sel ? H.lift : (myTurn && tm.has(G.monthOf(id)) ? H.lift * 0.32 : 0) + (id === ses.hover ? H.lift * 0.3 : 0);
           out[id] = { x: x0 + i * step, y: H.y + H.h - cw * 0.8 - 2 - lift, s: cw / 100, r: 0, z: id === ses.sel ? 330 : 200 + i, up: !!(watch || (me === p && !ses.hide)) };
         });
+        const can = myTurn && me === p && !ses.hide;
+        drawTokens(Array.from({ length: nt }, (_, j) => ({ x: x0 + (h.length + j) * step, y: H.y + H.h - cw * 0.8 - 2 - (can ? H.lift * 0.32 : 0), s: cw / 100, r: 0, z: 200 + h.length + j, can })));
       } else {
         const oh = geo.oppHand[p], n = h.length, bw = oh.bw;
         if (oh.row) {   // AI 구경: 이름표 아래 줄에 펼쳐서
@@ -1584,21 +1601,33 @@
 
   // ── 내 차례 ──────────────────────────────────────────────
   // ⏱ 친구랑: 내 차례 30초가 지나면 중급 AI 가 대신 둠 (10초 남으면 알림)
-  const TURN_SEC = 30;
+  //   10-31: 남은 초를 크게(화면 위 시계 · 채팅 창 맨 위) · 채팅 창을 열고 있으면 한 번 20초 더
+  const TURN_SEC = 30, CHAT_EXTRA = 20;
+  let clockEl = null;
+  function turnClock(left) {
+    const on = left != null;
+    if (on && !clockEl) { clockEl = document.createElement('div'); clockEl.className = 'turnclock'; document.body.appendChild(clockEl); }
+    if (clockEl) { clockEl.hidden = !on; if (on) { clockEl.textContent = `⏱ 내 차례 ${left}초`; clockEl.classList.toggle('hot', left <= 10); } }
+    if (window.ArenaUI && ArenaUI.chatTip) ArenaUI.chatTip(on ? `⏱ 내 차례 · ${left}초 남았어요${left <= 10 ? ' — 안 내면 AI 가 대신 내요' : ''}` : '', on && left <= 10);
+  }
   function turnTimer(ses) {
-    clearInterval(ses.turnT); ses.turnLeft = null;
+    clearInterval(ses.turnT); ses.turnLeft = null; turnClock(null);
     if (!ses.cfg.online || ses.replaying) return;
-    const end = Date.now() + TURN_SEC * 1000;
-    ses.turnLeft = TURN_SEC;
+    let end = Date.now() + TURN_SEC * 1000, extended = false;
+    ses.turnLeft = TURN_SEC; turnClock(TURN_SEC);
     ses.turnT = setInterval(() => {
-      if (!ses.alive || !ses.pending || ses.pending.isResult) { clearInterval(ses.turnT); ses.turnLeft = null; return; }
-      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-      if (left !== ses.turnLeft) { ses.turnLeft = left; if (left === 10) { C.toast('⏱ 10초 남았어요', 1500); C.vibrate(30); } drawHud(ses); }
+      if (!ses.alive || !ses.pending || ses.pending.isResult) { clearInterval(ses.turnT); ses.turnLeft = null; turnClock(null); return; }
+      let left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      if (left <= 0 && !extended && window.ArenaUI && ArenaUI.chatOpen) {   // 채팅 치는 중이면 한 번 더 기다려 줌
+        extended = true; end = Date.now() + CHAT_EXTRA * 1000; left = CHAT_EXTRA;
+        C.toast(`💬 채팅 중이라 ${CHAT_EXTRA}초 더 드려요`, 1800); C.vibrate(30);
+      }
+      if (left !== ses.turnLeft) { ses.turnLeft = left; turnClock(left); if (left === 10) { C.toast('⏱ 10초 남았어요', 1500); C.vibrate(30); } drawHud(ses); }
       if (left <= 0) {
-        clearInterval(ses.turnT); ses.turnLeft = null;
+        clearInterval(ses.turnT); ses.turnLeft = null; turnClock(null);
         for (const close of ses.modals.splice(0)) { try { close(); } catch (e) {} }
         $('goBox').hidden = true;
-        C.toast('⏱ 30초가 지나서 AI 가 대신 냈어요', 2000);
+        C.toast('⏱ 시간이 지나서 AI 가 대신 냈어요', 2400);
         const a = AI.choose(G.view(ses.S, ses.S.turn), 'normal', { seed: rand32() });
         finishHuman(ses, a);
       }
@@ -1624,7 +1653,7 @@
   }
   function finishHuman(ses, a) {
     const p = ses.pending; if (!p) return;
-    clearInterval(ses.turnT); ses.turnLeft = null;
+    clearInterval(ses.turnT); ses.turnLeft = null; turnClock(null);
     ses.pending = null; ses.sel = -1;
     markHand(ses);
     $('passBtn').hidden = true;
@@ -1995,7 +2024,9 @@
       }
       $('resTitle').textContent = title;
       $('resBig').innerHTML = `${big ? `<div class="resbig ${bigCls}">${big}</div>` : ''}${coinLine}`;
-      $('resBody').innerHTML = sumLine + reviewHtml;
+      // 📊 승패: 이 조합(은행 방은 장부에서 이어짐, 아니면 이 방) + 내 통산
+      const recLine = !ses.cfg.online || !ses.score ? '' : `<p class="small chipline">📊 ${ses.tot ? '이 조합' : '이 방'} ${ses.seats.map((x, rs) => `${esc(rs === ses.cfg.me ? '나' : x.name)} ${ses.score.w[rs] || 0}승${ses.score.l[rs] || 0}패`).join(' · ')}${ses.tot && ses.cfg.me >= 0 ? ` · 내 통산 <b>${ses.tot.w[ses.cfg.me] || 0}승 ${ses.tot.l[ses.cfg.me] || 0}패</b>` : ''}</p>`;
+      $('resBody').innerHTML = sumLine + recLine + reviewHtml;
       $('resBtns').innerHTML = '';
       const done = v => { clearTimeout(autoT); $('resBox').hidden = true; ses.drawReady = null; resolve(v); };
       if (worstTurn && $('drillBtn')) {
@@ -2071,7 +2102,7 @@
     cb.setAttribute('aria-pressed', String(coachOn(ses)));
     cb.innerHTML = `<span class="ic">🧑‍🏫</span><span>AI 선생님</span>`;
     $('pauseBtn').hidden = !watch || !!(ses && (ses.cfg.replay || ses.replaying));
-    $('loanBtn').hidden = !(ses && ses.bank); $('bankBtn').hidden = !(ses && ses.bank);
+    $('loanBtn').hidden = true; $('bankBtn').hidden = !(ses && ses.bank);   // 💰 빌리기 없음: 시작 돈 만원 뒤엔 마이너스로
     if (ses) $('pauseBtn').innerHTML = `<span class="ic">${ses.paused ? '▶' : '⏸'}</span><span>${ses.paused ? '계속' : '멈춤'}</span>`;
     const sp = SPEEDS[opt[speedKey()]] || SPEEDS.normal;
     $('speedBtn').innerHTML = `<span class="ic">${sp.em}</span><span>${sp.label}</span>`;

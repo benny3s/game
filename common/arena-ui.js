@@ -83,7 +83,9 @@
 .arn-clog{max-height:min(34vh,260px);overflow:auto;display:grid;gap:4px;align-content:start;background:rgba(0,0,0,.22);border-radius:12px;padding:8px 10px;font-size:14px}
 .arn-clog:empty::before{content:"아직 대화가 없어요";color:var(--soft,#94a3b8)}
 .arn-clog div{overflow-wrap:anywhere}.arn-clog b{color:#fde68a;margin-right:6px}.arn-clog .me b{color:#86efac}
-.arn-cq{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.arn-cq{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:2px;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.arn-ctip{font:800 14.5px/1.3 var(--round,system-ui,sans-serif);color:#fde68a;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.45);border-radius:10px;padding:6px 10px;text-align:center}
+.arn-ctip.hot{color:#fecaca;background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.6)}
 .arn-cq button{flex:none;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:inherit;border-radius:99px;padding:7px 11px;font:600 13.5px var(--text,inherit);cursor:pointer;white-space:nowrap}
 .arn-cin{flex:1;min-width:0;border:1.5px solid var(--line,rgba(255,255,255,.18));background:rgba(0,0,0,.28);color:inherit;border-radius:12px;padding:10px 12px;font:15px var(--text,inherit);outline:none}`;
   let styled = false;
@@ -93,6 +95,28 @@
   const clearList = () => { clearInterval(listT); listT = null; };
   // ── 💬 채팅 (방에 있는 동안 모든 게임 공통): 왼쪽 가장자리 손잡이 · 새 말은 위에 말풍선
   const QUICK = ["👍 좋아요", "😂 ㅋㅋㅋ", "⏰ 빨리 해요~", "🤔 잠깐만요", "🔥 고!", "✋ 스톱!", "😭 아이고", "🎉 한 판 더!"];
+  // 빠른 말 (10-31 베니 님: 폰은 치기 불편 · 순서가 자꾸 바뀌면 헷갈림): 순서는 그대로 두고,
+  //   직접 친 짧은 말을 두 번 쓰면 맨 끝에 붙음 (넘치면 가장 덜 쓴 것 하나 빠짐) · 길게 누르면 빼기. 이 기기에 저장
+  const QKEY = "arena.chat.quick.v1", QMAX = 12;
+  const qLoad = () => { try { const d = JSON.parse(localStorage.getItem(QKEY) || "null"); if (d && Array.isArray(d.list) && d.cnt) return d; } catch (e) {} return { list: QUICK.slice(), cnt: {} }; };
+  const qSave = d => { try { localStorage.setItem(QKEY, JSON.stringify(d)); } catch (e) {} };
+  function qUse(t) {
+    if (!t || t.length > 20) return;                          // 긴 문장은 단추로 안 만듦
+    const d = qLoad();
+    d.cnt[t] = (d.cnt[t] || 0) + 1;
+    if (d.list.indexOf(t) < 0 && d.cnt[t] >= 2) {
+      d.list.push(t);
+      while (d.list.length > QMAX) {
+        let k = -1, low = Infinity;
+        d.list.forEach((x, i) => { if (x !== t && (d.cnt[x] || 0) < low) { low = d.cnt[x] || 0; k = i; } });
+        if (k < 0) break; d.list.splice(k, 1);
+      }
+    }
+    const ks = Object.keys(d.cnt);
+    if (ks.length > 80) ks.filter(k => d.list.indexOf(k) < 0).sort((a, b) => d.cnt[a] - d.cnt[b]).slice(0, ks.length - 60).forEach(k => delete d.cnt[k]);
+    qSave(d);
+  }
+  function qRemove(t) { const d = qLoad(); const i = d.list.indexOf(t); if (i >= 0) { d.list.splice(i, 1); d.cnt[t] = -99; qSave(d); } }   // 다시 쳐도 바로 안 돌아오게
   let chat = null;
   function chatOn() {
     style();
@@ -100,24 +124,32 @@
       const tab = document.createElement("button"); tab.className = "arn-ctab"; tab.type = "button"; tab.setAttribute("aria-label", "채팅"); tab.innerHTML = "💬";
       const bub = document.createElement("div"); bub.className = "arn-cbub";
       const pan = document.createElement("div"); pan.className = "arn-cpan"; pan.hidden = true;
-      pan.innerHTML = `<div class="hd"><span>💬 채팅</span><button type="button" data-cx aria-label="닫기">✕</button></div><div class="arn-clog"></div>
-        <div class="arn-cq">${QUICK.map(q => `<button type="button">${esc(q)}</button>`).join("")}</div>
-        <div class="arn-row"><input class="arn-cin" maxlength="120" placeholder="말 보내기" enterkeyhint="send"><button class="arn-btn pri" type="button" data-cs>보내기</button></div>`;
+      pan.innerHTML = `<div class="hd"><span>💬 채팅</span><button type="button" data-cx aria-label="닫기">✕</button></div><div class="arn-ctip" hidden></div><div class="arn-clog"></div>
+        <div class="arn-cq"></div>
+        <div class="arn-row"><input class="arn-cin" maxlength="120" placeholder="말 보내기 (두 번 친 말은 빠른 말로)" enterkeyhint="send"><button class="arn-btn pri" type="button" data-cs>보내기</button></div>`;
       document.body.append(tab, bub, pan);
-      chat = { tab, bub, pan, log: pan.querySelector(".arn-clog"), inp: pan.querySelector(".arn-cin"), unread: 0, quietUntil: 0 };
+      chat = { tab, bub, pan, log: pan.querySelector(".arn-clog"), inp: pan.querySelector(".arn-cin"), tip: pan.querySelector(".arn-ctip"), cq: pan.querySelector(".arn-cq"), unread: 0, quietUntil: 0 };
       const badge = () => { tab.innerHTML = "💬" + (chat.unread ? `<i>${chat.unread > 9 ? "9+" : chat.unread}</i>` : ""); };
       chat.badge = badge;
-      const send = t => { t = String(t || "").trim().slice(0, 120); if (!t || !net || !net.chat) return; net.chat(t).catch(() => {}); };
-      tab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) { chat.unread = 0; badge(); chat.log.scrollTop = 1e9; } };
+      const qDraw = () => { chat.cq.innerHTML = qLoad().list.map(q => `<button type="button">${esc(q)}</button>`).join(""); };
+      const send = t => { t = String(t || "").trim().slice(0, 120); if (!t || !net || !net.chat) return; net.chat(t).catch(() => {}); qUse(t); };
+      tab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) { qDraw(); chat.unread = 0; badge(); chat.log.scrollTop = 1e9; } };
+      // 빠른 말 길게 누르기(PC 는 오른쪽 클릭) → 빼기
+      let lp = 0, lpFired = false;
+      const lpEnd = () => clearTimeout(lp);
+      const lpAsk = b => { lpFired = true; const t = b.textContent; if (confirm(`'${t}' 을(를) 빠른 말에서 뺄까요?`)) { qRemove(t); qDraw(); } };
+      chat.cq.addEventListener("pointerdown", e => { const b = e.target.closest("button"); if (!b) return; lpFired = false; lpEnd(); lp = setTimeout(() => lpAsk(b), 650); });
+      ["pointerup", "pointerleave", "pointercancel"].forEach(ev => chat.cq.addEventListener(ev, lpEnd));
+      chat.cq.addEventListener("contextmenu", e => { const b = e.target.closest("button"); if (!b) return; e.preventDefault(); lpEnd(); lpAsk(b); });
       pan.addEventListener("click", e => {
         const b = e.target.closest("button"); if (!b) return;
         if (b.matches("[data-cx]")) pan.hidden = true;
         else if (b.matches("[data-cs]")) { send(chat.inp.value); chat.inp.value = ""; }
-        else if (b.parentNode.classList.contains("arn-cq")) { send(b.textContent); pan.hidden = true; }
+        else if (b.parentNode === chat.cq) { if (lpFired) { lpFired = false; return; } send(b.textContent); pan.hidden = true; }
       });
       chat.inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) { send(chat.inp.value); chat.inp.value = ""; } });
     }
-    chat.log.innerHTML = ""; chat.unread = 0; chat.badge(); chat.pan.hidden = true; chat.tab.hidden = false;
+    chat.log.innerHTML = ""; chat.unread = 0; chat.badge(); chat.pan.hidden = true; chat.tab.hidden = false; chat.tip.hidden = true;
     chat.quietUntil = Date.now() + 1500;                      // 들어올 때 받는 지난 대화는 말풍선 없이 기록에만
   }
   // ── 📊 방 기록 (모든 게임 공통, 관리자만 읽음): logs/{게임}/{날짜}/{세션} — 방 · 참가자 들어옴·나감 · 판 시작 · 채팅. 방장만 씀
@@ -449,6 +481,9 @@
     toLobby() { if (net && net.isHost) { playing = false; net.setPhase("lobby"); opt.onLobby && opt.onLobby(ctx()); lobby(); } },
     leave() { if (net) end(""); },
     get net() { return net; }, get playing() { return playing; }, get me() { return me; },
+    get chatOpen() { return !!(chat && !chat.pan.hidden && !chat.tab.hidden); },
+    // 채팅 창 맨 위 한 줄 (게임이 씀: '⏱ 내 차례 12초' 등). hot = 빨갛게 · 빈 글이면 숨김
+    chatTip(text, hot) { if (!chat) return; chat.tip.textContent = text || ""; chat.tip.hidden = !text; chat.tip.classList.toggle("hot", !!hot); },
     hasInvite: () => !!Arena.roomFromUrl(),
     checkUrl(fn) {
       const sp = new URLSearchParams(location.search);

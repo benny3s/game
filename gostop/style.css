@@ -495,3 +495,13 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .rpgo button{height:36px;padding:0 13px;border-radius:99px;border:1px solid rgba(255,255,255,.22);background:rgba(10,18,14,.86);color:#fff;font:700 13.5px/1 var(--round,inherit);cursor:pointer;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.4)}
 .rpgo button.on{background:#065f46;border-color:#34d399}
 .rpgo button.br{background:#b45309;border-color:#fbbf24}
+/* ⏱ 친구랑 내 차례 남은 초 (화면 위 가운데, 채팅 창이 아래를 덮어도 보임) */
+.turnclock{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);transform:translateX(-50%);z-index:45;padding:6px 15px;border-radius:99px;background:rgba(6,78,59,.94);color:#fef3c7;border:1.5px solid #fbbf24;font:800 15px/1.2 var(--round,system-ui,sans-serif);box-shadow:0 6px 18px rgba(0,0,0,.45);pointer-events:none;white-space:nowrap}
+.turnclock[hidden]{display:none}
+.turnclock.hot{background:rgba(153,27,27,.95);border-color:#fca5a5;color:#fff;animation:tcpulse .8s ease-in-out infinite alternate}
+@keyframes tcpulse{from{transform:translateX(-50%) scale(1)}to{transform:translateX(-50%) scale(1.08)}}
+/* 💣 폭탄패: 손패 줄 끝 카드 (누르면 뒤집기만) */
+.bombtok{position:absolute;left:0;top:0;width:100px;height:160px;transform-origin:50% 50%;border-radius:10px;background:linear-gradient(160deg,#991b1b,#450a0a);border:4px solid #fca5a5;box-shadow:0 4px 10px rgba(0,0,0,.45);display:grid;place-items:center;align-content:center;gap:8px;color:#fff;cursor:default;-webkit-tap-highlight-color:transparent;transition:transform .25s ease}
+.bombtok b{font-size:46px;line-height:1}
+.bombtok span{font:800 21px/1 var(--round,system-ui,sans-serif);letter-spacing:-.02em}
+.bombtok.can{cursor:pointer;border-color:#fde68a;box-shadow:0 0 0 5px rgba(251,191,36,.85),0 6px 14px rgba(0,0,0,.5)}
