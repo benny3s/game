@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <meta name="theme-color" content="#071e18">
 <title>♠️ 텍사스 홀덤 포커 · 놀이터</title>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <style>/* 아이폰 확대 막기 (다른 게임은 common/cozy 에) */html{-webkit-text-size-adjust:100%}body,body *{touch-action:manipulation}@supports (-webkit-touch-callout:none){input,select,textarea{font-size:max(16px,1em)!important}}</style>
 <script>try{for(const ev of ["gesturestart","gesturechange","gestureend"])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});document.addEventListener("touchmove",e=>{if(e.touches.length>1||(e.scale&&e.scale!==1))e.preventDefault()},{passive:false});document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false})}catch(e){}</script>
 </head>
@@ -120,6 +120,7 @@
       </div>
 
       <button id="goStart" class="primary" type="button">홀덤 테이블 입장</button>
+      <button id="replayBtn" class="ghost rp-open" type="button" hidden>🎞️ 지난 판</button>
     </div>
   </div>
 
@@ -169,6 +170,6 @@
 <script src="../common/hotseat.js?v=2"></script>
 <script src="core.js?v=2"></script>
 <script src="ai.js?v=2"></script>
-<script src="main.js?v=6"></script>
+<script src="main.js?v=7"></script>
 </body>
 </html>

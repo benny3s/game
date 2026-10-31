@@ -457,3 +457,23 @@ html, body {
 .primary:disabled{opacity:.45;cursor:not-allowed}
 .modal.gone-modal .row-btns{flex-direction:column}
 .modal.gone-modal .row-btns .ghost,.modal.gone-modal .row-btns .primary{width:100%}
+
+/* 🎞️ 다시 보기: 재생 줄은 내 자리 안 베팅 버튼 자리에 (카드·버튼을 가리지 않게) */
+.rp-open{width:100%;margin-top:8px}
+.seat.me.rp .bet-bar{display:none}
+.rpgo{display:flex;gap:6px}
+.rpgo button{flex:1 1 auto;min-width:0;height:34px;padding:0 10px;border-radius:99px;border:1px solid rgba(255,255,255,.22);background:rgba(10,18,14,.86);color:#fff;font-size:12.5px;font-weight:800;line-height:1;font-family:inherit;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rpgo button.on{background:#065f46;border-color:#34d399}
+.rpgo button.br{background:#b45309;border-color:#fbbf24}
+.rpbar{display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(0,0,0,.35);border:1px solid rgba(246,196,83,.22)}
+.rpbar button{flex:1 1 0;min-width:30px;height:38px;border-radius:10px;border:0;background:rgba(255,255,255,.1);color:#fff;font-size:17px;font-family:inherit;cursor:pointer;padding:0}
+.rpbar button.pp{background:#16a34a}
+.rpbar .rpn{flex:none;font-size:12.5px;font-weight:800;color:#fde68a;padding:0 4px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rpbar .rpx{flex:none;width:auto;padding:0 12px;font-size:13px;font-weight:800;background:rgba(246,196,83,.16);color:#fde68a}
+.rplist{display:grid;gap:6px;max-height:52vh;overflow:auto;margin-bottom:4px}
+.rplist button{display:grid;gap:3px;justify-items:start;text-align:left;padding:10px 12px;border-radius:12px;border:1px solid rgba(246,196,83,.3);background:rgba(0,0,0,.35);color:#fde68a;font-size:13px;font-family:inherit;cursor:pointer}
+.rplist .small{font-size:11.5px;color:#a7f3d0;font-weight:600}
+.rp-who{font-size:12px;color:#ecfdf5;margin-bottom:4px}
+.rp-who span{color:#94a3b8;font-size:11px}
+.rp-real{margin:0 0 6px;padding-bottom:5px;border-bottom:1px dashed rgba(255,255,255,.18);font-size:12px;line-height:1.45;color:#fde68a}
+@media (orientation:landscape) and (max-height:560px){.rpbar button{height:34px}.rpgo button{height:30px}}
