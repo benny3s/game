@@ -29,6 +29,34 @@ def beat(ok, msg):
     except Exception: pass
 
 
+def auto_fix(new, t0):
+    """11-01 베니 님 '피드백 없을 때 돌리고 스스로 수정도': 새 문제가 있으면 API 일꾼(hub work build)이 따로 된 작업 폴더(워크트리)에서 고치고
+    그 게임만 QA 를 다시 돌려 통과하면 커밋까지 — 라이브(main push)에는 안 올림. 아침에 Claude 세션이 가지를 보고 합침."""
+    games = sorted({i["game"] for i in new if i["game"] != "portal"} | ({"portal"} if any(i["game"] == "portal" for i in new) else set()))
+    task = REP / f"autofix-{t0:%m%d}.md"
+    rows = "\n".join(f"- [{i.get('sev')}] {i['game']} · {i.get('check', '')} · {str(i.get('title', ''))[:160]}\n  {str(i.get('detail', ''))[:400]}" for i in new[:12])
+    task.write_text(f"""# 게임 사이트 밤 점검 자동 수정 ({t0:%Y-%m-%d})
+저장소: C:\\Users\\1\\Claude-Benny\\game (정적 사이트, 순수 JS, 한국어 주석 — 둘레 코드 모양 그대로)
+밤 QA(node test/qa/run.js)가 찾은 새 문제:
+{rows}
+
+할 일:
+1. 문제마다 원인을 코드에서 찾아 가장 작게 고친다. 고친 JS 의 ?v= 숫자를 그 게임 index.html 에서 올린다.
+2. 확인: `node test/qa/run.js --games {','.join(games)} --no-webkit` 과 해당 게임 `node <게임>/test/selftest.js` — 둘 다 문제 0 이어야 함.
+3. 통과하면 커밋 (메시지: '밤 점검 자동 수정: …'). push 하지 않는다. 못 고친 것은 이 파일 아래에 까닭을 적는다.
+하지 말 것: common/ 의 큰 구조 바꾸기, firebase 규칙 수정·배포, 다른 저장소(agent-hub 등) 건드리기, 시험을 고쳐서 통과시키기.
+""", encoding="utf-8")
+    try:
+        p = subprocess.run([PY, "-I", HUB, "work", "build", "--task", str(task), "--workdir", str(ROOT), "--tag", f"qa-fix-{t0:%m%d}", "--timeout", "60"],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=75 * 60, creationflags=NOWIN)
+        last = ((p.stdout or "") + (p.stderr or "")).strip().splitlines()[-1:] or [""]
+        return f"🛠 자동 수정 시도 끝 (코드 {p.returncode}) — {last[0][:100]}"
+    except subprocess.TimeoutExpired:
+        return "🛠 자동 수정이 75분 안에 안 끝남"
+    except Exception as e:
+        return f"🛠 자동 수정 못 돌림: {e}"[:140]
+
+
 def main():
     t0 = dt.datetime.now()
     args = [NODE, str(QA / "run.js")] + (["--quick"] if "--quick" in sys.argv else [])
@@ -61,12 +89,13 @@ def main():
         f.write(json.dumps({"at": t0.isoformat(timespec="seconds"), "min": mins, **cnt, "new": len(new), "mode": D["meta"]["mode"]}, ensure_ascii=False) + "\n")
 
     msg = f"high {cnt['high']} · medium {cnt['medium']} · low {cnt['low']} · {mins}분"
+    fix_note = auto_fix(new, t0) if new and "--no-fix" not in sys.argv else ""
     if new:
         names = {"portal": "게임 목록", "gostop": "고스톱", "seotda": "섯다", "poker": "홀덤", "baduk": "바둑", "omok": "오목", "cube": "큐브", "chess": "체스",
                  "janggi": "장기", "yut": "윷놀이", "billiards": "당구", "volley": "냥냥배구", "land": "땅따먹기", "onecard": "원카드"}
         lines = [f"· {names.get(i['game'], i['game'])}: {str(i.get('title', ''))[:60]}" for i in sorted(new, key=lambda i: i.get("sev") != "high")[:4]]
         more = f"\n…그 밖 {len(new) - 4}개" if len(new) > 4 else ""
-        phone(f"🎮 게임 밤 점검: 새 문제 {len(new)}개\n" + "\n".join(lines) + more + "\nClaude 에게 '게임 점검 결과 봐줘' 하시면 고칩니다.", "game-qa:" + t0.strftime("%m%d"))
+        phone(f"🎮 게임 밤 점검: 새 문제 {len(new)}개\n" + "\n".join(lines) + more + (f"\n{fix_note}" if fix_note else "") + "\nClaude 에게 '게임 점검 결과 봐줘' 하시면 확인하고 올립니다.", "game-qa:" + t0.strftime("%m%d"))
     beat(True, ("새 문제 %d · " % len(new) if new else "") + msg)
     print("끝", msg, "새", len(new))
 
