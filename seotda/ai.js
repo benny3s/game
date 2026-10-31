@@ -276,7 +276,35 @@
     return { kind: k, share, avgSame, top, names, winPct: eq, handName: mine.handEval ? mine.handEval.name : '', tag, why };
   }
 
-  const API = { analyzeEquity, coach, choose, readAction, TIER_IDS: ['easy', 'normal', 'hard'] };
+  // ── 📒 아쉬운 장면 판정 (복기·판 끝 자동 분석·다시 해 보기 공용) ──
+  //   v = 그 차례 사람 눈(S.view)만, a = 실제로 한 행동 → null 또는 { tier, miss, loss(냥), sev, my, best, why, lossText }
+  //   miss: 선생님 신호등 🔴(추천보다 기댓값 22냥 넘게 손해) 또는 손해가 REVIEW.ok 냥·판돈의 REVIEW.potShare 이상 (섯다 판돈은 작아서 판돈 대비로도 봄)
+  //     단 '덜 세게' 간 수(실제 행동도 기댓값 +, 추천이 더 큰 레이즈)는 손해가 REVIEW.passive 냥·판돈의 REVIEW.passShare 넘을 때만 — 선생님 레이즈 계산은 상대가 죽어 줄 확률을 어림해서
+  //   o.c = 미리 계산한 coach · o.read = false 면 행동 짐작(readAction)을 안 붙임
+  const REVIEW = { ok: 10, potShare: 0.2, passive: 20, passShare: 0.4 };
+  const sevOf = loss => Math.max(0, Math.min(100, Math.round(loss * 1.1)));   // 22냥 ≈ 24 · 90냥 넘으면 100
+  const ACT_NAME = ['다이', '콜', '쿼터', '하프', '따당'];
+  const firstLine = t => { t = String(t || '').trim(); const m = t.match(/^.+?[.!?](?=\s|$)/); return (m ? m[0] : t).slice(0, 90); };
+  function review(v, a, o) {
+    o = o || {};
+    const p = v.turn;
+    if (v.phase !== 'bet') return null;
+    const c = o.c || coach(v, p), info = c.byAction[a], bi = c.byAction[c.bestAction];
+    if (!info || !bi) return null;
+    const loss = Math.max(0, -info.delta), toCall = Math.max(0, v.curBet - v.bets[p]);
+    const passive = info.ev >= 0 && bi.cost > info.cost;
+    let miss = info.tier === 'bad' || (loss >= REVIEW.ok && loss >= v.pot * REVIEW.potShare);
+    if (miss && passive) miss = loss >= Math.max(REVIEW.passive, v.pot * REVIEW.passShare);
+    const lab = x => (x === A_CALL && toCall === 0 ? '체크' : ACT_NAME[x] || '콜');
+    let why = `${firstLine(c.detail)} (승률 ${c.winPct}% · 팟오즈 ${c.potOddsPct}%)`;
+    if (miss && o.read !== false) {
+      let rd = null; try { rd = readAction(v, p, a, v.hands[p]); } catch (e) { rd = null; }
+      if (rd && rd.tag && !/흔한 수/.test(rd.tag)) why = `${rd.tag} — ${rd.why} · ${why}`;
+    }
+    return { kind: 'bet', tier: info.tier, miss, loss, sev: sevOf(loss), my: lab(a), best: lab(c.bestAction), why, lossText: `기댓값 −${Math.round(loss)}냥` };
+  }
+
+  const API = { analyzeEquity, coach, choose, readAction, review, REVIEW, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.SeotdaAI = API;
 })(this);

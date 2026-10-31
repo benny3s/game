@@ -233,6 +233,41 @@
     return { a: best.a, card, name: card >= 0 ? G.cardName(card) : (v.atk > 0 ? `${v.atk}장 받기` : '한 장 먹기'), why, tag: best.tag, byCard };
   }
 
-  const API = { TIERS, CALL, choose, chooseNormal, chooseEasy, chooseHard, scorePlay, coach, race, callPlan, bestSuit, suitCounts };
+  // ── 📒 아쉬운 장면 판정 (복기·판 끝 자동 분석·다시 해 보기 공용) ──
+  //   v = 그 차례 사람 눈(view)만, a = 실제로 한 행동 → null(판정 안 하는 장면) 또는
+  //   { kind, tier(best·good·ok·bad), miss, loss(선생님 점수 차), rank, n, my, best, why, lossText }
+  //   miss: 낼 카드가 있는데 먹음 · 고를 카드가 3장 이상인데 선생님 순위 아래쪽 절반 + 점수 차 REVIEW.gap 이상 · 7 무늬를 REVIEW.suit 장 이상 적은 쪽으로
+  //   sev(얼마나 아쉬운지 0~100): 순위 = 15 + 점수 차×1.5 (최대 60) · 그냥 먹기 35 · 공격 받기 25 + 받은 장수×12 · 무늬 10 + 장수 차×10
+  const REVIEW = { gap: 8, suit: 2 };
+  const cap = (x, hi) => Math.max(0, Math.min(hi, Math.round(x)));
+  function review(v, a, o) {
+    o = o || {};
+    const p = v.me != null ? v.me : v.turn;
+    if (v.phase === 'suit') {
+      if (a < G.A_SUIT || a >= G.A_SUIT + 4) return null;
+      const cnt = suitCounts(v.hands[p]), bs = bestSuit(v.hands[p]), su = a - G.A_SUIT, d = cnt[bs] - cnt[su];
+      const tier = d <= 0 ? 'best' : d < REVIEW.suit ? 'good' : 'bad';
+      return { kind: 'suit', tier, miss: tier === 'bad', loss: d * 4, sev: cap(10 + d * 10, 60), rank: 0, n: 4, my: `${G.SUIT_SYM[su]} ${G.SUIT_NAME[su]}`, best: `${G.SUIT_SYM[bs]} ${G.SUIT_NAME[bs]}`,
+        why: `7 은 내 손에 가장 많은 ${G.SUIT_SYM[bs]}(${cnt[bs]}장)로 바꾸면 이어 내기 좋아요 (고른 ${G.SUIT_SYM[su]} ${cnt[su]}장)`, lossText: `무늬 ${d}장 적음` };
+    }
+    if (v.phase !== 'play') return null;
+    const sc = scorePlay(v, p).sort((x, y) => y.sc - x.sc), best = sc[0];
+    const i = sc.findIndex(x => x.a === a);
+    if (i < 0 || !best) return null;
+    const me = sc[i], gap = best.sc - me.sc, plays = sc.filter(x => x.a !== G.A_DRAW).length;
+    const nm = x => (x.a === G.A_DRAW ? (v.atk > 0 ? `${v.atk}장 받기` : '한 장 먹기') : `[${G.cardName(x.a - G.A_PLAY)}]`);
+    let tier, miss = false, lossText = '', sev = cap(15 + gap * 1.5, 60);
+    if (gap < 0.5) tier = 'best';
+    else if (a === G.A_DRAW && best.a !== G.A_DRAW) { tier = 'bad'; miss = true; lossText = v.atk > 0 ? `${v.atk}장 받음` : '1장 더 먹음'; sev = v.atk > 0 ? cap(25 + v.atk * 12, 100) : 35; }
+    else {
+      const low = i >= 2 && i * 2 >= plays;                            // 복기 선생님의 '순위가 낮아 실수였을 수 있어요' 와 같은 기준
+      tier = gap < 2.5 ? 'good' : low && gap >= REVIEW.gap ? 'bad' : 'ok';
+      miss = tier === 'bad';
+      lossText = `순위 ${i + 1}/${sc.length}`;
+    }
+    return { kind: 'play', tier, miss, loss: gap, sev, rank: i, n: sc.length, my: nm(me), best: nm(best), why: best.why, aim: me.why, lossText };
+  }
+
+  const API = { TIERS, CALL, choose, chooseNormal, chooseEasy, chooseHard, scorePlay, coach, race, callPlan, bestSuit, suitCounts, review, REVIEW };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.OneCardAI = API;
 })(this);

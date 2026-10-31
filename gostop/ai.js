@@ -579,6 +579,37 @@
     return { stopPts, goEv, winRateGo, gobakRisk, rec, why };
   }
 
-  const API = { choose, hint, coachHand, coachGoStop, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
+  // ── 📒 아쉬운 장면 판정 (복기·판 끝 자동 분석·다시 해 보기 공용) ──
+  //   v = 그 차례 사람 눈(view)만, a = 실제로 한 행동 → null(판정 안 하는 장면) 또는
+  //   { kind, tier(best·good·ok·bad), miss(추천보다 뚜렷이 손해), loss(점), my, best, why }
+  //   패 내기: 선생님 신호등이 🔴(추천보다 1.35점 넘게 손해) · 고/스톱: 추천과 다르고 차이가 REVIEW.goStop 점과 스톱 점수의 REVIEW.goShare 를 넘음
+  //   (고 기댓값은 56번 끝까지 둬 본 평균이라 몇 점은 흔들림 → 작은 차이는 안 셈)
+  const REVIEW = { goStop: 3, goShare: 0.25 };
+  const firstWhys = (t, k) => String(t || '').split(' · ').slice(0, k).join(' · ');
+  const sevOf = loss => Math.max(0, Math.min(100, Math.round(loss * 18)));   // 1.35점 ≈ 24 · 5.5점 넘으면 100
+  function review(v, a, o) {
+    o = o || {};
+    const p = v.turn;
+    if (v.phase === 'play') {
+      if (a === A.PASS) return null;                                   // 폭탄 뒤 뒤집기만: 선생님 비교가 없음
+      const c = o.c || coachHand(v);
+      if (!c || c.bestCard < 0) return null;
+      const ch = isBomb(a) ? (v.hands[p].find(x => monthOf(x) === a - A.BOMB) ?? -1) : cardOf(a);
+      const info = ch >= 0 ? c.byCard[ch] : null;
+      if (!info) return null;
+      const loss = Math.max(0, -info.delta);
+      return { kind: 'play', tier: info.tier, miss: info.tier === 'bad', loss, sev: sevOf(loss), lossText: `−${loss.toFixed(1)}점`, my: `[${info.name}]`, best: `[${c.bestName}]`,
+        why: `${c.bestTag ? c.bestTag + ' — ' : ''}${firstWhys(c.bestWhy, 2)}`, aim: info.tag ? `${info.tag} — ${info.why}` : info.why };
+    }
+    if (v.phase === 'goStop' && (a === A.GO || a === A.STOP)) {
+      const g = o.g || coachGoStop(v);
+      const loss = a === g.rec ? 0 : Math.abs(g.goEv - g.stopPts);
+      const tier = a === g.rec ? 'best' : loss < 0.6 ? 'good' : loss < Math.max(REVIEW.goStop, g.stopPts * REVIEW.goShare) ? 'ok' : 'bad';
+      return { kind: 'goStop', tier, miss: tier === 'bad', loss, sev: sevOf(loss), lossText: `−${loss.toFixed(1)}점`, my: a === A.GO ? '고' : '스톱', best: g.rec === A.GO ? '고' : '스톱', why: g.why };
+    }
+    return null;
+  }
+
+  const API = { choose, hint, coachHand, coachGoStop, review, REVIEW, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.GostopAI = API;
 })(this);

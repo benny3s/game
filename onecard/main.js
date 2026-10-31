@@ -280,14 +280,14 @@
     $('hand').innerHTML = ''; $('opps').innerHTML = ''; $('fly').innerHTML = ''; $('discard').innerHTML = '';
     const rb = $('rpBar'); if (rb) rb.remove();
     document.querySelectorAll('.rpgo').forEach(x => x.remove());
-    show('home'); drawMenu();
+    show('home'); drawMenu(); drawMistakeBtn();
   }
 
   // ── AI 일꾼 (🐯 은 Web Worker 에서) ─────────────────────────
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=1');
+    worker = new Worker('ai-worker.js?v=2');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -812,7 +812,7 @@
     const V = ses.V, b = bottomSeat(ses), box = $('hand');
     const show = faceUp(ses, b), cards = V.out[b] === 0 ? V.hands[b] : [];
     const mine = myTurnNow(ses) && b === meSeat(ses);
-    const coach = mine ? getCoach(ses) : null, hint = coach && coach.card >= 0 && ses.sel < 0 ? coach.card : -1;
+    const coach = mine && !mHide(ses) ? getCoach(ses) : null, hint = coach && coach.card >= 0 && ses.sel < 0 ? coach.card : -1;   // 📒 노트 연습 첫 장면은 💡 전까지 감춤
     const pos = handLayout(ses, cards);
     const keep = new Set();
     box.classList.toggle('hidden', !show);
@@ -957,7 +957,7 @@
   // ── 한 판 진행 ───────────────────────────────────────────
   async function playRound(ses, s) {
     ses.S = s; ses.V = G.fastClone(s); ses.sel = -1; ses.armed = false; ses.resCounted = false; ses.coachCache = null; ses.busy = -1;
-    ses.rec = ses.isDrill ? null : { at: Date.now(), start: G.fastClone(s), acts: [], seats: ses.seats.map((x, i) => ({ name: i === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, em: x.em })) };
+    ses.rec = ses.isDrill ? null : { at: Date.now(), start: G.fastClone(s), acts: [], seats: ses.seats.map((x, i) => Object.assign({ name: i === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, em: x.em }, x.ctrl === 'me' && !ses.cfg.watch ? { h: 1 } : {})) };   // h = 이 기기 사람 자리 (📒 아쉬운 장면은 이 자리만)
     if (ses.hot) ses.hide = true;
     $('resBox').hidden = true; $('callZone').hidden = true;
     HEL.forEach(el => el.remove()); HEL.clear();
@@ -980,7 +980,9 @@
         const ctrl = ses.seats[p].ctrl;
         if (ctrl === 'me') {
           if (ses.hot) await hotAccept(ses, p);
+          const mdPre = ses.mdrill && ses.mdrill.pending ? ses.S : null;   // 📒 노트에서 온 연습: 그 장면에서 고른 수를 채점
           a = await humanTurn(ses);
+          if (mdPre) mDrillCheck(ses, mdPre, p, a);
           if (ses.net && ses.net.sendAct) ses.net.sendAct(a);
         } else if (ctrl === 'remote') a = await remoteTurn(ses, p);
         else {
@@ -1006,7 +1008,58 @@
       render(ses);
     }
     render(ses);
-    if (ses.rec) saveReplay(ses.rec, ses.S);
+    if (ses.rec) { saveReplay(ses.rec, ses.S); if (ses.kind === 'solo' || ses.kind === 'hot') scanMistakes(ses.rec); }
+  }
+
+  // ── 📒 아쉬운 장면 (common/mistakes.js): 내 수가 선생님 추천보다 뚜렷이 손해였던 장면을 모음 → 그 장면부터 다시 ──
+  //   · 판이 끝나면 쉬는 틈에(조금씩) 사람 자리 수만 그 사람 눈(view)으로 다시 봄 → 손해 큰 것 2개까지 (판정 기준은 AI.review)
+  //   · 복기 선생님이 본 장면도 같은 기준으로 넣음 (같은 판·같은 장면은 하나로)
+  const MST_PER_ROUND = 2;
+  const isHumanSeat = (rec, i) => { const x = rec && rec.seats[i]; return !!x && (!!x.h || x.name === '나'); };
+  const idleRun = f => (window.requestIdleCallback ? requestIdleCallback(f, { timeout: 2500 }) : setTimeout(f, 60));
+  const recLite = (rec, k) => ({ at: rec.at, start: rec.start, acts: rec.acts.slice(0, k), seats: rec.seats, title: rec.title, mode: rec.mode });
+  function addMistake(rec, k, seat, r) {
+    if (!window.Mistakes || !r || !r.miss) return;
+    try {
+      Mistakes.add({ game: 'onecard', title: `원카드 · ${rec.title || '판'}`, scene: `${k + 1}수째 · ${(rec.seats[seat] || {}).name || '나'}`,
+        my: r.my, best: r.best, why: r.why, sev: r.sev, lossText: r.lossText, drill: { rec: recLite(rec, k), k, seat } });
+    } catch (e) {}
+  }
+  function scanMistakes(rec) {
+    if (!window.Mistakes || !AI.review || !rec || !rec.acts.length || !rec.seats.some((x, i) => isHumanSeat(rec, i))) return;
+    let st = G.fastClone(rec.start), k = 0;
+    const found = [];
+    const run = () => {
+      try {
+        const t0 = performance.now();
+        while (k < rec.acts.length && st.phase !== 'end' && performance.now() - t0 < 10) {
+          const a = rec.acts[k];
+          if ((st.phase === 'play' || st.phase === 'suit') && isHumanSeat(rec, st.turn)) { const r = AI.review(G.view(st, st.turn), a); if (r && r.miss) found.push({ k, seat: st.turn, r }); }
+          st = G.step(st, a).state; k++;
+        }
+      } catch (e) { return; }
+      if (k < rec.acts.length && st.phase !== 'end') { idleRun(run); return; }
+      found.sort((x, y) => y.r.sev - x.r.sev).slice(0, MST_PER_ROUND).forEach(f => addMistake(rec, f.k, f.seat, f.r));
+    };
+    idleRun(run);
+  }
+  // 노트에서 온 연습(?drill): 첫 장면은 추천을 감추고(💡 로 봄), 고른 수가 추천 쪽(👑·🟢 · 또는 선생님이 끝까지 둬 보고 고른 수)이면 ✅
+  const mHide = ses => !!(ses && ses.mdrill && ses.mdrill.pending && ses.mdrill.hide);
+  const MHIDE_HTML = '📒 아쉬웠던 그 장면이에요 — 이번엔 직접 골라 보세요 · <button type="button" class="mst-reveal" data-mreveal style="border:0;border-radius:8px;padding:3px 9px;margin:2px 0;background:#fde68a;color:#3a2e0b;font-family:inherit;font-weight:700;font-size:12.5px;line-height:1.3;cursor:pointer">💡 답 보기</button>';
+  function mDrillCheck(ses, st, p, a) {
+    const m = ses.mdrill; if (!m) return;
+    m.pending = false; m.hide = false;
+    let r = null;
+    try { r = AI.review(G.view(st, p), a); } catch (e) { r = null; }
+    if (!r) return;
+    const live = ses.coachCache && ses.coachCache.data;
+    if (r.tier === 'best' || r.tier === 'good' || (live && live.a === a && st.phase === 'play')) { if (window.Mistakes) Mistakes.solved(m.id); C.toast('✅ 이번엔 잘 골랐어요!', 2400); }
+    else C.toast(`🤔 아쉬워요 — 추천은 ${r.best}`, 2600);
+  }
+  function drawMistakeBtn() {
+    const b = $('mistakeBtn'); if (!b) return;
+    const n = window.Mistakes ? Mistakes.count('onecard') : 0;
+    b.hidden = !n; b.textContent = `📒 아쉬운 장면 ${n}`;
   }
 
   // 나누기: 더미에서 한 장씩 (선부터), 마지막에 시작 카드 뒤집기
@@ -1155,7 +1208,7 @@
     runReplay(ses, rec, false).then(() => { if (SES === ses) goHome(); }, e => { if (!(e instanceof Cancel)) { console.error(e); if (SES === ses) goHome(); } });
   }
   // 🎮 복기 → '여기서부터 내가 두기': k 수째 장면(같은 손패·같은 더미)에서 seat 자리를 내가, 나머지는 AI 가 이어서. 선생님은 켜고 시작 (단추로 끔), 냥·전적·칩에는 안 넣음
-  function startBranch(rec, k, seat) {
+  function startBranch(rec, k, seat, mid) {
     let st = G.fastClone(rec.start);
     for (let j = 0; j < k; j++) st = G.step(st, rec.acts[j]).state;
     if (st.phase === 'end') return C.toast('이미 끝난 장면이에요. 앞으로 돌아가서 눌러 주세요');
@@ -1165,10 +1218,16 @@
     const tier = TIER[opt.tier] ? opt.tier : 'normal';
     ses.seats = rec.seats.map((x, i) => (i === seat ? { ctrl: 'me', tier: null, name: '나', em: '나' } : { ctrl: 'ai', tier, name: x.name === '나' ? '그때의 나' : x.name, em: x.em === '나' ? '🙂' : x.em }));
     ses.isDrill = true;
-    ses.drillMsg = `🎮 ${k}수째 장면부터 내가 둬요 — 🧑‍🏫 선생님을 켜고 끄며 해 보세요`;
+    ses.drillMsg = mid ? '📒 아쉬웠던 장면부터 다시 — 이번엔 추천 수를 찾아보세요' : `🎮 ${k}수째 장면부터 내가 둬요 — 🧑‍🏫 선생님을 켜고 끄며 해 보세요`;
+    if (mid) ses.mdrill = { id: mid, pending: true, hide: true };
     ses.coachOn = true;
     show('play');
     setupCoach(ses);
+    if (mid && ses.panel && ses.panel.collapsed) {                   // 📒 노트 연습: 선생님 창을 펴서 시작 (💡 답 보기가 보이게 · 사용자가 저장해 둔 접힘은 그대로 둠)
+      let keep = null; try { keep = localStorage.getItem(ses.panel.key); } catch (e) {}
+      ses.panel.collapse(false);
+      try { if (keep == null) localStorage.removeItem(ses.panel.key); else localStorage.setItem(ses.panel.key, keep); } catch (e) {}
+    }
     drawDock();
     runMatch(ses);
   }
@@ -1197,6 +1256,7 @@
     // 🧑‍🏫 복기 선생님: 카드를 내는 장면마다 '그 차례 사람 눈에 보이던 카드'만으로 낸 추천 vs 실제로 한 수 (다른 사람 손패는 안 봄)
     let rpPanel = null, rpOn = false;
     const coachMap = new Map();                              // 장면 번호 → 추천 (같은 장면은 다시 안 셈)
+    const noted = new Set();
     const seatNm = p => (rec.seats[p] || {}).name || '?';
     const actText = (st, a) => (a < G.A_DRAW ? `[${G.cardName(a - G.A_PLAY)}]` : a === G.A_DRAW ? (st.atk > 0 ? `${st.atk}장 받기` : '한 장 먹기') : a < G.A_CALL ? `무늬 ${SYM[a - G.A_SUIT]} ${G.SUIT_NAME[a - G.A_SUIT]}` : a === G.A_CALL ? '☝️ 원카드 외침' : a < G.A_MISS ? `🫵 ${seatNm(a - G.A_CATCH)} 잡았다!` : '⏰ 아무도 안 눌러서 시간 지남');
     function coachFor(k, st, p) {
@@ -1219,6 +1279,10 @@
       if (st.phase === 'end' || i >= acts.length) html = '<span class="small">끝난 장면이에요 — ◀ 로 돌아가 보세요</span>';
       else {
         const p = st.phase === 'call' ? st.call.p : st.turn, who = `<b>${esc(seatNm(p))}</b> 차례`, c = st.phase === 'call' ? null : coachFor(i, st, p);
+        if (c && !noted.has(i) && AI.review && isHumanSeat(rec, p)) {   // 📒 사람 자리의 뚜렷한 손해는 노트에도 (같은 기준 · 끝까지 둬 본 추천과 같으면 뺌)
+          noted.add(i);
+          try { const r = AI.review(G.view(st, p), a); if (r && c.a !== a) addMistake(rec, i, p, r); } catch (e) {}
+        }
         if (st.phase === 'call') html = `<b>${esc(seatNm(p))}</b> 한 장 남음 · ☝️ 외치기 시간 — 누가 먼저 누르는지 겨루는 거라 추천은 없어요<br>실제: <b>${esc(actText(st, a))}</b>`;
         else if (c && st.phase === 'suit') {
           html = `${who} · 7 무늬 고르기 · <span class="cb-tag">👑 추천</span> <b>${esc(c.name)}</b> — ${esc(c.why)}<br>` + (a === c.a ? '👍 실제로도 추천대로 골랐어요' : `실제: <b>${esc(actText(st, a))}</b>`);
@@ -1420,14 +1484,16 @@
   function askSuit(ses) {
     sfx('pop');
     const s = ses.S, me = s.turn, cnt = AI.suitCounts(s.hands[me]);
-    const co = coachOn(ses) && !ses.hide ? AI.coach(G.view(s, me)) : null;
+    const co0 = coachOn(ses) && !ses.hide ? AI.coach(G.view(s, me)) : null, hid = !!co0 && mHide(ses);   // 📒 노트 연습 첫 장면: 💡 를 누르면 추천 표시
+    const co = hid ? null : co0;
     const close = C.modal({
       title: '🎨 다음 무늬를 골라요',
-      html: `<div class="suits">${[0, 1, 2, 3].map(su => `<button type="button" data-su="${su}" class="${co && co.suit === su ? 'rec' : ''}">${ART.pip(su)}<span>${G.SUIT_NAME[su]}</span><small>내 손에 ${cnt[su]}장${co && co.suit === su ? ' · 🧑‍🏫 추천' : ''}</small></button>`).join('')}</div>`,
+      html: `<div class="suits">${[0, 1, 2, 3].map(su => `<button type="button" data-su="${su}" class="${co && co.suit === su ? 'rec' : ''}">${ART.pip(su)}<span>${G.SUIT_NAME[su]}</span><small>내 손에 ${cnt[su]}장${co && co.suit === su ? ' · 🧑‍🏫 추천' : ''}</small></button>`).join('')}</div>${hid ? `<p class="small" style="margin:8px 0 0">${MHIDE_HTML}</p>` : ''}`,
       buttons: [], dismiss: false,
     });
     ses.suitClose = close; ses.modals.push(close);
     const ov = [...document.querySelectorAll('.overlay')].pop();
+    ses.mReveal = hid ? () => { const b = ov.querySelector(`[data-su="${co0.suit}"]`); if (b) { b.classList.add('rec'); const sm = b.querySelector('small'); if (sm) sm.textContent += ' · 🧑‍🏫 추천'; } } : null;
     ov.querySelectorAll('[data-su]').forEach(b => b.onclick = () => { sfx('tap'); ses.modals = ses.modals.filter(x => x !== close); finishHuman(ses, G.A_SUIT + +b.dataset.su); });
   }
 
@@ -1535,9 +1601,10 @@
     if (!ses || !ses.panel) return;
     const on = coachOn(ses) && !ses.hide && meSeat(ses) >= 0;
     if (!on) { ses.panel.hide(); ses.coachHtml = null; return; }
-    const co = getCoach(ses);
+    const co = mHide(ses) ? null : getCoach(ses);
     let html;
-    if (co) {
+    if (mHide(ses)) html = MHIDE_HTML;
+    else if (co) {
       const sel = ses.sel >= 0 ? co.byCard[ses.sel] : null;
       if (sel && !sel.best) html = `<span class="small">고른 카드</span> <b>[${esc(G.cardName(ses.sel))}]</b> ${esc(sel.why)}<br>🧑‍🏫 추천은 <b>[${esc(co.name)}]</b> — ${esc(co.why)}`;
       else html = `👑 <b>[${esc(co.name)}]</b>${co.card >= 0 && co.byCard[co.card] && co.byCard[co.card].suit != null ? ` → ${SYM[co.byCard[co.card].suit]}` : ''} — ${esc(co.why)}`;
@@ -1710,7 +1777,25 @@
   ART.install();
   $('replayBtn').onclick = () => { sfx('tap'); openReplayList(); };
   drawReplayBtn();
+  // 📒 아쉬운 장면: 첫 화면 단추(없으면 숨김) · 목록을 닫으면 숫자 다시 · 노트에서 온 주소(?drill=)면 그 장면부터 연습
+  $('mistakeBtn').onclick = () => {
+    if (!window.Mistakes) return;
+    sfx('tap'); Mistakes.open({ game: 'onecard' });
+    const t = setInterval(() => { if (!document.querySelector('.mst-ov')) { clearInterval(t); drawMistakeBtn(); } }, 400);
+  };
+  if (window.Mistakes) Mistakes.onChange(drawMistakeBtn);
+  drawMistakeBtn();
+  document.addEventListener('click', e => {                 // 💡 답 보기 (노트 연습 첫 장면)
+    if (!e.target.closest('[data-mreveal]')) return;
+    const ses = SES; if (!ses || !ses.mdrill || !ses.mdrill.hide) return;
+    sfx('tap'); ses.mdrill.hide = false; ses.coachHtml = null;
+    render(ses); coachRender(ses); if (ses.mReveal) { ses.mReveal(); ses.mReveal = null; }
+  });
   drawMenu();
   show('home');
-  if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
+  const mDrill = window.Mistakes ? Mistakes.fromUrl('onecard') : null;
+  if (mDrill && mDrill.drill && mDrill.drill.rec && mDrill.drill.rec.start) {
+    const d = mDrill.drill, seat = d.seat != null ? d.seat : Math.max(0, d.rec.seats.findIndex(x => x.name === '나'));
+    try { startBranch(d.rec, d.k, seat, mDrill.id); } catch (e) { console.warn(e); C.toast('이 장면은 다시 열 수 없어요', 2200); goHome(); }
+  } else if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
 })();

@@ -248,7 +248,37 @@
     return { kind: k, share, avgSame, top, equityPct: eq, handName: mine.handEval ? mine.handEval.name : '', tag, why };
   }
 
-  const API = { preflopStrength, estimateEquity, coach, choose, readAction, TIER_IDS: ['easy', 'normal', 'hard'] };
+  // ── 📒 아쉬운 장면 판정 (복기·핸드 끝 자동 분석·다시 해 보기 공용) ──
+  //   v = 그 차례 사람 눈(P.view)만, a = 실제로 한 행동 → null 또는 { tier, miss, loss(칩), sev, my, best, why, lossText }
+  //   miss: 선생님 신호등 🔴(추천보다 기댓값 40칩 넘게 손해) 또는 🟡 인데 손해가 REVIEW.ok 칩·팟의 REVIEW.potShare 넘음
+  //     단 '덜 세게' 간 수(실제 행동도 기댓값 +, 추천이 더 큰 베팅·올인)는 손해가 REVIEW.passive 칩·팟의 REVIEW.passShare 넘을 때만 — 선생님 베팅 계산은 상대가 접어 줄 확률을 어림해서
+  //     선생님이 올인을 꼽아도 에퀴티 80% 미만이면 팟 벳을 기준으로 잼 (AI 🐯 도 그렇게 둠 — 올인 계산은 접어 줄 확률 어림이 커서)
+  //   o.c = 미리 계산한 coach · o.read = false 면 행동 짐작(readAction)을 안 붙임
+  const REVIEW = { ok: 30, potShare: 0.3, passive: 60, passShare: 0.5, allinEq: 80 };
+  const sevOf = loss => Math.max(0, Math.min(100, Math.round(loss * 0.6)));   // 40칩 ≈ 24 · 165칩 넘으면 100
+  const firstLine = t => { t = String(t || '').trim(); const m = t.match(/^.+?[.!?](?=\s|$)/); return (m ? m[0] : t).slice(0, 90); };
+  function review(v, a, o) {
+    o = o || {};
+    const p = v.turn;
+    if (v.phase !== 'bet') return null;
+    const c = o.c || coach(v, p), info = c.byAction[a];
+    const ref = c.bestAction === A_ALLIN && c.equityPct < REVIEW.allinEq && c.byAction[A_POT] ? A_POT : c.bestAction, bi = c.byAction[ref];
+    if (!info || !bi) return null;
+    const loss = a === c.bestAction ? 0 : Math.max(0, bi.ev - info.ev);
+    const tier = ref === c.bestAction ? info.tier : loss <= 1 ? 'best' : loss <= 15 ? 'good' : loss <= 40 ? 'ok' : 'bad';
+    const passive = info.ev >= 0 && bi.cost > info.cost;
+    let miss = tier === 'bad' || (tier === 'ok' && loss >= REVIEW.ok && loss >= v.pot * REVIEW.potShare);
+    if (miss && passive) miss = loss >= Math.max(REVIEW.passive, v.pot * REVIEW.passShare);
+    const lab = x => { const k = P.actionCost(v, p, x); return x === A_FOLD ? '폴드' : x === A_CALL ? (k ? `콜 ${k}칩` : '체크') : `${x === A_HALF ? '하프 벳' : x === A_POT ? '팟 벳' : '올인'} ${k}칩`; };
+    let why = `${firstLine(c.detail)} (에퀴티 ${c.equityPct}% · 팟오즈 ${c.potOddsPct}%)`;
+    if (miss && o.read !== false) {
+      let rd = null; try { rd = readAction(v, p, a, v.hands[p]); } catch (e) { rd = null; }
+      if (rd && rd.tag && !/흔한 수/.test(rd.tag)) why = `${rd.tag} — ${rd.why} · ${why}`;
+    }
+    return { kind: 'bet', tier, miss, loss, sev: sevOf(loss), my: lab(a), best: lab(ref), why, lossText: `기댓값 −${Math.round(loss)}칩` };
+  }
+
+  const API = { preflopStrength, estimateEquity, coach, choose, readAction, review, REVIEW, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.PokerAI = API;
 })(this);
