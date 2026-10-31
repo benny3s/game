@@ -248,15 +248,31 @@
       "players": {
         ".read": "auth != null",
         "$pid": {
-          ".write": "auth != null && ((newData.exists() && (!data.exists() || newData.child('n').val() === data.child('n').val()) && (!data.child('h').exists() || newData.child('h').val() === data.child('h').val())) || auth.token.admin === 1)",
-          ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length >= 1 && newData.child('n').val().length <= 12 && (!newData.child('h').exists() || (newData.child('h').isString() && newData.child('h').val().length <= 64)))"
+          ".write": "auth != null && (auth.token.admin === 1 || (newData.exists() && (!data.exists() || newData.child('n').val() === data.child('n').val() || (root.child('gp/pins/' + $pid).exists() && root.child('gp/pinchk/' + $pid + '/' + auth.uid).val() === root.child('gp/pins/' + $pid).val()))))",
+          ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length >= 1 && newData.child('n').val().length <= 12 && (!newData.child('h').exists() || auth.token.admin === 1) && (!newData.child('hp').exists() || newData.child('hp').val() === true))"
         }
       },
       "names": {
         ".read": "auth != null",
         "$key": {
-          ".write": "auth != null && (!data.exists() || auth.token.admin === 1)",
+          ".write": "auth != null && (!data.exists() || auth.token.admin === 1 || (!newData.exists() && root.child('gp/pins/' + data.val()).exists() && root.child('gp/pinchk/' + data.val() + '/' + auth.uid).val() === root.child('gp/pins/' + data.val()).val()))",
           ".validate": "!newData.exists() || newData.isString()"
+        }
+      },
+      "pins": {
+        ".read": "auth != null && auth.token.admin === 1",
+        "$pid": {
+          ".write": "auth != null && (auth.token.admin === 1 || (!data.exists() && newData.exists()) || (data.exists() && newData.exists() && root.child('gp/pinchk/' + $pid + '/' + auth.uid).val() === data.val()))",
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().length === 32)"
+        }
+      },
+      "pinchk": {
+        ".read": "auth != null && auth.token.admin === 1",
+        "$pid": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid",
+            ".validate": "newData.isString() && newData.val() === newData.parent().parent().parent().child('pins/' + $pid).val()"
+          }
         }
       }
     },
@@ -496,7 +512,41 @@
     },
     "test": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      "gp": {
+        "players": {
+          ".read": "auth != null",
+          "$pid": {
+            ".write": "auth != null && (auth.token.admin === 1 || (newData.exists() && (!data.exists() || newData.child('n').val() === data.child('n').val() || (root.child('test/gp/pins/' + $pid).exists() && root.child('test/gp/pinchk/' + $pid + '/' + auth.uid).val() === root.child('test/gp/pins/' + $pid).val()))))",
+            ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length >= 1 && newData.child('n').val().length <= 12 && (!newData.child('h').exists() || auth.token.admin === 1) && (!newData.child('hp').exists() || newData.child('hp').val() === true))"
+          }
+        },
+        "names": {
+          ".read": "auth != null",
+          "$key": {
+            ".write": "auth != null && (!data.exists() || auth.token.admin === 1 || (!newData.exists() && root.child('test/gp/pins/' + data.val()).exists() && root.child('test/gp/pinchk/' + data.val() + '/' + auth.uid).val() === root.child('test/gp/pins/' + data.val()).val()))",
+            ".validate": "!newData.exists() || newData.isString()"
+          }
+        },
+        "pins": {
+          ".read": "auth != null && auth.token.admin === 1",
+          "$pid": {
+            ".write": "auth != null && (auth.token.admin === 1 || (!data.exists() && newData.exists()) || (data.exists() && newData.exists() && root.child('test/gp/pinchk/' + $pid + '/' + auth.uid).val() === data.val()))",
+            ".validate": "!newData.exists() || (newData.isString() && newData.val().length === 32)"
+          }
+        },
+        "pinchk": {
+          ".read": "auth != null && auth.token.admin === 1",
+          "$pid": {
+            "$uid": {
+              ".write": "auth != null && auth.uid === $uid",
+              ".validate": "newData.isString() && newData.val() === newData.parent().parent().parent().child('pins/' + $pid).val()"
+            }
+          }
+        }
+      },
+      "$other": {
+        ".write": "auth != null"
+      }
     },
     "logs": {
       ".read": "auth != null && auth.token.admin === 1",

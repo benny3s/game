@@ -408,7 +408,7 @@ const Gate = (() => {
   // 가입 신청: 닉네임 + PIN → 게임 공통 프로필(me.js GME) 만들기·이어 받기. 아케이드 첫 화면처럼 me.js 가 없는 곳은 불러옴
   async function registerProfile(name, pin) {
     await ensureFirebase();
-    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=11"); } catch (e) {} }
+    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=12"); } catch (e) {} }
     if (!window.GME || !GME.register) return { name };
     return GME.register(db(), name, pin);
   }
@@ -1032,10 +1032,10 @@ const Gate = (() => {
         <p class="bgate-sub">둘러보기는 누구나, 게임은 <b>허용된 기기</b>만 (💞 베니브릿지 회원은 허용 전에도 하루 ${FREE_MIN}분). 허용된 기기는 친구 방도 만들 수 있어요. 친구는 방 링크로 등록 없이 그 방에만 들어와요.</p>
 
         <div class="bgate-sec">
-          <h4><span>🙋 내 이름 · 이 기기</span> <span class="bgate-pill active">${myPill()}</span></h4>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input class="bgate-inp" id="bgMyName" maxlength="12" placeholder="온라인 대결 이름" value="${esc(state.name || lsGet(NAME_KEY) || "베니")}" style="flex:1">
-            <button class="bgate-btn primary sm" id="bgSaveMyName" style="padding:11px 14px">이름 저장</button>
+          <h4><span>🙋 내 닉네임 · 이 기기</span> <span class="bgate-pill active">${myPill()}</span></h4>
+          <div style="display:flex;gap:8px;align-items:center;justify-content:space-between">
+            <b id="bgMyName" style="font-size:16px;color:#fde68a">${esc(profName() || state.name || lsGet(NAME_KEY) || "아직 없음")}</b>
+            <button class="bgate-btn primary sm" id="bgProfile" style="padding:10px 14px">👤 닉네임·PIN 바꾸기</button>
           </div>
         </div>
 
@@ -1077,21 +1077,23 @@ const Gate = (() => {
     adminEl.querySelector("[data-coffee]").onclick = openCoffee;
 
     adminEl.querySelector("#bgAdmClose").onclick = closeAdminModal;
-    adminEl.querySelector("#bgSaveMyName").onclick = () => {
-      const v = adminEl.querySelector("#bgMyName").value.trim().slice(0, 12);
-      if (v) {
-        lsSet(NAME_KEY, v);
-        state.name = v;
-        notify();
-        alert(`이름을 '${v}'(으)로 저장했어요.`);
-      }
+    // 👤 닉네임·PIN: 게임 공통 프로필(me.js) 창 — 없는 곳(아케이드 첫 화면)은 불러옴
+    adminEl.querySelector("#bgProfile").onclick = async () => {
+      try {
+        await ensureFirebase();
+        if (!window.GME && GATE_BASE) await loadScript(GATE_BASE + "me.js?v=12");
+        if (!window.GME) throw new Error("프로필을 불러오지 못했어요");
+        const m = GME.me ? await GME.manage(db()) : await GME.pick(db(), { canClose: true });
+        if (m && m.name) { state.name = m.name; lsSet(NAME_KEY, m.name); notify(); }
+        renderAdminModal();
+      } catch (e) { alert(e.message || e); }
     };
 
     if (!canApprove) {
       const rBtn = adminEl.querySelector("#bgModalRedeem");
       if (rBtn) rBtn.onclick = async () => {
         try {
-          await redeemPassCode(adminEl.querySelector("#bgModalCode").value, adminEl.querySelector("#bgMyName").value);
+          await redeemPassCode(adminEl.querySelector("#bgModalCode").value, profName() || state.name);
           renderAdminModal();
         } catch (e) { alert(e.message); }
       };
