@@ -538,8 +538,8 @@
             ".write": "auth != null && newData.exists()",
             "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
             "t": { ".validate": "newData.isNumber()" },
-            "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-            "base": { "$dev": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+            "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+            "base": { "$dev": { "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
             "vs": { "$opp": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
             "$other": { ".validate": false }
           }
@@ -611,8 +611,8 @@
           ".write": "auth != null && newData.exists()",
           "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
           "t": { ".validate": "newData.isNumber()" },
-          "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-          "base": { "$dev": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+          "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+          "base": { "$dev": { "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
           "vs": { "$opp": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
           "$other": { ".validate": false }
         }

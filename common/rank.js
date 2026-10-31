@@ -10,7 +10,11 @@
      GRank.result('gostop', { mode: 'friend'|'ai'|'hot', res: 'w'|'l'|'d', beat: 이긴 사람 수, score: 이번 판 점수·칩(선택),
                               opp: [{ uid, res }] (친구 판: 다른 사람마다 '나'의 결과 w·l·d) })
      GRank.migrateLocal('gostop', () => ({ n, w, l, b }))   — 예전 기기 기록 한 번 올리기 (게임 처음 열 때)
-     GRank.open('gostop')                                     — 랭킹 창 */
+     GRank.open('gostop')                                     — 랭킹 창
+   11-01 베니 님 "기록은 메인에서 한 곳으로": 게임 화면의 내 전적·난이도별 전적도 여기서 읽음 (기기 localStorage 로 따로 보이지 않게)
+     result 에 tier(난이도 id)를 주면 m/{모드}/t/{tier} {n,w,l,d} 에도 셈 · migrateTiers(game, () => ({ tier: {w,l,d} })) 예전 난이도별 기록 한 번
+     GRank.mine(game) → Promise<{ all, f, a, tier: {id: {n,w,l,d}} }> (캐시, 판이 끝나면 새로) · GRank.line(game, tier) 동기 '3승 2패' (캐시 있을 때)
+     GRank.mount(el, game) — 랭킹을 창 대신 화면 안에 · window 'grank' 이벤트(detail.game) = 내 기록이 바뀜 */
 (() => {
   const GUEST = new URLSearchParams(location.search).has("guest");
   const MOCK = new URLSearchParams(location.search).has("mock");
@@ -49,11 +53,17 @@
       const sc = r.score != null && Number.isFinite(+r.score) ? Math.round(+r.score) : null;
       base.child("name").set(String(m.name || "").slice(0, 12)).catch(() => {});
       base.child("t").set(Date.now()).catch(() => {});
-      add(base.child(`m/${mode}`), c => {
+      const tier = r.tier != null && /^[A-Za-z0-9_-]{1,20}$/.test(String(r.tier)) ? String(r.tier) : null;
+      const tx = withTier => base.child(`m/${mode}`).transaction(c => {
+        c = c || {};
         c.n = num(c.n) + 1; c[res] = num(c[res]) + 1; c.p = num(c.p) + beat;
         if (sc != null) { c.s = num(c.s) + sc; c.b = c.b == null ? sc : Math.max(num(c.b), sc); }
+        if (withTier) { c.t = c.t || {}; const x = c.t[tier] || {}; x.n = num(x.n) + 1; x[res] = num(x[res]) + 1; c.t[tier] = x; }
         return c;
       });
+      // 난이도별 칸(t)을 규칙이 아직 안 받으면 그 칸만 빼고 다시 (판 기록은 꼭 남게)
+      const done = (tier ? tx(true).catch(() => tx(false)) : tx(false)).catch(e => console.warn("[rank]", e && e.message));
+      Promise.resolve(done).then(() => { delete mineCache[game]; mine(game).then(() => dispatchEvent(new CustomEvent("grank", { detail: { game } }))); });
       if (mode === "f") for (const o of r.opp || []) {
         const op = o.pid || pidOf(o.uid); const orr = o.res === "w" || o.res === "l" || o.res === "d" ? o.res : null;
         if (!op || op === m.pid || !orr) continue;
@@ -86,6 +96,46 @@
     if (pending.length === 1 && window.GME && GME.onChange) GME.onChange(() => { if (me()) for (const [g, s] of pending.splice(0)) migrateLocal(g, s); });
   }
 
+  // 예전 난이도별 기록 한 번 (base/{기기}/t/{tier}) — migrateLocal 과 따로 (이미 올린 기기도 한 번 더)
+  async function migrateTiers(game, sum) {
+    try {
+      const m = me(); if (!m) return;
+      const flag = `rank.mig2.${game}.${m.pid}`;
+      if (localStorage.getItem(flag)) return;
+      const v = sum && sum(), t = {};
+      for (const [id, x] of Object.entries(v || {})) {
+        if (!/^[A-Za-z0-9_-]{1,20}$/.test(id) || !x) continue;
+        const w = num(x.w), l = num(x.l), dd = num(x.d); if (w + l + dd) t[id] = { n: w + l + dd, w, l, d: dd };
+      }
+      const d = await db(); if (!d) return;
+      if (Object.keys(t).length) await d.ref(`${P}rank/${game}/${m.pid}/base/${devId()}/t`).set(t);
+      localStorage.setItem(flag, "1"); delete mineCache[game];
+    } catch (e) { console.warn("[rank] tiers", e); }
+  }
+  function tiersWhenReady(game, sum) {
+    if (me()) return migrateTiers(game, sum);
+    if (window.GME && GME.onChange) GME.onChange(() => { if (me()) migrateTiers(game, sum); });
+  }
+
+  // ── 내 기록 (게임 화면용): 전체·친구·AI 와 난이도별 — 캐시
+  const mineCache = {};
+  function mine(game) {
+    if (mineCache[game]) return mineCache[game];
+    return (mineCache[game] = (async () => {
+      const m = me(), d = m && (await db());
+      if (!d) { delete mineCache[game]; return null; }
+      const rec = (await d.ref(`${P}rank/${game}/${m.pid}`).get()).val() || {};
+      const tier = {}, addT = src => { for (const [id, x] of Object.entries((src && src.t) || {})) { const o = tier[id] || (tier[id] = { n: 0, w: 0, l: 0, d: 0 }); for (const k of ["n", "w", "l", "d"]) o[k] += num(x[k]); } };
+      for (const k of ["f", "a", "h"]) addT((rec.m || {})[k]);
+      for (const b of Object.values(rec.base || {})) addT(b);
+      const out = { all: totalOf(rec, ""), f: totalOf(rec, "f"), a: totalOf(rec, "a"), tier, rec };
+      mineCache[game].v = out; return out;
+    })().catch(e => { delete mineCache[game]; console.warn("[rank] mine", e); return null; }));
+  }
+  const wl = x => (x && (x.w || x.l || x.d) ? `${x.w}승 ${x.l}패${x.d ? ` ${x.d}무` : ""}` : "");
+  function line(game, tier) { const c = mineCache[game] && mineCache[game].v; if (!c) return ""; return wl(tier == null ? c.all : c.tier[tier]); }
+  if (window.GME && GME.onChange) GME.onChange(() => { for (const g of Object.keys(mineCache)) delete mineCache[g]; });
+
   // ── 합치기
   const Z = () => ({ n: 0, w: 0, l: 0, d: 0, p: 0, s: 0, b: null });
   function merge(t, x) { if (!x) return t; for (const k of ["n", "w", "l", "d", "p", "s"]) t[k] += num(x[k]); if (x.b != null) t.b = t.b == null ? num(x.b) : Math.max(t.b, num(x.b)); return t; }
@@ -107,6 +157,7 @@
 .rk-ov{position:fixed;inset:0;z-index:210;background:rgba(4,9,16,.8);backdrop-filter:blur(6px);display:grid;place-items:center;padding:12px}
 .rk-box{position:relative;background:var(--card,#142030);color:var(--ink,#f1f5f9);border:1.5px solid rgba(255,255,255,.15);border-radius:20px;width:min(520px,100%);max-height:100%;overflow:auto;padding:18px 14px 14px;display:grid;gap:12px;font:14px/1.45 var(--text,system-ui,"Malgun Gothic",sans-serif)}
 .rk-box>*{min-width:0}.rk-body{display:grid;gap:10px;min-width:0}
+.rk-box.rk-inl{width:100%;max-height:none;padding:10px 4px;border:0;background:none}.rk-inl .rk-chips{display:none}
 .rk-box h2{margin:0;font:800 20px var(--round,inherit);color:#fde68a}
 .rk-x{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:inherit;font-size:16px;cursor:pointer}
 .rk-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.rk-chips::-webkit-scrollbar{display:none}
@@ -136,7 +187,11 @@
     const onKey = e => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
     addEventListener("keydown", onKey, true);
     ov.addEventListener("click", e => { if (e.target === ov || e.target.closest(".rk-x")) close(); });
-    const body = ov.querySelector(".rk-body");
+    return render(ov.querySelector(".rk-body"), game, opt);
+  }
+  // 화면 안에 그리기 (냥도쿠 🏆 탭처럼) — opt.games 를 안 주면 이 게임만
+  function mount(el, game, opt = {}) { style(); el.classList.add("rk-box", "rk-inl"); el.innerHTML = `<div class="rk-body"><p class="rk-soft">불러오는 중…</p></div>`; return render(el.querySelector(".rk-body"), game, { games: [game], ...opt }); }
+  async function render(body, game, opt = {}) {
     const d = await db();
     if (!d) { body.innerHTML = `<p class="rk-soft">랭킹은 인터넷에 연결된 실제 사이트에서 보여요</p>`; return; }
     const games = opt.games || Object.keys(NAMES).filter(g => g !== "sc");
@@ -177,5 +232,5 @@
     draw();
   }
 
-  window.GRank = { result, migrateLocal: migrateWhenReady, open, NAMES };
+  window.GRank = { result, migrateLocal: migrateWhenReady, migrateTiers: tiersWhenReady, mine, line, open, mount, NAMES };
 })();
