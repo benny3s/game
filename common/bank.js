@@ -525,10 +525,14 @@ if (typeof window !== "undefined") (() => {
     const [ov, box] = overlay();
     const st = { gid: o.gid || null, tab: o.tab || "main", groups: [], meta: null, members: {}, edit: null, msg: "", ok: false, offs: [], settled: null, hist: null, pools: [], totals: null };
     const refreshTotals = () => { if (st.gid && mgr()) loadTotals(st.gid).then(t => { st.totals = t; draw(); }).catch(() => {}); };
-    if (st.tab === "settle" && !canManage()) st.tab = "main";
+    if (st.tab === "hist" && !boss()) st.tab = "main";
     // AI 와 한 판 묶음 (장부 'ai' 줄) — 정산 화면에서만, 관리자만 읽힘
     const refreshPools = () => { if (!st.gid || st.tab !== "settle" || st.settled) return; loadPools(st.gid).then(p => { st.pools = p; if (st.tab === "settle" && !st.settled) draw(true); }).catch(() => {}); };
     const mgr = () => canManage();
+    // 장부를 고치는 손(금액 조정·사람 추가·정산 확정·기록) — 11-01 베니 님: 허용된 친구 기기까지 열 필요 없음 → 관리자만,
+    //   💵 내기 장부는 만든 사람도 (그 방 정산). 나머지는 '정산 보기'(읽기만)
+    const isAdm = () => { try { return !!((window.Gate && Gate.state && Gate.state.isAdmin) || (window.Arena && Arena.isAdmin === true)); } catch (e) { return false; } };
+    const boss = () => isAdm() || (!!st.gid && C.isBet(st.gid) && !!st.meta && st.meta.by === byName() && canManage());
     let myPid = null;                                        // 내 줄 표시 (기다리지 않고 나중에 다시 그림)
     (async () => {
       try { const n = (window.GME && GME.me && GME.me.name) || (MOCK ? localStorage.getItem("game.arena.name") : ""); if (n) { myPid = await pidFor(n); if (st.tab === "main") draw(); } } catch (e) {}
@@ -547,7 +551,7 @@ if (typeof window !== "undefined") (() => {
 
     function draw(force) {
       if (!force && busy() && st.tab !== "settle") return;
-      const M = mgr();
+      const M = boss();
       const head = `<button class="bk-x" data-x aria-label="닫기">✕</button><h2>🏦 은행 장부</h2>`;
       if (st.tab === "settle") return drawSettle(head);
       if (st.tab === "hist") return drawHist(head);
@@ -582,8 +586,7 @@ if (typeof window !== "undefined") (() => {
           ${res.residualChips ? `<p class="bk-soft">AI·조정 몫 ${sfmt(-res.residualChips * m.chipWon)}원 (정산 때 같이 한 사람끼리 나눠요)</p>` : ""}
           ${M ? `<div class="bk-row"><input class="bk-in bk-grow" data-addn maxlength="12" placeholder="사람 추가 (이름)"><button class="bk-btn" data-add>추가</button></div>
           <div class="bk-row"><button class="bk-btn pri bk-grow" data-settle>🧾 정산하고 새로 시작</button><button class="bk-btn" data-hist>📜 기록</button></div>`
-          : bet ? `<p class="bk-note">정산 확정은 방장(관리자·허용된 기기)이 해요. 아래에서 누가 누구에게 보낼지는 미리 볼 수 있어요.</p><div class="bk-row"><button class="bk-btn pri bk-grow" data-settle>🧾 정산 보기</button></div>`
-          : `<p class="bk-note">각자 0원에서 시작해 잃으면 마이너스로 가요. 정산·기록은 방장(관리자·허용된 기기)이 해요.</p>`}`;
+          : `<p class="bk-note">각자 0원에서 시작해 잃으면 마이너스로 가요. 금액 조정·정산 확정은 ${bet ? "이 장부를 만든 사람이나 " : ""}관리자가 해요. 누가 누구에게 보낼지는 미리 볼 수 있어요.</p><div class="bk-row"><button class="bk-btn bk-grow" data-settle>🧾 정산 보기</button></div>`}`;
       } else if (st.gid) body = `<p class="bk-soft">장부를 불러오는 중…</p>`;
       else body = `<p class="bk-soft">${M ? "장부를 준비하는 중…" : "아직 장부가 없어요. 돈 거는 게임을 친구랑 하면 저절로 생겨요."}</p>`;
       box.innerHTML = head + pick + body + `<div class="bk-msg${st.ok ? " ok" : ""}" data-msg>${esc(st.msg)}</div>`;
@@ -602,7 +605,7 @@ if (typeof window !== "undefined") (() => {
         <textarea class="bk-txt" data-txt readonly>${esc(txt)}</textarea>
         <div class="bk-row"><button class="bk-btn bk-grow" data-copy>📋 카톡용 복사</button></div>
         ${st.settled ? `<div class="bk-row"><button class="bk-btn pri bk-grow" data-back>장부 보기</button></div>`
-          : !mgr() ? `<p class="bk-soft">미리 보기예요 (AI 와 한 판이 있으면 방장 화면과 조금 다를 수 있어요). 확정은 방장이 해요.</p><div class="bk-row"><button class="bk-btn bk-grow" data-back>← 뒤로</button></div>`
+          : !boss() ? `<p class="bk-soft">미리 보기예요 (AI 와 한 판이 있으면 방장 화면과 조금 다를 수 있어요). 확정은 방장이 해요.</p><div class="bk-row"><button class="bk-btn bk-grow" data-back>← 뒤로</button></div>`
           : `<p class="bk-soft">확정하면 모두의 손익만 0원이 되고, 🏆 승패·📈 누적·장부 기록은 그대로 남아요.</p>
              <div class="bk-row"><button class="bk-btn" data-back>← 뒤로</button><button class="bk-btn pri bk-grow" data-reset>✅ 정산 확정하고 새로 시작</button></div>`}
         <div class="bk-msg${st.ok ? " ok" : ""}" data-msg>${esc(st.msg)}</div>`;
@@ -670,7 +673,7 @@ if (typeof window !== "undefined") (() => {
           return;
         }
         if (b.matches("[data-reset]")) {
-          if (!mgr()) return;                                  // 읽기 전용(방 손님)은 확정 못 함 — 규칙도 막음
+          if (!boss()) return;                                 // 읽기 전용(관리자·내기 장부 만든 사람 말고)은 확정 못 함
           if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "한 번 더 누르면 돈만 0으로 (기록은 남아요)"; return; }
           b.disabled = true;
           st.settled = await saveSettlement(gid, { reset: true });

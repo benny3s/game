@@ -815,10 +815,10 @@ button { font: inherit; cursor: pointer; }
 <script src="common/gate.js?v=15"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=12"></script>
-<script src="common/rank.js?v=5"></script>
+<script src="common/rank.js?v=7"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=11"></script>
-<script src="common/bank.js?v=8"></script>
+<script src="common/bank.js?v=9"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -1617,8 +1617,17 @@ button { font: inherit; cursor: pointer; }
     .then(async list => {
       await checkPermissions();
       games = list.filter(x => !x.hidden && (!x.admin || isAdmin));
-      // 🔥 추천 순서: 사람들이 많이 연 게임 순 (game_plays, 모두 합쳐 30번이 넘을 때부터) · 그 전엔 완성도(q) 순
-      const plays = await fetch("https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app/game_plays.json", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null) || {};
+      // 🔥 추천 순서: 실제로 한 판 수가 많은 게임부터 (메인 랭킹의 날짜별 판 수 rank_days 를 모두 더함, 11-01 베니 님) · 못 읽으면 열어 본 수(game_plays) · 그 전엔 완성도(q)
+      let plays = {};
+      try {
+        if (window.Arena && Arena.init && !Arena.mock) {
+          await Promise.race([Arena.init(), new Promise(r => setTimeout(r, 2500))]);
+          const v = Arena.db && Arena.db() ? (await Promise.race([Arena.db().ref("rank_days").get(), new Promise(r => setTimeout(() => r(null), 3000))])) : null;
+          const days = v && v.val ? v.val() || {} : {};
+          for (const d of Object.values(days)) for (const [g, ps] of Object.entries(d || {})) plays[g] = { n: ((plays[g] && plays[g].n) || 0) + Object.values(ps || {}).reduce((a, x) => a + (+x || 0), 0) };
+        }
+      } catch (e) { plays = {}; }
+      if (!Object.keys(plays).length) plays = await fetch("https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app/game_plays.json", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null) || {};
       const pn = id => (plays[id] && plays[id].n) || 0, byPlays = games.reduce((t, x) => t + pn(x.id), 0) >= 30;
       games.sort((a, b) => (byPlays ? pn(b.id) - pn(a.id) : 0) || (b.q || 0) - (a.q || 0));
       const firstF = games.find(x => x.featured);

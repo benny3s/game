@@ -157,7 +157,8 @@
 .rk-ov{position:fixed;inset:0;z-index:210;background:rgba(4,9,16,.8);backdrop-filter:blur(6px);display:grid;place-items:center;padding:12px}
 .rk-box{position:relative;background:var(--card,#142030);color:var(--ink,#f1f5f9);border:1.5px solid rgba(255,255,255,.15);border-radius:20px;width:min(520px,100%);max-height:100%;overflow:auto;padding:18px 14px 14px;display:grid;gap:12px;font:14px/1.45 var(--text,system-ui,"Malgun Gothic",sans-serif)}
 .rk-box>*{min-width:0}.rk-body{display:grid;gap:10px;min-width:0}
-.rk-box.rk-inl{width:100%;max-height:none;padding:10px 4px;border:0;background:none}.rk-inl .rk-chips{display:none}
+.rk-ov .rk-box{height:min(680px,calc(100dvh - 24px));align-content:start;grid-template-rows:auto 1fr}.rk-ov .rk-body{overflow:auto;align-content:start;min-height:0}   /* 게임을 바꿔도 창 크기 그대로 (11-01 베니 님: 어지러움) — 안만 굴림 */
+.rk-box.rk-inl{width:100%;height:auto;max-height:none;padding:10px 4px;border:0;background:none}.rk-inl .rk-chips{display:none}
 .rk-box h2{margin:0;font:800 20px var(--round,inherit);color:#fde68a}
 .rk-x{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:inherit;font-size:16px;cursor:pointer}
 .rk-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.rk-chips::-webkit-scrollbar{display:none}
@@ -194,13 +195,16 @@
   async function render(body, game, opt = {}) {
     const d = await db();
     if (!d) { body.innerHTML = `<p class="rk-soft">랭킹은 인터넷에 연결된 실제 사이트에서 보여요</p>`; return; }
-    const games = opt.games || Object.keys(NAMES).filter(g => g !== "sc");
+    let games = opt.games || Object.keys(NAMES).filter(g => g !== "sc");
     let cur = game && games.includes(game) ? game : games[0], view = "all", recs = {}, days = {};
     const day7 = Array.from({ length: 7 }, (_, i) => kstDay(Date.now() - (6 - i) * 864e5));
     try {
       const [r, ...ds] = await Promise.all([d.ref(`${P}rank`).get(), ...day7.map(x => d.ref(`${P}rank_days/${x}`).get())]);
       recs = r.val() || {}; ds.forEach((s, i) => { days[day7[i]] = s.val() || {}; });
     } catch (e) { body.innerHTML = `<p class="rk-soft">랭킹을 못 불러왔어요 (${esc(e.message)})</p>`; return; }
+    // 게임 칩 순서 = 모두 합친 판 수가 많은 게임부터 (11-01 베니 님)
+    const playsOf = g => Object.values(recs[g] || {}).reduce((a, r) => a + totalOf(r, "").n, 0);
+    if (!opt.games) { games = games.slice().sort((a, b) => playsOf(b) - playsOf(a)); if (!game) cur = games[0]; }
     const my = me();
     const draw = () => {
       const g = recs[cur] || {}, money = MONEY.has(cur);
