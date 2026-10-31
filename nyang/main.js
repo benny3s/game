@@ -959,8 +959,9 @@
   async function loadRec(force) {
     if (rkData && !force) return rkData;
     await NET.init();
-    const [rec, people] = await Promise.all([NET.db().ref(`${GME.P}nyang/rec`).get(), GME.loadAll(NET.db())]);
-    return (rkData = { rec: rec.val() || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) });
+    // 판·승패·승점은 공용 랭킹(rank/nyang) 한 곳에서 (11-01 베니 님: 기록이 두 군데로 갈라지지 않게) · 시간·푼 문제 같은 퍼즐 기록만 nyang/rec
+    const [rec, people, rk] = await Promise.all([NET.db().ref(`${GME.P}nyang/rec`).get(), GME.loadAll(NET.db()), NET.db().ref(`${GME.P}rank/nyang`).get().catch(() => null)]);
+    return (rkData = { rec: rec.val() || {}, rank: (rk && rk.val()) || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) });
   }
   const myRec = () => (rkData && GME.me && (rkData.rec[GME.me.pid] || (rkData.rec[GME.me.pid] = {}))) || null;
   const rkSet = p => { Object.assign(RK, p); store.set("rk2", RK); drawRank(false); };
@@ -982,14 +983,16 @@
     chips("rkTier", useTier ? TIERS.map(t => [t.id, t.name]) : [], RK.tier, "tier");
     chips("rkMins", RK.kind === "ta" && minsHave.size > 1 ? [...minsHave].sort().map(m => [m, m + "분"]) : [], RK.mins, "mins");
     const rows = [];
-    for (const [pid, r0] of Object.entries(rkData.rec)) {
+    const pids = new Set(Object.keys(rkData.rec).concat(RK.kind === "pts" ? Object.keys(rkData.rank) : []));
+    for (const pid of pids) {
+      const r0 = rkData.rec[pid] || {};
       const name = rkData.names[pid]; if (!name) continue;
       const r = pick(r0);
       let v = null, sub = "";
       if (RK.kind === "ta") v = (r.ta || {})[`${RK.tier}_${RK.mins}`];
       else if (RK.kind === "tb") v = (r.tb || {})[RK.tier];
       else if (RK.kind === "sv") v = r.sv;
-      else if (r.games) { v = r.pts || 0; sub = `${r.games}판 ${r.wins || 0}승`; }
+      else { const f = ((rkData.rank[pid] || {}).m || {}).f; if (f && f.n) { v = f.p || 0; sub = `${f.n}판 ${f.w || 0}승`; } }   // 대결 승점 = 공용 랭킹 친구 판
       if (v == null || (v === 0 && RK.kind !== "pts")) continue;
       rows.push({ pid, name, v, sub, lv: level(r0.sv), gr: grade(r0.pts) });
     }
