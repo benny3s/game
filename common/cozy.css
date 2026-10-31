@@ -165,7 +165,7 @@ input[type=text]:focus{border-color:var(--gold)}
 .list li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-radius:14px;background:var(--paper);border:1px solid var(--line)}
 
 /* ── 게임 화면: 화면 한 장 (스크롤 없음) ── */
-body.playing{overflow:hidden;height:100dvh;padding:0;overscroll-behavior:none}
+body.playing{overflow:hidden;height:calc(100dvh - var(--gap-b, 0px));padding:0;overscroll-behavior:none}   /* --gap-b: 폴드 작업 표시줄 (common/fit.js) */
 body.playing .wrap{display:none}
 .play{
   position:fixed;inset:0;display:flex;flex-direction:column;gap:10px;

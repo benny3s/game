@@ -1427,6 +1427,10 @@
     else startLocal();
   });
   $('replayBtn').addEventListener('click', openReplayList);
+  // 📱 아래 여백: 폴드처럼 작업 표시줄이 판 아래를 덮는 기기 (자동으로 켜지기도 함, common/fit.js)
+  const drawGap = () => { const b = $('gapBtn'); if (b) b.textContent = window.FitGap && FitGap.on ? '📱 화면 아래 여백: 켬 (누르면 끔)' : '📱 화면 아래가 가려지면 켜기'; };
+  $('gapBtn').addEventListener('click', () => { if (!window.FitGap) return; FitGap.set(!FitGap.on); drawGap(); showToast(FitGap.on ? '아래를 조금 비웠어요' : '아래 여백을 껐어요'); });
+  drawGap(); setTimeout(drawGap, 800);
   $('gRankBtn').addEventListener('click', () => { if (window.GRank) GRank.open('poker'); else showToast('랭킹을 불러오지 못했어요'); });
   try { if (window.GRank) GRank.migrateLocal('poker', () => { const st = loadStats(); return { n: st.games, w: st.wins, l: Math.max(0, st.games - st.wins) }; }); } catch (e) {}   // 예전 기기 기록 한 번 올림
   // 📒 아쉬운 장면: 시작 창 단추(없으면 숨김) · 목록을 닫으면 숫자 다시 · 노트에서 온 주소(?drill=)면 그 장면부터 연습 (맨 아래)

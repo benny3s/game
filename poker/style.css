@@ -9,7 +9,7 @@ html, body {
 }
 .app {
   display: flex; flex-direction: column;
-  height: 100dvh; max-width: 720px; margin: 0 auto;
+  height: calc(100dvh - var(--gap-b, 0px)); max-width: 720px; margin: 0 auto;   /* 폴드 작업 표시줄 (common/fit.js) */
   position: relative;
 }
 .top {
