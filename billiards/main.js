@@ -553,10 +553,11 @@
       if (!window.GRank || !s || s.phase !== 'end' || ses.rankGid === ses.gid || ses.isDrill || ses.rp || (ses.kind !== 'ai' && ses.kind !== 'online')) return;
       const mi = ses.seats.findIndex(x => x.ctrl === 'me'); if (mi < 0) return;      // 구경만 함
       ses.rankGid = ses.gid;
+      const aiSeat = ses.seats.find(x => x.ctrl === 'ai'), tier = ses.kind === 'ai' && aiSeat ? aiSeat.tier : undefined;      // AI 판은 난이도별로도 셈
       const won = i => (s.mode === '8ball' ? B.teamOf(s, i) === s.winTeam : i === s.winner), w = won(mi);
       const others = ses.seats.map((x, i) => ({ x, i })).filter(o => o.i !== mi && (s.mode !== '8ball' || B.teamOf(s, o.i) !== B.teamOf(s, mi)));   // 같은 팀은 상대 아님
       GRank.result('billiards', {
-        mode: ses.kind === 'ai' ? 'ai' : 'friend', res: w ? 'w' : 'l', beat: w ? others.length : 0,
+        mode: ses.kind === 'ai' ? 'ai' : 'friend', res: w ? 'w' : 'l', beat: w ? others.length : 0, tier,
         opp: ses.kind === 'online' ? others.filter(o => o.x.uid && o.x.ctrl === 'remote' && !o.x.sub && (w || won(o.i))).map(o => ({ uid: o.x.uid, res: w ? 'w' : 'l' })) : undefined,
       });
     } catch (e) { console.warn('[rank]', e); }

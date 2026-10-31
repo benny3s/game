@@ -49,7 +49,7 @@ header.top a{margin-left:auto;font-size:13px;text-decoration:none;background:var
 .t-easy{background:#e3f4e6}.t-normal{background:#fff0c9}.t-hard{background:#ffe0d6}.t-master{background:#eadff8}
 .mechip{margin-left:auto;font:15px var(--round);border:0;background:var(--card);color:var(--ink);padding:7px 12px;border-radius:99px;box-shadow:var(--shadow);cursor:pointer;max-width:42vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header.top .mechip+a{margin-left:0}
-.rktabs{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:#fbe9d7;padding:4px;border-radius:16px}
+.rktabs{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;background:#fbe9d7;padding:4px;border-radius:16px}
 .rktabs button{border:0;background:transparent;border-radius:12px;padding:8px 2px;font:14px/1.2 var(--round);color:var(--soft);cursor:pointer;display:grid;justify-items:center;gap:2px}
 .rktabs button i{font-style:normal;font-size:18px}
 .rktabs button[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 2px 8px rgba(140,98,70,.15)}
@@ -58,6 +58,10 @@ header.top .mechip+a{margin-left:0}
 .rkopts .per{margin-left:auto}
 .rkopts button{border:0;background:transparent;color:var(--soft);font:13.5px var(--round);padding:5px 9px;border-radius:99px;cursor:pointer}
 .rkopts button[aria-pressed="true"]{background:var(--ink);color:#fff}
+/* 공용 랭킹(common/rank.js, 어두운 판 기준 색)을 밝은 판에 맞춰 */
+#rkShared .rk-t td b{color:var(--accent)}#rkShared .rk-t td,#rkShared .rk-t th{border-bottom-color:#f0d9c4}#rkShared .rk-t tr.me td{background:#fff1e3}
+#rkShared .rk-chips button,#rkShared .rk-seg button{background:#fbe9d7;border-color:#f0d9c4;color:var(--ink)}#rkShared .rk-chips button.on,#rkShared .rk-seg button.on{background:#f59e0b;border-color:#f59e0b;color:#1c1917}
+#rkShared .rk-sub{color:var(--ink)}#rkShared .rk-bars div{background:var(--good)}
 .meline{display:flex;align-items:center;gap:8px;background:#fff6ea;border-radius:14px;padding:9px 12px;font-size:13.5px;color:var(--soft)}
 .meline b{color:var(--ink);font:16px var(--round)}.meline .lv{font-size:22px;line-height:1}
 .rklist li{flex-wrap:nowrap}.rklist .rkn{width:28px;text-align:center;font:18px var(--round);color:var(--soft)}
@@ -279,12 +283,15 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
       <ul class="list" id="rooms"><li class="none">불러오는 중…</li></ul>
     </div>
     <div id="rankBox" hidden style="display:grid;gap:10px">
+      <div class="meline" id="meCard"></div>
+      <div id="rkShared"></div>
+      <h3 style="margin:6px 0 0">🏅 퍼즐 최고 기록 (시간·타임어택)</h3>
+      <p class="small" style="margin:-6px 0 0">판 수·승패·승점은 위 랭킹이에요. 여기는 퍼즐을 가장 빨리·가장 많이 푼 기록만 따로 모아요.</p>
       <div class="rktabs" id="rkKind"></div>
       <div class="rkopts"><span class="chips" id="rkTier"></span><span class="chips" id="rkMins"></span></div>
       <ol class="list rklist" id="rkList"></ol>
       <p class="small" id="rkNote" style="margin:0;text-align:center"></p>
-      <div class="meline" id="meCard"></div>
-      <button class="btn" id="gRankBtn">🏆 전체 랭킹</button>
+      <button class="btn" id="gRankBtn">🏆 전체 게임 랭킹</button>
     </div>
     <div id="watchBox" hidden style="display:grid;gap:12px">
       <p class="lede">🧠 AI가 사람처럼 하나씩 따져 가며 푸는 모습을 봐요. 한 수마다 왜 그렇게 했는지 알려 줘요.</p>
@@ -349,9 +356,9 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 <script src="core.js?v=4"></script>
 <script src="net.js?v=6"></script>
 <script src="../common/me.js?v=12"></script>
-<script src="../common/rank.js?v=4"></script>
+<script src="../common/rank.js?v=5"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=20"></script>
+<script src="main.js?v=21"></script>
 <script src="watch.js?v=7"></script>
 </body>
 </html>

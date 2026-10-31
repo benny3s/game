@@ -916,8 +916,9 @@
       const mt = ses.teams.findIndex(tm => tm.members.some(m => m.kind === 'human' && (mode === 'ai' || m.uid === ses.cfg.net.uid)));
       if (mt < 0) return;                                            // 구경만 함
       const hc = t => Y.homeCount(S, t), mine = hc(mt), opp = [];
+      const aiM = mode === 'ai' ? ses.teams.flatMap(tm => tm.members).find(m => m.kind === 'ai') : null, tier = aiM && aiM.tier;      // AI 판은 난이도별로도 셈
       if (mode === 'online') ses.teams.forEach((tm, t) => { if (t !== mt) tm.members.forEach(m => { if (m.kind === 'human' && m.uid && !m.sub) opp.push({ uid: m.uid, res: t === S.winner ? 'l' : mt === S.winner ? 'w' : mine > hc(t) ? 'w' : mine < hc(t) ? 'l' : 'd' }); }); });
-      GRank.result('yut', { mode: mode === 'ai' ? 'ai' : 'friend', res: S.winner === mt ? 'w' : 'l', beat: ses.teams.filter((_, t) => t !== mt && hc(t) < mine).length, opp: mode === 'online' ? opp : undefined });
+      GRank.result('yut', { mode: mode === 'ai' ? 'ai' : 'friend', res: S.winner === mt ? 'w' : 'l', beat: ses.teams.filter((_, t) => t !== mt && hc(t) < mine).length, tier, opp: mode === 'online' ? opp : undefined });
     } catch (e) { console.warn('[rank]', e); }
   }
   function closeResult() { document.querySelectorAll('.overlay.yres').forEach(o => o.remove()); }

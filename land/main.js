@@ -74,7 +74,7 @@
     $('howto1').textContent = duo ? '1P는 W·A·S·D, 2P는 방향키로 돌아요 · 멈춤은 Space' : '밀면(스와이프) 그쪽으로 돌아요 · PC는 방향키나 WASD';
     $('startBtn').textContent = solo ? '시작!' : duo ? '⌨️ 둘이서 시작!' : '구경하기';
     const best = Cozy.store('land.best', {})[bestKey(opts.mode, opts.tier, opts.count)];
-    $('bestLine').textContent = solo && best ? `🏅 최고 기록 · ${best.rank}등 · ${pctStr(best.pct)}%` : '';
+    $('bestLine').textContent = solo && best ? `🏅 이 설정 최고 점수 · ${best.rank}등 · ${pctStr(best.pct)}%` : '';
   }
   $('tabSolo').onclick = () => { if (opts.tab !== 'solo') sfx('tap'); opts.tab = 'solo'; saveOpts(); drawMenu(); };
   if ($('tabFriend')) $('tabFriend').onclick = () => { sfx('tap'); openFriendModal(); };
@@ -724,7 +724,7 @@
       if (!window.GRank || !res || S.me < 0 || (!online && S.kind !== 'solo') || res.length < 2) return;
       const r = res.find(x => x.id === S.me); if (!r) return;
       GRank.result('land', {
-        mode: online ? 'friend' : 'ai', res: r.rank === 1 ? 'w' : 'l', beat: res.filter(x => x.rank > r.rank).length, score: r.pct,
+        mode: online ? 'friend' : 'ai', res: r.rank === 1 ? 'w' : 'l', beat: res.filter(x => x.rank > r.rank).length, score: r.pct, tier: online ? undefined : S.tier,      // AI 판은 난이도별로도 셈
         opp: online ? res.filter(x => x.id !== S.me && x.id < S.seats.length && !S.subs.has(x.id)).map(x => ({ uid: S.seats[x.id], res: r.rank < x.rank ? 'w' : 'l' })) : undefined,
       });
     } catch (e) { console.warn('[rank]', e); }
@@ -785,7 +785,7 @@
     if (beat) { bests[key] = { pct: r.pct, rank: r.rank, aliveT: r.aliveT }; Cozy.save('land.best', bests); }
     const isBest = beat && (old ? true : r.rank <= 3);
     const html = `<div class="big">${pctStr(r.pct)}%</div>
-      <p class="res-sub">${sub}${isBest ? ' <b class="newbest">· 최고 기록!</b>' : ''}</p>
+      <p class="res-sub">${sub}${isBest ? ' <b class="newbest">· 이 설정 최고 점수!</b>' : ''}</p>
       <div class="rstat">
         <span><i>✂️ 끊은 횟수</i><b>${r.kills}번</b></span>
         <span><i>🍰 가장 크게 먹은 땅</i><b>+${pctStr(r.bestPct)}%</b></span>

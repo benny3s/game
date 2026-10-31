@@ -260,13 +260,31 @@
       },
     });
   }
-  // 결과창 격려 한 줄: "🧩 24판째! 😺 길냥이까지 6판" (칭호가 바뀌면 축하)
-  function cheerLine() {
-    const m = myRec(); if (!m || !m.sv) return "";
-    const sv = m.sv, lv = level(sv), nx = LEVELS.find(l => l[0] > sv);
-    const up = lv[0] === sv && sv > 0;
-    return `<p class="cheer">${up ? `🎉 새 칭호! ${lv[1]} <b>${lv[2]}</b>` : `🧩 ${sv}판째!`}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : ""}</p>`;
+  // ── 공용 랭킹 내 기록 (rank/nyang · common/rank.js) — 판·승·패·승점 숫자는 전부 여기서 (11-01 베니 님: 기록은 메인 한 곳)
+  //   푼 문제 = 혼자(AI) 판 이긴 수 · 대결 = 친구 판. nyang/rec 는 시간·타임어택·단계 별·배지 같은 퍼즐 기록만 (판 수 숫자는 안 보여 줌)
+  let gm = null;
+  const solvedN = () => (gm && gm.a && gm.a.w) || 0;
+  async function loadGM() {
+    if (!window.GRank) return gm = null;
+    try { await NET.init(); gm = await GRank.mine("nyang"); } catch (e) { gm = null; }
+    return gm;
   }
+  addEventListener("grank", e => {
+    if (e.detail && e.detail.game && e.detail.game !== "nyang") return;
+    loadGM().then(() => {
+      const c = document.getElementById("cheerLn"); if (c) c.innerHTML = cheerHtml();
+      drawMe(); drawSoloProg(); checkBadges();
+    });
+  });
+  // 결과창 격려 한 줄: "🧩 24판째! 😺 길냥이까지 6판" (칭호가 바뀌면 축하)
+  // 판 수는 공용 랭킹(rank/nyang) 숫자 — 방금 끝난 혼자 판은 랭킹에 올라간 뒤('grank' 알림) 채움 (wait)
+  function cheerHtml() {
+    const sv = solvedN(); if (!sv) return "";
+    const lv = level(sv), nx = LEVELS.find(l => l[0] > sv);
+    const up = lv[0] === sv && sv > 0;
+    return `${up ? `🎉 새 칭호! ${lv[1]} <b>${lv[2]}</b>` : `🧩 ${sv}판째!`}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : ""}`;
+  }
+  const cheerLine = wait => `<p class="cheer" id="cheerLn">${wait ? "" : cheerHtml()}</p>`;
   function playTA(tier) {
     NET.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, NET.uid); if (lg) lg.matchStart({ mode: "ta", tier, mins: TA_SOLO_MIN }); }).catch(() => {});
     TA = { kind: "solo", tier, endAt: Date.now() + TA_SOLO_MIN * 60000, clock: () => Date.now(), solved: 0, failed: 0, i: 0, hintRule: "penalty", over: false };
@@ -349,7 +367,7 @@
   ];
   function myStats() {
     const m = myRec() || {}, c = m.cnt || {};
-    return { sv: m.sv || 0, wins: m.wins || 0, nhNormal: c.nhNormal || 0, perfHard: c.perfHard || 0, star3: c.star3 || 0, coopWin: c.coopWin || 0,
+    return { sv: solvedN(), wins: (gm && gm.f && gm.f.w) || 0, nhNormal: c.nhNormal || 0, perfHard: c.perfHard || 0, star3: c.star3 || 0, coopWin: c.coopWin || 0,
       taMax: Math.max(0, ...Object.values(m.ta || {})), stage: maxStage() };
   }
   function checkBadges() {
@@ -374,13 +392,10 @@
   async function drawSoloProg(force) {
     const el = $("soloProg");
     if (!myName()) { el.innerHTML = '<span class="small">이름을 정하면 몇 판 깼는지 쌓여요</span>'; return; }
-    try { await loadRec(force); } catch (e) { return; }
-    const sv = (myRec() || {}).sv || 0, lv = level(sv), nx = LEVELS.find(l => l[0] > sv);
+    await Promise.all([loadRec(force).catch(() => {}), loadGM()]);                  // 퍼즐 기록(배지·단계)을 못 읽어도 공용 랭킹 숫자는 보여 줌
+    const sv = solvedN(), lv = level(sv), nx = LEVELS.find(l => l[0] > sv);       // 판 수 = 공용 랭킹 (친구와 비교는 🏆 랭킹 탭)
     const pct = nx ? Math.round((sv - lv[0]) / (nx[0] - lv[0]) * 100) : 100;
-    const rows = Object.entries(rkData.rec).filter(([pid, r]) => rkData.names[pid] && r.sv).map(([pid, r]) => ({ pid, n: rkData.names[pid], sv: r.sv })).sort((a, b) => b.sv - a.sv);
-    const i = rows.findIndex(r => r.pid === GME.me.pid), above = i > 0 ? rows[i - 1] : null;
-    const cheer = !sv ? "첫 판을 깨 보세요!" : i === 0 ? (rows.length > 1 ? `👑 친구 ${rows.length}명 중 1등!` : "👑 지금 1등!")
-      : above ? `${i + 1}등 · <b>${esc(above.n)}</b>까지 ${above.sv - sv + 1}판 더!` : "";
+    const cheer = !sv ? "첫 판을 깨 보세요!" : "🏆 친구와 비교는 랭킹 탭에서";
     el.innerHTML = `<div class="pc-top"><span class="lv">${lv[1]}</span><div class="pc-mid"><b class="round">${sv}판 깼어요</b><span class="small">${lv[2]}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : " · 최고 칭호!"}</span></div><button class="btn mint" id="shareBtn">📤 자랑</button></div>
       <div class="pc-bar"><i style="width:${pct}%"></i></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}
       <button class="pc-badges" id="badgeBtn">🏅 배지 ${Object.keys((myRec() || {}).ach || {}).length}/${ACHS.length} <span>${ACHS.filter(a => ((myRec() || {}).ach || {})[a[0]]).map(a => a[1]).join("")}</span></button>`;
@@ -425,7 +440,7 @@
       onEnd(won) {
         const secs = G.secs; ctx.finalSecs = secs;
         if (glog) glog.matchEnd({ won, secs: Math.round(secs * 10) / 10, mistakes: G.mistakes, hints: G.hints });
-        if (window.GRank) try { GRank.result("nyang", { mode: "ai", res: won ? "w" : "l", beat: won ? 1 : 0 }); } catch (e) {}   // 🏆 공용 랭킹: 혼자 퍼즐 (포기·처음부터는 안 셈)
+        if (window.GRank) try { GRank.result("nyang", { mode: "ai", res: won ? "w" : "l", beat: won ? 1 : 0, tier }); } catch (e) {}   // 🏆 공용 랭킹: 혼자 퍼즐 (포기·처음부터는 안 셈)
         if (won) {
           REC.solved(1); if (!G.hints) REC.best(tier, secs, G.n);
           const st = starsOf(G, secs);
@@ -439,7 +454,7 @@
           extra = `<div class="stars">${[0, 1, 2].map(j => `<span class="${j < st ? "on" : ""}" style="animation-delay:${.15 + j * .25}s">⭐</span>`).join("")}</div>
             <p class="small" style="margin:0">${starWhy(G, secs)}</p>`;
           [0, 1, 2].slice(0, st).forEach(j => setTimeout(() => S("star", { i: j }), 200 + j * 250));
-          result(stage ? `🎉 ${stage}단계 성공!` : "🎉 다 찾았어요!", `${extra}<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>${gift}${cheerLine()}`,
+          result(stage ? `🎉 ${stage}단계 성공!` : "🎉 다 찾았어요!", `${extra}<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">실수 ${G.mistakes}번 · 힌트 ${G.hints}번${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>${gift}${cheerLine(true)}`,
             stage ? [["다음 단계 ▶", () => playStage(stage + 1), "primary"], ["다시 (⭐ 더 받기)", () => playStage(stage)], ["지도", goHome]]
                   : [["한 판 더", () => playSolo(tier), "primary"], ["난이도 고르기", goHome]]);
           if (gift) setTimeout(() => S("badge"), 900);
@@ -952,20 +967,23 @@
     setTimeout(checkBadges, 1500);
   }
 
-  // 랭킹 화면: 위에 종류 4칸(많이 푼 먼저) · 한 줄 옵션(난이도·시간은 필요할 때만, 이번 주/전체) · 목록 · 맨 아래 내 정보 한 줄
-  const RK = Object.assign({ kind: "sv", period: "week", tier: "easy", mins: 3 }, store.get("rk2", {}));
-  const RK_KINDS = [["sv", "🧩", "많이 푼"], ["ta", "⏱", "타임어택"], ["tb", "🏁", "최고 시간"], ["pts", "⚔️", "승점"]];
+  // 🏆 랭킹 탭: 위는 공용 랭킹(GRank.mount — 판·승패·승점·친구/AI 판·상대 전적, 11-01 베니 님 "기록은 메인 한 곳") ·
+  //   아래는 공용 랭킹에 없는 퍼즐 기록(⏱ 타임어택 최고 개수 · 🏁 최고 시간)만 따로 — 판 수 숫자가 아니라 퍼즐 기록
+  const RK = Object.assign({ kind: "ta", period: "week", tier: "easy", mins: 3 }, store.get("rk2", {}));
+  if (RK.kind !== "ta" && RK.kind !== "tb") RK.kind = "ta";                  // 예전 저장값(sv·pts)은 공용 랭킹으로 옮겼음
+  const RK_KINDS = [["ta", "⏱", "타임어택 최고"], ["tb", "🏁", "최고 시간"]];
   let rkData = null, rkAdmin = false;
   async function loadRec(force) {
     if (rkData && !force) return rkData;
     await NET.init();
-    // 판·승패·승점은 공용 랭킹(rank/nyang) 한 곳에서 (11-01 베니 님: 기록이 두 군데로 갈라지지 않게) · 시간·푼 문제 같은 퍼즐 기록만 nyang/rec
-    const [rec, people, rk] = await Promise.all([NET.db().ref(`${GME.P}nyang/rec`).get(), GME.loadAll(NET.db()), NET.db().ref(`${GME.P}rank/nyang`).get().catch(() => null)]);
-    return (rkData = { rec: rec.val() || {}, rank: (rk && rk.val()) || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) });
+    const [rec, people] = await Promise.all([NET.db().ref(`${GME.P}nyang/rec`).get(), GME.loadAll(NET.db())]);
+    return (rkData = { rec: rec.val() || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) });
   }
   const myRec = () => (rkData && GME.me && (rkData.rec[GME.me.pid] || (rkData.rec[GME.me.pid] = {}))) || null;
   const rkSet = p => { Object.assign(RK, p); store.set("rk2", RK); drawRank(false); };
   async function drawRank(reload = true) {
+    drawMe(); loadGM().then(drawMe);
+    if (reload && window.GRank) NET.init().then(() => GRank.mount($("rkShared"), "nyang")).catch(() => {});   // 탭에 들어올 때마다 새로
     $("rkKind").innerHTML = RK_KINDS.map(([v, ic, l]) => `<button data-v="${v}" aria-pressed="${RK.kind === v}"><i>${ic}</i>${l}</button>`).join("");
     for (const b of $("rkKind").children) b.onclick = () => rkSet({ kind: b.dataset.v });
     if (reload || !rkData) {
@@ -973,49 +991,39 @@
       try { await loadRec(true); rkAdmin = await NET.isAdmin(); }
       catch (e) { $("rkList").innerHTML = `<li class="none">못 불러왔어요 (${esc(e.message)})</li>`; return; }
     }
-    const wk = weekKey(), useTier = RK.kind === "ta" || RK.kind === "tb";
-    const pick = r0 => r0;                                                   // 누적만 (주간 기록 w/ 는 쌓아만 둠)
     // 타임어택 시간(2·3·5분): 이 난이도에 3분 말고 다른 시간 기록이 있을 때만 고르게
     const minsHave = new Set([3]);
-    if (RK.kind === "ta") for (const r0 of Object.values(rkData.rec)) for (const k of Object.keys(pick(r0).ta || {})) { const [t, m] = k.split("_"); if (t === RK.tier) minsHave.add(+m); }
+    if (RK.kind === "ta") for (const r0 of Object.values(rkData.rec)) for (const k of Object.keys(r0.ta || {})) { const [t, m] = k.split("_"); if (t === RK.tier) minsHave.add(+m); }
     if (!minsHave.has(RK.mins)) RK.mins = 3;
     const chips = (el, items, cur, key) => { $(el).innerHTML = items.map(([v, l]) => `<button data-v="${v}" aria-pressed="${String(v) === String(cur)}">${l}</button>`).join(""); for (const b of $(el).children) b.onclick = () => rkSet({ [key]: key === "mins" ? +b.dataset.v : b.dataset.v }); };
-    chips("rkTier", useTier ? TIERS.map(t => [t.id, t.name]) : [], RK.tier, "tier");
+    chips("rkTier", TIERS.map(t => [t.id, t.name]), RK.tier, "tier");
     chips("rkMins", RK.kind === "ta" && minsHave.size > 1 ? [...minsHave].sort().map(m => [m, m + "분"]) : [], RK.mins, "mins");
     const rows = [];
-    const pids = new Set(Object.keys(rkData.rec).concat(RK.kind === "pts" ? Object.keys(rkData.rank) : []));
-    for (const pid of pids) {
-      const r0 = rkData.rec[pid] || {};
+    for (const [pid, r] of Object.entries(rkData.rec)) {
       const name = rkData.names[pid]; if (!name) continue;
-      const r = pick(r0);
-      let v = null, sub = "";
-      if (RK.kind === "ta") v = (r.ta || {})[`${RK.tier}_${RK.mins}`];
-      else if (RK.kind === "tb") v = (r.tb || {})[RK.tier];
-      else if (RK.kind === "sv") v = r.sv;
-      else { const f = ((rkData.rank[pid] || {}).m || {}).f; if (f && f.n) { v = f.p || 0; sub = `${f.n}판 ${f.w || 0}승`; } }   // 대결 승점 = 공용 랭킹 친구 판
-      if (v == null || (v === 0 && RK.kind !== "pts")) continue;
-      rows.push({ pid, name, v, sub, lv: level(r0.sv), gr: grade(r0.pts) });
+      const v = RK.kind === "ta" ? (r.ta || {})[`${RK.tier}_${RK.mins}`] : (r.tb || {})[RK.tier];
+      if (v == null || v === 0) continue;
+      rows.push({ pid, name, v });
     }
     rows.sort((a, b) => RK.kind === "tb" ? a.v - b.v : b.v - a.v);
-    const fmtV = v => RK.kind === "tb" ? fmt(v) : RK.kind === "ta" ? `${v}개` : RK.kind === "sv" ? `${v}문제` : `${v}점`;
+    const fmtV = v => RK.kind === "tb" ? fmt(v) : `${v}개`;
     const myPid = GME.me && GME.me.pid, top = rows.slice(0, 20), meI = rows.findIndex(r => r.pid === myPid);
-    const li = (r, i) => `<li class="${r.pid === myPid ? "me" : ""}"><span class="rkn">${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span><span class="inf"><b>${esc(r.name)}</b> <span class="small">${RK.kind === "pts" ? r.gr + " " + esc(r.sub) : r.lv[1]}</span></span><b class="rkv">${fmtV(r.v)}</b>${rkAdmin ? `<button class="del" data-del="${esc(r.pid)}" title="기록 지우기 (관리자)">🗑</button>` : ""}</li>`;
+    const li = (r, i) => `<li class="${r.pid === myPid ? "me" : ""}"><span class="rkn">${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</span><span class="inf"><b>${esc(r.name)}</b></span><b class="rkv">${fmtV(r.v)}</b>${rkAdmin ? `<button class="del" data-del="${esc(r.pid)}" title="퍼즐 기록 지우기 (관리자)">🗑</button>` : ""}</li>`;
     $("rkList").innerHTML = rows.length ? top.map(li).join("") + (meI >= 20 ? `<li class="none">…</li>${li(rows[meI], meI)}` : "")
       : '<li class="none">아직 기록이 없어요. 첫 기록을 남겨 보세요!</li>';
-    $("rkNote").textContent = { sv: "다 푼 문제 수 · 혼자·대결·협동 모두", ta: "타임어택으로 푼 문제 수", tb: "힌트 없이 다 푼 가장 빠른 시간", pts: "대결에서 이긴 사람 수만큼 · 협동 성공 +1" }[RK.kind];
+    $("rkNote").textContent = { ta: "타임어택으로 한 번에 푼 가장 많은 문제 수 (판 수·승패와는 별개)", tb: "힌트 없이 다 푼 가장 빠른 시간 (판 수·승패와는 별개)" }[RK.kind];
     for (const b of $("rkList").querySelectorAll("[data-del]")) b.onclick = async () => {
-      const n = rkData.names[b.dataset.del]; if (!confirm(`${n} 의 냥도쿠 기록을 모두 지울까요?`)) return;
+      const n = rkData.names[b.dataset.del]; if (!confirm(`${n} 의 냥도쿠 퍼즐 기록(시간·타임어택·배지)을 모두 지울까요? (공용 랭킹 판·승패는 그대로)`)) return;
       await NET.db().ref(`${GME.P}nyang/rec/${b.dataset.del}`).remove(); toast("지웠어요"); drawRank();
     };
-    drawMe();
   }
-  // 내 정보 한 줄 (랭킹 맨 아래) + 머리글 이름표. 이름 바꾸기는 머리글 이름표로
+  // 내 정보 한 줄 (랭킹 위) + 머리글 이름표. 판·승은 공용 랭킹 숫자. 이름 바꾸기는 머리글 이름표로
   function drawMe() {
     const n = myName();
     $("meChip").textContent = n ? `👤 ${n}` : "👤 이름 정하기";
     if (!n) { $("meCard").innerHTML = '<span>이름을 정하면 랭킹에 올라가요</span>'; return; }
-    const r = (rkData && GME.me && rkData.rec[GME.me.pid]) || {}, lv = level(r.sv), nx = LEVELS.find(l => l[0] > (r.sv || 0));
-    $("meCard").innerHTML = `<span class="lv">${lv[1]}</span><span><b>${esc(n)}</b> · ${lv[2]}${nx ? ` <span class="small">(다음 칭호까지 ${nx[0] - (r.sv || 0)}문제)</span>` : ""}</span><span style="margin-left:auto;white-space:nowrap">${grade(r.pts)} ${r.pts || 0}점</span>`;
+    const sv = solvedN(), lv = level(sv), nx = LEVELS.find(l => l[0] > sv), a = gm && gm.all;
+    $("meCard").innerHTML = `<span class="lv">${lv[1]}</span><span><b>${esc(n)}</b> · ${lv[2]}${nx ? ` <span class="small">(다음 칭호까지 ${nx[0] - sv}판)</span>` : ""}</span><span style="margin-left:auto;white-space:nowrap">${a ? `${grade(gm.f.p)} ${a.n}판 ${a.w}승` : ""}</span>`;
   }
   $("meChip").onclick = () => askName(true).then(() => { if (!$("rankBox").hidden) drawRank(); }).catch(() => {});
 

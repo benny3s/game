@@ -458,6 +458,7 @@ button { font: inherit; cursor: pointer; }
 .cap-title span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-sub { font-size: 11.5px; color: var(--steam-blue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cap-stat { font-size: 11px; color: var(--gold); }
+.cap-stat:empty { display: none; }
 
 /* ── Steam Library Sidebar View ── */
 .library-view {
@@ -814,7 +815,7 @@ button { font: inherit; cursor: pointer; }
 <script src="common/gate.js?v=15"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=12"></script>
-<script src="common/rank.js?v=4"></script>
+<script src="common/rank.js?v=5"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=11"></script>
 <script src="common/bank.js?v=8"></script>
@@ -1196,58 +1197,34 @@ button { font: inherit; cursor: pointer; }
     }
   }
 
-  // 각 게임의 로컬 전적/기록 요약 읽기
-  function readLocalStat(id) {
-    try {
-      if (id === "gostop") {
-        const c = JSON.parse(localStorage.getItem("gostop.coins") || "0");
-        const st = JSON.parse(localStorage.getItem("gostop.stats") || "null");
-        if (st && st.played) return `🪙 ${Number(c).toLocaleString()}냥 · ${st.won || 0}승`;
-        const d = JSON.parse(localStorage.getItem("gostop_v1") || "null");
-        if (d && d.wallet != null) return `💰 ${Number(d.wallet).toLocaleString()}냥 · ${d.wins || 0}승`;
-      } else if (id === "seotda") {
-        const d = JSON.parse(localStorage.getItem("seotda.stats") || "null");
-        if (d && d.played) return `🪙 ${Number(d.coins || 0).toLocaleString()}냥 · ${d.won || 0}승`;
-      } else if (id === "poker") {
-        const d = JSON.parse(localStorage.getItem("poker.stats") || "null");
-        if (d && d.played) return `🪙 ${Number(d.chips || 0).toLocaleString()}칩 · ${d.won || 0}승`;
-      } else if (id === "baduk") {
-        const d = JSON.parse(localStorage.getItem("baduk.rec.v1") || "null");
-        if (d) {
-          let w = 0, l = 0;
-          Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); });
-          if (w || l) return `🏆 ${w}승 ${l}패`;
-        }
-      } else if (id === "omok") {
-        const d = JSON.parse(localStorage.getItem("omok_stats_v1") || "null");
-        if (d) {
-          let w = 0, l = 0;
-          Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); });
-          if (w || l) return `🏆 ${w}승 ${l}패`;
-        }
-      } else if (id === "cube") {
-        const d = JSON.parse(localStorage.getItem("cube_stats_v1") || "null");
-        if (d && (d.wins || d.games)) return `⭐ ${d.wins || 0}승 / ${d.games || 0}판`;
-      } else if (id === "volley") {
-        const d = JSON.parse(localStorage.getItem("volley.rec") || "null");
-        if (d) {
-          let w = 0, l = 0;
-          Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); });
-          if (w || l) return `🏐 ${w}승 ${l}패`;
-        }
-      } else if (id === "land") {
-        const d = JSON.parse(localStorage.getItem("land.best") || "null");
-        if (d) {
-          const vals = Object.values(d);
-          if (vals.length) {
-            const best = vals.sort((a, b) => (b.pct || 0) - (a.pct || 0))[0];
-            if (best) return `🏅 최고 ${best.rank}등 (${Number(best.pct).toFixed(1)}%)`;
-          }
-        }
-      }
-    } catch (e) {}
-    return "";
+  // 게임 카드의 내 기록 = 공용 랭킹(common/rank.js) 한 곳에서만 (11-01 베니 님: 기록이 여러 군데로 갈라지지 않게 — 이 기기 localStorage 는 안 읽음)
+  //   프로필이 있을 때만, 첫 그림이 뜬 뒤 게임마다 차례로 한 번씩 읽어서 카드 칸에 채움
+  const statCache = {};   // 게임 id → "🏆 12판 7승" ("" = 기록 없음) · 읽기 전엔 키 없음
+  const readStat = id => statCache[id] || "";
+  const hasProfile = () => !!(window.GME && GME.me && GME.me.pid);
+  function paintStat(id) {
+    const t = readStat(id);
+    document.querySelectorAll('[data-stat="' + id + '"]').forEach(el => { el.textContent = t; });
+    if (id === featuredId) { const h = document.querySelector("[data-hstat]"); if (h) h.textContent = t || h.dataset.hstat; }
   }
+  let statRun = 0;
+  async function loadStats() {
+    if (!window.GRank || !hasProfile() || !games.length) return;
+    const run = ++statRun, cur = filteredGames().map(g => g.id);
+    const ids = [...new Set([featuredId, ...cur, ...games.map(g => g.id)])].filter(id => GRank.NAMES && GRank.NAMES[id] && !(id in statCache));
+    for (const id of ids) {
+      if (run !== statRun) return;
+      try {
+        const m = await GRank.mine(id);
+        if (!m) continue;                                                  // 랭킹에 못 닿음(시험 모드 등) — 다음에 다시
+        statCache[id] = m.all && m.all.n ? "🏆 " + m.all.n + "판 " + m.all.w + "승" : "";
+        paintStat(id);
+      } catch (e) {}
+    }
+  }
+  const loadStatsSoon = () => setTimeout(() => { if (!document.hidden) loadStats(); }, 400);
+  addEventListener("grank", e => { const g = e.detail && e.detail.game; if (g) delete statCache[g]; loadStatsSoon(); });
+  if (window.GME && GME.onChange) GME.onChange(() => { for (const k of Object.keys(statCache)) delete statCache[k]; loadStatsSoon(); });
 
   let games = [];
   let isAdmin = false;
@@ -1490,7 +1467,7 @@ button { font: inherit; cursor: pointer; }
     if (!featuredList.length) return;
     const cur = featuredList.find(g => g.id === featuredId) || featuredList[0];
     featuredId = cur.id;
-    const stat = readLocalStat(cur.id);
+    const stat = readStat(cur.id);
     
     $("heroBox").innerHTML = `
       <a class="hero-art" href="${cur.url}">
@@ -1508,7 +1485,7 @@ button { font: inherit; cursor: pointer; }
         <p class="hero-desc">${cur.desc}</p>
         <div class="hero-meta">
           <div><span>지원 모드</span><b>${(cur.modes || ["혼자", "친구랑"]).join(" · ")}</b></div>
-          <div><span>탑재 AI / 기록</span><b>${stat || cur.aiTech || "규칙 + 탐색 AI"}</b></div>
+          <div><span>탑재 AI / 내 기록</span><b data-hstat="${cur.aiTech || "규칙 + 탐색 AI"}">${stat || cur.aiTech || "규칙 + 탐색 AI"}</b></div>
         </div>
         <div class="hero-actions">
           <a class="btn-play" href="${cur.url}">▶ 플레이</a>
@@ -1555,14 +1532,14 @@ button { font: inherit; cursor: pointer; }
     }
     // 작은 카드: 그림 · 이름 · 인원 · 한 줄 소개. 누르면 게임으로 (혼자 · 한 기기 · 친구랑은 게임 안에서 고름)
     grid.innerHTML = list.map(g => {
-      const stat = readLocalStat(g.id);
+      const stat = readStat(g.id);
       return `
         <a class="capsule" href="${g.url}">
           <span class="cap-art">${capsuleSvg(g.id)}<span class="cap-badge">${g.players || "1~2명"}</span></span>
           <span class="cap-body">
             <b class="cap-title"><span>${g.emoji || "🎮"}</span><span>${g.name}</span></b>
             <span class="cap-sub">${g.subtitle || ""}</span>
-            ${stat ? `<span class="cap-stat">${stat}</span>` : ""}
+            <span class="cap-stat" data-stat="${g.id}">${stat}</span>
           </span>
         </a>`;
     }).join("");
@@ -1574,7 +1551,7 @@ button { font: inherit; cursor: pointer; }
     if (!b) return;
     $("catTabs").querySelectorAll(".cat-btn").forEach(x => x.classList.toggle("active", x === b));
     activeCat = b.dataset.cat;
-    renderCatalog();
+    renderCatalog(); loadStatsSoon();
   });
   $("searchInput").addEventListener("input", e => {
     searchQ = e.target.value.trim().toLowerCase();
@@ -1657,6 +1634,7 @@ button { font: inherit; cursor: pointer; }
       renderCatalog();
       mountReqs();
       refreshHome();
+      loadStatsSoon();
     });
 })();
 </script>
