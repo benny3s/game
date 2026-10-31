@@ -285,6 +285,7 @@ body.playing .dock button[aria-pressed="true"] .ic{background:#047857;border-col
   .play{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto 1fr;column-gap:12px;row-gap:4px;padding-top:calc(env(safe-area-inset-top,0px) + 6px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 6px)}
   .play .bar{grid-column:1;grid-row:1}
   .play .scorebar{grid-column:1;grid-row:2}
+  .play .rpgo{grid-column:1;grid-row:2}
   .play .stage{grid-column:1;grid-row:3}
   .play .dock{grid-column:2;grid-row:1 / span 3;flex-direction:column;justify-content:center;gap:6px}
   .dock button .ic{width:42px;height:42px;font-size:19px}
@@ -297,3 +298,10 @@ body.playing .dock button[aria-pressed="true"] .ic{background:#047857;border-col
   body.playing .play{gap:5px;padding-top:calc(env(safe-area-inset-top,0px) + 6px);padding-bottom:calc(env(safe-area-inset-bottom,0px) + 8px)}
   body.playing .dock button>span:last-child{font-size:11px}
 }
+
+/* 🧑‍🏫 복기 선생님 · 🎮 여기서부터 내가 두기: 다시 보기 중엔 점수판 자리에 한 줄 (카드·다시 보기 줄을 안 가림) */
+.rpgo{display:flex;justify-content:center;gap:6px;flex:none}
+.rpgo button{height:32px;padding:0 13px;border-radius:99px;border:1px solid rgba(255,255,255,.22);background:rgba(8,18,38,.88);color:#fff;font:700 13.5px/1 var(--round,inherit);cursor:pointer;white-space:nowrap;box-shadow:0 3px 10px rgba(0,0,0,.35)}
+.rpgo button.on{background:#065f46;border-color:#34d399}
+.rpgo button.br{background:#b45309;border-color:#fbbf24}
+.cpn .cb-tag{display:inline-block;padding:1px 6px;border-radius:6px;background:rgba(52,211,153,.2);color:#6ee7b7;font-size:11px;font-weight:700;margin-right:4px}

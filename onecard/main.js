@@ -279,6 +279,7 @@
     $('loanBtn').hidden = true; $('bankBtn').hidden = true;
     $('hand').innerHTML = ''; $('opps').innerHTML = ''; $('fly').innerHTML = ''; $('discard').innerHTML = '';
     const rb = $('rpBar'); if (rb) rb.remove();
+    document.querySelectorAll('.rpgo').forEach(x => x.remove());
     show('home'); drawMenu();
   }
 
@@ -534,13 +535,14 @@
       ses.chips = (ses.startChips || CHIPS.start(ses.kind, ses.seats.length)).slice();
       for (;;) {
         await playRound(ses, s);
-        reportChips(ses);
+        if (!ses.isDrill) reportChips(ses); else { ses.lastDeltas = null; drawBar(ses); }   // 복기 연습 판은 칩·기록에 안 넣음
         let next;
         for (;;) {
           next = await showResult(ses);
-          if (next && typeof next === 'object' && next.replay) { await runReplay(ses, next.replay, true); continue; }
+          if (next && typeof next === 'object' && next.replay) { await runReplay(ses, next.replay, true); ses.check(); continue; }   // 🎮 여기서부터 두기로 갔으면 이 판은 끝
           break;
         }
+        ses.isDrill = false;
         if (next !== 'next') { goHome(); return; }
         if (ses.bank && ses.cfg.role === 'host') {
           $('sub').textContent = '🏦 장부에 쓰는 중…';
@@ -866,7 +868,7 @@
     $('sub').classList.toggle('hurt', myT && s.atk > 0);
     // 점수판 한 줄
     const turnSeat = s.phase === 'end' ? -1 : (ses.actor != null ? ses.actor : turnP);
-    $('scoreBar').hidden = false;
+    $('scoreBar').hidden = !!ses.replaying;
     $('scoreBar').innerHTML = ses.seats.map((x, i) => {
       const W = (ses.score && ses.score.w[i]) || 0, L = (ses.score && ses.score.l[i]) || 0, ch = ses.chips && ses.chips[i], money = ch == null ? '' : ses.chipWon ? fmtN(Math.round(ch * ses.chipWon)) + '원' : '🪙' + fmtN(ch);
       const nm = i === me && !ses.cfg.watch && !ses.hot ? '나' : x.name;
@@ -885,7 +887,8 @@
     if (ses.cfg.watch) $('lbl').textContent = '🍿 AI 구경';
     else if (ses.hot) $('lbl').textContent = `📱 한 기기 ${n}명`;
     else if (ses.cfg.online) $('lbl').textContent = `👥 친구랑 ${n}명 (${ses.net.code})`;
-    else $('lbl').textContent = `☝️ ${n}명 · ${TIER[ses.seats[1].tier].em} ${TIER[ses.seats[1].tier].name}`;
+    else if (ses.isDrill) $('lbl').textContent = `🎮 복기 연습 · ${n}명`;
+    else { const ai = ses.seats.find(x => x.ctrl === 'ai' && TIER[x.tier]) || ses.seats[1], t = TIER[ai && ai.tier] || TIER.normal; $('lbl').textContent = `☝️ ${n}명 · ${t.em} ${t.name}`; }
   }
 
   addEventListener('resize', onResize);
@@ -954,16 +957,17 @@
   // ── 한 판 진행 ───────────────────────────────────────────
   async function playRound(ses, s) {
     ses.S = s; ses.V = G.fastClone(s); ses.sel = -1; ses.armed = false; ses.resCounted = false; ses.coachCache = null; ses.busy = -1;
-    ses.rec = { at: Date.now(), start: G.fastClone(s), acts: [], seats: ses.seats.map((x, i) => ({ name: i === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, em: x.em })) };
+    ses.rec = ses.isDrill ? null : { at: Date.now(), start: G.fastClone(s), acts: [], seats: ses.seats.map((x, i) => ({ name: i === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, em: x.em })) };
     if (ses.hot) ses.hide = true;
     $('resBox').hidden = true; $('callZone').hidden = true;
     HEL.forEach(el => el.remove()); HEL.clear();
     setLabel(ses);
     layout(ses);
     lastWH = $('stage').clientWidth + 'x' + $('stage').clientHeight;
-    if (ses.resume) { ses.resume = false; render(ses); C.toast('방장 화면과 맞췄어요. 이어서 해요', 1800); }
+    if (ses.isDrill) { render(ses); C.toast(ses.drillMsg || '🎮 복기 장면부터 이어서 해요', 2600); ses.drillMsg = null; }   // 🎮 복기에서 '여기서부터 내가 두기': 나누기 없이 그 장면 그대로
+    else if (ses.resume) { ses.resume = false; render(ses); C.toast('방장 화면과 맞췄어요. 이어서 해요', 1800); }
     else await dealAnim(ses);
-    if (!ses.hot && !ses.cfg.watch && !ses.cfg.online && ses.S.round === 1) showHowto(false);
+    if (!ses.hot && !ses.cfg.watch && !ses.cfg.online && !ses.isDrill && ses.S.round === 1) showHowto(false);
     while (ses.S.phase !== 'end') {
       await ses.ready();
       const S = ses.S, p = S.phase === 'call' ? S.call.p : S.turn;
@@ -989,7 +993,7 @@
       ses.check();
       if (!G.isLegal(ses.S, a)) { console.warn('[onecard] 할 수 없는 수', a, ses.S.phase); a = G.legal(ses.S).indexOf(G.A_DRAW) >= 0 ? G.A_DRAW : G.legal(ses.S)[0]; }
       const { state, events } = G.step(ses.S, a);
-      ses.S = state; ses.rec.acts.push(a);
+      ses.S = state; if (ses.rec) ses.rec.acts.push(a);
       ses.actor = p;
       try { await playEvents(ses, events); } finally { ses.actor = null; }
       ses.check();
@@ -1002,7 +1006,7 @@
       render(ses);
     }
     render(ses);
-    saveReplay(ses.rec, ses.S);
+    if (ses.rec) saveReplay(ses.rec, ses.S);
   }
 
   // 나누기: 더미에서 한 장씩 (선부터), 마지막에 시작 카드 뒤집기
@@ -1150,6 +1154,26 @@
     show('play'); drawDock();
     runReplay(ses, rec, false).then(() => { if (SES === ses) goHome(); }, e => { if (!(e instanceof Cancel)) { console.error(e); if (SES === ses) goHome(); } });
   }
+  // 🎮 복기 → '여기서부터 내가 두기': k 수째 장면(같은 손패·같은 더미)에서 seat 자리를 내가, 나머지는 AI 가 이어서. 선생님은 켜고 시작 (단추로 끔), 냥·전적·칩에는 안 넣음
+  function startBranch(rec, k, seat) {
+    let st = G.fastClone(rec.start);
+    for (let j = 0; j < k; j++) st = G.step(st, rec.acts[j]).state;
+    if (st.phase === 'end') return C.toast('이미 끝난 장면이에요. 앞으로 돌아가서 눌러 주세요');
+    if (SES) SES.dispose();
+    const cfg = { watch: false, N: rec.start.n, rules: rec.start.rules, seed: 0, me: seat, initState: st, branch: true };
+    const ses = SES = newSession(cfg);
+    const tier = TIER[opt.tier] ? opt.tier : 'normal';
+    ses.seats = rec.seats.map((x, i) => (i === seat ? { ctrl: 'me', tier: null, name: '나', em: '나' } : { ctrl: 'ai', tier, name: x.name === '나' ? '그때의 나' : x.name, em: x.em === '나' ? '🙂' : x.em }));
+    ses.isDrill = true;
+    ses.drillMsg = `🎮 ${k}수째 장면부터 내가 둬요 — 🧑‍🏫 선생님을 켜고 끄며 해 보세요`;
+    ses.coachOn = true;
+    show('play');
+    setupCoach(ses);
+    drawDock();
+    runMatch(ses);
+  }
+  // 다시 두기: 처음 ⏮ · 한 수 ◀ ▶ · 재생/멈춤. inline = 결과 창에서 (끝나면 결과로 돌아감)
+  //   위 줄: 🧑‍🏫 선생님(이 장면 그 차례 사람 눈으로 본 추천 vs 실제로 한 수) · 🎮 여기서부터 내가 두기
   async function runReplay(ses, rec, inline) {
     const keep = { watch: ses.cfg.watch, S: ses.S, seats: ses.seats, hide: ses.hide };
     const acts = rec.acts || [];
@@ -1159,13 +1183,80 @@
     ses.S = G.fastClone(rec.start); ses.V = G.fastClone(ses.S);
     $('resBox').hidden = true; $('pop').hidden = true; $('callZone').hidden = true;
     HEL.forEach(el => el.remove()); HEL.clear();
+    const canBranch = !ses.cfg.online;                       // 친구 방 결과 창에서는 방을 떠나게 되니 안 보임 (지난 판 목록에서는 됨)
+    const rg = document.createElement('div'); rg.className = 'rpgo';
+    rg.innerHTML = `<button data-rg="coach" aria-pressed="false">🧑‍🏫 선생님</button>${canBranch ? '<button data-rg="branch" class="br">🎮 여기서부터 내가 두기</button>' : ''}`;
+    $('scoreBar').after(rg);                                 // 점수판 자리에 (다시 보기에선 점수판을 감춤) — 카드·다시 보기 줄을 안 가림
     layout(ses); $('lbl').textContent = '🎞️ 다시 보기'; drawDock(); render(ses);
     let i = 0;
     const rp = { cmd: null, play: true };
     const bar = document.createElement('div'); bar.className = 'rpbar'; bar.id = 'rpBar';
     bar.innerHTML = `<button data-rp="start" aria-label="처음으로">⏮</button><button data-rp="prev" aria-label="한 수 뒤로">◀</button><button data-rp="play" class="pp" aria-label="재생 · 멈춤"></button><button data-rp="next" aria-label="한 수 앞으로">▶</button><span class="rpn"></span><button data-rp="exit" class="rpx">${inline ? '결과로' : '닫기'}</button>`;
     $('play').appendChild(bar);
-    const draw = () => { bar.querySelector('.pp').textContent = rp.play ? '⏸' : '⏵'; bar.querySelector('.rpn').textContent = `${i} / ${acts.length}수`; };
+    const draw = () => { bar.querySelector('.pp').textContent = rp.play ? '⏸' : '⏵'; bar.querySelector('.rpn').textContent = `${i} / ${acts.length}수`; rpCoach(); };
+    // 🧑‍🏫 복기 선생님: 카드를 내는 장면마다 '그 차례 사람 눈에 보이던 카드'만으로 낸 추천 vs 실제로 한 수 (다른 사람 손패는 안 봄)
+    let rpPanel = null, rpOn = false;
+    const coachMap = new Map();                              // 장면 번호 → 추천 (같은 장면은 다시 안 셈)
+    const seatNm = p => (rec.seats[p] || {}).name || '?';
+    const actText = (st, a) => (a < G.A_DRAW ? `[${G.cardName(a - G.A_PLAY)}]` : a === G.A_DRAW ? (st.atk > 0 ? `${st.atk}장 받기` : '한 장 먹기') : a < G.A_CALL ? `무늬 ${SYM[a - G.A_SUIT]} ${G.SUIT_NAME[a - G.A_SUIT]}` : a === G.A_CALL ? '☝️ 원카드 외침' : a < G.A_MISS ? `🫵 ${seatNm(a - G.A_CATCH)} 잡았다!` : '⏰ 아무도 안 눌러서 시간 지남');
+    function coachFor(k, st, p) {
+      let ent = coachMap.get(k);
+      if (!ent) {
+        const v = G.view(st, p);
+        ent = { data: AI.coach(v) }; coachMap.set(k, ent);
+        if (!FAST && ent.data && st.phase === 'play') coachMC(v, k + 1).then(d => {   // 바로 보여 주고, 일꾼이 끝까지 둬 본 결과가 더 낫다고 하면 바꿈 (실제 판 선생님과 같은 길)
+          if (!d || !ses.alive || !rpOn) return;
+          const nd = AI.coach(v, { mc: d, minN: 60 });
+          if (nd && nd.a !== ent.data.a) { ent.data = nd; if (i === k) rpCoach(); }
+        });
+      }
+      return ent.data;
+    }
+    function rpCoach() {
+      if (!rpOn || !rpPanel) return;
+      const st = ses.S, a = acts[i];
+      let html = '<span class="small">카드를 내는 장면마다 선생님 추천을 보여 드려요 (▶ 로 한 수씩) — 그 차례 사람 눈에 보이던 카드만 보고 골라요</span>';
+      if (st.phase === 'end' || i >= acts.length) html = '<span class="small">끝난 장면이에요 — ◀ 로 돌아가 보세요</span>';
+      else {
+        const p = st.phase === 'call' ? st.call.p : st.turn, who = `<b>${esc(seatNm(p))}</b> 차례`, c = st.phase === 'call' ? null : coachFor(i, st, p);
+        if (st.phase === 'call') html = `<b>${esc(seatNm(p))}</b> 한 장 남음 · ☝️ 외치기 시간 — 누가 먼저 누르는지 겨루는 거라 추천은 없어요<br>실제: <b>${esc(actText(st, a))}</b>`;
+        else if (c && st.phase === 'suit') {
+          html = `${who} · 7 무늬 고르기 · <span class="cb-tag">👑 추천</span> <b>${esc(c.name)}</b> — ${esc(c.why)}<br>` + (a === c.a ? '👍 실제로도 추천대로 골랐어요' : `실제: <b>${esc(actText(st, a))}</b>`);
+        } else if (c) {
+          const info = a >= G.A_PLAY && a < G.A_DRAW ? c.byCard[a - G.A_PLAY] : null, sug = c.card >= 0 && c.byCard[c.card] && c.byCard[c.card].suit != null ? ` → ${SYM[c.byCard[c.card].suit]}` : '';
+          html = `${who} · <span class="cb-tag">👑 추천</span> <b>${c.card >= 0 ? '[' + esc(c.name) + ']' : esc(c.name)}</b>${sug} — ${esc(c.why)}<br>`
+            + (a === c.a ? '👍 실제로도 추천대로 했어요' : `실제로 한 수: <b>${esc(actText(st, a))}</b>${info ? (c.tag === '끝까지 둬 봄' ? '' : ` <span class="small">(선생님 순위 ${info.rank + 1}/${Object.keys(c.byCard).length + 1})</span>`) + ' — ' + esc(info.why) : a === G.A_DRAW && c.card >= 0 ? ` — ${st.atk > 0 ? '받아칠' : '낼'} 수 있는 카드가 있었어요` : ''}`);
+        }
+      }
+      rpPanel.set(html);
+      if (!rpPanel.visible) rpPanel.show();
+    }
+    const pickSeat = st => new Promise(res => {
+      const ok = rec.seats.map((x, k) => k).filter(k => st.out[k] === 0), mine = rec.seats.findIndex(x => x.name === '나'), cur = st.phase === 'call' ? st.call.p : st.turn;
+      if (!ok.length) return res(-1);
+      if (mine >= 0 && ok.indexOf(mine) >= 0) return res(mine);
+      C.modal({ title: '🎮 어느 자리를 둘까요?', html: '<p class="small" style="margin:0">고른 자리는 내가, 나머지는 AI 가 이어서 둬요.</p>', dismiss: true,
+        buttons: ok.map(k => ({ label: `${rec.seats[k].em && rec.seats[k].em !== '나' ? rec.seats[k].em + ' ' : ''}${rec.seats[k].name}${k === cur ? ' (지금 차례)' : ''}`, primary: k === cur, onClick: () => res(k) })), onClose: () => res(-1) });
+    });
+    rg.onclick = async e => {
+      const b = e.target.closest('[data-rg]'); if (!b) return;
+      sfx('tap');
+      if (b.dataset.rg === 'coach') {
+        rpOn = !rpOn; b.setAttribute('aria-pressed', String(rpOn)); b.classList.toggle('on', rpOn);
+        if (rpOn && !rpPanel && window.CoachPanel) {
+          // 복기 창은 따로 기억 — 처음엔 위 단추 줄 바로 아래 (단추·내 카드를 안 가림)
+          try { if (!localStorage.getItem('game.coach.onecard-rp')) { const pw = Math.min(320, innerWidth * 0.86), t = Math.round(rg.getBoundingClientRect().bottom + 6); localStorage.setItem('game.coach.onecard-rp', JSON.stringify({ c: [Math.max(4, innerWidth - 56), t], p: [Math.max(4, Math.round((innerWidth - pw) / 2)), t], z: 0 })); } } catch (err) {}
+          try { rpPanel = CoachPanel.create({ game: 'onecard-rp', title: 'AI 선생님 · 복기', startHidden: true }); } catch (err) { rpPanel = null; }
+        }
+        if (rpOn) { rpCoach(); if (rpPanel && rpPanel.collapsed) rpPanel.collapse(false); } else if (rpPanel) rpPanel.hide();
+        return;
+      }
+      if (ses.S.phase === 'end' || i >= acts.length) return C.toast('끝난 장면이에요. ◀ 로 앞으로 가서 눌러 주세요');
+      rp.play = false; draw();
+      const seat = await pickSeat(ses.S);
+      if (seat < 0 || !ses.alive) return;
+      rp.branch = { k: i, seat }; rp.cmd = 'exit'; ses.wake();
+    };
     bar.onclick = e => {
       const b = e.target.closest('[data-rp]'); if (!b) return;
       sfx('tap');
@@ -1199,8 +1290,10 @@
         }
       }
     } finally {
-      bar.remove(); ses.replaying = false;
+      bar.remove(); rg.remove(); ses.replaying = false;
+      if (rpPanel) { try { rpPanel.destroy(); } catch (e) {} }
     }
+    if (rp.branch) { startBranch(rec, rp.branch.k, rp.branch.seat); return; }
     if (inline && ses.alive) {
       ses.cfg.watch = keep.watch; ses.seats = keep.seats; ses.hide = keep.hide;
       ses.S = keep.S; ses.V = G.fastClone(keep.S);
@@ -1409,7 +1502,7 @@
   }
 
   // ── 🧑‍🏫 AI 선생님 ─────────────────────────────────────
-  const coachAvail = ses => !!ses && !ses.cfg.watch && !ses.cfg.replay && (!ses.cfg.online || !!ses.cfg.coach);
+  const coachAvail = ses => !!ses && !ses.cfg.watch && !ses.cfg.replay && !ses.replaying && (!ses.cfg.online || !!ses.cfg.coach);   // 복기 중엔 복기 전용 선생님 창이 따로 있음
   const coachOn = ses => coachAvail(ses) && !!ses.coachOn;
   function setupCoach(ses) {
     if (!coachAvail(ses) || !window.CoachPanel) return;
@@ -1479,15 +1572,16 @@
         title = r.kind === 'last' ? '🎉 다 파산해서 이겼어요!' : '🎉 이겼어요!';
         big = `+${r.pts[me]}장`;
         const gain = r.pts[me] * 10;
-        if (!ses.resCounted && !ses.cfg.online) { coins += gain; C.save(KEY + 'coins', coins); }
-        if (!ses.cfg.online) coinLine = `<p class="rescoin">🪙 +${fmtN(gain)}냥</p>`;
+        if (!ses.resCounted && !ses.cfg.online && !ses.isDrill) { coins += gain; C.save(KEY + 'coins', coins); }
+        if (!ses.cfg.online && !ses.isDrill) coinLine = `<p class="rescoin">🪙 +${fmtN(gain)}냥</p>`;
         sfx('win');
         setTimeout(() => C.confetti(r.pts[me] >= 15 ? {} : { particleCount: 60, spread: 60 }), 150);
       } else {
         title = `😿 ${esc(iga(ses.seats[r.winner].name))} 이겼어요`;
         big = `${r.pts[me]}장`; bigCls = 'lose'; sfx('lose');
       }
-      if (!spec && !ses.resCounted && !ses.cfg.online) {
+      if (ses.isDrill) coinLine += '<p class="small" style="margin:4px 0 0">🎮 복기 연습이라 냥·기록엔 안 넣었어요 (다음 판부터 들어가요)</p>';
+      if (!spec && !ses.resCounted && !ses.cfg.online && !ses.isDrill) {
         stats.played++; if (r.winner === me) { stats.won++; stats.best = Math.max(stats.best, r.pts[me]); }
         C.save(KEY + 'stats', stats);
       }
