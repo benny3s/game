@@ -18,6 +18,7 @@
   --han-l:#f87171;
   --arrow:rgba(5,150,105,.9);
   --arrow2:rgba(217,119,6,.92);
+  --arrow3:rgba(124,58,237,.92);
   --serif:"Noto Serif KR","Noto Serif CJK KR","Source Han Serif K","Nanum Myeongjo","Batang","AppleMyungjo","SimSun","Songti SC",serif;
 }
 body{background:var(--bg-grad)}
@@ -267,6 +268,11 @@ body.playing .bar .t.myturn{color:#422006;background:linear-gradient(180deg,#fde
 .ch-real b{font:800 14.5px var(--round);color:#fcd34d}
 .ch-mv .lg,.ch-real .lg{display:inline-block;width:14px;height:4px;border-radius:2px;vertical-align:3px;margin-right:4px;background:var(--arrow)}
 .ch-real .lg{background:var(--arrow2)}
+.jb-a.thr{stroke:var(--arrow3);stroke-width:1.5;stroke-dasharray:1.2 1.6;opacity:.95}
+.ch-why{margin-top:3px;font-size:12.5px;line-height:1.45;color:#ede4d3}
+.ch-why b{color:#c4b5fd}
+.ch-why .lg{background:var(--arrow3)}
+.ch-why .bad{color:#fca5a5}
 
 .dock{gap:8px}
 .dock button span:last-child{white-space:nowrap}

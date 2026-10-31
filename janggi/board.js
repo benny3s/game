@@ -11,7 +11,7 @@
       this.pcs = new Map(); this.sel = -1; this.tg = []; this.marks = {}; this.arrow = null; this.locked = false;
       el.classList.add('jb');
       el.innerHTML = '<div class="jb-wood"></div><svg class="jb-lines" viewBox="0 0 90 100" preserveAspectRatio="none" aria-hidden="true"></svg><div class="jb-pcs"></div><div class="jb-mk"></div>' +
-        '<svg class="jb-arw" viewBox="0 0 90 100" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="jbHead" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow)"/></marker><marker id="jbHead2" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow2,#d97706)"/></marker></defs><g></g></svg><div class="jb-fx" aria-live="polite"></div>';
+        '<svg class="jb-arw" viewBox="0 0 90 100" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="jbHead" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow)"/></marker><marker id="jbHead2" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow2,#d97706)"/></marker><marker id="jbHead3" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow3,#7c3aed)"/></marker></defs><g></g></svg><div class="jb-fx" aria-live="polite"></div>';
       this.lines = el.children[1]; this.pcLayer = el.children[2]; this.mkLayer = el.children[3]; this.arw = el.children[4]; this.fx = el.children[5];
       this.drawLines();
       el.addEventListener('pointerdown', e => this.tap(e));
@@ -90,8 +90,8 @@
         p.classList.toggle('sel', this.sel === sq);
       }
     }
-    // 화살표: a = 추천 수 [from, to] (초록) · real = 복기에서 실제로 둔 수 [from, to] (주황 점선, 없어도 됨)
-    setArrow(a, real) { this.arrow = a; this.real = real || null; this.drawArrow(); }
+    // 화살표: a = 추천 수 [from, to] (초록) · real = 복기에서 실제로 둔 수 (주황 점선) · thr = 그 수가 다음에 노리는 수 (보라 가는 점선) — 뒤 둘은 없어도 됨
+    setArrow(a, real, thr) { this.arrow = a; this.real = real || null; this.thr = thr || null; this.drawArrow(); }
     drawArrow() {
       const g = this.arw.querySelector('g'); g.innerHTML = '';
       const line = (a, cls, head) => {
@@ -102,6 +102,7 @@
         l.setAttribute('class', cls); l.setAttribute('marker-end', `url(#${head})`);
         g.appendChild(l);
       };
+      if (this.thr) line(this.thr, 'jb-a thr', 'jbHead3');
       if (this.real) line(this.real, 'jb-a real', 'jbHead2');
       if (this.arrow) line(this.arrow, 'jb-a', 'jbHead');
     }
