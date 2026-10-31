@@ -238,7 +238,45 @@
     return c.bestAction;
   }
 
-  const API = { analyzeEquity, coach, choose, TIER_IDS: ['easy', 'normal', 'hard'] };
+  // 🤔 행동으로 패 짐작 (복기용): 공개된 것(모두의 오픈패·배팅)만 보고 그 사람 히든패 자리에 올 수 있는 카드를 다 넣어 봐서,
+  //   선생님 기준이라면 같은 종류의 행동(다이 / 콜 / 레이즈)을 하는 패가 무엇·얼마나 센지 → 실제 패는 그 중 어디쯤인지
+  function readAction(v, p, a, hole) {
+    if (!hole || hole[1] == null || hole[1] < 0 || v.street === 1) return null;   // 첫째 장 장면은 숨은 패가 없어 짐작할 게 없음
+    const kind = x => (x === A_FOLD ? 'fold' : x === A_CALL ? 'call' : 'bet');
+    const k = kind(a), c1 = hole[0];
+    const open = new Set();
+    for (let q = 0; q < v.n; q++) { const h = v.hands[q] || []; if (h[0] != null && h[0] >= 0) open.add(h[0]); }
+    const withC2 = c2 => { const hv = Object.assign({}, v, { hands: v.hands.slice() }); hv.hands[p] = [c1, c2]; return hv; };
+    const all = [], same = [];
+    for (let c2 = 0; c2 < 20; c2++) {
+      if (open.has(c2) || c2 === c1) continue;
+      const c = coach(withC2(c2), p);
+      all.push(c.winPct);
+      if (kind(c.bestAction) === k) same.push({ w: c.winPct, name: c.handEval ? c.handEval.name : '' });
+    }
+    if (!all.length) return null;
+    const mine = coach(withC2(hole[1]), p);
+    const eq = mine.winPct, odds = mine.potOddsPct;
+    const share = Math.round((100 * same.length) / all.length);
+    const avgSame = same.length ? Math.round(same.reduce((x, y) => x + y.w, 0) / same.length) : null;
+    const top = Math.max(1, Math.round((100 * all.filter(w => w > eq).length) / all.length));
+    const names = [...new Set(same.sort((x, y) => y.w - x.w).map(x => x.name).filter(Boolean))].slice(0, 4);
+    let tag, why;
+    if (share >= 90 && k !== 'fold') { tag = '🤷 흔한 수'; why = '이 자리에선 거의 모든 패가 이렇게 해서 이것만으로는 패를 짐작하기 어려워요'; }
+    else if (k === 'bet') {
+      if (eq >= 55 || (avgSame != null && eq >= avgSame)) { tag = '💪 밸류 레이즈'; why = '센 패로 판을 키운 수예요'; }
+      else { tag = '🎭 블러프'; why = '약한 패로 상대를 죽게 하려는 수예요'; }
+    } else if (k === 'call') {
+      if (eq >= 65) { tag = '🪤 숨기기'; why = '센 패를 감추고 따라가 상대 레이즈를 더 받으려는 수예요'; }
+      else if (!odds) { tag = '✋ 체크'; why = '돈을 더 걸지 않고 넘긴 수예요'; }
+      else if (eq >= odds) { tag = '✅ 오즈 맞는 콜'; why = `승률 ${eq}%가 팟 오즈 ${odds}%보다 높아 따라갈 만해요`; }
+      else { tag = '🙏 무리한 콜'; why = `승률 ${eq}%가 팟 오즈 ${odds}%보다 낮은데 따라갔어요`; }
+    } else if (eq >= odds + 10) { tag = '😨 지나친 조심'; why = `승률 ${eq}%로 따라갈 만했는데 죽었어요`; }
+    else { tag = '🛑 맞는 다이'; why = '승산이 낮아 돈을 아꼈어요'; }
+    return { kind: k, share, avgSame, top, names, winPct: eq, handName: mine.handEval ? mine.handEval.name : '', tag, why };
+  }
+
+  const API = { analyzeEquity, coach, choose, readAction, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.SeotdaAI = API;
 })(this);

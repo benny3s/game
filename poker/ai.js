@@ -232,12 +232,14 @@
     const top = Math.max(1, Math.round((100 * eqs.filter(e => e > mine.equityPct).length) / N));   // 실제 패보다 센 패 비율 = 상위 몇 %
     const eq = mine.equityPct, outs = (mine.draws && mine.draws.outsCount) || 0;
     let tag, why;
-    if (k === 'bet') {
+    if (share >= 90 && k !== 'fold') { tag = '🤷 흔한 수'; why = '이 자리에선 거의 모든 패가 이렇게 해서 이것만으로는 패를 짐작하기 어려워요'; }
+    else if (k === 'bet') {
       if (eq >= 55 || (avgSame != null && eq >= avgSame)) { tag = '💪 밸류 베팅'; why = '센 패로 판을 키운 수예요'; }
       else if (outs >= 8) { tag = '🎣 세미 블러프'; why = `지금은 약해도 아웃 ${outs}장(드로)을 믿고 먼저 친 수예요`; }
       else { tag = '🎭 블러프'; why = '약한 패로 상대를 접게 하려는 수예요'; }
     } else if (k === 'call') {
       if (eq >= 62) { tag = '🪤 숨기기'; why = '센 패를 감추고 따라가 상대 베팅을 더 받으려는 수예요'; }
+      else if (!mine.potOddsPct) { tag = '✋ 체크'; why = '칩을 더 걸지 않고 다음 카드를 본 수예요'; }
       else if (outs >= 8 && eq < mine.potOddsPct) { tag = '🎣 드로 콜'; why = `아웃 ${outs}장을 보고 따라간 수예요`; }
       else if (eq >= mine.potOddsPct) { tag = '✅ 오즈 맞는 콜'; why = `승률 ${eq}%가 팟 오즈 ${mine.potOddsPct}%보다 높아 따라갈 만해요`; }
       else { tag = '🙏 무리한 콜'; why = `승률 ${eq}%가 팟 오즈 ${mine.potOddsPct}%보다 낮은데 따라갔어요`; }

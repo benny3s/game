@@ -270,6 +270,7 @@ body.playing .dock button[aria-pressed="true"] .ic{background:#047857;border-col
 .rpgo button.br{background:#78350f;border-color:#fbbf24}
 .rpc-who{font-size:12.5px;line-height:1.6;margin-bottom:2px}
 .rpc-act{font:700 12.5px/1.4 var(--text);color:#fde68a}
+.rpc-read{font:500 12px/1.45 var(--text);color:#e2e8f0;margin-top:4px}
 .rpc-desc{margin-top:5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .rp-note{margin:8px 0 0;color:#fde68a}
 @media (orientation:landscape) and (max-height:560px){

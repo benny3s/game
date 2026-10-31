@@ -1077,7 +1077,7 @@
         states.push(S.step(st, acts[j]).state);
       }
       const N = states.length - 1, mine = rec.seats.findIndex(x => x.name === '나');
-      const rp = { rec, states, log, N, i: 0, S: states[0], me: mine >= 0 ? mine : 0, seats: rec.seats, play: true, t: 0, coach: false, panel: null, cc: {}, draw: () => {} };
+      const rp = { rec, states, log, N, i: 0, S: states[0], me: mine >= 0 ? mine : 0, seats: rec.seats, play: true, t: 0, coach: false, panel: null, cc: {}, rd: {}, draw: () => {} };
       const cpWas = !!(ses.cp && ses.cp.visible);
       if (cpWas) ses.cp.hide();
       $('coachPanel').hidden = true; $('coachBtn').hidden = true; $('scoreBar').hidden = true;
@@ -1105,9 +1105,13 @@
         const c = rp.cc[i] || (rp.cc[i] = AI.coach(S.view(st, p), p));
         const info = c.byAction[a];
         const mark = !info ? '' : info.tier === 'best' ? '👑 최선' : `${info.tier === 'good' ? '🟢' : info.tier === 'ok' ? '🟡' : '🔴'} 기댓값 ${Math.round(info.delta)}냥`;
+        // 🤔 이 행동으로 본 패 짐작 (오픈패·배팅만 보고) + 실제 패는 그 중 어디쯤 — 장면마다 한 번만 셈
+        if (!(i in rp.rd)) { try { rp.rd[i] = AI.readAction ? AI.readAction(S.view(st, p), p, a, st.hands[p]) : null; } catch (e) { rp.rd[i] = null; } }
+        const rd = rp.rd[i], KIND = { fold: '다이', call: '콜', bet: '레이즈' };
+        const read = rd ? `<div class="rpc-read">🤔 <b>${esc(rd.tag)}</b> — ${esc(rd.why)}<br><span class="small">여기서 ${KIND[rd.kind]}하는 패는 보통 승률 ${rd.avgSame != null ? rd.avgSame + '%' : '?'}${rd.names.length ? ` (${rd.names.map(esc).join('·')} …)` : ''} · 실제 패 [${esc(rd.handName)}] 승률 ${rd.winPct}% · 상위 ${rd.top}%</span></div>` : '';
         // 짧게 (테이블을 덜 가리게): 누구 차례·승률 / 추천 vs 실제 / 행동별 기댓값 / 한 줄 해설
         out(`<div class="rpc-who"><b>${esc(who)}</b> 차례 · ${st.street}차 · <span class="cp-chip win">승률 ${c.winPct}%</span> <span class="cp-chip odds">팟오즈 ${c.potOddsPct}%</span></div>`
-          + `<div class="rpc-act">👑 추천 <b>[${esc(actLabel(st, p, c.bestAction))}]</b> · 실제 <b>[${esc(actLabel(st, p, a))}]</b> ${mark}</div>`
+          + `<div class="rpc-act">👑 추천 <b>[${esc(actLabel(st, p, c.bestAction))}]</b> · 실제 <b>[${esc(actLabel(st, p, a))}]</b> ${mark}</div>${read}`
           + `${evRow(c)}<p class="cp-desc rpc-desc">${esc(c.detail)} <span class="small">(${esc(who)} 눈으로 본 계산)</span></p>`);
       };
       rp.draw = () => {
