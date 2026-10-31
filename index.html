@@ -1463,7 +1463,8 @@ button { font: inherit; cursor: pointer; }
   });
 
   function renderFeatured() {
-    const featuredList = games.filter(g => g.featured || g.id === "gostop");
+    // 추천·대표 = 실제로 많이 한 게임 위에서부터 7개 (games 는 이미 판 수 순 — 11-01 베니 님: 냥도쿠처럼 많이 한 게임이 빠지지 않게)
+    const featuredList = games.slice(0, 7);
     if (!featuredList.length) return;
     const cur = featuredList.find(g => g.id === featuredId) || featuredList[0];
     featuredId = cur.id;
@@ -1630,7 +1631,7 @@ button { font: inherit; cursor: pointer; }
       if (!Object.keys(plays).length) plays = await fetch("https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app/game_plays.json", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null) || {};
       const pn = id => (plays[id] && plays[id].n) || 0, byPlays = games.reduce((t, x) => t + pn(x.id), 0) >= 30;
       games.sort((a, b) => (byPlays ? pn(b.id) - pn(a.id) : 0) || (b.q || 0) - (a.q || 0));
-      const firstF = games.find(x => x.featured);
+      const firstF = games[0];                                   // 가장 많이 한 게임이 맨 앞
       if (firstF) featuredId = firstF.id;
       if (isAdmin) {
         const logLink = document.createElement("a");
