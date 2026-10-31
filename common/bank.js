@@ -1,6 +1,8 @@
 /* 모임 칩 '은행' (common/bank.js) — 섯다·홀덤·고스톱 … 돈 거는 게임 공용 장부
    · 실제 돈은 앱 밖에서. 앱은 칩 장부만 쓰고, 끝나면 '누가 누구에게 얼마' (송금 횟수 최소) 를 알려 줌
    · 장부 주인 = 모임(gid). 방은 열고 닫혀도 잔액은 그대로, 초기화(새 회차)는 관리자·허용 기기만
+   · 10-31 베니 님: 장부는 하나(🏦 기본 은행 gbasic, 저절로 생김 — 새 모임 만들기 없앰). '정산하고 새로 시작' = 누가 누구에게 얼마 + 돈만 0,
+     🏆 승패(records)·장부·정산 기록은 계속 쌓임. 📈 누적 손익 = 'reset' 정산들의 nets 합 (loadTotals)
    · 데이터 bank/{gid}: meta {name, chipWon(1칩=원), loanUnit(한 번 빌리는 칩), created, by}
        members/{pid} {name, borrowed, balance, updated} · ledger/{id} {t, type: loan|game|adjust|reset|ai, pid, amount, game, round, room, by, name, note, pids(ai: 그 판 사람들)}
        settlements/{id} {t, by, lines:[{from,to,won,fn,tn}], nets:{pid:원}, members(그때 잔액), chipWon, residualWon}
@@ -318,7 +320,20 @@ if (typeof window !== "undefined") (() => {
     return S.txn(G(gid) + "/records/" + pid, cur => ({ name: clean(name || (cur && cur.name), 12) || "?", w: int(cur && cur.w) + (win ? 1 : 0), l: int(cur && cur.l) + (win ? 0 : 1), updated: S.now() }));
   }
   async function removeMember(gid, pid) { return S.set(G(gid) + "/members/" + pid, null); }
-  // 정산 저장 (+ 새 회차면 모두 0, 기록은 남김)
+  // 누적: '정산하고 새로 시작'한 회차들의 원 손익 합 (사람별 { name, won, sets }) — 정산 기록은 관리자·허용 기기만 읽힘
+  async function loadTotals(gid) {
+    const sets = await S.last(G(gid) + "/settlements", 1000);
+    const out = {};
+    for (const s of sets) {
+      if (!s || !s.reset) continue;                           // 저장만 한 정산(예전 단추)은 다음 회차 정산에 이미 들어 있음
+      for (const pid of Object.keys(s.nets || {})) {
+        const o = out[pid] || (out[pid] = { name: (s.members && s.members[pid] && s.members[pid].name) || pid, won: 0, sets: 0 });
+        o.won += int(s.nets[pid]); o.sets++;
+      }
+    }
+    return out;
+  }
+  // 정산 저장 (+ reset 이면 돈만 0, 기록은 남김)
   async function loadPools(gid) { return C.poolsFromLedger(await S.last(G(gid) + "/ledger", 1000)); }
   async function saveSettlement(gid, { reset } = {}) {
     const [meta, members, pools] = await Promise.all([getMeta(gid), getMembers(gid), loadPools(gid).catch(() => [])]);
@@ -333,10 +348,9 @@ if (typeof window !== "undefined") (() => {
       lines: res.lines.map(l => ({ from: l.from, to: l.to, won: l.won, fn: clean(l.fn, 12), tn: clean(l.tn, 12) })),
       nets, members: snapM,
     });
-    if (reset) {
+    if (reset) {                                              // 돈(칩·빌린 칩)만 0 — 승패·장부·정산 기록은 그대로 쌓임 (10-31 베니 님)
       for (const pid of Object.keys(members)) upd["members/" + pid] = { name: snapM[pid].name, borrowed: 0, balance: 0, updated: t };
-      upd["ledger/" + S.key()] = ledgerLine("reset", "", 0, { note: "정산 후 새 회차" });
-      upd["records"] = null;                                  // 승패도 새 회차부터
+      upd["ledger/" + S.key()] = ledgerLine("reset", "", 0, { note: "정산하고 새로 시작 (돈만 0)" });
     }
     await S.update(G(gid), upd);
     if (reset) try { window.dispatchEvent(new CustomEvent("bank:reset", { detail: { gid } })); } catch (e) {}   // 이 기기에서 돌고 있는 판은 다음 판에 새 잔액으로
@@ -455,7 +469,8 @@ if (typeof window !== "undefined") (() => {
   async function panel(o) {
     o = o || {};
     const [ov, box] = overlay();
-    const st = { gid: o.gid || null, tab: o.tab || "main", groups: [], meta: null, members: {}, edit: null, msg: "", ok: false, offs: [], settled: null, hist: null, pools: [] };
+    const st = { gid: o.gid || null, tab: o.tab || "main", groups: [], meta: null, members: {}, edit: null, msg: "", ok: false, offs: [], settled: null, hist: null, pools: [], totals: null };
+    const refreshTotals = () => { if (st.gid && mgr()) loadTotals(st.gid).then(t => { st.totals = t; draw(); }).catch(() => {}); };
     if (st.tab === "settle" && !canManage()) st.tab = "main";
     // AI 와 한 판 묶음 (장부 'ai' 줄) — 정산 화면에서만, 관리자만 읽힘
     const refreshPools = () => { if (!st.gid || st.tab !== "settle" || st.settled) return; loadPools(st.gid).then(p => { st.pools = p; if (st.tab === "settle" && !st.settled) draw(true); }).catch(() => {}); };
@@ -472,33 +487,37 @@ if (typeof window !== "undefined") (() => {
       st.offs.push(S.on(G(gid) + "/meta", v => { st.meta = v; draw(); }));
       st.offs.push(S.on(G(gid) + "/members", v => { st.members = v || {}; draw(); refreshPools(); }));
       st.offs.push(S.on(G(gid) + "/records", v => { st.records = v || {}; draw(); }));
+      st.totals = null; refreshTotals();
     };
     const busy = () => box.contains(document.activeElement) && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
 
     function draw(force) {
       if (!force && busy() && st.tab !== "settle") return;
       const M = mgr();
-      const head = `<button class="bk-x" data-x aria-label="닫기">✕</button><h2>🏦 칩 은행</h2>`;
+      const head = `<button class="bk-x" data-x aria-label="닫기">✕</button><h2>🏦 은행 장부</h2>`;
       if (st.tab === "settle") return drawSettle(head);
       if (st.tab === "hist") return drawHist(head);
-      let pick;
-      if (M) {
-        pick = `<div class="bk-row"><select class="bk-sel bk-grow" data-g aria-label="모임 고르기"><option value="">모임을 골라 주세요</option>${st.groups.map(g => `<option value="${esc(g.gid)}" ${g.gid === st.gid ? "selected" : ""}>${esc(g.name)}</option>`).join("")}</select><button class="bk-btn" data-new>＋ 새 모임</button></div>`;
-      } else pick = st.gid ? "" : `<p class="bk-note">은행을 쓰는 방에서 열면 그 모임 잔액이 보여요. 모임 만들기·정산은 관리자·허용된 기기만 돼요.</p>`;
+      // 장부는 하나(🏦 기본 은행, 저절로 생김). 예전에 따로 만든 모임 장부가 있으면 관리자만 골라 볼 수 있게
+      const pick = M && st.groups.length > 1
+        ? `<label class="bk-pick">📂 장부 <select class="bk-sel" data-g aria-label="장부 고르기">${st.groups.map(g => `<option value="${esc(g.gid)}" ${g.gid === st.gid ? "selected" : ""}>${esc(g.name)}${g.gid === DEFAULT.gid ? "" : " (예전)"}</option>`).join("")}</select></label>`
+        : "";
       let body = "";
       if (st.gid && st.meta) {
         const m = st.meta;
         const res = C.settle(st.members, m.chipWon);
+        const tot = st.totals || {};
         const rows = Object.keys(st.members).map(pid => ({ pid, ...C.norm(st.members[pid]) })).map(r => ({ ...r, chips: r.balance - r.borrowed }))
           .sort((a, b) => b.chips - a.chips || (a.name < b.name ? -1 : 1));
         const sumB = rows.reduce((a, r) => a + r.balance, 0), sumL = rows.reduce((a, r) => a + r.borrowed, 0);
-        body = `<div class="bk-meta"><span class="bk-chip">📒 ${esc(m.name)}</span><span class="bk-chip">1칩 = ${fmt(m.chipWon)}원</span><span class="bk-chip">빌리기 ${fmt(m.loanUnit)}칩</span></div>
+        body = `<div class="bk-meta"><span class="bk-chip">1칩 = ${fmt(m.chipWon)}원</span><span class="bk-chip">빌리기 ${fmt(m.loanUnit)}칩 = ${fmt(m.loanUnit * m.chipWon)}원</span></div>
+          <p class="bk-soft">이번 판들 돈 (정산하면 0으로) · 🏆 승패와 📈 누적은 계속 쌓여요</p>
           <div class="bk-list" data-members>${rows.length ? rows.map(r => {
             const cls = r.chips > 0 ? "bk-up" : r.chips < 0 ? "bk-down" : "";
             const ed = M && st.edit === r.pid;
+            const rec = st.records && st.records[r.pid], t = tot[r.pid];
             return `<div class="bk-m${r.pid === myPid ? " me" : ""}" data-pid="${esc(r.pid)}"><b>${esc(r.name)}${r.pid === myPid ? ' <span class="bk-soft">(나)</span>' : ""}</b>
-              <span class="net ${cls}">${sfmt(r.chips)}칩<small>${sfmt(r.chips * m.chipWon)}원</small></span>
-              <span class="nums">${st.records && st.records[r.pid] ? `🏆 ${int(st.records[r.pid].w)}승 ${int(st.records[r.pid].l)}패 · ` : ""}칩 ${fmt(r.balance)} · 빌림 ${fmt(r.borrowed)}</span>
+              <span class="net ${cls}">${sfmt(r.chips * m.chipWon)}원<small>${sfmt(r.chips)}칩</small></span>
+              <span class="nums">${rec ? `🏆 ${int(rec.w)}승 ${int(rec.l)}패 · ` : ""}${t ? `📈 누적 ${sfmt(t.won)}원 (${t.sets}번 정산) · ` : ""}빌림 ${fmt(r.borrowed)}칩</span>
               ${M ? `<div class="acts">${ed
                 ? `<input class="bk-in bk-grow" data-adj type="number" inputmode="numeric" value="${r.balance}" aria-label="새 칩 수" style="max-width:150px"><button class="bk-btn sm pri" data-adjok="${esc(r.pid)}">저장</button><button class="bk-btn sm" data-adjno>취소</button>`
                 : `<button class="bk-btn sm" data-lend="${esc(r.pid)}">💰 ${fmt(m.loanUnit)} 빌려주기</button><button class="bk-btn sm" data-edit="${esc(r.pid)}">✎ 칩 조정</button>${!r.balance && !r.borrowed ? `<button class="bk-btn sm" data-del="${esc(r.pid)}">빼기</button>` : ""}`}</div>` : ""}
@@ -506,10 +525,10 @@ if (typeof window !== "undefined") (() => {
           }).join("") : `<p class="bk-soft">아직 아무도 없어요. 게임에서 칩을 빌리면 여기에 생겨요.</p>`}</div>
           <p class="bk-soft">모두 칩 ${fmt(sumB)} · 빌린 칩 ${fmt(sumL)}${res.residualChips ? ` · AI·조정 몫 ${sfmt(-res.residualChips)}칩 (정산 때 같이 한 사람끼리 나눠요)` : ""}</p>
           ${M ? `<div class="bk-row"><input class="bk-in bk-grow" data-addn maxlength="12" placeholder="사람 추가 (이름)"><button class="bk-btn" data-add>추가</button></div>
-          <div class="bk-row"><button class="bk-btn pri bk-grow" data-settle>🧾 정산하기</button><button class="bk-btn" data-hist>📜 기록</button></div>`
+          <div class="bk-row"><button class="bk-btn pri bk-grow" data-settle>🧾 정산하고 새로 시작</button><button class="bk-btn" data-hist>📜 기록</button></div>`
           : `<p class="bk-note">빌리기는 게임 화면의 💰 단추로, 정산·기록은 방장(관리자·허용된 기기)이 해요.</p>`}`;
       } else if (st.gid) body = `<p class="bk-soft">장부를 불러오는 중…</p>`;
-      else if (M) body = `<p class="bk-soft">${st.groups.length ? "위에서 모임을 고르거나 새로 만들어요." : "아직 모임이 없어요. ＋ 새 모임으로 시작해요."}</p>`;
+      else body = `<p class="bk-soft">${M ? "장부를 준비하는 중…" : "아직 장부가 없어요. 돈 거는 게임을 친구랑 하면 저절로 생겨요."}</p>`;
       box.innerHTML = head + pick + body + `<div class="bk-msg${st.ok ? " ok" : ""}" data-msg>${esc(st.msg)}</div>`;
     }
 
@@ -518,16 +537,16 @@ if (typeof window !== "undefined") (() => {
       const res = st.settled ? st.settled.res : C.settle(st.members, m.chipWon, { pools: st.pools });
       const txt = C.text(res, m, st.settled ? st.settled.t : Date.now());
       const rows = res.rows.slice().sort((a, b) => b.won - a.won);
-      box.innerHTML = `${head}<h3>🧾 ${esc(m.name)} 정산${st.settled ? " (저장됨)" : ""}</h3>
+      box.innerHTML = `${head}<h3>🧾 정산${st.settled ? " — 끝났어요, 새로 시작해요" : ""}</h3>
         <table class="bk-tbl">${rows.map(r => `<tr><td>${esc(r.name)}</td><td class="n">칩 ${sfmt(r.chips)}</td><td class="n ${r.won > 0 ? "bk-up" : r.won < 0 ? "bk-down" : ""}"><b>${sfmt(r.won)}원</b></td></tr>`).join("") || `<tr><td class="bk-soft">정산할 사람이 없어요</td></tr>`}</table>
         <h3>💸 보낼 돈 (${res.lines.length}번)</h3>
         <div class="bk-lines" data-lines>${res.lines.map(l => `<div class="bk-line"><span>${esc(l.fn)} → ${esc(l.tn)}</span><span class="w">${fmt(l.won)}원</span></div>`).join("") || `<p class="bk-soft">보낼 돈이 없어요 🙂</p>`}</div>
         ${res.split === "split" ? `<p class="bk-note">AI·조정 몫 ${sfmt(-res.residualWon)}원은 같이 한 사람끼리 똑같이 나눴어요 (AI 와 한 판은 그 판에 앉은 사람끼리, 칩 조정은 모두).</p>` : ""}
         <textarea class="bk-txt" data-txt readonly>${esc(txt)}</textarea>
         <div class="bk-row"><button class="bk-btn bk-grow" data-copy>📋 카톡용 복사</button></div>
-        ${st.settled ? `<div class="bk-row"><button class="bk-btn pri bk-grow" data-back>잔액 보기</button></div>`
-          : `<div class="bk-row"><button class="bk-btn" data-back>← 뒤로</button><button class="bk-btn bk-grow" data-save>💾 정산 저장</button></div>
-             <button class="bk-btn warn" data-reset>🔄 저장하고 새 회차 (모두 0으로)</button>`}
+        ${st.settled ? `<div class="bk-row"><button class="bk-btn pri bk-grow" data-back>장부 보기</button></div>`
+          : `<p class="bk-soft">확정하면 모두의 돈(칩·빌린 칩)만 0이 되고, 🏆 승패·📈 누적·장부 기록은 그대로 남아요.</p>
+             <div class="bk-row"><button class="bk-btn" data-back>← 뒤로</button><button class="bk-btn pri bk-grow" data-reset>✅ 정산 확정하고 새로 시작</button></div>`}
         <div class="bk-msg${st.ok ? " ok" : ""}" data-msg>${esc(st.msg)}</div>`;
     }
 
@@ -535,19 +554,26 @@ if (typeof window !== "undefined") (() => {
       const h = st.hist;
       const icon = { loan: "💰", game: "🎴", adjust: "✎", reset: "🔄", ai: "🤖" };
       const nm = pid => (st.members[pid] && st.members[pid].name) || pid;
-      box.innerHTML = `${head}<div class="bk-row"><button class="bk-btn" data-back>← 잔액</button><h3 class="bk-grow">📜 ${esc((st.meta && st.meta.name) || "")} 기록</h3></div>
+      const tot = st.totals || {}, recs = st.records || {};
+      const cum = [...new Set(Object.keys(tot).concat(Object.keys(recs)))].map(pid => ({
+        name: (tot[pid] && tot[pid].name) || (recs[pid] && recs[pid].name) || nm(pid), won: tot[pid] ? tot[pid].won : 0, sets: tot[pid] ? tot[pid].sets : 0,
+        w: recs[pid] ? int(recs[pid].w) : 0, l: recs[pid] ? int(recs[pid].l) : 0,
+      })).sort((a, b) => b.won - a.won || b.w - a.w);
+      box.innerHTML = `${head}<div class="bk-row"><button class="bk-btn" data-back>← 장부</button><h3 class="bk-grow">📜 기록</h3></div>
         ${!h ? `<p class="bk-soft">불러오는 중…</p>` : h.err ? `<p class="bk-note">${esc(h.err)}</p>` : `
+        <h3>📈 지금까지 모두 (누적)</h3>
+        <table class="bk-tbl">${cum.map(r => `<tr><td>${esc(r.name)}</td><td class="n">🏆 ${r.w}승 ${r.l}패</td><td class="n">${r.sets}번 정산</td><td class="n ${r.won > 0 ? "bk-up" : r.won < 0 ? "bk-down" : ""}"><b>${sfmt(r.won)}원</b></td></tr>`).join("") || `<tr><td class="bk-soft">아직 정산한 적이 없어요</td></tr>`}</table>
         <h3>정산 기록</h3><div class="bk-hist">${h.sets.length ? h.sets.slice().reverse().map(s => {
           const lines = Array.isArray(s.lines) ? s.lines : Object.values(s.lines || {});
-          return `<div class="bk-set"><b>${when(s.t)} · ${esc(s.by || "")}${s.reset ? " · 새 회차" : ""}</b>${lines.map(l => `<span>${esc(l.fn || l.from)} → ${esc(l.tn || l.to)} <b>${fmt(l.won)}원</b></span>`).join("") || '<span class="bk-soft">보낼 돈 없음</span>'}</div>`;
+          return `<div class="bk-set"><b>${when(s.t)} · ${esc(s.by || "")}${s.reset ? " · 정산하고 새로 시작" : " · (저장만)"}</b>${lines.map(l => `<span>${esc(l.fn || l.from)} → ${esc(l.tn || l.to)} <b>${fmt(l.won)}원</b></span>`).join("") || '<span class="bk-soft">보낼 돈 없음</span>'}</div>`;
         }).join("") : '<p class="bk-soft">아직 정산한 적이 없어요</p>'}</div>
-        <h3>장부 (최근 ${h.led.length}줄)</h3><div class="bk-hist">${h.led.slice().reverse().map(l => `<div class="bk-h"><span>${when(l.t)}</span><span>${icon[l.type] || "·"} ${esc(l.type === "reset" ? "새 회차" : l.name || nm(l.pid))}${l.game ? ` · ${esc(l.game)}${l.round ? " " + l.round + "판" : ""}` : ""}${l.note ? ` · ${esc(l.note)}` : ""}</span><span class="a ${l.amount > 0 ? "bk-up" : l.amount < 0 ? "bk-down" : ""}">${l.type === "reset" ? "" : sfmt(l.amount)}</span></div>`).join("") || '<p class="bk-soft">비어 있어요</p>'}</div>`}`;
+        <h3>장부 (최근 ${h.led.length}줄)</h3><div class="bk-hist">${h.led.slice().reverse().map(l => `<div class="bk-h"><span>${when(l.t)}</span><span>${icon[l.type] || "·"} ${esc(l.type === "reset" ? "정산" : l.name || nm(l.pid))}${l.game ? ` · ${esc(l.game)}${l.round ? " " + l.round + "판" : ""}` : ""}${l.note ? ` · ${esc(l.note)}` : ""}</span><span class="a ${l.amount > 0 ? "bk-up" : l.amount < 0 ? "bk-down" : ""}">${l.type === "reset" ? "" : sfmt(l.amount)}</span></div>`).join("") || '<p class="bk-soft">비어 있어요</p>'}</div>`}`;
     }
 
     async function loadGroups() {
-      try { st.groups = await listGroups(); } catch (e) { st.groups = []; say(errText(e)); }
-      if (!st.gid && st.groups.length === 1 && mgr()) st.gid = st.groups[0].gid;
-      if (!st.gid) { try { const last = localStorage.getItem("bank.last"); if (last && st.groups.some(g => g.gid === last)) st.gid = last; } catch (e) {} }
+      try { st.groups = await listGroups(); if (mgr()) st.groups = await ensureDefault(st.groups); } catch (e) { st.groups = []; say(errText(e)); }
+      // 장부는 하나: 방에서 연 장부가 아니면 🏦 기본 은행 (없으면 — 아직 아무도 안 만듦 — 있는 것 중 최근)
+      if (!st.gid) st.gid = st.groups.some(g => g.gid === DEFAULT.gid) ? DEFAULT.gid : (st.groups[0] && st.groups[0].gid) || null;
     }
     const setGid = gid => { st.gid = gid || null; st.edit = null; st.settled = null; try { if (gid) localStorage.setItem("bank.last", gid); } catch (e) {} watch(st.gid); draw(true); };
 
@@ -558,7 +584,6 @@ if (typeof window !== "undefined") (() => {
       const gid = st.gid;
       try {
         if (b.matches("[data-x]")) return close();
-        if (b.matches("[data-new]")) { const g = await createDialog(); if (g) { await loadGroups(); setGid(g.gid); say(`'${g.name}' 모임을 만들었어요`, true); } return; }
         if (b.dataset.lend) {
           const r = st.members[b.dataset.lend]; b.disabled = true;
           await borrow(gid, b.dataset.lend, r && r.name, 0, { game: o.game, note: "은행 창" });
@@ -575,7 +600,7 @@ if (typeof window !== "undefined") (() => {
           st.tab = "hist"; st.hist = null; draw(true);
           try { const [sets, led] = await Promise.all([S.last(G(gid) + "/settlements", 20), S.last(G(gid) + "/ledger", 120)]); st.hist = { sets, led }; }
           catch (err) { st.hist = { err: "정산 기록과 장부는 관리자·허용된 기기만 볼 수 있어요" }; }
-          if (st.tab === "hist") draw(true); return;
+          if (st.tab === "hist") draw(true); refreshTotals(); return;
         }
         if (b.matches("[data-copy]")) {
           const t = box.querySelector("[data-txt]");
@@ -583,13 +608,12 @@ if (typeof window !== "undefined") (() => {
           catch (err) { t.focus(); t.select(); say("글을 길게 눌러 복사해 주세요"); }
           return;
         }
-        if (b.matches("[data-save]") || b.matches("[data-reset]")) {
-          const reset = b.matches("[data-reset]");
-          if (reset && !b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "한 번 더 누르면 모두 0으로 (기록은 남아요)"; return; }
+        if (b.matches("[data-reset]")) {
+          if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = "한 번 더 누르면 돈만 0으로 (기록은 남아요)"; return; }
           b.disabled = true;
-          st.settled = await saveSettlement(gid, { reset });
-          say(reset ? "정산을 저장하고 새 회차를 시작했어요" : "정산을 저장했어요", true);
-          draw(true); return;
+          st.settled = await saveSettlement(gid, { reset: true });
+          say("정산했어요. 돈은 0부터 새로 시작해요 (기록은 그대로)", true);
+          draw(true); refreshTotals(); return;
         }
       } catch (err) { console.warn("[bank]", err); say(errText(err)); b.disabled = false; }
     });
@@ -611,8 +635,10 @@ if (typeof window !== "undefined") (() => {
     el.innerHTML = `<label class="bk-pick">🏦 은행 <select class="bk-sel" data-bk-pick aria-label="은행 모임"><option value="">은행 안 씀 (연습 칩)</option></select></label><div class="bk-pick-sub" data-bk-sub></div>`;
     const sel = el.querySelector("select"), sub = el.querySelector("[data-bk-sub]");
     let groups = [];
+    // 장부는 하나(🏦 기본 은행) — 이 방이 예전 모임 장부를 쓰던 중이면 그것도 보여 줌
     const fill = () => {
-      sel.innerHTML = `<option value="">은행 안 씀 (연습 칩)</option>${groups.map(g => `<option value="${esc(g.gid)}">${esc(g.name)}</option>`).join("")}${canManage() ? '<option value="__new">＋ 새 모임 만들기…</option>' : ""}`;
+      const shown = groups.filter(g => g.gid === DEFAULT.gid || g.gid === cfg.bank);
+      sel.innerHTML = `<option value="">은행 안 씀 (연습 칩)</option>${shown.map(g => `<option value="${esc(g.gid)}">🏦 ${esc(g.gid === DEFAULT.gid ? "은행 장부" : g.name + " (예전)")}</option>`).join("")}`;
     };
     const desc = async gid => {
       if (!gid) { sub.textContent = "칩은 연습용 — 장부에 안 남아요"; return; }
@@ -628,12 +654,6 @@ if (typeof window !== "undefined") (() => {
     sel.addEventListener("change", async e => {
       e.stopPropagation();
       const v = sel.value;
-      if (v === "__new") {
-        const g = await createDialog();
-        if (g) { groups.unshift({ gid: g.gid, name: g.name, t: Date.now() }); fill(); sel.value = g.gid; set(g.gid, g.name); }
-        else sel.value = cfg.bank && groups.some(x => x.gid === cfg.bank) ? cfg.bank : "";
-        return;
-      }
       const g = groups.find(x => x.gid === v);
       cfg = { ...cfg, bank: v || null };
       set(v, g && g.name);
