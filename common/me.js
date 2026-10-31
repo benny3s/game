@@ -1,5 +1,7 @@
-/* 게임 사이트 공통 '이름 로그인' — PIN 없이 이름만. 다른 폰에서도 같은 이름을 고르면 기록이 이어짐
-   gp/players/{pid} = { n: 이름, c: 만든 시각, l: 마지막 접속 }, gp/names/{이름 키} = pid (같은 이름 두 번 못 만들게)
+/* 게임 사이트 공통 '이름 로그인' — 이름(6자까지) + 🔒 PIN 4자리는 '다른 기기에서 이미 있는 이름을 고를 때'만 물음 (10-31 베니 님)
+   gp/players/{pid} = { n: 이름, c: 만든 시각, l: 마지막 접속, h: PIN 지문(SHA-256 앞 32자) }, gp/names/{이름 키} = pid (같은 이름 두 번 못 만들게)
+   · 새 이름은 PIN 을 정해서 만듦 · PIN 없는 예전 이름은 다른 기기에서 처음 고를 때 정함 · 한 번 정한 PIN 은 관리자만 지움(규칙)
+   · 서버 확인 없이 기기에서 맞춰 보는 '실수·사칭 막기' 수준 (진짜 잠금은 아님)
    ?guest(시험) 이면 test/gp/... 를 써서 실제 명단·기록을 더럽히지 않음
    쓰는 법: GME.ensure(db) → { pid, name } (없으면 이름 고르는 창), GME.pick(db, { canClose: true }) 로 바꾸기 */
 (() => {
@@ -61,7 +63,7 @@
         ${canClose ? '<button class="gme-x" data-x>닫기 ✕</button>' : ""}
         <h2>👤 ${esc(title)}</h2>
         <p>친구들에게 보이는 이름이에요. 기존 이름을 누르면 전적과 기록이 그대로 이어집니다.</p>
-        <input class="gme-in" maxlength="12" placeholder="새 이름 입력 또는 아래에서 선택" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <input class="gme-in" maxlength="6" placeholder="새 이름 (6자까지) 또는 아래에서 선택" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
         <div class="gme-list"></div><div class="gme-msg"></div></div>`;
       document.body.appendChild(ov);
       const inp = ov.querySelector("input"), list = ov.querySelector(".gme-list"), msg = ov.querySelector(".gme-msg");
@@ -83,17 +85,26 @@
       ov.addEventListener("click", async e => {
         if (e.target.closest("[data-x]")) { done(me); return; }
         const it = e.target.closest(".gme-it"); if (!it || busy) return;
-        if (it.dataset.pid) { const p = all.find(x => x.pid === it.dataset.pid); save({ pid: p.pid, name: p.n }); touch(db); done(me); return; }
-        const n = inp.value.trim().slice(0, 12); if (!n) return;
+        if (it.dataset.pid) {
+          const p = all.find(x => x.pid === it.dataset.pid);
+          if (me && me.pid === p.pid) { touch(db); done(me); return; }   // 이 기기에서 쓰던 이름은 PIN 안 물음
+          busy = true; msg.textContent = "";
+          try { if (await claim(db, p.pid, p.n)) { save({ pid: p.pid, name: p.n }); touch(db); done(me); return; } }
+          catch (err) { msg.textContent = "확인하지 못했어요: " + err.message; }
+          busy = false; return;
+        }
+        const n = inp.value.trim().slice(0, 6); if (!n) return;
         busy = true; msg.textContent = "";
         try {
           const pid = db.ref(P + "gp/players").push().key;
           const r = await db.ref(P + "gp/names/" + nameKey(n)).transaction(cur => cur == null ? pid : undefined);
           if (!r.committed) {
             const other = r.snapshot.val(), p = (await db.ref(P + "gp/players/" + other).get()).val();
-            save({ pid: other, name: (p && p.n) || n });
+            if (await claim(db, other, (p && p.n) || n)) save({ pid: other, name: (p && p.n) || n }); else { busy = false; return; }
           } else {
-            await db.ref(P + "gp/players/" + pid).set({ n, c: firebase.database.ServerValue.TIMESTAMP, l: firebase.database.ServerValue.TIMESTAMP });
+            const pin = await askPin({ title: `🔒 '${n}' PIN 4자리 정하기`, sub: "다른 기기에서 이 이름으로 이어 할 때만 물어요. 이 기기에서는 다시 안 물어요." });
+            if (!pin) { await db.ref(P + "gp/names/" + nameKey(n)).remove().catch(() => {}); busy = false; return; }
+            await db.ref(P + "gp/players/" + pid).set({ n, c: firebase.database.ServerValue.TIMESTAMP, l: firebase.database.ServerValue.TIMESTAMP, h: await pinHash(pid, pin) });
             save({ pid, name: n });
           }
           done(me);
@@ -103,6 +114,49 @@
       loadAll(db).then(a => { all = a; draw(); }).catch(err => { all = []; msg.textContent = "명단을 못 불러왔어요: " + err.message; draw(); });
       draw();
     });
+  }
+
+  // 🔒 PIN: 지문 = SHA-256('bennygame:' + pid + ':' + PIN) 앞 32자 (같은 PIN 이라도 사람마다 다름)
+  async function pinHash(pid, pin) {
+    const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("bennygame:" + pid + ":" + pin));
+    return Array.from(new Uint8Array(b)).slice(0, 16).map(x => x.toString(16).padStart(2, "0")).join("");
+  }
+  function askPin({ title, sub }) {
+    style();
+    return new Promise(resolve => {
+      const ov = document.createElement("div"); ov.className = "gme-ov"; ov.style.zIndex = "230";
+      ov.innerHTML = `<div class="gme-box"><h2>${esc(title)}</h2><p>${esc(sub)}</p>
+        <input class="gme-in gme-pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" placeholder="숫자 4자리">
+        <div class="gme-msg"></div><div style="display:flex;gap:8px"><button class="gme-it" data-no style="justify-content:center">취소</button><button class="gme-it new" data-ok style="justify-content:center"><b>확인</b></button></div></div>`;
+      document.body.appendChild(ov);
+      const inp = ov.querySelector("input"), m = ov.querySelector(".gme-msg");
+      const fin = v => { ov.remove(); resolve(v); };
+      const ok = () => { const v = inp.value.replace(/\D/g, ""); if (v.length !== 4) { m.textContent = "숫자 4자리로 적어 주세요"; inp.focus(); return; } fin(v); };
+      inp.addEventListener("input", () => { inp.value = inp.value.replace(/\D/g, "").slice(0, 4); m.textContent = ""; if (inp.value.length === 4) setTimeout(ok, 120); });
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") ok(); });
+      ov.querySelector("[data-ok]").onclick = ok;
+      ov.querySelector("[data-no]").onclick = () => fin(null);
+      setTimeout(() => inp.focus(), 50);
+    });
+  }
+  // 다른 기기에서 이미 있는 이름 고르기: PIN 이 있으면 맞춰 보고, 없으면(예전 이름) 지금 정함 → true = 써도 됨
+  let missN = 0, missUntil = 0;
+  async function claim(db, pid, name) {
+    const rec = (await db.ref(P + "gp/players/" + pid).get()).val() || {};
+    if (!rec.h) {
+      const pin = await askPin({ title: `🔒 '${name}' PIN 정하기`, sub: "이 이름에 아직 PIN 이 없어요. 4자리를 정하면 다른 기기에서 이어 할 때 물어요." });
+      if (!pin) return false;
+      await db.ref(P + "gp/players/" + pid + "/h").set(await pinHash(pid, pin));
+      return true;
+    }
+    for (;;) {
+      if (Date.now() < missUntil) { alert(`PIN 이 여러 번 틀렸어요. ${Math.ceil((missUntil - Date.now()) / 1000)}초 뒤에 다시 해 주세요.`); return false; }
+      const pin = await askPin({ title: `🔒 '${name}' PIN 4자리`, sub: "다른 기기에서 이 이름으로 이어 해요. PIN 을 잊었으면 베니(관리자)에게 말하면 지워 줘요." });
+      if (!pin) return false;
+      if ((await pinHash(pid, pin)) === rec.h) { missN = 0; return true; }
+      if (++missN >= 5) { missN = 0; missUntil = Date.now() + 30000; }
+      else alert("PIN 이 달라요. 다시 적어 주세요.");
+    }
   }
 
   let pending = null;

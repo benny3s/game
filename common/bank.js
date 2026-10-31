@@ -316,13 +316,18 @@ if (typeof window !== "undefined") (() => {
   }
   // 🏆 승패 (모임 장부에 같이: 방을 다시 열어도 이어짐, 새 회차면 0)
   async function getRecords(gid) { return (await S.get(G(gid) + "/records")) || {}; }
-  async function addRecord(gid, pid, name, win, ck) {
-    const f = cur => ({ name: clean(name || (cur && cur.name), 12) || "?", w: int(cur && cur.w) + (win ? 1 : 0), l: int(cur && cur.l) + (win ? 0 : 1), updated: S.now() });
-    if (ck) await S.txn(G(gid) + "/combos/" + ck + "/" + pid, f).catch(e => console.warn("[bank combo]", e));   // 이 조합(같이 친 사람들)에서
-    return S.txn(G(gid) + "/records/" + pid, f);                                                                  // 통산
+  async function addRecord(gid, pid, name, win) {
+    return S.txn(G(gid) + "/records/" + pid, cur => ({ name: clean(name || (cur && cur.name), 12) || "?", w: int(cur && cur.w) + (win ? 1 : 0), l: int(cur && cur.l) + (win ? 0 : 1), updated: S.now() }));
   }
-  // 같이 친 사람 조합 열쇠: 사람 pid 를 정렬해 이음 (AI 자리 빼고, 2명 이상일 때만)
-  const comboKey = pids => { const a = [...new Set(pids.filter(Boolean))].sort(); return a.length >= 2 ? a.join("~").replace(/[.#$\[\]\/]/g, "_").slice(0, 300) : null; };
+  // 🆚 상대 전적 (두 사람끼리): pairs/{작은 pid~큰 pid} = { a, b, wa, wb, ma(a 가 b 에게서 딴 칩, 마이너스면 잃음) }
+  const pairKey = (x, y) => [x, y].sort().join("~").replace(/[.#$\[\]\/]/g, "_").slice(0, 120);
+  // 한 판 칩 변화 → 두 사람끼리 오간 칩 (잃은 사람 몫을 딴 사람들에게 딴 만큼 나눔, 합 = 변화)
+  function pairFlows(rows) {
+    const pos = rows.filter(r => r.delta > 0), neg = rows.filter(r => r.delta < 0), P = pos.reduce((a, r) => a + r.delta, 0), out = [];
+    if (!P) return out;
+    for (const n of neg) for (const p of pos) { const f = Math.round((-n.delta * p.delta) / P); if (f) out.push({ win: p.pid, lose: n.pid, chips: f }); }
+    return out;
+  }
   async function removeMember(gid, pid) { return S.set(G(gid) + "/members/" + pid, null); }
   // 누적: '정산하고 새로 시작'한 회차들의 원 손익 합 (사람별 { name, won, sets }) — 정산 기록은 관리자·허용 기기만 읽힘
   async function loadTotals(gid) {
@@ -514,14 +519,14 @@ if (typeof window !== "undefined") (() => {
           .sort((a, b) => b.chips - a.chips || (a.name < b.name ? -1 : 1));
         const sumB = rows.reduce((a, r) => a + r.balance, 0), sumL = rows.reduce((a, r) => a + r.borrowed, 0);
         body = `<div class="bk-meta"><span class="bk-chip">1칩 = ${fmt(m.chipWon)}원</span><span class="bk-chip">빌리기 ${fmt(m.loanUnit)}칩 = ${fmt(m.loanUnit * m.chipWon)}원</span></div>
-          <p class="bk-soft">이번 판들 돈 (정산하면 0으로) · 🏆 승패와 📈 누적은 계속 쌓여요</p>
+          <p class="bk-soft">큰 글씨 = <b>정산 전 손익</b> (지난 정산 뒤로 따고 잃은 돈, 정산하면 0) · 📈 통산 = 처음부터 모두 · 🏆 승패도 계속 쌓여요</p>
           <div class="bk-list" data-members>${rows.length ? rows.map(r => {
             const cls = r.chips > 0 ? "bk-up" : r.chips < 0 ? "bk-down" : "";
             const ed = M && st.edit === r.pid;
             const rec = st.records && st.records[r.pid], t = tot[r.pid];
             return `<div class="bk-m${r.pid === myPid ? " me" : ""}" data-pid="${esc(r.pid)}"><b>${esc(r.name)}${r.pid === myPid ? ' <span class="bk-soft">(나)</span>' : ""}</b>
               <span class="net ${cls}">${sfmt(r.chips * m.chipWon)}원<small>${sfmt(r.chips)}칩</small></span>
-              <span class="nums">${rec ? `🏆 ${int(rec.w)}승 ${int(rec.l)}패 · ` : ""}${t ? `📈 누적 ${sfmt(t.won)}원 (${t.sets}번 정산) · ` : ""}빌림 ${fmt(r.borrowed)}칩</span>
+              <span class="nums">${rec ? `🏆 ${int(rec.w)}승 ${int(rec.l)}패 · ` : ""}${st.totals ? `📈 통산 ${sfmt((t ? t.won : 0) + r.chips * m.chipWon)}원${t ? ` (${t.sets}번 정산)` : ""}` : ""}${r.borrowed ? ` · 빌림 ${fmt(r.borrowed)}칩` : ""}</span>
               ${M ? `<div class="acts">${ed
                 ? `<input class="bk-in bk-grow" data-adj type="number" inputmode="numeric" value="${r.balance}" aria-label="새 칩 수" style="max-width:150px"><button class="bk-btn sm pri" data-adjok="${esc(r.pid)}">저장</button><button class="bk-btn sm" data-adjno>취소</button>`
                 : `<button class="bk-btn sm" data-lend="${esc(r.pid)}">💰 ${fmt(m.loanUnit)} 빌려주기</button><button class="bk-btn sm" data-edit="${esc(r.pid)}">✎ 칩 조정</button>${!r.balance && !r.borrowed ? `<button class="bk-btn sm" data-del="${esc(r.pid)}">빼기</button>` : ""}`}</div>` : ""}
@@ -565,7 +570,7 @@ if (typeof window !== "undefined") (() => {
       })).sort((a, b) => b.won - a.won || b.w - a.w);
       box.innerHTML = `${head}<div class="bk-row"><button class="bk-btn" data-back>← 장부</button><h3 class="bk-grow">📜 기록</h3></div>
         ${!h ? `<p class="bk-soft">불러오는 중…</p>` : h.err ? `<p class="bk-note">${esc(h.err)}</p>` : `
-        <h3>📈 지금까지 모두 (누적)</h3>
+        <h3>📈 정산한 것 모두 (통산, 정산 전 손익은 빼고)</h3>
         <table class="bk-tbl">${cum.map(r => `<tr><td>${esc(r.name)}</td><td class="n">🏆 ${r.w}승 ${r.l}패</td><td class="n">${r.sets}번 정산</td><td class="n ${r.won > 0 ? "bk-up" : r.won < 0 ? "bk-down" : ""}"><b>${sfmt(r.won)}원</b></td></tr>`).join("") || `<tr><td class="bk-soft">아직 정산한 적이 없어요</td></tr>`}</table>
         <h3>정산 기록</h3><div class="bk-hist">${h.sets.length ? h.sets.slice().reverse().map(s => {
           const lines = Array.isArray(s.lines) ? s.lines : Object.values(s.lines || {});
@@ -684,7 +689,7 @@ if (typeof window !== "undefined") (() => {
         detach() { offs.splice(0).forEach(f => f()); },
       };
     }
-    const ses = { gid, role: "host", alive: true, track: [], queue: {}, meta: null, bankName: cfg.bankName || "", minStack: Math.max(1, int(min) || 1), negative: !!negative, ck: null };
+    const ses = { gid, role: "host", alive: true, track: [], queue: {}, meta: null, bankName: cfg.bankName || "", minStack: Math.max(1, int(min) || 1), negative: !!negative, pairs: {}, tots: {} };
     let chain = Promise.resolve();
     const run = fn => (chain = chain.then(() => (ses.alive ? fn() : undefined)).catch(e => { console.warn("[bank]", e); emit({ op: "error", msg: errText(e) }); }));
     const info = extra => ({ game, room: net && net.code, ...(extra || {}) });
@@ -692,9 +697,13 @@ if (typeof window !== "undefined") (() => {
       ses.meta = await getMeta(gid);
       ses.bankName = ses.meta.name;
       const pids = await Promise.all((seats || []).map(s => (s && s.ctrl !== "ai" && s.name ? pidFor(s.name) : null)));
-      ses.ck = comboKey(pids);
-      const [members, recs, combo] = await Promise.all([getMembers(gid), getRecords(gid).catch(() => ({})), ses.ck ? S.get(G(gid) + "/combos/" + ses.ck).catch(() => null) : null]);
-      const seen = new Set(), cb = combo || {};
+      const ps = [...new Set(pids.filter(Boolean))], pks = [];
+      for (let a = 0; a < ps.length; a++) for (let b = a + 1; b < ps.length; b++) pks.push(pairKey(ps[a], ps[b]));
+      const [members, recs, tots, pairVals] = await Promise.all([getMembers(gid), getRecords(gid).catch(() => ({})), loadTotals(gid).catch(() => ({})),
+        Promise.all(pks.map(k => S.get(G(gid) + "/pairs/" + k).catch(() => null)))]);
+      ses.pairs = {}; pks.forEach((k, i) => { ses.pairs[k] = pairVals[i] || null; });
+      ses.tots = tots || {};
+      const seen = new Set();
       const startChips = start ? Math.max(1, Math.round(start / (ses.meta.chipWon || 1))) : 0;
       const stacks = [];
       for (let i = 0; i < (seats || []).length; i++) {
@@ -706,7 +715,7 @@ if (typeof window !== "undefined") (() => {
         if (ses.negative) { if (startChips && (!members[pid] || (!int(members[pid].borrowed) && !bal))) lent = startChips; }   // 이번 회차 처음이면 시작 돈 한 번
         else while (bal + lent < ses.minStack && lent < ses.meta.loanUnit * 20) lent += ses.meta.loanUnit;
         if (lent) { const m = await borrow(gid, pid, name, lent, info({ note: ses.negative ? "시작 돈" : "시작 칩" })); bal = int(m.balance); emit({ op: "loan", seat: i, name, n: lent, auto: true, start: !!ses.negative }); }
-        ses.track[i] = { pid, name, last: bal, w: int(recs[pid] && recs[pid].w), l: int(recs[pid] && recs[pid].l), cw: int(cb[pid] && cb[pid].w), cl: int(cb[pid] && cb[pid].l) };
+        ses.track[i] = { pid, name, last: bal, s0: bal, base: members[pid] ? int(members[pid].borrowed) + lent : lent, w: int(recs[pid] && recs[pid].w), l: int(recs[pid] && recs[pid].l) };
         stacks.push(bal);
       }
       return stacks;
@@ -724,7 +733,17 @@ if (typeof window !== "undefined") (() => {
         ses.track.forEach((t, i) => { if (!t || coins[i] == null) return; const c = int(coins[i]), dl = c - t.last; t.last = c; if (dl) rows.push({ pid: t.pid, name: t.name, delta: dl }); });
         if (rows.length) await applyDeltas(gid, rows, info({ round: d.round }), ses.track.filter(Boolean).map(t => t.pid));
         const W = Array.isArray(d.win) ? d.win : [], L = Array.isArray(d.lose) ? d.lose : [];
-        for (const i of W.concat(L)) { const t = ses.track[i]; if (!t) continue; const win = W.includes(i); if (win) { t.w++; t.cw++; } else { t.l++; t.cl++; } await addRecord(gid, t.pid, t.name, win, ses.ck); }
+        for (const i of W.concat(L)) { const t = ses.track[i]; if (!t) continue; const win = W.includes(i); if (win) t.w++; else t.l++; await addRecord(gid, t.pid, t.name, win); }
+        // 🆚 두 사람끼리: 이긴 사람 → 진 사람마다 1승, 오간 칩
+        const inc = {};
+        const bump = (x, y, dw, dm) => { const k = pairKey(x, y), a = [x, y].sort()[0], o = inc[k] || (inc[k] = { a, b: a === x ? y : x, wa: 0, wb: 0, ma: 0 }); if (x === a) { o.wa += dw; o.ma += dm; } else { o.wb += dw; o.ma -= dm; } };
+        for (const wi of W) for (const li of L) { const tw = ses.track[wi], tl = ses.track[li]; if (tw && tl && tw.pid !== tl.pid) bump(tw.pid, tl.pid, 1, 0); }
+        for (const f of pairFlows(rows)) bump(f.win, f.lose, 0, f.chips);
+        for (const k of Object.keys(inc)) {
+          const o = inc[k];
+          await S.txn(G(gid) + "/pairs/" + k, cur => ({ a: o.a, b: o.b, wa: int(cur && cur.wa) + o.wa, wb: int(cur && cur.wb) + o.wb, ma: int(cur && cur.ma) + o.ma, updated: S.now() }))
+            .then(v => { ses.pairs[k] = v; }).catch(e => console.warn("[bank pairs]", e));   // 규칙 배포 전엔 조용히 건너뜀
+        }
         emit({ op: "saved", rows });
       });
     };
@@ -747,7 +766,24 @@ if (typeof window !== "undefined") (() => {
       });
     }));
     Object.assign(ses, {
-      records: () => ses.track.map(t => (t ? { w: t.w || 0, l: t.l || 0, cw: t.cw || 0, cl: t.cl || 0 } : null)),   // 자리별 승패: w·l 통산 · cw·cl 이 조합(같이 친 사람들)
+      records: () => ses.track.map(t => (t ? { w: t.w || 0, l: t.l || 0 } : null)),   // 자리별 통산 승패 (장부)
+      // 📊 시작할 때 자리별 판: 통산 승패·통산 원(정산된 것) · 이번 게임 시작 칩(s0) · 정산 전 기준(base=빌린 칩) · 두 사람끼리 승(pw[i][j] = i 가 j 를 이긴 수)·칩(pm[i][j] = i 가 j 에게서 딴 칩)
+      rel0() {
+        const n = (seats || []).length, T = ses.track, M = () => Array.from({ length: n }, () => Array(n).fill(0));
+        const r = { chipWon: (ses.meta && ses.meta.chipWon) || 0, s0: [], base: [], totWon: [], w: [], l: [], pw: M(), pm: M(), on: [] };
+        for (let i = 0; i < n; i++) {
+          const t = T[i]; r.on[i] = !!t;
+          r.s0[i] = t ? t.s0 : null; r.base[i] = t ? t.base : 0; r.w[i] = t ? t.w : 0; r.l[i] = t ? t.l : 0;
+          r.totWon[i] = t && ses.tots && ses.tots[t.pid] ? int(ses.tots[t.pid].won) : 0;
+          for (let j = 0; j < n; j++) {
+            const u = T[j]; if (!t || !u || i === j || t.pid === u.pid) continue;
+            const pv = ses.pairs && ses.pairs[pairKey(t.pid, u.pid)]; if (!pv) continue;
+            const isA = pv.a === t.pid;
+            r.pw[i][j] = int(isA ? pv.wa : pv.wb); r.pm[i][j] = isA ? int(pv.ma) : -int(pv.ma);
+          }
+        }
+        return r;
+      },
       tracks: i => !!ses.track[i],
       pidOf: i => (ses.track[i] ? ses.track[i].pid : null),
       requestLoan(i) {
@@ -761,11 +797,11 @@ if (typeof window !== "undefined") (() => {
       },
       // 다음 판 직전: 요청한 빌리기 + 칩이 min 보다 적은 사람 자동 빌리기 → { coins, loans:[{seat,name,n}] }
       beforeNext({ coins, min } = {}) {
-        const out = (coins || []).slice(), loans = [];
+        const out = (coins || []).slice(), loans = []; let reloaded = false;
         return run(async () => {
           const lim = Math.max(1, int(min) || ses.minStack);
           if (ses.reload) {                                   // 새 회차: 사람 자리 칩 = 새 잔액 (모자라면 자동으로 빌림)
-            ses.reload = false; ses.queue = {};
+            ses.reload = false; ses.queue = {}; reloaded = true;
             ses.minStack = Math.max(ses.minStack, lim);
             const st = await load();
             st.forEach((v, i) => { if (v != null) out[i] = v; });
@@ -782,7 +818,7 @@ if (typeof window !== "undefined") (() => {
             loans.push({ seat: i, name: t.name, n });
             emit({ op: "loan", seat: i, name: t.name, n });
           }
-        }).then(() => ({ coins: out, loans }));
+        }).then(() => ({ coins: out, loans, reloaded }));
       },
       // 새 게임(홀덤 '새 게임' 등): 지금 잔액으로 다시 시작 칩
       restart() { return run(load).then(v => v || (seats || []).map(() => null)); },

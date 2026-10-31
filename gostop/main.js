@@ -526,13 +526,13 @@
       if (Bank.getMeta) Bank.getMeta(cfg.bank).then(m => { if (SES === ses && m && m.chipWon) { ses.chipWon = m.chipWon; drawCoinPill(); if (ses.S && ses.hud) drawHud(ses); } }, () => {});
       const seatsB = ses.seats;
       if (role === 'host') {
-        ses.bank = Bank.attach({ game: 'gostop', net, cfg, seats: seatsB, min: bankMin(rules), start: START_WON, negative: true, onEvent: ev => bankEvent(ses, ev) });   // 시작 돈 만원 · 마이너스 됨
+        ses.bank = Bank.attach({ game: 'gostop', net, cfg, seats: seatsB, min: bankMin(rules), start: START_WON, negative: true, onEvent: ev => bankEvent(ses, ev) });   // 마이너스 됨 (자동 빌리기 없음)
         drawDock();
         $('lbl').textContent = `👥 친구랑 (${net.code})`; $('sub').textContent = '🏦 은행 장부를 여는 중…';
         ses.bank.ready.then(stacks => {
           if (!ses.alive || SES !== ses) return;
-          ses.startChips = CHIPS.start('host', N).map((b, i) => (stacks && stacks[i] > 0 ? stacks[i] : b));   // 은행 쓰는 사람은 잔액, 나머지는 기본 칩
-          if (ses.bank.records) { const rec = ses.bank.records(); ses.score = { w: rec.map(x => (x ? x.cw : 0)), l: rec.map(x => (x ? x.cl : 0)) }; ses.tot = { w: rec.map(x => (x ? x.w : 0)), l: rec.map(x => (x ? x.l : 0)) }; }   // 승패도 장부에서: 점수판 = 이 조합(같이 친 사람들), ses.tot = 통산
+          ses.startChips = CHIPS.start('host', N).map((b, i) => (stacks && stacks[i] != null ? stacks[i] : b));   // 은행 쓰는 사람은 잔액(0·마이너스도 그대로), 나머지는 기본 칩
+          if (ses.bank.rel0) ses.rel = ses.bank.rel0();          // 📊 통산 승패·통산 원·두 사람끼리 전적 (장부에서, 판 묶음으로 친구에게도)
           net.broadcast({ t: '_chips', round: 0, coins: ses.startChips }, true);
           runMatch(ses);
         });
@@ -544,7 +544,7 @@
     runMatch(ses);
   }
   // 은행에서 자동으로 빌려 주는 기준: 이 칩보다 적으면 다음 판 전에 빌려요 (점당 칩의 20배)
-  const START_WON = 10000;                                 // 🏦 회차 처음 앉으면 만원씩 받고 시작, 그 뒤엔 마이너스로 내려가도 됨 (10-31 베니 님)
+  const START_WON = 0;                                     // 🏦 시작 돈 없이 0에서 +/− (화면은 '이번 게임'·'통산' 손익으로) — 만원 들고 시작하려면 10000
   const bankMin = () => 1;                                 // 바닥나면(1칩 아래) 다음 판 전에 은행이 자동으로 더 빌려 줌
   function bankEvent(ses, ev) {
     if (!ses.alive || !ev) return;
@@ -596,7 +596,9 @@
           $('sub').textContent = '🏦 장부에 쓰는 중…';
           const r = await ses.bank.beforeNext({ coins: ses.chips, min: bankMin(ses.S.rules) });
           ses.check();
-          ses.chips = r.coins.slice(); drawCoinPill();
+          ses.chips = r.coins.slice();
+          if (r.reloaded && ses.bank.rel0) ses.rel = ses.bank.rel0();   // 정산하고 새로 시작했으면 '이번 게임'·통산 기준도 새로
+          drawCoinPill();
           if (ses.net) ses.net.broadcast({ t: '_chips', round: ses.S.round, coins: ses.chips }, true);
         }
         if (ses.cfg.online && ses.cfg.role !== 'host') {
@@ -617,7 +619,7 @@
 
   // ── 친구랑 판 묶음: 방장 판 상태 + 자리(uid 순서) + 차례 번호 + 칩
   const AVS = ['🎴', '🌸', '🌕', '🍀', '🔥'];
-  const roundPack = (ses, S) => ({ S: S || ses.S, seq: ses.seq, uids: ses.seats.map(x => x.uid), names: ses.seats.map(x => x.name), chips: ses.chips, score: ses.score || null, tot: ses.tot || null });
+  const roundPack = (ses, S) => ({ S: S || ses.S, seq: ses.seq, uids: ses.seats.map(x => x.uid), names: ses.seats.map(x => x.name), chips: ses.chips, score: ses.score || null, rel: ses.rel || null });
   // 손님: 묶음대로 자리 맞추기. 내 uid 가 없으면 구경 (me = -1)
   function adoptPack(ses, d) {
     const idx = d.uids.indexOf(ses.net.uid);
@@ -628,7 +630,7 @@
     });
     ses.cfg.me = idx; ses.cfg.N = d.uids.length; ses.seq = d.seq;
     if (d.score) ses.score = { w: d.score.w || [], l: d.score.l || [] };
-    if (d.tot) ses.tot = { w: d.tot.w || [], l: d.tot.l || [] };
+    if (d.rel) ses.rel = d.rel;
     return d.S;
   }
   // 방장: 다음 판 열기. 구경하던 사람(새로 온 사람)은 5명까지 자리에 넣고, 인원이 바뀌면 방식도 바뀜 (2 맞고 → 3 고스톱 …)
@@ -644,7 +646,7 @@
       const gone = old.filter(x => x.drop).map(x => x.name);
       ses.seats = keep.map(i => old[i]); ses.chips = keep.map(i => ses.chips[i]);
       if (ses.score) { ses.score.w = keep.map(i => ses.score.w[i]); ses.score.l = keep.map(i => ses.score.l[i]); }
-      if (ses.tot) { ses.tot.w = keep.map(i => ses.tot.w[i]); ses.tot.l = keep.map(i => ses.tot.l[i]); }
+      if (ses.rel) relRemap(ses, keep, add.length);
       for (const u of add) { const i = ses.seats.length; ses.seats.push({ ctrl: 'remote', tier: null, name: (pl[u] && pl[u].name) || `친구${i + 1}`, em: AVS[i % AVS.length], uid: u }); ses.chips.push(CHIPS.start('host', 1)[0]); delete ses.joinPick[u]; }
       const N = ses.seats.length, plan = G.tablePlan(N, prev.round);
       const fi = Math.max(0, ses.seats.findIndex(x => x.uid === prevUid));
@@ -726,12 +728,37 @@
   }
 
   // 판이 끝날 때마다 칩 변화를 알림: 점수 변화 × 점당 칩 (합 0). 친구랑에서 손님은 방장이 보내니 알리지 않음 (섯다와 같음)
+  // 📊 은행 방: rel = { chipWon, on[], s0[](이번 게임 시작 칩), base[](빌린 칩), totWon[](정산된 원), w[] l[](통산), pw[i][j](i 가 j 를 이긴 수), pm[i][j](i 가 j 에게서 딴 칩) }
+  //   방장이 장부에서 만들어 판 묶음으로 나눠 주고, 판마다 모든 화면이 같은 계산으로 더함 (장부에는 방장이 씀)
+  function relAdd(ses, s, r, deltas) {
+    const R = ses.rel; if (!R) return;
+    if (r.kind !== 'nagari' && r.winner >= 0) {
+      const wi = s.who[r.winner];
+      s.who.forEach((rs, p) => { if (!R.on[rs]) return; if (p === r.winner) R.w[rs]++; else { R.l[rs]++; if (R.on[wi]) R.pw[wi][rs]++; } });
+    }
+    const rows = Object.keys(deltas).map(i => ({ i: +i, d: deltas[i] })).filter(x => x.d && R.on[x.i]);
+    const pos = rows.filter(x => x.d > 0), neg = rows.filter(x => x.d < 0), P = pos.reduce((a, x) => a + x.d, 0);
+    if (P) for (const n of neg) for (const q of pos) { const f = Math.round((-n.d * q.d) / P); R.pm[q.i][n.i] += f; R.pm[n.i][q.i] -= f; }
+  }
+  // 자리가 바뀜 (keep = 남는 자리, add = 새로 온 사람 수 — 새 사람은 장부에 안 묶임)
+  function relRemap(ses, keep, add) {
+    const R = ses.rel, n = keep.length + add, pick = a => keep.map(i => a[i]).concat(Array(add).fill(null));
+    for (const k of ['s0', 'base', 'totWon', 'w', 'l']) R[k] = pick(R[k]).map(v => v ?? 0);
+    R.on = keep.map(i => R.on[i]).concat(Array(add).fill(false));
+    for (const k of ['pw', 'pm']) R[k] = Array.from({ length: n }, (_, a) => Array.from({ length: n }, (_, b) => (a < keep.length && b < keep.length ? R[k][keep[a]][keep[b]] : 0)));
+  }
+  const relOn = (ses, i) => !!(ses.rel && ses.rel.on[i] && ses.chips && ses.chips[i] != null);
+  const sgnN = v => (v > 0 ? '+' : v < 0 ? '−' : '') + fmtN(Math.abs(v));
+  const wonOf = (ses, chips) => Math.round(chips * ((ses.rel && ses.rel.chipWon) || ses.chipWon || 1));
+  const gainWon = (ses, i) => wonOf(ses, ses.chips[i] - ses.rel.s0[i]);                       // 이번 게임 (자리에 앉은 뒤)
+  const totWon = (ses, i) => ses.rel.totWon[i] + wonOf(ses, ses.chips[i] - ses.rel.base[i]);  // 통산 (정산된 것 + 정산 전)
   function reportChips(ses) {
     const s = ses.S, r = s && s.result; if (!r) return;
     ses.score = ses.score || { w: [], l: [] };
-    if (r.kind !== 'nagari' && r.winner >= 0) s.who.forEach((rs, p) => { const k = p === r.winner ? 'w' : 'l'; ses.score[k][rs] = (ses.score[k][rs] || 0) + 1; if (ses.tot) ses.tot[k][rs] = (ses.tot[k][rs] || 0) + 1; });
+    if (r.kind !== 'nagari' && r.winner >= 0) s.who.forEach((rs, p) => { const k = p === r.winner ? 'w' : 'l'; ses.score[k][rs] = (ses.score[k][rs] || 0) + 1; });
     const per = s.rules.chipPer, pts = G.pointDeltas(s), deltas = {};
     pts.forEach((x, i) => { deltas[i] = x * per; });
+    relAdd(ses, s, r, deltas);
     ses.lastDeltas = deltas;
     // 친구 화면: 방장이 이미 이 판 뒤의 칩을 알려 줬으면 거기에 또 더하지 않음
     if (!(ses.kind === 'guest' && (ses.chipSync || 0) >= s.round)) ses.chips = (ses.chips || CHIPS.start(ses.kind, ses.cfg.N)).map((c, i) => c + (deltas[i] || 0));
@@ -784,6 +811,7 @@
   // 친구랑은 내 칩(방장이 알려 주는 장부 값), 나머지는 냥코인
   function drawCoinPill() {
     const ses = SES, i = ses && ses.cfg.online ? ses.cfg.me : -1;
+    if (i >= 0 && relOn(ses, i)) { $('coinPill').textContent = `💰 이번 게임 ${sgnN(gainWon(ses, i))}원`; return; }
     $('coinPill').textContent = i >= 0 && ses.chips && ses.chips[i] != null ? (ses.chipWon ? '💰 내 돈 ' + fmtN(Math.round(ses.chips[i] * ses.chipWon)) + '원' : '🪙 내 칩 ' + fmtN(ses.chips[i])) : '🪙 모은 ' + fmtN(coins) + '냥';
   }
   function drawHud(ses) {
@@ -831,6 +859,11 @@
     const turnSeat = s.phase === 'end' ? -1 : ses.who[ses.actor != null ? ses.actor : s.turn];
     $('scoreBar').hidden = false;
     $('scoreBar').innerHTML = ses.seats.map((x, rs) => {
+      const nmx = rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, mi = ses.cfg.watch ? -1 : ses.cfg.me;
+      if (relOn(ses, rs)) {                                    // 은행 방: 이번 게임 손익 · 나랑 상대 전적 (구경이면 통산 승패)
+        const vs = mi >= 0 && mi !== rs && relOn(ses, mi) ? ` · 나랑 ${ses.rel.pw[mi][rs]}승${ses.rel.pw[rs][mi]}패` : mi < 0 ? ` · ${ses.rel.w[rs]}승${ses.rel.l[rs]}패` : '';
+        return `<span class="sbi${rs === turnSeat ? ' on' : ''}${ses.who.indexOf(rs) < 0 ? ' rest' : ''}"><b>${esc(nmx)}</b> ${sgnN(gainWon(ses, rs))}원${vs}</span>`;
+      }
       const W = (ses.score && ses.score.w[rs]) || 0, L = (ses.score && ses.score.l[rs]) || 0, ch = ses.chips && ses.chips[rs], money = ch == null ? '' : ses.chipWon ? fmtN(Math.round(ch * ses.chipWon)) + '원' : '🪙' + fmtN(ch);
       const nm = rs === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name;
       return `<span class="sbi${rs === turnSeat ? ' on' : ''}${ses.who.indexOf(rs) < 0 ? ' rest' : ''}"><b>${esc(nm)}</b> ${W}승${L}패${money ? ' ' + money : ''}</span>`;
@@ -1952,6 +1985,20 @@
     return a;
   }
 
+  // 📊 결과 창 줄: 나 — 이번 게임 · 통산(원·승패) / 상대마다 — 나랑 전적·주고받은 돈 (은행 방). 은행 안 쓰면 이 방 승패만
+  function relLines(ses) {
+    if (!ses.cfg.online) return '';
+    const mi = ses.cfg.watch ? -1 : ses.cfg.me, nm = rs => esc(ses.seats[rs] ? ses.seats[rs].name : '?');
+    if (!ses.rel) return ses.score ? `<p class="small chipline">📊 이 방 ${ses.seats.map((x, rs) => `${rs === mi ? '나' : nm(rs)} ${ses.score.w[rs] || 0}승${ses.score.l[rs] || 0}패`).join(' · ')}</p>` : '';
+    const R = ses.rel, L = [];
+    if (mi >= 0 && relOn(ses, mi)) {
+      L.push(`💰 <b>이번 게임 ${sgnN(gainWon(ses, mi))}원</b> · 통산 ${sgnN(totWon(ses, mi))}원 (${R.w[mi]}승 ${R.l[mi]}패)`);
+      const vs = ses.seats.map((x, rs) => rs).filter(rs => rs !== mi && relOn(ses, rs)).map(rs => `${nm(rs)}: 나 ${R.pw[mi][rs]}승 ${R.pw[rs][mi]}패 · ${sgnN(wonOf(ses, R.pm[mi][rs]))}원`);
+      if (vs.length) L.push(`🆚 상대 전적 (나 기준, 통산) ${vs.join(' / ')}`);
+    } else L.push('📊 ' + ses.seats.map((x, rs) => rs).filter(rs => relOn(ses, rs)).map(rs => `${nm(rs)} ${sgnN(gainWon(ses, rs))}원 · 통산 ${R.w[rs]}승${R.l[rs]}패`).join(' / '));
+    return L.map(t => `<p class="small chipline">${t}</p>`).join('');
+  }
+
   // ── 판 결과 ──────────────────────────────────────────────
   async function showResult(ses) {
     await Promise.race([popQ, sleep(1500)]);
@@ -2025,7 +2072,7 @@
       $('resTitle').textContent = title;
       $('resBig').innerHTML = `${big ? `<div class="resbig ${bigCls}">${big}</div>` : ''}${coinLine}`;
       // 📊 승패: 이 조합(은행 방은 장부에서 이어짐, 아니면 이 방) + 내 통산
-      const recLine = !ses.cfg.online || !ses.score ? '' : `<p class="small chipline">📊 ${ses.tot ? '이 조합' : '이 방'} ${ses.seats.map((x, rs) => `${esc(rs === ses.cfg.me ? '나' : x.name)} ${ses.score.w[rs] || 0}승${ses.score.l[rs] || 0}패`).join(' · ')}${ses.tot && ses.cfg.me >= 0 ? ` · 내 통산 <b>${ses.tot.w[ses.cfg.me] || 0}승 ${ses.tot.l[ses.cfg.me] || 0}패</b>` : ''}</p>`;
+      const recLine = relLines(ses);
       $('resBody').innerHTML = sumLine + recLine + reviewHtml;
       $('resBtns').innerHTML = '';
       const done = v => { clearTimeout(autoT); $('resBox').hidden = true; ses.drawReady = null; resolve(v); };

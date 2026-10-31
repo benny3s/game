@@ -248,8 +248,8 @@
       "players": {
         ".read": "auth != null",
         "$pid": {
-          ".write": "auth != null && ((newData.exists() && (!data.exists() || newData.child('n').val() === data.child('n').val())) || auth.token.admin === 1)",
-          ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length >= 1 && newData.child('n').val().length <= 12)"
+          ".write": "auth != null && ((newData.exists() && (!data.exists() || newData.child('n').val() === data.child('n').val()) && (!data.child('h').exists() || newData.child('h').val() === data.child('h').val())) || auth.token.admin === 1)",
+          ".validate": "!newData.exists() || (newData.child('n').isString() && newData.child('n').val().length >= 1 && newData.child('n').val().length <= 12 && (!newData.child('h').exists() || (newData.child('h').isString() && newData.child('h').val().length <= 64)))"
         }
       },
       "names": {
@@ -438,28 +438,31 @@
             }
           }
         },
-        "combos": {
+        "pairs": {
           ".read": "auth != null",
-          "$ck": {
-            ".validate": "$ck.length >= 3 && $ck.length <= 300",
-            "$pid": {
-              ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
-              ".validate": "!newData.exists() || ($pid.length <= 40 && newData.hasChildren(['name', 'w', 'l']))",
-              "name": {
-                ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12"
-              },
-              "w": {
-                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
-              },
-              "l": {
-                ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
-              },
-              "updated": {
-                ".validate": "newData.isNumber()"
-              },
-              "$other": {
-                ".validate": false
-              }
+          "$pk": {
+            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".validate": "!newData.exists() || ($pk.length >= 3 && $pk.length <= 120 && newData.hasChildren(['a', 'b', 'wa', 'wb', 'ma']))",
+            "a": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "b": {
+              ".validate": "newData.isString() && newData.val().length <= 40"
+            },
+            "wa": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+            },
+            "wb": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000"
+            },
+            "ma": {
+              ".validate": "newData.isNumber() && newData.val() >= -1000000000 && newData.val() <= 1000000000"
+            },
+            "updated": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
             }
           }
         },
