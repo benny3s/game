@@ -37,6 +37,7 @@ const Gate = (() => {
     databaseURL: "https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app",
   };
   const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+  const GATE_BASE = (() => { const c = document.currentScript && document.currentScript.src; return c ? c.replace(/gate\.js.*$/, "") : ""; })();
   const PASS_KEY = "game.gate.pass.v1";
   const NAME_KEY = "game.arena.name";
   const DAY = 24 * 3600 * 1000;
@@ -80,6 +81,7 @@ const Gate = (() => {
   const notify = () => {
     state.isHost = state.canHost;
     for (const fn of listeners) { try { fn(state); } catch (e) {} }
+    if (presencePut) presencePut(true);                     // 허용·브릿지 상태가 바뀌면 방문자 표도
     // 로그인 창이 떠 있는 중에 브릿지 로그인(다른 탭)·허용이 바뀌면 창 내용도 (입력 중이 아닐 때)
     if (lockRender && lockEl && !lockEl.hidden && lockSig !== sigOf() && !lockEl.contains(document.activeElement)) lockRender();
   };
@@ -199,14 +201,31 @@ const Gate = (() => {
   const leftTxt = exp => { const h = leftHours(exp); return h > 48 ? `${Math.ceil(h / 24)}일 남음` : `${h}시간 남음`; };
 
   // ── 허용됨 / 허용 안 됨 상태 반영
-  let presenceOn = false;
+  // 👥 방문자: 게임·아케이드를 연 모든 기기(둘러보기 손님 포함)를 game_presence/{uid} 에 — 떠날 때 지우지 않고 마지막 시각만 남김
+  //   (관리자만 읽음: 아케이드 첫 화면 '👥 방문자' · logs.html) · mode = admin | allowed | bridge | guest
+  let presenceOn = false, presencePut = null, presenceSig = "";
+  const presMode = () => (state.isAdmin ? "admin" : state.allowed ? "allowed" : state.isMember || state.role === "bridge_free" ? "bridge" : "guest");
+  const profName = () => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } };
+  // 🔥 게임별 '열어 본 수' (아케이드 추천 순서용, 누구나 읽음) — 게임 페이지를 연 탭마다 한 번
+  function countPlay() {
+    const g = detectGameId();
+    if (IS_LOCAL || !user || !g || g === "portal" || !/^[a-z0-9]{2,20}$/.test(g)) return;
+    try { if (sessionStorage.getItem("game.play." + g)) return; sessionStorage.setItem("game.play." + g, "1"); } catch (e) { return; }
+    db().ref("game_plays/" + g + "/n").transaction(n => (n || 0) + 1).catch(() => {});
+  }
   function startPresence() {
     if (presenceOn || IS_LOCAL || !user) return;
     presenceOn = true;
     try {
       const ref = db().ref("game_presence/" + user.uid);
-      const put = () => ref.set({ name: String(state.name || "?").slice(0, 16), game: detectGameId().slice(0, 20), t: TS(), ua: detectDeviceName().slice(0, 60) }).catch(() => {});
-      ref.onDisconnect().remove().then(put, put);
+      const put = soft => {
+        const name = String(state.name || profName() || "손님").slice(0, 16), mode = presMode(), sig = name + "|" + mode;
+        if (soft && sig === presenceSig) return;
+        presenceSig = sig;
+        ref.set({ name, game: detectGameId().slice(0, 20), t: TS(), ua: detectDeviceName().slice(0, 60), mode }).catch(() => {});
+      };
+      presencePut = put;
+      ref.onDisconnect().update({ t: TS() }).then(() => put(), () => put());
       setInterval(() => { if (!document.hidden) put(); }, 5 * 60 * 1000);   // 5분마다 '아직 있어요'
     } catch (e) { presenceOn = false; }
   }
@@ -274,6 +293,8 @@ const Gate = (() => {
   function checkPermissionsAndWatch() { return checkP || (checkP = checkPerm1().finally(() => { checkP = null; })); }
   async function checkPerm1() {
     await ensureFirebase();
+    startPresence();
+    countPlay();
     try {
       const tr = await user.getIdTokenResult();
       state.isAdmin = !!(tr && tr.claims && tr.claims.admin === 1);
@@ -382,6 +403,14 @@ const Gate = (() => {
     });
     applyAllowed(role, expiresAt, name);
     return { role, expiresAt, name };
+  }
+
+  // 가입 신청: 닉네임 + PIN → 게임 공통 프로필(me.js GME) 만들기·이어 받기. 아케이드 첫 화면처럼 me.js 가 없는 곳은 불러옴
+  async function registerProfile(name, pin) {
+    await ensureFirebase();
+    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=11"); } catch (e) {} }
+    if (!window.GME || !GME.register) return { name };
+    return GME.register(db(), name, pin);
   }
 
   // ── 2) 베니비서 앱으로 허용 요청 보내기 (want: "always" 계속 | "today" 오늘만 — 정하는 건 베니 님)
@@ -590,6 +619,21 @@ const Gate = (() => {
         background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.35);
         color: #a7f3d0; font-size: 13px; line-height: 1.55; text-align: center;
       }
+      .bgate-mem {
+        margin: 0 0 14px; padding: 12px 13px; border-radius: 12px; display: grid; gap: 8px;
+        background: rgba(236,72,153,0.09); border: 1px solid rgba(236,72,153,0.35); color: #fbcfe8; font-size: 13px; line-height: 1.5;
+      }
+      .bgate-mem[hidden] { display: none; }
+      .bgate-mem small, .bgate-field label small, .bgate-chk small { color: #94a3b8; font-weight: 500; font-size: 11.5px; }
+      .bgate-chk { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; padding: 10px 12px; border-radius: 11px; border: 1px solid #334155; background: #0c131d; color: #e2e8f0; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+      .bgate-chk input { width: 18px; height: 18px; accent-color: #ec4899; flex: none; }
+      .bgate-chk span { display: grid; gap: 1px; }
+      .bgate-err { min-height: 0; font-size: 12.5px; color: #fca5a5; margin: -4px 0 8px; }
+      .bgate-err:empty { display: none; }
+      .bgate-visl { display: flex; flex-wrap: wrap; gap: 6px; }
+      .bgate-vis { font-size: 12.5px; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); color: #e2e8f0; }
+      .bgate-vis.on { border-color: #10b981; background: rgba(16,185,129,0.12); }
+      .bgate-vis small { color: #94a3b8; font-size: 11px; }
       .bgate-sec {
         background: rgba(12,19,29,0.75); border: 1px solid rgba(255,255,255,0.08);
         border-radius: 12px; padding: 14px; margin-bottom: 14px;
@@ -646,131 +690,123 @@ const Gate = (() => {
       document.body.appendChild(lockEl);
     }
     const isHostMode = mode === "host", canClose = mode !== "lock";
-    let curTab = state.isMember && !state.allowed && !isHostMode ? "bridge" : "req", want = "week";
+    // 10-31 베니 님: 탭 대신 '가입 신청' 한 장 — 닉네임(게임 프로필) · PIN · 한마디 · 기간. 💞 베니브릿지 회원은 기본 권한 안내(체크), 허용 코드는 아래 작은 링크
+    let want = "week", bmOpen = false, codeOpen = false;
+    const form = { name: (() => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } })() || state.name || "", pin: "", note: "", code: "" };
+    const myProfName = () => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } };
     const render = () => {
-      const sig = sigOf();
-      if (lockSig && sig !== lockSig && state.isMember && !state.allowed && !isHostMode) curTab = "bridge";   // 다른 탭에서 브릿지 로그인하고 옴
-      lockSig = sig;
+      lockSig = sigOf();
       const left = Math.ceil(freeLeft(state.uid) / 60);
       lockEl.innerHTML = `
-        <div class="bgate-card" role="dialog" aria-modal="true" aria-label="로그인">
+        <div class="bgate-card" role="dialog" aria-modal="true" aria-label="가입 신청">
           ${canClose ? `<button class="bgate-x" data-close aria-label="닫기">✕</button>` : ""}
           <div class="bgate-badge">${isHostMode ? "🏠 친구 방 만들기" : "🎮 베니 아케이드"}</div>
-          <h2 class="bgate-title">${isHostMode ? "이 기기를 허용받으면 방을 만들 수 있어요" : "로그인하고 같이 해요"}</h2>
+          <h2 class="bgate-title">${isHostMode ? "가입이 허용되면 방을 만들 수 있어요" : "가입하고 같이 해요"}</h2>
           <p class="bgate-sub">${isHostMode
-            ? `허용된 기기는 <b>혼자 하기</b>와 <b>친구 방 만들기</b>를 다 할 수 있어요.${title ? ` (${esc(title)})` : ""}`
-            : `가족·지인 전용이에요. 베니가 한 번 허용하면 <b>이 기기에서 계속</b> 할 수 있어요. 둘러보기는 로그인 없이 돼요.`}</p>
+            ? `허용된 회원은 <b>혼자 하기</b>와 <b>친구 방 만들기</b>를 다 할 수 있어요.${title ? ` (${esc(title)})` : ""}`
+            : `가족·지인 전용이에요. 가입 신청을 보내면 베니가 확인하고 허용해요. 허용된 뒤로는 <b>이 기기에서 계속</b> 할 수 있어요. 둘러보기는 가입 없이 돼요.`}</p>
           ${state.reason ? `<div class="bgate-warn">${esc(state.reason)}</div>` : ""}
-          ${isHostMode ? `<div class="bgate-alt"><span>같이 하기만 할 거면 <b style="color:#e2e8f0">허용이 필요 없어요.</b><br>방장이 보낸 <b style="color:#e2e8f0">방 링크</b>를 누르거나 방 목록에서 들어가세요.</span><button class="bgate-btn ghost" data-close>👍 그냥 들어갈게요</button></div>` : ""}
-          <div class="bgate-tabs">
-            <button class="bgate-tab ${curTab === "req" ? "active" : ""}" data-tab="req">📲 허용 요청</button>
-            <button class="bgate-tab ${curTab === "bridge" ? "active" : ""}" data-tab="bridge">💞 베니브릿지</button>
-            <button class="bgate-tab ${curTab === "code" ? "active" : ""}" data-tab="code">🔑 허용 코드</button>
-          </div>
+          ${isHostMode ? `<div class="bgate-alt"><span>같이 하기만 할 거면 <b style="color:#e2e8f0">가입이 필요 없어요.</b><br>방장이 보낸 <b style="color:#e2e8f0">방 링크</b>를 누르거나 방 목록에서 들어가세요.</span><button class="bgate-btn ghost" data-close>👍 그냥 들어갈게요</button></div>` : ""}
           <div id="bgateTabBody"></div>
           <div class="bgate-foot"><span>🖥️ 서버·통신 비용은 베니가 내고 있어요.</span><button type="button" class="bgate-coffee" data-coffee>☕ 커피 사 주기</button></div>
           ${mode === "lock" ? `<a class="bgate-btn ghost" href="${esc(PORTAL_URL)}" style="margin-top:12px">← 아케이드 둘러보기</a>` : ""}
         </div>
       `;
       const body = lockEl.querySelector("#bgateTabBody");
-      if (curTab === "req") {
-        body.innerHTML = `
-          <div class="bgate-field">
-            <label for="bgReqName">이름 (베니 님 폰 알림에 보여요)</label>
-            <input class="bgate-inp" id="bgReqName" maxlength="12" placeholder="예: 철수, 처남, 민수" value="${esc(state.name)}">
-          </div>
-          <div class="bgate-field">
-            <label for="bgReqNote">한마디 (선택)</label>
-            <input class="bgate-inp" id="bgReqNote" maxlength="60" placeholder="예: 금요일 고스톱 같이 쳐요">
-          </div>
-          <div class="bgate-field">
-            <span class="lb">얼마나 쓸까요?</span>
-            <div class="bgate-seg">
-              ${[["day", "⏳ 하루", "24시간"], ["week", "📅 1주", "7일"], ["month", "🗓️ 1달", "30일"], ["always", "♾️ 계속", "기한 없이"]].map(([k, t, sm]) => `<button type="button" data-want="${k}" class="${want === k ? "on" : ""}">${t}<small>${sm}</small></button>`).join("")}
-            </div>
-          </div>
-          <button class="bgate-btn green" id="bgReqBtn">📲 베니에게 허용 요청</button>
-          <div id="bgReqWait" hidden class="bgate-wait"></div>
-        `;
-        body.querySelectorAll("[data-want]").forEach(b => {
-          b.onclick = () => { want = b.dataset.want; body.querySelectorAll("[data-want]").forEach(x => x.classList.toggle("on", x === b)); };
-        });
-        const nameInp = body.querySelector("#bgReqName");
-        const reqBtn = body.querySelector("#bgReqBtn");
-        const waitBox = body.querySelector("#bgReqWait");
-        reqBtn.onclick = async () => {
-          const nm = nameInp.value.trim();
-          if (!nm) { nameInp.focus(); return; }
-          reqBtn.disabled = true;
-          reqBtn.textContent = "보내는 중...";
-          try {
-            await requestDeviceApproval(nm, (st) => {
-              waitBox.hidden = false;
-              if (st === "pending") {
-                waitBox.innerHTML = `<b>📡 요청을 보냈어요!</b><br>베니 님이 허용하면 이 화면이 바로 열려요.`;
-                reqBtn.textContent = "⏳ 허용 기다리는 중";
-              } else if (st === "rejected") {
-                waitBox.innerHTML = `😿 이번에는 허용되지 않았어요.`;
-                reqBtn.disabled = false;
-                reqBtn.textContent = "다시 요청하기";
-              }
-            }, want, body.querySelector("#bgReqNote").value);
-          } catch (e) {
-            alert(e.message || "요청을 보내지 못했어요.");
-            reqBtn.disabled = false;
-            reqBtn.textContent = "📲 베니에게 허용 요청";
-          }
-        };
-      } else if (curTab === "bridge") {
-        if (!state.isMember) {
-          body.innerHTML = `
-            <p class="bgate-sub">베니브릿지 회원이면 <b>로그인만 해도 하루 ${FREE_MIN}분 무료</b>예요 (허용을 기다리지 않고 바로).</p>
-            <a class="bgate-btn primary" href="${esc(BRIDGE_URL)}" target="_blank" rel="noopener">💞 베니브릿지에서 로그인하기</a>
-            <p class="bgate-hint">같은 브라우저에서 로그인하고 이 화면으로 돌아오면 저절로 열려요.</p>`;
-        } else if (state.allowed) {
-          body.innerHTML = `<div class="bgate-wait">💞 베니브릿지 회원 · 이미 허용된 계정이에요.</div>`;
-        } else if (isHostMode) {
-          body.innerHTML = `<p class="bgate-sub">💞 베니브릿지 회원은 혼자 하기를 하루 ${FREE_MIN}분 무료로 해요. <b>친구 방 만들기</b>는 허용받은 뒤에 돼요 — 📲 허용 요청에서 요청해 주세요.</p>
-            <button class="bgate-btn green" data-tab="req">📲 허용 요청하기</button>`;
-        } else if (left > 0) {
-          body.innerHTML = `
-            <div class="bgate-wait"><b>💞 베니브릿지 회원이에요!</b><br>허용 전에도 하루 <b>${FREE_MIN}분</b> 무료로 할 수 있어요.<br>오늘 남은 시간 <b>${left}분</b></div>
-            <button class="bgate-btn green" id="bgFreeGo" style="margin-top:12px">▶ 무료로 하기</button>
-            <p class="bgate-hint">허용 요청을 보내 두면, 허용된 뒤로는 시간 제한이 없어요.</p>`;
-          body.querySelector("#bgFreeGo").onclick = () => hideLockOverlay(true);
-        } else {
-          body.innerHTML = `<div class="bgate-warn">⏰ 오늘 무료 ${FREE_MIN}분을 다 썼어요. 내일 다시 생겨요.</div>
-            <button class="bgate-btn green" data-tab="req">📲 허용 요청하고 계속 하기</button>`;
-        }
+      let bridgeHtml;
+      if (state.isMember) {
+        bridgeHtml = state.allowed ? ""
+          : isHostMode ? `<div class="bgate-mem">💞 <b>베니브릿지 회원</b>이라 혼자 하기는 하루 ${FREE_MIN}분 무료예요. 친구 방 만들기는 가입이 허용된 뒤에 돼요.</div>`
+          : left > 0 ? `<div class="bgate-mem">💞 <b>베니브릿지 회원</b>이라 <b>기본 권한</b>이 있어요 — 허용 전에도 하루 ${FREE_MIN}분 무료 (오늘 ${left}분 남음)<button class="bgate-btn green sm" id="bgFreeGo">▶ 지금 무료로 하기</button><small>가입이 허용되면 시간 제한이 없어요.</small></div>`
+          : `<div class="bgate-mem">💞 베니브릿지 회원 · 오늘 무료 ${FREE_MIN}분을 다 썼어요. 가입이 허용되면 시간 제한이 없어요.</div>`;
       } else {
-        body.innerHTML = `
-          <div class="bgate-field">
-            <label for="bgCodeName">내 이름 / 별명</label>
-            <input class="bgate-inp" id="bgCodeName" maxlength="12" placeholder="예: 철수, 와이프" value="${esc(state.name)}">
-          </div>
-          <div class="bgate-field">
-            <label for="bgCodeVal">6자리 허용 코드</label>
-            <input class="bgate-inp code" id="bgCodeVal" maxlength="6" placeholder="ABCDEF" autocomplete="off" autocapitalize="characters" spellcheck="false">
-          </div>
-          <button class="bgate-btn primary" id="bgCodeBtn">🔓 코드로 허용받기</button>
-          <p class="bgate-hint">코드에 따라 오늘만(24시간) 또는 계속 허용돼요.</p>
-        `;
-        const nameInp = body.querySelector("#bgCodeName");
-        const codeInp = body.querySelector("#bgCodeVal");
-        const codeBtn = body.querySelector("#bgCodeBtn");
-        codeBtn.onclick = async () => {
-          codeBtn.disabled = true;
-          try {
-            await redeemPassCode(codeInp.value, nameInp.value);
-          } catch (e) {
-            alert(e.message || "코드를 확인하지 못했어요.");
-            codeBtn.disabled = false;
-          }
-        };
+        bridgeHtml = `<label class="bgate-chk"><input type="checkbox" id="bgBm"${bmOpen ? " checked" : ""}><span>💞 베니브릿지 회원이에요 <small>기본 권한: 허용 전에도 하루 ${FREE_MIN}분 무료</small></span></label>
+          <div class="bgate-mem" id="bgBmBox"${bmOpen ? "" : " hidden"}>베니브릿지에 로그인하면 허용을 기다리지 않고 바로 하루 ${FREE_MIN}분 무료예요.<a class="bgate-btn primary sm" href="${esc(BRIDGE_URL)}" target="_blank" rel="noopener">💞 베니브릿지에서 로그인</a><small>같은 브라우저에서 로그인하고 이 화면으로 돌아오면 저절로 열려요. 가입 신청도 같이 보내 두면 허용 뒤엔 시간 제한이 없어요.</small></div>`;
       }
-      lockEl.querySelectorAll("[data-tab]").forEach(b => {
-        b.onclick = () => { curTab = b.dataset.tab; render(); };
+      body.innerHTML = `
+        ${bridgeHtml}
+        <div class="bgate-field">
+          <label for="bgReqName">닉네임 <small>6자까지 · 게임에서 친구들에게 보여요</small></label>
+          <input class="bgate-inp" id="bgReqName" maxlength="6" placeholder="예: 철수, 처남" value="${esc(form.name)}" autocomplete="nickname" spellcheck="false">
+        </div>
+        <div class="bgate-field">
+          <label for="bgReqPin">PIN 4자리 <small id="bgPinHint"></small></label>
+          <input class="bgate-inp code" id="bgReqPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="••••" autocomplete="off" value="${esc(form.pin)}">
+        </div>
+        <div class="bgate-field">
+          <label for="bgReqNote">베니에게 한마디 <small>선택</small></label>
+          <input class="bgate-inp" id="bgReqNote" maxlength="60" placeholder="예: 금요일 고스톱 같이 쳐요" value="${esc(form.note)}">
+        </div>
+        <div class="bgate-field">
+          <span class="lb">얼마나 쓸까요?</span>
+          <div class="bgate-seg">
+            ${[["day", "⏳ 하루", "24시간"], ["week", "📅 1주", "7일"], ["month", "🗓️ 1달", "30일"], ["always", "♾️ 계속", "기한 없이"]].map(([k, t, sm]) => `<button type="button" data-want="${k}" class="${want === k ? "on" : ""}">${t}<small>${sm}</small></button>`).join("")}
+          </div>
+        </div>
+        <div class="bgate-err" id="bgReqMsg"></div>
+        <button class="bgate-btn green" id="bgReqBtn">📮 가입 신청 보내기</button>
+        <div id="bgReqWait" hidden class="bgate-wait"></div>
+        <div class="bgate-more"><button type="button" id="bgCodeTgl">🔑 베니에게 코드를 받았어요</button></div>
+        <div id="bgCodeBox"${codeOpen ? "" : " hidden"}><div style="display:flex;gap:8px;margin-top:4px">
+          <input class="bgate-inp code" id="bgCodeVal" maxlength="6" placeholder="6자리 코드" autocomplete="off" autocapitalize="characters" spellcheck="false" style="flex:1" value="${esc(form.code)}">
+          <button class="bgate-btn primary sm" id="bgCodeBtn" style="padding:11px 14px">🔓 시작</button>
+        </div><p class="bgate-hint">코드를 넣으면 기다리지 않고 바로 허용돼요 (닉네임도 위에 적어 주세요).</p></div>
+      `;
+      const nameInp = body.querySelector("#bgReqName"), pinInp = body.querySelector("#bgReqPin"), noteInp = body.querySelector("#bgReqNote");
+      const msgEl = body.querySelector("#bgReqMsg"), reqBtn = body.querySelector("#bgReqBtn"), waitBox = body.querySelector("#bgReqWait");
+      const sameDev = () => !!myProfName() && nameInp.value.trim() === myProfName();
+      const hint = () => { body.querySelector("#bgPinHint").textContent = sameDev() ? "이 기기에서 쓰던 닉네임이라 비워도 돼요" : "새 닉네임이면 정하고, 다른 기기에서 쓰던 닉네임이면 그 PIN"; };
+      hint();
+      nameInp.oninput = () => { form.name = nameInp.value; msgEl.textContent = ""; hint(); };
+      pinInp.oninput = () => { pinInp.value = pinInp.value.replace(/\D/g, "").slice(0, 4); form.pin = pinInp.value; msgEl.textContent = ""; };
+      noteInp.oninput = () => { form.note = noteInp.value; };
+      body.querySelectorAll("[data-want]").forEach(b => {
+        b.onclick = () => { want = b.dataset.want; body.querySelectorAll("[data-want]").forEach(x => x.classList.toggle("on", x === b)); };
       });
+      const bm = body.querySelector("#bgBm");
+      if (bm) bm.onchange = () => { bmOpen = bm.checked; body.querySelector("#bgBmBox").hidden = !bmOpen; };
+      const freeGo = body.querySelector("#bgFreeGo");
+      if (freeGo) freeGo.onclick = () => hideLockOverlay(true);
+      reqBtn.onclick = async () => {
+        const nm = nameInp.value.trim().slice(0, 6), pin = pinInp.value;
+        if (!nm) { msgEl.textContent = "닉네임을 적어 주세요."; nameInp.focus(); return; }
+        if (!sameDev() && pin.length !== 4) { msgEl.textContent = "PIN 숫자 4자리를 적어 주세요."; pinInp.focus(); return; }
+        reqBtn.disabled = true;
+        reqBtn.textContent = "보내는 중...";
+        try {
+          const prof = await registerProfile(nm, pin);
+          await requestDeviceApproval(prof.name || nm, st => {
+            waitBox.hidden = false;
+            if (st === "pending") {
+              waitBox.innerHTML = `<b>📮 '${esc(prof.name || nm)}' 가입 신청을 보냈어요!</b><br>베니가 허용하면 이 화면이 바로 열려요.`;
+              reqBtn.textContent = "⏳ 허용 기다리는 중";
+            } else if (st === "rejected") {
+              waitBox.innerHTML = "😿 이번에는 허용되지 않았어요.";
+              reqBtn.disabled = false;
+              reqBtn.textContent = "다시 신청하기";
+            }
+          }, want, noteInp.value);
+        } catch (e) {
+          msgEl.textContent = e.message || "신청을 보내지 못했어요.";
+          reqBtn.disabled = false;
+          reqBtn.textContent = "📮 가입 신청 보내기";
+        }
+      };
+      body.querySelector("#bgCodeTgl").onclick = () => { codeOpen = !codeOpen; body.querySelector("#bgCodeBox").hidden = !codeOpen; if (codeOpen) body.querySelector("#bgCodeVal").focus(); };
+      const codeInp = body.querySelector("#bgCodeVal"), codeBtn = body.querySelector("#bgCodeBtn");
+      codeInp.oninput = () => { form.code = codeInp.value; };
+      codeBtn.onclick = async () => {
+        const nm = nameInp.value.trim().slice(0, 6);
+        if (!nm) { msgEl.textContent = "닉네임을 먼저 적어 주세요."; nameInp.focus(); return; }
+        codeBtn.disabled = true;
+        try {
+          if (pinInp.value.length === 4 || sameDev()) await registerProfile(nm, pinInp.value).catch(() => {});
+          await redeemPassCode(codeInp.value, nm);
+        } catch (e) {
+          msgEl.textContent = e.message || "코드를 확인하지 못했어요.";
+          codeBtn.disabled = false;
+        }
+      };
       lockEl.querySelectorAll("[data-close]").forEach(b => { b.onclick = () => hideLockOverlay(false); });
       lockEl.querySelector("[data-coffee]").onclick = openCoffee;
     };
@@ -913,6 +949,31 @@ const Gate = (() => {
     };
     ref.on("value", fn, () => { el.hidden = true; });
     return () => ref.off("value", fn);
+  }
+
+  // 아케이드 첫 화면 '👥 방문자' (관리자만): 지금 · 오늘 · 7일 수와 오늘 온 사람 → 📊 자세히(logs.html)
+  const GAME_KO = { portal: "아케이드", gostop: "고스톱", seotda: "섯다", onecard: "원카드", poker: "포커", baduk: "바둑", omok: "오목", chess: "체스", janggi: "장기", yut: "윷", billiards: "당구", volley: "배구", land: "땅따먹기", nyang: "냥도쿠", snake: "지렁이", cube: "큐브", sc: "스타" };
+  async function mountVisitors(el) {
+    injectStyle();
+    await ensureFirebase();
+    if (!state.isAdmin) return () => {};
+    const ref = db().ref("game_presence"), MODE = { admin: "👑", allowed: "✅", bridge: "💞", guest: "👀" };
+    let val = {};
+    const draw = () => {
+      const now = Date.now(), d0 = new Date(); d0.setHours(0, 0, 0, 0);
+      const all = Object.entries(val || {}).map(([uid, p]) => Object.assign({ uid }, p)).filter(p => p && p.t);
+      const live = all.filter(p => now - p.t < 6 * 60000), today = all.filter(p => p.t >= d0.getTime()), week = all.filter(p => now - p.t < 7 * DAY);
+      const rows = today.sort((a, b) => b.t - a.t).slice(0, 16).map(p =>
+        `<span class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" title="${esc(p.ua || "")}">${MODE[p.mode] || "👀"} ${esc(p.name || "손님")} <small>${esc(GAME_KO[p.game] || p.game || "")} · ${fmtTimeAgo(p.t)}</small></span>`).join("");
+      el.hidden = false;
+      el.innerHTML = `<div class="bgate-sec" style="margin:0"><h4><span>👥 방문자 · 🟢 지금 ${live.length} · 오늘 ${today.length} · 7일 ${week.length}</span><a href="logs.html" style="color:#93c5fd;font-size:12.5px;text-decoration:none">📊 자세히 ›</a></h4>
+        <div class="bgate-visl">${rows || '<span class="bgate-meta">오늘은 아직 아무도 안 왔어요.</span>'}</div>
+        <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 회원 · 👀 둘러보기 · 🟢 테두리 = 지금 · 기기마다 한 줄 (10-31부터 모음)</div></div>`;
+    };
+    const fn = snap => { val = snap.val() || {}; draw(); };
+    ref.on("value", fn, () => { el.hidden = true; });
+    const iv = setInterval(draw, 60000);
+    return () => { ref.off("value", fn); clearInterval(iv); };
   }
 
   // ── 포털 [👑 출입·기기 관리] 모달 ─────────────────────────────────
@@ -1198,6 +1259,7 @@ const Gate = (() => {
     openAdminModal,
     closeAdminModal,
     mountRequests,
+    mountVisitors,
     createPass,
     redeemPassCode,
     requestDeviceApproval,

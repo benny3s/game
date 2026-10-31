@@ -513,6 +513,19 @@
         }
       }
     },
+    "game_plays": {
+      ".read": true,
+      "$g": {
+        ".validate": "$g.matches(/^[a-z0-9]{2,20}$/)",
+        "n": {
+          ".write": "auth != null",
+          ".validate": "newData.isNumber() && ((!data.exists() && newData.val() === 1) || newData.val() === data.val() + 1)"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
     "game_presence": {
       ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
       "$uid": {

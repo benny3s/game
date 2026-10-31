@@ -159,6 +159,34 @@
     }
   }
 
+  // 가입 신청 창(gate.js)에서: 닉네임 + PIN 으로 프로필 만들기 또는 이어 받기 (창 없이) → { pid, name, isNew }
+  //   이 기기에서 쓰던 닉네임이면 PIN 안 봄 · 새 닉네임이면 PIN 으로 만듦 · 남의(이미 있는) 닉네임이면 PIN 이 맞아야 함
+  async function register(db, rawName, pin) {
+    const n = String(rawName || "").trim().slice(0, 6);
+    if (!n) throw new Error("닉네임을 적어 주세요.");
+    if (me && me.pid && nameKey(me.name) === nameKey(n)) { touch(db); return { pid: me.pid, name: me.name, isNew: false }; }
+    if (!/^\d{4}$/.test(String(pin || ""))) throw new Error("PIN 숫자 4자리를 적어 주세요.");
+    if (Date.now() < missUntil) throw new Error(`PIN 이 여러 번 틀렸어요. ${Math.ceil((missUntil - Date.now()) / 1000)}초 뒤에 다시 해 주세요.`);
+    const TS = firebase.database.ServerValue.TIMESTAMP;
+    const pid = db.ref(P + "gp/players").push().key;
+    const r = await db.ref(P + "gp/names/" + nameKey(n)).transaction(cur => cur == null ? pid : undefined);
+    if (r.committed) {
+      await db.ref(P + "gp/players/" + pid).set({ n, c: TS, l: TS, h: await pinHash(pid, pin) });
+      save({ pid, name: n });
+      return { pid, name: n, isNew: true };
+    }
+    const other = r.snapshot.val(), rec = (await db.ref(P + "gp/players/" + other).get()).val() || {};
+    if (!rec.h) await db.ref(P + "gp/players/" + other + "/h").set(await pinHash(other, pin));
+    else if ((await pinHash(other, pin)) !== rec.h) {
+      if (++missN >= 5) { missN = 0; missUntil = Date.now() + 30000; }
+      throw new Error(`'${rec.n || n}' 은(는) 이미 있는 닉네임이에요. 내 닉네임이면 PIN 을 다시 확인해 주세요 (잊었으면 베니에게).`);
+    }
+    missN = 0;
+    save({ pid: other, name: rec.n || n });
+    touch(db);
+    return { pid: other, name: rec.n || n, isNew: false };
+  }
+
   let pending = null;
   function ensure(db) { return pending || (pending = ensure1(db).finally(() => { pending = null; })); }
   async function ensure1(db) {
@@ -174,7 +202,7 @@
     return pick(db, { canClose: true });
   }
 
-  window.GME = { get me() { return me; }, P, ensure, pick, loadAll, onChange: f => listeners.push(f), nameKey };
+  window.GME = { get me() { return me; }, P, ensure, pick, register, loadAll, onChange: f => listeners.push(f), nameKey };
   if (typeof document !== "undefined" && !window.Gate) {
     const cur = document.currentScript && document.currentScript.src;
     const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=11") : "../common/gate.js?v=11";

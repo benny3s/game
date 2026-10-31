@@ -23,7 +23,8 @@
       "휴대폰 가능"
     ],
     "url": "gostop/",
-    "hidden": false
+    "hidden": false,
+    "q": 98
   },
   {
     "id": "seotda",
@@ -49,7 +50,8 @@
       "휴대폰 가능"
     ],
     "url": "seotda/",
-    "hidden": false
+    "hidden": false,
+    "q": 91
   },
   {
     "id": "onecard",
@@ -77,7 +79,8 @@
       "휴대폰 가능"
     ],
     "url": "onecard/",
-    "hidden": false
+    "hidden": false,
+    "q": 88
   },
   {
     "id": "poker",
@@ -103,7 +106,8 @@
       "휴대폰 가능"
     ],
     "url": "poker/",
-    "hidden": false
+    "hidden": false,
+    "q": 92
   },
   {
     "id": "baduk",
@@ -129,7 +133,8 @@
       "휴대폰 가능"
     ],
     "url": "baduk/",
-    "hidden": false
+    "hidden": false,
+    "q": 90
   },
   {
     "id": "omok",
@@ -155,7 +160,8 @@
       "휴대폰 가능"
     ],
     "url": "omok/",
-    "hidden": false
+    "hidden": false,
+    "q": 86
   },
   {
     "id": "cube",
@@ -180,7 +186,8 @@
       "휴대폰 가능"
     ],
     "url": "cube/",
-    "hidden": false
+    "hidden": false,
+    "q": 68
   },
   {
     "id": "chess",
@@ -206,7 +213,8 @@
       "휴대폰 가능"
     ],
     "url": "chess/",
-    "hidden": false
+    "hidden": false,
+    "q": 84
   },
   {
     "id": "janggi",
@@ -232,7 +240,8 @@
       "휴대폰 가능"
     ],
     "url": "janggi/",
-    "hidden": false
+    "hidden": false,
+    "q": 84
   },
   {
     "id": "yut",
@@ -258,7 +267,8 @@
       "혼자도 가능"
     ],
     "url": "yut/",
-    "hidden": false
+    "hidden": false,
+    "q": 76
   },
   {
     "id": "billiards",
@@ -284,7 +294,8 @@
       "4구·3쿠션"
     ],
     "url": "billiards/",
-    "hidden": false
+    "hidden": false,
+    "q": 82
   },
   {
     "id": "volley",
@@ -310,7 +321,8 @@
       "휴대폰 가능"
     ],
     "url": "volley/",
-    "hidden": false
+    "hidden": false,
+    "q": 74
   },
   {
     "id": "land",
@@ -335,7 +347,8 @@
       "휴대폰 가능"
     ],
     "url": "land/",
-    "hidden": false
+    "hidden": false,
+    "q": 70
   },
   {
     "id": "nyang",
@@ -359,7 +372,8 @@
       "휴대폰 가능"
     ],
     "url": "nyang/",
-    "hidden": false
+    "hidden": false,
+    "q": 80
   },
   {
     "id": "snake",
@@ -382,7 +396,8 @@
       "휴대폰 가능"
     ],
     "url": "snake/",
-    "hidden": false
+    "hidden": false,
+    "q": 64
   },
   {
     "id": "sc",
@@ -406,6 +421,7 @@
     ],
     "url": "sc/",
     "hidden": false,
-    "admin": true
+    "admin": true,
+    "q": 50
   }
 ]

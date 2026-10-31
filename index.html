@@ -638,6 +638,7 @@ button { font: inherit; cursor: pointer; }
         <span class="ic">🔍</span>
         <input type="search" id="searchInput" placeholder="게임, 태그, AI 검색..." aria-label="게임 검색">
       </div>
+      <button class="host-badge" id="mstBtn" type="button" title="복기에서 모은 아쉬운 장면 다시 해 보기" hidden>📒 아쉬운 장면</button>
       <button class="host-badge active" id="bankBtn" type="button" title="모임 칩 은행 · 잔액 · 정산" hidden>🏦 은행</button>
       <button class="host-badge" id="hostBtn" type="button">👑 출입·기기 관리</button>
     </div>
@@ -647,6 +648,7 @@ button { font: inherit; cursor: pointer; }
 <main class="container">
   <!-- 🔔 허용 요청 (관리자만, 요청이 있을 때만 보임 — Gate.mountRequests) -->
   <section id="reqBox" hidden style="margin:0 0 18px"></section>
+  <section id="visitBox" hidden style="margin:0 0 18px"></section>
   <div class="section-head">
     <h2>🔥 추천 & 대표 게임 (FEATURED & RECOMMENDED)</h2>
     <span id="featuredHint">카드를 눌러 미리보기 · 모든 게임 혼자 & 친구랑 지원</span>
@@ -716,7 +718,8 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=11"></script>
+<script src="common/gate.js?v=12"></script>
+<script src="common/mistakes.js?v=1"></script>
 <script src="common/me.js?v=10"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=9"></script>
@@ -1204,6 +1207,7 @@ button { font: inherit; cursor: pointer; }
     if (reqMounted || !window.Gate || !Gate.mountRequests || !(isAdmin || Gate.state.isAdmin || Gate.state.canApprove)) return;
     reqMounted = true;
     Gate.mountRequests($("reqBox"), n => { reqCount = n; updateHostBadge(); }).catch(() => { reqMounted = false; });
+    if (Gate.mountVisitors) Gate.mountVisitors($("visitBox")).catch(() => {});
   }
   const allowedNow = () => isAdmin || canHost || !!(window.Gate && Gate.state.allowed);
 
@@ -1322,6 +1326,10 @@ button { font: inherit; cursor: pointer; }
   // 기기 허용이 바뀌면 배지도 바로 (Gate 가 나중에 확인을 끝내도)
   if (window.Gate && Gate.onChange) Gate.onChange(s => { if (s.status !== "checking" && s.status !== "open" && !isAdmin) { canHost = !!s.canHost; updateHostBadge(); } mountReqs(); });
   $("coffeeBtn").onclick = () => { if (window.Gate && Gate.openCoffee) Gate.openCoffee(); };
+  // 📒 아쉬운 장면: 복기에서 모은 '내 수가 많이 손해였던 장면' (이 기기) — 있을 때만 단추
+  const drawMst = () => { const n = window.Mistakes ? Mistakes.count() : 0; $("mstBtn").hidden = !n; $("mstBtn").textContent = `📒 아쉬운 장면 ${n}`; };
+  $("mstBtn").onclick = () => { if (window.Mistakes) Mistakes.open({}); };
+  drawMst(); addEventListener("pageshow", drawMst);
 
   // 방장 & 출입·기기 관리 모달 (Gate 연동)
   $("hostBtn").onclick = async () => {
@@ -1361,6 +1369,12 @@ button { font: inherit; cursor: pointer; }
     .then(async list => {
       await checkPermissions();
       games = list.filter(x => !x.hidden && (!x.admin || isAdmin));
+      // 🔥 추천 순서: 사람들이 많이 연 게임 순 (game_plays, 모두 합쳐 30번이 넘을 때부터) · 그 전엔 완성도(q) 순
+      const plays = await fetch("https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app/game_plays.json", { cache: "no-store" }).then(r => (r.ok ? r.json() : null)).catch(() => null) || {};
+      const pn = id => (plays[id] && plays[id].n) || 0, byPlays = games.reduce((t, x) => t + pn(x.id), 0) >= 30;
+      games.sort((a, b) => (byPlays ? pn(b.id) - pn(a.id) : 0) || (b.q || 0) - (a.q || 0));
+      const firstF = games.find(x => x.featured);
+      if (firstF) featuredId = firstF.id;
       if (isAdmin) {
         const logLink = document.createElement("a");
         logLink.className = "nav-pill";
