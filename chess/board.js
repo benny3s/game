@@ -13,7 +13,7 @@
       this.pcs = new Map();          // 칸 → 기물 요소
       this.sel = null; this.targets = []; this.drag = null; this.coords = true;
       el.classList.add('cb');
-      el.innerHTML = '<div class="cb-sqs"></div><div class="cb-pcs"></div><svg class="cb-arw" viewBox="0 0 8 8" aria-hidden="true"><defs><marker id="cbHead" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto"><path d="M0,0 L3,1.5 L0,3 Z" fill="var(--arrow)"/></marker><marker id="cbHead2" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto"><path d="M0,0 L3,1.5 L0,3 Z" fill="var(--arrow2,#60a5fa)"/></marker></defs><g></g></svg><div class="cb-promo" hidden></div>';
+      el.innerHTML = '<div class="cb-sqs"></div><div class="cb-pcs"></div><svg class="cb-arw" viewBox="0 0 8 8" aria-hidden="true"><defs><marker id="cbHead" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto"><path d="M0,0 L3,1.5 L0,3 Z" fill="var(--arrow)"/></marker><marker id="cbHead2" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto"><path d="M0,0 L3,1.5 L0,3 Z" fill="var(--arrow2,#60a5fa)"/></marker><marker id="cbHead3" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto"><path d="M0,0 L3,1.5 L0,3 Z" fill="var(--arrow3,#fb923c)"/></marker></defs><g></g></svg><div class="cb-promo" hidden></div>';
       this.sqLayer = el.children[0]; this.pcLayer = el.children[1]; this.arw = el.children[2]; this.promo = el.children[3];
       this.sqEls = {};
       this.drawSquares();
@@ -81,19 +81,20 @@
       if (this.marks.check) add(this.marks.check, 'check');
       if (this.marks.hint) this.marks.hint.forEach(s => add(s, 'hint'));
     }
-    // 화살표: a = 추천(초록), a2 = 복기에서 실제로 둔 수(파랑, 점선) — 둘 다 [from, to] 또는 null
-    setArrow(a, a2) { this.arrow = a || null; this.arrow2 = a2 || null; this.drawArrow(); }
+    // 화살표: a = 추천(초록), a2 = 복기에서 실제로 둔 수(파랑, 점선), a3 = 그 수가 다음에 노리는 수(주황, 가는 점선) — 모두 [from, to] 또는 null
+    setArrow(a, a2, a3) { this.arrow = a || null; this.arrow2 = a2 || null; this.arrow3 = a3 || null; this.drawArrow(); }
     drawArrow() {
       const g = this.arw.querySelector('g'); g.innerHTML = '';
-      const line = (a, col, head, dash) => {
+      const line = (a, col, head, dash, w = 0.2) => {
         const [x0, y0] = this.disp(a[0]), [x1, y1] = this.disp(a[1]);
         const ax = x0 + 0.5, ay = y0 + 0.5, bx = x1 + 0.5, by = y1 + 0.5, L = Math.hypot(bx - ax, by - ay) || 1;
         const ex = bx - (bx - ax) / L * 0.38, ey = by - (by - ay) / L * 0.38;
-        return `<line x1="${ax}" y1="${ay}" x2="${ex}" y2="${ey}" stroke="${col}" stroke-width=".2" stroke-linecap="round"${dash ? ' stroke-dasharray=".32 .2"' : ''} marker-end="url(#${head})"/>`;
+        return `<line x1="${ax}" y1="${ay}" x2="${ex}" y2="${ey}" stroke="${col}" stroke-width="${w}" stroke-linecap="round"${dash ? ` stroke-dasharray="${dash}"` : ''} marker-end="url(#${head})"/>`;
       };
       let h = '';
-      if (this.arrow2) h += line(this.arrow2, 'var(--arrow2,#60a5fa)', 'cbHead2', true);
-      if (this.arrow) h += line(this.arrow, 'var(--arrow)', 'cbHead', false);
+      if (this.arrow3) h += line(this.arrow3, 'var(--arrow3,#fb923c)', 'cbHead3', '.16 .14', 0.12);
+      if (this.arrow2) h += line(this.arrow2, 'var(--arrow2,#60a5fa)', 'cbHead2', '.32 .2');
+      if (this.arrow) h += line(this.arrow, 'var(--arrow)', 'cbHead', '');
       g.innerHTML = h;
     }
     // ── 고르기 · 둘 자리 점 ──

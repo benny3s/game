@@ -4,6 +4,7 @@
      ChessAI.think({ start: FEN, moves: ['e2e4', …] }, { tier: 'easy'|'normal'|'hard', seed, timeMs, nodes, explain })
        → { move: 'g1f3', score(지금 둘 쪽 기준 cp), mate(+n 이기는 수 / -n 지는 수), depth, nodes, ms, pv: [...], book, why? }
      ChessAI.explain(game, uci, res) → { kind, text } — AI 선생님 한 줄 까닭 ('나이트로 포크를 걸어요' …)
+     ChessAI.intent(game, uci, { timeMs }) → 복기: 실제로 둔 수의 까닭 · 이 수 뒤 형세 · 다음 노림(널 무브)
      ChessAI.perft(fen, depth) · ChessAI.evaluate(fen) */
 (function (root, factory) {
   const m = factory();
@@ -691,6 +692,31 @@
     return { kind, text };
   }
 
+  // ════════ 복기 선생님: 실제로 둔 수가 노린 것 ════════
+  // intent(game, uci, { timeMs }) → { score, mate: 둔 쪽 기준 이 수 뒤 형세(상대가 가장 잘 받았을 때), why: explain(실제 수), check,
+  //   threat: { move, score, mate, why, fen } | null } — threat = 둔 쪽이 한 번 더 둔다면(널 무브) 가장 좋은 수 = '다음에 노리는 것'.
+  //   이 수가 체크면 상대가 차례를 넘길 수 없으니 threat 없음. fen 은 그 '한 번 더' 국면 (SAN 만들기용)
+  function intent(game, uci, o = {}) {
+    const t = o.timeMs || 450, start = (game && game.start) || START, moves = ((game && game.moves) || []).slice();
+    const pos = setup(game), m = pos.findUci(uci);
+    if (!m) return null;
+    const why = explain(game, uci, null);
+    const st = start.split(' '), n = moves.length + 1, full = (+st[5] || 1) + Math.floor((n + (st[1] === 'b' ? 1 : 0)) / 2);
+    pos.make(m);
+    const check = pos.inCheck(), replies = pos.legalMoves().length;
+    let score = 0, mate = 0;
+    if (!replies) { if (check) { score = MATE - 1; mate = 1; } }
+    else { const r = think({ start, moves: moves.concat(uci) }, { tier: 'hard', hint: true, timeMs: t, seed: 3 }); score = -r.score; mate = -r.mate || 0; }
+    let threat = null;
+    if (!check && replies) {
+      pos.makeNull();
+      const fen = pos.fen().replace(/ \d+$/, ' ' + full);
+      const r = think({ start: fen, moves: [] }, { tier: 'hard', hint: true, explain: true, timeMs: t, seed: 5 });
+      if (r.move) threat = { move: r.move, score: r.score, mate: r.mate, why: r.why || null, fen };
+    }
+    return { score, mate, why, check, threat };
+  }
+
   function perft(fen, depth) {
     const pos = new Pos().load(fen);
     const go = d => {
@@ -703,5 +729,5 @@
   }
   const evalFen = fen => evaluate(new Pos().load(fen));
 
-  return { think, explain, perft, evaluate: evalFen, TIERS, BOOK_LINES, START, MATE, _Pos: Pos, _setup: setup };
+  return { think, explain, intent, perft, evaluate: evalFen, TIERS, BOOK_LINES, START, MATE, _Pos: Pos, _setup: setup };
 });

@@ -19,6 +19,7 @@
   --dot:rgba(24,20,45,.34);
   --arrow:rgba(16,185,129,.88);
   --arrow2:rgba(96,165,250,.9);
+  --arrow3:rgba(251,146,60,.95);
 }
 body{background:var(--bg-grad)}
 body.playing{background:radial-gradient(110% 90% at 50% 35%,#1d2346 0%,#11152b 70%,#090b16 100%)}
@@ -142,6 +143,10 @@ header.top h1{display:flex;align-items:center;gap:8px}
 .ch-rev.bad b{color:#fca5a5}
 .ch-real{margin-top:3px;font-size:13.5px}
 .ch-real b{font:800 15px var(--round);color:#93c5fd}
+.ch-real .ch-loss{color:#fca5a5;font-weight:700}
+.ch-int{margin-top:3px;font-size:13px;color:#e2e8f0}
+.ch-int b{font:800 14px var(--round);color:#fdba74}
+.ch-peek{border:0;border-radius:8px;padding:3px 9px;margin-left:2px;font:700 12.5px var(--round);cursor:pointer;background:#fde68a;color:#422006}
 
 /* 결과 창 */
 .winp{width:64px;height:64px;margin:0 auto;background:center/contain no-repeat;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}

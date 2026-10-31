@@ -262,6 +262,17 @@ const why = (fen, u) => AI.explain({ start: fen, moves: [] }, u, { score: 0, mat
   ok(m && m.kind === 'mate', '메이트', m && m.text);
   const r = AI.think({ start: 'r3k3/8/8/3N4/8/8/8/4K3 w - - 0 1', moves: [] }, { tier: 'hard', hint: true, explain: true, seed: 1, nodes: 100000, timeMs: 1e9 });
   ok(r.move === 'd5c7' && r.why && r.why.kind === 'fork', '선생님 추천 = 포크 + 까닭', r.move + ' ' + (r.why && r.why.text));
+  // 복기 선생님 '🤔 노린 것' (ChessAI.intent): 실제로 둔 수의 까닭 · 한 번 더 둔다면(널 무브) 노리는 수 · 이 수 뒤 형세
+  const it = (moves, u) => AI.intent({ moves: moves.split(' ') }, u, { timeMs: 300 });
+  const q = it('e2e4 e7e5 f1c4 b8c6', 'd1h5');
+  ok(q && q.threat && q.threat.move === 'h5f7' && q.threat.mate > 0, '노림: 퀸h5 → 퀸xf7# 메이트 위협', q && q.threat && q.threat.move);
+  const ng = it('e2e4 e7e5 g1f3 b8c6 f1c4 g8f6', 'f3g5');
+  ok(ng && ng.threat && ng.threat.move === 'g5f7' && ng.threat.why && ng.threat.why.kind === 'fork', '노림: 나g5 → 나xf7 포크', ng && ng.threat && ng.threat.move);
+  const ck = it('e2e4 e7e5 f1c4 b8c6 d1h5 g8f6', 'h5f7');
+  ok(ck && ck.check && !ck.threat && ck.mate === 1 && ck.why.kind === 'mate', '체크(메이트)면 노림 없음 · 메이트', ck && ck.why && ck.why.text);
+  const bl = it('e2e4 e7e5 f1c4 b8c6 d1h5', 'g8f6');
+  ok(bl && bl.mate < 0, '실수: 나f6?? 뒤엔 메이트를 당함', bl && bl.mate);
+  ok(AI.intent({ moves: [] }, 'e2e5') === null, '안 되는 수는 null');
 }
 
 // ── 6) 학습 입력 ──
