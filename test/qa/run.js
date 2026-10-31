@@ -27,7 +27,7 @@ const CHROME = [
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1247/chrome-headless-shell-win64/chrome-headless-shell.exe',
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe',
 ];
-const ALL = ['portal', 'gostop', 'seotda', 'poker', 'baduk', 'omok', 'cube', 'chess', 'janggi', 'yut', 'billiards', 'volley', 'land', 'onecard'];
+const ALL = ['portal', 'gostop', 'seotda', 'poker', 'baduk', 'omok', 'cube', 'chess', 'janggi', 'yut', 'billiards', 'volley', 'land', 'onecard', 'nyang', 'snake', 'sc'];
 
 // ── 인자
 const argv = process.argv.slice(2);

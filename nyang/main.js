@@ -121,8 +121,9 @@
     if (hint && stateKey() !== hintKey) closeHint();
     if (res === "miss" || res === "fail") { const el = $("board").children[k]; el.classList.remove("shake"); void el.offsetWidth; el.classList.add("shake"); if (navigator.vibrate) navigator.vibrate(60); }
     paint(); progress();
-    if (res === "win") { celebrate(); setTimeout(() => ctx.onEnd(true), ctx.ta ? 450 : 1150); }   // 춤·색종이를 잠깐 보고 결과창
-    if (res === "fail") setTimeout(() => ctx.onEnd(false), 350);
+    // 춤·색종이를 잠깐 보고 결과창. 그 사이 ‹ 로 나가거나 처음부터 눌러 판이 바뀌었으면(G 가 달라짐) 옛 판의 끝 처리는 건너뜀 (안 그러면 G 가 null 이라 G.secs 에서 오류 — QA 가 찾음)
+    if (res === "win") { celebrate(); const g0 = G, c0 = ctx; setTimeout(() => { if (G === g0) c0.onEnd(true); }, ctx.ta ? 450 : 1150); }
+    if (res === "fail") { const g0 = G, c0 = ctx; setTimeout(() => { if (G === g0) c0.onEnd(false); }, 350); }
   }
   // 누르기: 한 번 = ✕ 켜고 끔, 0.4초 안에 같은 칸 두 번 = 🐱 (앱과 같게). 누른 채 끌면 같은 방향으로 ✕ 칠하기
   let lastTap = { k: -1, t: 0 }, drag = null;

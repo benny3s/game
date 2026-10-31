@@ -724,4 +724,9 @@
     get zoneR() { return gs().R; },
     get hz() { return HZ; },
   };
+  // ── QA 점검용 손잡이 (test/qa/adapters/snake.js) — 게임 규칙은 안 바꿈: 읽기 + (혼자·방장만) 틱을 직접 더 돌리기 (라운드 3분·배틀로얄을 빨리 끝내 보려고)
+  window.__snake = {
+    get sim() { return sim; }, get mode() { return mode; }, get lobby() { return lobby; },
+    ff(n) { if (!sim || paused || (mode !== "solo" && mode !== "host")) return 0; let k = 0; while (k < n && !sim.over) { stepSim(); k++; } return k; },
+  };
 })();

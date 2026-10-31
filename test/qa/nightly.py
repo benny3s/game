@@ -42,7 +42,7 @@ def auto_fix(new, t0):
 
 할 일:
 1. 문제마다 원인을 코드에서 찾아 가장 작게 고친다. 고친 JS 의 ?v= 숫자를 그 게임 index.html 에서 올린다.
-2. 확인: `node test/qa/run.js --games {','.join(games)} --no-webkit` 과 해당 게임 `node <게임>/test/selftest.js` — 둘 다 문제 0 이어야 함.
+2. 확인: `node test/qa/run.js --games {','.join(games)} --no-webkit` 과 (그 게임에 test/selftest.js 가 있으면) `node <게임>/test/selftest.js` — 둘 다 문제 0 이어야 함.
 3. 통과하면 커밋 (메시지: '밤 점검 자동 수정: …'). push 하지 않는다. 못 고친 것은 이 파일 아래에 까닭을 적는다.
 하지 말 것: common/ 의 큰 구조 바꾸기, firebase 규칙 수정·배포, 다른 저장소(agent-hub 등) 건드리기, 시험을 고쳐서 통과시키기.
 """, encoding="utf-8")
@@ -92,7 +92,7 @@ def main():
     fix_note = auto_fix(new, t0) if new and "--no-fix" not in sys.argv else ""
     if new:
         names = {"portal": "게임 목록", "gostop": "고스톱", "seotda": "섯다", "poker": "홀덤", "baduk": "바둑", "omok": "오목", "cube": "큐브", "chess": "체스",
-                 "janggi": "장기", "yut": "윷놀이", "billiards": "당구", "volley": "냥냥배구", "land": "땅따먹기", "onecard": "원카드"}
+                 "janggi": "장기", "yut": "윷놀이", "billiards": "당구", "volley": "냥냥배구", "land": "땅따먹기", "onecard": "원카드", "nyang": "냥도쿠", "snake": "지렁이", "sc": "스타"}
         lines = [f"· {names.get(i['game'], i['game'])}: {str(i.get('title', ''))[:60]}" for i in sorted(new, key=lambda i: i.get("sev") != "high")[:4]]
         more = f"\n…그 밖 {len(new) - 4}개" if len(new) > 4 else ""
         phone(f"🎮 게임 밤 점검: 새 문제 {len(new)}개\n" + "\n".join(lines) + more + (f"\n{fix_note}" if fix_note else "") + "\nClaude 에게 '게임 점검 결과 봐줘' 하시면 확인하고 올립니다.", "game-qa:" + t0.strftime("%m%d"))

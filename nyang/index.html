@@ -215,7 +215,7 @@ table.rank{width:100%;border-collapse:collapse;font-size:14px;text-align:left}
 table.rank td,table.rank th{padding:6px;border-bottom:2px solid #f6eadf}
 table.rank th{font-weight:400;color:var(--soft);font-size:12.5px}
 table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
-.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:99px;z-index:30;font-size:14px;box-shadow:var(--shadow);max-width:calc(100vw - 32px)}
+.toast{pointer-events:none;position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:99px;z-index:30;font-size:14px;box-shadow:var(--shadow);max-width:calc(100vw - 32px)}
 /* AI 구경: 판은 고정 정사각형, 칸 안의 ✕·🐱는 미리 넣어 두고 보였다 숨겼다 (크기 안 바뀜, 부드럽게) */
 .wstage-wrap{display:grid;gap:10px;justify-items:center}
 .wtop{display:flex;gap:8px;justify-content:center}.wtop .pill{font:16px var(--round);letter-spacing:0}
@@ -360,7 +360,7 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 <script src="../common/me.js?v=12"></script>
 <script src="../common/rank.js?v=7"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=21"></script>
+<script src="main.js?v=22"></script>
 <script src="watch.js?v=7"></script>
 </body>
 </html>
