@@ -78,7 +78,80 @@
     return "내 돌을 튼튼하게 잇고 집을 넓히는 자리예요";
   }
 
-  const API = { coachWhy, order, seatsFrom, nextSeats, nextSeatsPick, freeSeats, seatOf, full, spectators, canMove, validMove, snap, restore, names };
+  // ── 🤔 노린 것 (복기): 실제로 둔 수가 바로 한 일 + 같은 쪽이 한 번 더 둔다면(상대가 손 뺀다면) 둘 곳(노림)
+  //    판 위 사실(활로·사슬·눈 모양)로만 말함. 못 알아보면 소유 지도(own: 흑 +1 ~ 백 −1)로 집 지키기·줄이기·큰 곳
+  // st 에서 둘 차례(c)가 a 를 두면 생기는 일 (중요한 순) — [{ k: "cap"|"save"|"atari"|"self"|"cut"|"connect"|"eyeTake"|"eyeMake"|"press", n }]
+  function moveFx(B, st, a, own) {
+    const N = st.size, c = st.toPlay, o = 3 - c, out = [];
+    if (!(a >= 0 && a < N * N) || st.board[a] || !B.isLegal(st, a)) return out;
+    const b = B.toBoard(st), i = b.ix(a), r = B.play(st, a), s1 = r.state, ev = r.events || [];
+    const b1 = B.toBoard(s1);
+    // 무리가 약한가: 소유 지도가 있으면 그 무리 평균이 덜 기울었을 때, 없으면 활로가 적을 때
+    const weak = (bd, h, col) => {
+      if (own) { let s = 0, n = 0; for (const j of bd.chain(h)) { s += own[bd.pt(j)] * (col === B.BLACK ? 1 : -1); n++; } return s / n < 0.55; }
+      return bd.libs(h, 4) <= 3;
+    };
+    const cap = ev.find(e => e.type === "capture");
+    if (cap) out.push({ k: "cap", n: cap.points.length });
+    const inAt = B.ataris(st)[c];
+    if (inAt.length) { const after = new Set(B.ataris(s1)[c]); const n = inAt.filter(p => s1.board[p] === c && !after.has(p)).length; if (n) out.push({ k: "save", n }); }
+    const at = ev.find(e => e.type === "atari");
+    if (at) out.push({ k: "atari", n: at.points.length });
+    if (!cap && b1.libs(b1.head[b1.ix(a)], 2) === 1) out.push({ k: "self", n: b1.sz[b1.head[b1.ix(a)]] });
+    const mine = new Set(), theirs = new Set();
+    for (const d of b.adj) { const j = i + d; if (b.c[j] === c) mine.add(b.head[j]); else if (b.c[j] === o) theirs.add(b.head[j]); }
+    let alive = 0; for (const h of theirs) if (s1.board[b.pt(h)] === o) alive++;
+    if (alive >= 2) out.push({ k: "cut" });
+    if (mine.size >= 2) out.push({ k: "connect" });
+    // 눈: a 옆 빈칸이 a 때문에 내 눈이 됨(약한 내 무리) · a 만 빼면 사방이 상대 돌이던 빈칸(약한 상대 무리의 눈 자리)을 망침
+    let eyeMake = 0, eyeTake = 0;
+    for (const d of b.adj) {
+      const j = i + d; if (b.c[j] !== B.EMPTY) continue;
+      if (!b.isEye(j, c) && b1.isEye(j, c) && weak(b1, b1.head[b1.ix(a)], c)) eyeMake++;
+      let ring = true, h = -1;
+      for (const e of b.adj) { const v = b.c[j + e]; if (j + e === i || v === B.WALL) continue; if (v !== o) { ring = false; break; } h = b.head[j + e]; }
+      if (ring && h >= 0 && s1.board[b.pt(h)] === o && weak(b1, b1.head[b1.ix(b.pt(h))], o)) eyeTake++;
+    }
+    if (eyeTake) out.push({ k: "eyeTake" });
+    if (eyeMake) out.push({ k: "eyeMake" });
+    for (const h of theirs) { const p = b.pt(h); if (s1.board[p] === o && b1.libs(b1.head[b1.ix(p)], 3) === 2 && b.libs(h, 3) > 2) { out.push({ k: "press" }); break; } }
+    return out;
+  }
+  const FX_DONE = { cap: n => `상대 돌 ${n}점을 따냈어요`, save: () => "단수 걸린 내 돌을 살렸어요", atari: n => `상대 돌 ${n}점을 단수로 몰았어요`,
+    self: () => "내 돌이 단수에 걸려 위험해요", cut: () => "상대 돌 사이를 끊었어요", connect: () => "떨어진 내 돌을 이었어요",
+    eyeTake: () => "상대 눈 자리를 빼앗았어요 (사활)", eyeMake: () => "눈을 만들었어요 (사활)", press: () => "상대 돌 숨구멍을 둘로 줄였어요" };
+  const FX_NEXT = { cap: n => `${n}점 따내기`, save: () => "내 돌 살리기", atari: () => "단수", cut: () => "끊기", connect: () => "잇기",
+    eyeTake: () => "눈 빼앗기 (사활)", eyeMake: () => "눈 만들기 (사활)", press: () => "숨구멍 줄이기" };
+  // 한 줄로: st(실제 수 전) · a 실제 수 · t 노림(같은 쪽이 한 번 더 둔다면, 없으면 -1) · opt { own: 노림 판의 소유 지도, gain: 안 받으면 몇 집, name: 점 → 이름 }
+  // → { done, next, text }  (text 는 HTML 아님 · 이름은 name 이 준 그대로)
+  function aimWhy(B, st, a, t, opt = {}) {
+    const N = st.size, c = st.toPlay, name = opt.name || (p => String(p));
+    if (a === N * N) return { done: "패스했어요", next: "", text: "패스했어요" };
+    const top = moveFx(B, st, a, null)[0];
+    const ax = a % N, ay = (a / N) | 0, edge = Math.min(ax, ay, N - 1 - ax, N - 1 - ay);   // 판 끝에서 몇 줄 안쪽 (0 = 1선)
+    let done = top ? FX_DONE[top.k](top.n) : st.moves.length >= N || edge <= 1 ? ""
+      : edge >= 4 || (N <= 7 && edge >= 3) ? "가운데 큰 곳을 차지했어요" : Math.max(ax, N - 1 - ax) >= N - 4 && Math.max(ay, N - 1 - ay) >= N - 4 ? "귀를 차지했어요" : "변의 넓은 곳을 차지했어요";
+    let next = "";
+    const r = B.play(st, a), s1 = r.state;
+    if (t >= 0 && t < N * N && !s1.over) {
+      const sn = B.play(s1, N * N).state;                                // 상대가 손 뺐다고 보고 (패스) 같은 쪽 차례
+      const ft = sn.over ? [] : moveFx(B, sn, t, opt.own).filter(f => f.k !== "self");
+      let lab, sharp = false;                                           // sharp = 판 위 사실로 알아본 노림 (따냄·단수·끊기·사활 …)
+      if (ft.length) { lab = FX_NEXT[ft[0].k](ft[0].n); sharp = true; }
+      else {
+        const oc = opt.own ? opt.own[t] * (c === B.BLACK ? 1 : -1) : 0;
+        const x = t % N, y = (t / N) | 0;
+        let nearMine = false;
+        for (let dy = -2; dy <= 2 && !nearMine; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < N && Y < N && s1.board[Y * N + X] === c && Math.abs(dx) + Math.abs(dy) <= 2) { nearMine = true; break; } }
+        lab = !opt.own ? (nearMine ? "모양 넓히기" : "큰 곳 (자리 잡기)") : oc >= 0.45 ? "집 지키기" : oc <= -0.45 ? "상대 집 줄이기" : nearMine ? "집 넓히기" : "큰 곳 (자리 잡기)";
+      }
+      next = `다음 ${name(t)} ${lab}`;
+      if (sharp && opt.gain >= 3) next += ` (안 받으면 ${Math.round(opt.gain)}집쯤)`;   // 그냥 큰 곳은 한 수 값이 늘 커서 말하지 않음
+    } else if (!s1.over) next = "다음에 급한 노림은 없어 보여요";
+    return { done, next, text: [done, next].filter(Boolean).join(" · ") };
+  }
+
+  const API = { coachWhy, moveFx, aimWhy, order, seatsFrom, nextSeats, nextSeatsPick, freeSeats, seatOf, full, spectators, canMove, validMove, snap, restore, names };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   else root.BadukRoom = API;
 })(typeof window !== "undefined" ? window : globalThis);

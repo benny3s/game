@@ -11,7 +11,7 @@
   const now = () => (root.performance ? performance.now() : Date.now());
   const STARS = [[3, 3], [11, 3], [7, 7], [3, 11], [11, 11]];
   const LETTERS = 'ABCDEFGHIJKLMNO';
-  const COL = { line: 'rgba(96,62,34,.62)', star: 'rgba(86,54,28,.78)', coord: 'rgba(110,74,44,.62)', last: '#ff7a59', hint: '#45b897', forbid: '#e65f78', cross: 'rgba(232,140,70,.55)' };
+  const COL = { line: 'rgba(96,62,34,.62)', star: 'rgba(86,54,28,.78)', coord: 'rgba(110,74,44,.62)', last: '#ff7a59', hint: '#45b897', aim: '#d9466f', forbid: '#e65f78', cross: 'rgba(232,140,70,.55)' };
 
   // 잡음: simplex-noise(2.4.0) 가 있으면 그걸, 없으면 부드러운 값 잡음
   function makeNoise(seed) {
@@ -164,6 +164,8 @@
   P.setForbidden = function (mask) { this.forbid = mask; this.invalidate(); };
   P.setGhost = function (g) { this.ghost = g; this.invalidate(); };
   P.setHint = function (i) { this.hint = i; this.hintAt = now(); this.invalidate(); };
+  // 복기 표시: { real 실제로 둔 칸, color, num 수 번호, aim 노린 칸 } 또는 null — 실제 수는 흐린 돌, 노린 곳은 빨간 점선 고리 + '!' (움직이지 않음)
+  P.setMarks = function (m) { this.marks = m || null; this.invalidate(); };
   P.setWin = function (lines) {
     const key = lines && lines.length ? JSON.stringify(lines) : '';
     if (key === (this.winKey || '')) return;                           // 같은 줄이면 다시 반짝이지 않음
@@ -186,7 +188,7 @@
   P.lift = function (idx, color) { this.anims.push({ type: 'lift', idx, color, t0: now(), dur: 220 }); this.invalidate(); };
   // 위협(사·열린 삼) 알림 고리
   P.pulse = function (idx, strong) { this.anims.push({ type: 'pulse', idx, strong: !!strong, t0: now() + 180, dur: 760 }); this.invalidate(); };
-  P.clearFx = function () { this.anims = []; this.win = null; this.winKey = ''; this.hint = -1; this.ghost = null; this.invalidate(); };
+  P.clearFx = function () { this.anims = []; this.win = null; this.winKey = ''; this.hint = -1; this.ghost = null; this.marks = null; this.invalidate(); };
 
   // 화면 좌표 → 칸 번호 (가장 가까운 교차점, 멀면 -1)
   P.idxAt = function (cx, cy) {
@@ -335,6 +337,25 @@
       const [x, y] = this.xy(this.hint), ph = (t - this.hintAt) / 1000, w = 0.5 + 0.5 * Math.sin(ph * 5.2);
       ctx.fillStyle = `rgba(124,201,180,${0.16 + 0.14 * w})`; ctx.beginPath(); ctx.arc(x, y, R * 1.1, 0, TAU); ctx.fill();
       ctx.strokeStyle = COL.hint; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, R * (1.05 + 0.22 * w), 0, TAU); ctx.stroke();
+    }
+    // 복기: 실제로 둔 곳(흐린 돌 + 수 번호) · 노린 곳(점선 고리 + !)
+    const mk = this.marks;
+    if (mk) {
+      if (mk.real >= 0 && !this.stones[mk.real] && this.spr[mk.color]) {
+        const [x, y] = this.xy(mk.real), sp = this.spr[mk.color];
+        ctx.globalAlpha = 0.45; ctx.drawImage(sp.c, x - sp.off, y - sp.off, sp.size, sp.size); ctx.globalAlpha = 1;
+        if (mk.num) {
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `${Math.round(c * (mk.num >= 100 ? 0.34 : 0.42))}px Jua, "Gowun Dodum", sans-serif`;
+          ctx.fillStyle = mk.color === 1 ? 'rgba(255,250,240,.8)' : 'rgba(60,44,34,.7)'; ctx.fillText(String(mk.num), x, y + c * 0.03);
+        }
+      }
+      if (mk.aim >= 0) {
+        const [x, y] = this.xy(mk.aim);
+        ctx.save(); ctx.setLineDash([Math.max(2.5, R * 0.34), Math.max(2, R * 0.22)]);
+        ctx.strokeStyle = COL.aim; ctx.lineWidth = Math.max(1.8, R * 0.15); ctx.beginPath(); ctx.arc(x, y, R * 0.88, 0, TAU); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = COL.aim; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${Math.max(10, Math.round(R * 1.15))}px Jua, sans-serif`;
+        ctx.fillText('!', x, y + R * 0.06);
+      }
     }
     // 미리 보기 · 마우스 올림 · 방향키 커서
     const gh = this.ghost;

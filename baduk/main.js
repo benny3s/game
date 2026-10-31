@@ -74,7 +74,7 @@
     seg($("wWSeg"), tl, cfg.ww, v => { cfg.ww = v; saveCfg(); drawMenu(); });
     seg($("wSpeedSeg"), [["slow", "🐢 느리게"], ["normal", "보통"], ["fast", "🐇 빠르게"]], cfg.speed, v => { cfg.speed = v; saveCfg(); drawMenu(); });
     setTab(cfg.tab);
-    drawResume();
+    drawResume(); drawMst();
   }
   function setTab(t) {
     cfg.tab = t;
@@ -411,7 +411,7 @@
   }
   const coachAvail = () => !!(G && G.mode !== "watch" && (G.mode !== "online" || G.coach));
   const coachOpen = () => !!(coachBox && coachBox.visible && !coachBox.collapsed);
-  function coachClear() { if (G && G.hintP >= 0) { G.hintP = -1; kick(); } }
+  function coachClear() { if (G && (G.hintP >= 0 || G.rvMark)) { G.hintP = -1; G.rvMark = null; kick(); } }
   function coachHide() { if (coachBox) coachBox.hide(); coachClear(); }
   // 판을 시작할 때: 쓸 수 있는 판이면 단추를 보이고, 사용자가 꺼 두지 않았으면 창도 켬
   function coachEnter() {
@@ -426,7 +426,8 @@
     if (!G) return;
     const N = G.st.size;
     G.hintP = res.move === N * N ? -1 : res.move;
-    if (coachBox) coachBox.set(res.html);
+    if (res.rk != null && G.rv) G.rvMark = { k: res.rk, real: res.real, col: G.st.toPlay, aim: G.rv.aim[res.rk] ? G.rv.aim[res.rk].t : -1 };
+    if (coachBox) coachBox.set(res.rk != null ? res.html + rvFoot(res) : res.html);
     else {
       say(res.msg, 3200);
       const hp = G.hintP; if (hp >= 0) later(() => { if (G && G.hintP === hp) { G.hintP = -1; kick(); } }, 8000);
@@ -448,24 +449,143 @@
       else say("내 차례가 되면 알려 드릴게요", 1800);
       return;
     }
+    if (P && drillScene()) {                                          // 📒 다시 해 보는 그 장면: 답은 💡 를 눌러야
+      G.hintP = -1; kick();
+      P.set('📒 아쉬웠던 그 장면이에요 — 이번엔 직접 찾아보세요 · <button class="btn" data-peek style="padding:4px 10px;font-size:13px">💡 답 보기</button>');
+      const btn = P.body && P.body.querySelector("[data-peek]");
+      if (btn) btn.onclick = () => { if (G && G.drill) { G.drill.peek = true; sfx("tap"); coachTurn(); } };
+      return;
+    }
     const key = (G.g || 0) + ":" + B.hash(st) + ":" + st.moves.length;
     if (G.coachRes && G.coachRes.key === key) { coachShow(G.coachRes, tapped); return; }
     if (G.coachBusy === key) return;
     G.coachBusy = key;
     if (P) P.set("💡 생각하는 중…");
-    let r = null; try { r = await ask("hint", st, { seed: 11 }); } catch (e) {}
+    const rk = rev && G.rv ? G.rv.k : -1;                              // 복기: 장면마다 기억 (앞뒤로 오가도 다시 안 셈)
+    let r = rk >= 0 && G.rv.hint[rk] || null;
+    if (!r) { try { r = await ask("hint", st, { seed: 11 }); } catch (e) {} }
     if (G !== game) return;
-    G.coachBusy = null;
+    if (G.coachBusy === key) G.coachBusy = null;
+    if (rk >= 0 && r && Number.isInteger(r.move) && G.rv) G.rv.hint[rk] = r;
     if (G.st !== st || !r || !Number.isInteger(r.move)) return;
     const N = st.size, c = st.toPlay;
     const who = G.mode === "duo" ? `${stoneEm(c)} ${colorName(c)} 차례 · ` : spec ? `${stoneEm(c)} ${esc(sideName(c))} 차례라면 ` : "";
     const msg = r.move === N * N ? `💡 ${who}지금은 <b>패스</b>해도 괜찮아 보여요` : `💡 ${who}<b>${ptName(r.move, N)}</b> 자리 (반짝이는 곳) 어때요?`;
     let why = ""; try { why = coachWhy(st, r.move); } catch (e) {}
-    const real = rev && G.rv ? G.rv.full.moves[G.rv.k] : undefined;   // 🎞️ 복기: 그때 실제로 둔 곳
-    const foot = rev ? (real == null ? "🎞️ 복기 · " : `🎞️ 실제로 둔 곳: <b>${real === N * N ? "패스" : ptName(real, N)}</b>${real === r.move ? " 👑 추천과 같아요" : ""} · `)
-      : spec ? "👀 구경 중 · " : G.mode === "duo" ? "" : `${stoneEm(c)} 내 차례 · `;
+    if (rk >= 0) {                                                    // 🎞️ 복기: 실제로 둔 곳 + 🤔 노린 것 (rvFoot 이 아래에 붙임)
+      const real = G.rv.full.moves[rk];
+      G.coachRes = { key, move: r.move, msg, rk, real: real == null ? -1 : real, html: `${msg}${why ? `<br>👉 ${why}` : ""}` };
+      if (coachBox ? coachOpen() : tapped) coachShow(G.coachRes, tapped);
+      if (real != null) rvAim(rk, st, r);
+      return;
+    }
+    const foot = spec ? "👀 구경 중 · " : G.mode === "duo" ? "" : `${stoneEm(c)} 내 차례 · `;
     G.coachRes = { key, move: r.move, msg, html: `${msg}${why ? `<br>👉 ${why}` : ""}<br><span style="opacity:.75;font-size:12px">${foot}정답은 아니고 참고만 해요</span>` };
     if (coachBox ? coachOpen() : tapped) coachShow(G.coachRes, tapped);
+  }
+  // 🎞️ 복기 창 아랫줄: 실제로 둔 곳(판에 흐린 돌) · 🤔 노린 것(판에 ! 표시)
+  function rvFoot(res) {
+    const N = G.st.size, A = G.rv && G.rv.aim[res.rk], real = res.real;
+    if (real < 0) return '<br><span style="opacity:.75;font-size:12px">🎞️ 복기 · 정답은 아니고 참고만 해요</span>';
+    const head = `<br>🎞️ 실제 <b>${real === N * N ? "패스" : ptName(real, N)}</b>${real === res.move ? " 👑 추천과 같아요" : real === N * N ? "" : "(흐린 돌)"}`;
+    return `${head} · 🤔 노린 것${A && A.t >= 0 ? '(<b style="color:#d9466f">!</b>)' : ""}: ${A ? A.html : "살펴보는 중…"}`;   // 창이 판을 더 가리지 않게 두 줄 안팎으로
+  }
+  // 🤔 노린 것: 실제 수 뒤 같은 쪽이 한 번 더 둔다면(상대가 패스했다고 보고) AI 가 고르는 곳 + 판 위 사실로 짧게
+  //    승률·집 차이(형세 계산)로 추천보다 많이 손해면 '실수였을 수' 를 붙이고, 내 수면 📒 아쉬운 장면에 남김
+  //    워커는 한 번에 하나씩 · 장면을 옮기면 남은 계산은 그만둠 · 결과는 장면마다 기억
+  async function rvAim(rk, st, hint) {
+    const rv = G && G.rv; if (!rv || rv.aim[rk] || rv.aimBusy === rk) return;
+    const game = G, N = st.size, c = st.toPlay, PASS = N * N, real = rv.full.moves[rk];
+    const here = () => G === game && G.rv === rv && rv.k === rk;
+    rv.aimBusy = rk;
+    try {
+      const s1 = B.play(st, real).state, nn = nnState === "nn", sg = c === BLACK ? 1 : -1;
+      const an = async (k, s) => { if (rv.an[k]) return rv.an[k]; const a = await ask("analyze", s, {}); if (a && G === game) rv.an[k] = { winB: a.winB, leadB: a.leadB, src: a.source }; return rv.an[k]; };
+      let t = -1, own = null, gain = null;
+      if (real !== PASS && !s1.over) {
+        const sn = B.play(s1, PASS).state;                             // 상대가 손 뺐다고 보고 같은 쪽 차례
+        if (!sn.over) {
+          if (nn) {
+            const a = await ask("analyze", sn, {}); if (!here()) return;
+            own = a && a.own ? Float32Array.from(a.own) : null;
+            const top = (a && a.top || []).find(([p]) => p !== PASS && !sn.board[p] && B.isLegal(sn, p));
+            t = top ? top[0] : -1;
+            const a1 = await an(rk + 1, s1); if (!here()) return;
+            if (a && a1 && a.source === "nn") gain = sg * (a.leadB - a1.leadB);
+          } else {
+            const h = await ask("hint", sn, { seed: 7 }); if (!here()) return;
+            t = h && Number.isInteger(h.move) && h.move !== PASS ? h.move : -1;
+          }
+        }
+      }
+      const w = RM.aimWhy(B, st, real, t, { own, gain, name: () => "@T@" });
+      const tn = t >= 0 ? ptName(t, N) : "";
+      let html = [w.done, w.next].filter(Boolean).map(x => esc(x).replace("@T@", `<b>${tn}</b>`)).join(" · ") || "뚜렷한 노림은 안 보여요";
+      // 손해: 둔 쪽 기준 승률·집 차이 (신경망일 때만 — 몬테카를로 형세는 흔들려서)
+      let loss = null;
+      if (nn && real !== hint.move && !s1.over) {
+        const a0 = await an(rk, st); if (!here()) return;
+        const a1 = await an(rk + 1, s1); if (!here()) return;
+        if (a0 && a1 && a0.src === "nn" && a1.src === "nn") {
+          const wc = x => (c === BLACK ? x : 1 - x), drop = wc(a0.winB) - wc(a1.winB), sd = sg * (a0.leadB - a1.leadB);
+          if (drop >= 0.15 || sd >= 5) loss = { drop, sd, win0: wc(a0.winB) };
+        }
+      }
+      if (loss) html += " · 추천보다 많이 손해라 노림수보다는 실수였을 수 있어요";
+      rv.aim[rk] = { t, html, loss };
+      if (loss && rv.rec && G.human === c) rvNote(rv, rk, st, real, hint, loss);
+    } catch (e) { /* 계산 실패: 노린 것은 비워 둠 */ }
+    finally { if (rv.aimBusy === rk) rv.aimBusy = null; }
+    if (here() && G.coachRes && G.coachRes.rk === rk && coachOpen()) coachShow(G.coachRes);
+  }
+  // 📒 아쉬운 장면 노트에 남김 (같은 판·같은 장면은 하나로 — common/mistakes.js 가 맞춤)
+  function rvNote(rv, rk, st, real, hint, loss) {
+    if (!window.Mistakes || rv.noted[rk]) return;
+    rv.noted[rk] = 1;
+    noteMistake(rv.rec, rk, st, real, hint, loss);
+  }
+  function noteMistake(rec, rk, st, real, hint, loss) {
+    const N = st.size, c = st.toPlay, nm = p => (p === N * N ? "패스" : ptName(p, N));
+    let why = ""; try { why = coachWhy(st, hint.move); } catch (e) {}
+    try {
+      Mistakes.add({ game: "baduk", title: `바둑 · ${rec.result || ""}`, scene: `${rk + 1}수째 · ${colorName(c)} 차례`, my: nm(real), best: nm(hint.move),
+        why: why ? `추천 ${nm(hint.move)}: ${why}` : "", sev: Math.min(100, Math.round(Math.max(loss.drop * 160, loss.sd * 4) + 10)),
+        lossText: loss.drop >= 0.15 ? `승률 −${Math.round(loss.drop * 100)}%` : `약 ${Math.round(loss.sd)}집 손해`,
+        drill: { rec, k: rk, best: hint.move, win0: loss.win0 } });
+    } catch (e) {}
+  }
+  // 📒 AI 와 둔 판이 끝나면: 내 수를 가볍게 훑어(형세만) 손해가 큰 1~3 장면을 노트에 — 신경망 · 13줄까지 · 새 판·복기로 가면 그만둠 (워커에 한 번에 하나씩)
+  async function autoScan(game, rec) {
+    if (!window.Mistakes || nnState !== "nn" || game.mode !== "solo" || !game.human || rec.size > 13) return;
+    let full = null; try { full = B.fromSGF(rec.sgf); } catch (e) {}
+    if (!full) return;
+    const me = game.human, sg = me === BLACK ? 1 : -1, wc = x => (me === BLACK ? x : 1 - x), from = game.from || 0;
+    const n = Math.min(full.moves.length, 160), live = () => G === game && G.phase === "done";
+    const sts = [B.replay(full, full.moves.slice(0, from))];
+    for (let k = from; k < n; k++) sts.push(B.play(sts[sts.length - 1], full.moves[k]).state);
+    const an = [], bad = [];
+    try {
+      for (let i = 0; i < sts.length; i++) {
+        if (!live()) return;
+        const a = await ask("analyze", sts[i], {});
+        if (!a || a.source !== "nn") return;
+        an.push(a);
+      }
+      for (let i = 0; i + 1 < sts.length; i++) {
+        const st = sts[i], real = full.moves[from + i];
+        if (st.toPlay !== me || real === st.size * st.size || sts[i + 1].over) continue;
+        const drop = wc(an[i].winB) - wc(an[i + 1].winB), sd = sg * (an[i].leadB - an[i + 1].leadB);
+        if (drop >= 0.15 || sd >= 5) bad.push({ i, drop, sd, win0: wc(an[i].winB), w: Math.max(drop * 160, sd * 4) });
+      }
+      bad.sort((x, y) => y.w - x.w);
+      for (const b of bad.slice(0, 3)) {
+        if (!live()) return;
+        const st = sts[b.i], real = full.moves[from + b.i];
+        const h = await ask("hint", st, { seed: 11 });                  // 복기 선생님과 같은 씨앗 (같은 추천)
+        if (!live() || !h || !Number.isInteger(h.move) || h.move === real) continue;
+        noteMistake(rec, from + b.i, st, real, h, b);
+      }
+    } catch (e) {}
   }
   $("coachBtn").addEventListener("click", () => { if (!coachBox) coachTurn(true); });
 
@@ -645,6 +765,7 @@
     return L.length ? L[Math.floor(Math.random() * L.length)] : st.size * st.size;
   }
   function play(a, who) {
+    const drillAt = who === "human" && G.drill && !G.drill.solved && G.mode === "solo" && G.st.moves.length === G.drill.k ? G.st : null;
     const r = B.play(G.st, a);
     if (r.state === G.st) { if (who === "human") illegal(r.events[0]); return false; }
     if (G.mode === "online" && G.net && who === "human") netSend({ t: "move", a, n: G.st.moves.length, g: G.g });
@@ -652,6 +773,7 @@
     $("estBtn").setAttribute("aria-pressed", "false");
     effects(r.events);
     autosave();
+    if (drillAt) drillCheck(drillAt, a);
     afterMove();
     return true;
   }
@@ -961,6 +1083,7 @@
     const rec = { t: Date.now(), mode: G.mode, size: st.size, komi: st.komi, handicap: st.handicap, human: G.human, tiers: G.tiers, result, winner, moves: st.moves.length, sgf: B.toSGF(st, { date: new Date().toISOString().slice(0, 10), black: sideName(BLACK), white: sideName(WHITE), result: sgfResult(winner, sc, st) }) };
     const recs = store("records", []); recs.unshift(rec); save("records", recs.slice(0, 200));
     save("cur", null);
+    if (G.mode === "solo" && G.human) later(() => autoScan(game, rec), 1200);
     if (humanWon === false) sfx("lose"); else { sfx("win"); if (winner) Z.confetti(); }
     const chips = sc ? `<div class="reschips"><span>흑 집 ${sc.terrB} + 따냄 ${sc.capsB}</span><span>백 집 ${sc.terrW} + 따냄 ${sc.capsW} + 덤 ${st.komi}</span></div>` : "";
     later(() => {
@@ -1026,7 +1149,7 @@
     const nm = k => { const m = new RegExp("[^A-Z]" + k + "\\[((?:\\\\.|[^\\]])*)\\]").exec(rec.sgf); return m ? m[1].replace(/\\(.)/g, "$1") : ""; };
     leaveGame();
     G = baseG({ mode: "review", size: full.size, human: rec.human || null, players: {}, tiers: rec.tiers || {},
-      names: { [BLACK]: nm("PB") || "흑", [WHITE]: nm("PW") || "백" }, rv: { rec, full, n: full.moves.length, k: 0 } }, B.replay(full, []));
+      names: { [BLACK]: nm("PB") || "흑", [WHITE]: nm("PW") || "백" }, rv: { rec, full, n: full.moves.length, k: 0, hint: {}, an: {}, aim: {}, noted: {}, aimBusy: null, t: 0 } }, B.replay(full, []));
     if (!rvDock) {
       rvDock = document.createElement("div"); rvDock.className = "dock"; rvDock.id = "rvDock"; rvDock.hidden = true;
       rvDock.innerHTML = rvBtn("rvStart", "⏮", "처음") + rvBtn("rvPrev", "◀", "한 수 뒤") + rvBtn("rvNext", "▶", "한 수 앞") + rvBtn("rvEnd", "⏭", "끝")
@@ -1060,26 +1183,72 @@
     const rv = G.rv;
     rv.k = Math.max(0, Math.min(rv.n, k));
     G.st = B.replay(rv.full, rv.full.moves.slice(0, rv.k));
-    G.est = null; G.hintP = -1; G.pending = -1; G.coachRes = null;
-    updateAll(); rvSync(); coachTurn();
+    G.est = null; G.hintP = -1; G.pending = -1; G.coachRes = null; G.rvMark = null; G.coachBusy = null;
+    updateAll(); rvSync();
+    // 빠르게 넘길 때는 멈춘 장면만 계산 (워커에 일이 쌓이지 않게) · 이미 본 장면은 바로
+    clearTimeout(rv.t);
+    if (rv.hint[rv.k] || !coachOpen()) coachTurn();
+    else { coachBox.set("💡 생각하는 중…"); rv.t = later(() => coachTurn(), 260); }
   }
   function rvBranch() {
     const rv = G && G.rv; if (!rv) return;
     const st = B.replay(rv.full, rv.full.moves.slice(0, rv.k)), k = rv.k;
     if (st.over) { Z.toast("끝난 장면이에요. ◀ 로 앞으로 가서 눌러 주세요"); return; }
     const go = human => {
-      const t = rv.rec.tiers && rv.rec.tiers[3 - human], tier = TIERS[t] ? t : TIERS[cfg.tier] ? cfg.tier : "normal";
-      leaveGame();
-      G = baseG({ mode: "solo", size: st.size, komi: st.komi, handicap: st.handicap, human, players: { [human]: "human", [3 - human]: "ai" }, tiers: { [3 - human]: tier } }, st);
-      enterPlay(); autosave();
-      if (coachBox) coachBox.show();
+      branchFrom(rv.rec, st, human, null);
       say(`🎮 ${k}수째부터 ${stoneEm(human)} 내가 둬요 — 🧑‍🏫 선생님을 켜고 끄며 해 보세요`, 3200);
-      later(afterMove, 350);
     };
     if (rv.rec.mode === "solo" && rv.rec.human) return go(rv.rec.human);
     Z.modal({ title: "🎮 어느 쪽을 둘까요?", html: "<p class='small' style='margin:0'>고른 쪽은 내가, 다른 쪽은 AI 가 이어서 둬요.</p>", dismiss: true,
       buttons: [{ label: `⚫ 흑 (${G.names[BLACK]})`, primary: st.toPlay === BLACK, onClick: () => go(BLACK) }, { label: `⚪ 백 (${G.names[WHITE]})`, primary: st.toPlay === WHITE, onClick: () => go(WHITE) }] });
   }
+
+  // 그 장면부터 내가(human) 두는 연습 판 (상대는 그 판의 AI 난이도) · drill = 📒 아쉬운 장면에서 왔을 때 { id, k, best, win0 }
+  function branchFrom(rec, st, human, drill) {
+    const t = rec.tiers && rec.tiers[3 - human], tier = TIERS[t] ? t : TIERS[cfg.tier] ? cfg.tier : "normal";
+    leaveGame();
+    G = baseG({ mode: "solo", size: st.size, komi: st.komi, handicap: st.handicap, human, players: { [human]: "human", [3 - human]: "ai" }, tiers: { [3 - human]: tier }, drill, from: st.moves.length }, st);
+    enterPlay(); autosave();
+    if (coachBox) coachBox.show();
+    later(afterMove, 350);
+  }
+  // 📒 아쉬운 장면 (?drill=<id>): 그때 둔 쪽으로 그 장면부터 · 그 장면에선 선생님이 바로 답을 보여 주지 않고 '💡 답 보기' 만
+  function drillFromUrl() {
+    if (!window.Mistakes) return false;
+    let m = null; try { m = Mistakes.fromUrl("baduk"); } catch (e) {}
+    const d = m && m.drill; if (!d || !d.rec || !d.rec.sgf) return false;
+    let full = null; try { full = B.fromSGF(d.rec.sgf); } catch (e) {}
+    const k = d.k | 0;
+    if (!full || k < 0 || k >= full.moves.length) return false;
+    const st = B.replay(full, full.moves.slice(0, k));
+    if (st.over) return false;
+    branchFrom(d.rec, st, st.toPlay, { id: m.id, k, best: d.best, win0: d.win0, peek: false, solved: false });
+    Z.toast("📒 아쉬웠던 장면부터 다시 — 이번엔 추천 수를 찾아보세요", 3200);
+    return true;
+  }
+  function drillScene() { return !!(G && G.drill && !G.drill.solved && !G.drill.peek && G.mode === "solo" && G.st.moves.length === G.drill.k && G.players[G.st.toPlay] === "human"); }
+  // 그 장면에서 내가 둔 수: 추천과 같거나 승률이 거의 안 떨어지면(7%p 안) ✅ 해냄
+  async function drillCheck(st0, a) {
+    const d = G.drill, game = G, N = st0.size, c = st0.toPlay;
+    d.peek = true;                                                     // 한 번 둬 보면 그다음부터는 선생님이 늘 보여 줌
+    let good = a === d.best;
+    if (!good && a !== N * N && d.win0 != null && nnState === "nn") {
+      try {
+        const r = await ask("analyze", B.play(st0, a).state, {});
+        if (G !== game) return;
+        good = !!r && r.source === "nn" && d.win0 - (c === BLACK ? r.winB : 1 - r.winB) < 0.07;
+      } catch (e) {}
+    }
+    if (G !== game || d.solved) return;
+    if (good) { d.solved = true; try { Mistakes.solved(d.id); } catch (e) {} Z.toast("✅ 이번엔 해냈어요! 📒 노트에 표시해 둘게요", 2800); }
+    else Z.toast(`🤔 아쉬워요 · 추천은 ${d.best === N * N ? "패스" : ptName(d.best, N)} 였어요. ↶ 되돌려 다시 해 봐요`, 3200);
+  }
+  function drawMst() {
+    const b = $("mstBtn"); if (!b) return;
+    const n = window.Mistakes ? Mistakes.count("baduk") : 0;
+    b.hidden = !n; b.textContent = `📒 아쉬운 장면 ${n}`;
+  }
+  if ($("mstBtn")) $("mstBtn").onclick = () => { sfx("tap"); if (window.Mistakes) Mistakes.open({ game: "baduk" }); };
 
   /* ── 화면 전환 · 크기 ─────────────────────────────────────── */
   function show(id) {
@@ -1279,6 +1448,17 @@
       g.fillStyle = "#fff8de"; for (let k = 0; k < 3; k++) { const an = t * 2 + k * 2.1, rr = r * 1.15; g.beginPath(); g.arc(x + Math.cos(an) * rr, y + Math.sin(an) * rr, Math.max(1.5, r * 0.09), 0, 7); g.fill(); }
       live = true;
     }
+    // 복기: 실제로 둔 곳 = 흐린 돌 · 🤔 노린 곳 = 빨간 점선 고리 + '!' (추천의 금빛 반짝임과 다르게, 움직이지 않음)
+    const mk = G.mode === "review" && G.rv && G.rvMark && G.rvMark.k === G.rv.k ? G.rvMark : null;
+    if (mk && G.phase === "play") {
+      if (mk.real >= 0 && mk.real < NN && !st.board[mk.real]) { const [x, y] = ptXY(mk.real); stone(g, mk.col, x, y, 1, 0.45); }
+      if (mk.aim >= 0 && mk.aim < NN) {
+        const [x, y] = ptXY(mk.aim);
+        g.save(); g.setLineDash([Math.max(2.5, r * 0.34), Math.max(2, r * 0.22)]);
+        g.strokeStyle = "#d9466f"; g.lineWidth = Math.max(1.8, r * 0.14); g.beginPath(); g.arc(x, y, r * 0.86, 0, 7); g.stroke(); g.restore();
+        g.fillStyle = "#d9466f"; g.font = `800 ${Math.max(10, Math.round(r * 1.1))}px Jua, sans-serif`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("!", x, y + r * 0.06);
+      }
+    }
     // 미리 놓기(13·19줄 확인) · 마우스 그림자 · 키보드 칸
     const me = st.toPlay;
     if (canHumanMove()) {
@@ -1476,5 +1656,6 @@
 
   // 시작
   startWorker(); noteAI(); coachSetup(); drawMenu(); show("home");
-  if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
+  if (window.Mistakes && Mistakes.onChange) Mistakes.onChange(drawMst);
+  if (!drillFromUrl() && window.ArenaUI) ArenaUI.checkUrl(friendOpts());
 })();
