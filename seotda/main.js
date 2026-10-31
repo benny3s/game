@@ -47,6 +47,9 @@
   const AI_NAMES = ['짝귀', '독사', '아귀', '고니', '박무옥', '김첨지'];
   const AI_EMS = ['🎴', '🐍', '🦅', '🃏', '🌾', '🍶'];
   const ACT_NAME = ['다이', '콜', '쿼터', '하프', '따당'];
+  // 그 장면에서 낸 행동 이름 (낼 돈이 없을 때 콜 = 체크)
+  const actLabel = (st, p, a) => (a === S.A_CALL && Math.max(0, st.curBet - st.bets[p]) === 0 ? '체크' : ACT_NAME[a] || '콜');
+  const iga = w => { const c = String(w).charCodeAt(String(w).length - 1); return w + (c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? '이' : '가'); };
 
   function segBtns(el, items, cur, onPick) {
     if (!el) return;
@@ -80,6 +83,7 @@
     $('hotSeatSeg').innerHTML = Array.from({ length: opt.hotN }, (_, i) => `<button class="btn" data-i="${i}" aria-pressed="${opt.hotSeats[i] === 'h'}">${i + 1}번 ${opt.hotSeats[i] === 'h' ? '👤 사람' : '🤖 AI'}</button>`).join('');
     $('hotSeatSeg').onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); const i = +b.dataset.i; opt.hotSeats[i] = opt.hotSeats[i] === 'h' ? 'a' : 'h'; saveOpt('hotSeats'); drawMenu(); };
     segBtns($('wModeSeg'), countItems(), opt.wMode, v => { opt.wMode = +v; saveOpt('wMode'); drawMenu(); });
+    drawReplayBtn();
   }
 
   $('tabSolo').onclick = () => { sfx('tap'); opt.tab = 'solo'; saveOpt('tab'); drawMenu(); };
@@ -91,6 +95,7 @@
   $('watchBtn').onclick = () => { sfx('pop'); startGame({ watch: true }); };
   $('jokboBtn').onclick = () => showJokboModal();
   $('rankBtn').onclick = () => showJokboModal();
+  $('replayBtn').onclick = () => { sfx('tap'); openReplayList(); };
   C.sfx.button($('sndBtn'));
 
   const JOKBO_HTML = `
@@ -159,6 +164,7 @@
   function endSession() {
     if (SES) {
       SES.alive = false;
+      if (SES.rpClose) { try { SES.rpClose(); } catch (e) {} }     // 🎞️ 다시 보기 줄·창 정리
       if (SES.cpBtn) { try { SES.cpBtn.destroy(); } catch (e) {} }
       if (SES.cp) { try { SES.cp.destroy(); } catch (e) {} }
       $('coachBtn').onclick = null;
@@ -302,7 +308,7 @@
       try {
         // 처음엔 테이블 아래쪽 모서리에 작은 동그라미로 (내 카드·배팅 버튼을 가리지 않게). 눌러 펴고 끌어 옮길 수 있음
         const tb = $('tbl').getBoundingClientRect();
-        ses.cp = CoachPanel.create({ game: 'seotda', title: 'AI 선생님', bottom: Math.max(64, Math.round(window.innerHeight - tb.bottom + 6)) });
+        ses.cp = CoachPanel.create({ game: 'seotda', title: 'AI 선생님', bottom: Math.max(64, Math.round(window.innerHeight - tb.bottom + 6)), right: tb.width ? Math.max(6, Math.round(window.innerWidth - tb.right + 6)) : 10 });   // 테이블 오른쪽 아래 (가로 화면에서도 내 자리 칸을 안 가림)
         try { if (!localStorage.getItem(ses.cp.key)) ses.cp.collapse(true); } catch (e) {}
         ses.cpBtn = CoachPanel.button(btn, ses.cp, { onToggle: () => { ses.cc = null; renderGame(ses); } });
       } catch (e) { console.error(e); ses.cp = null; }
@@ -327,12 +333,14 @@
   }
 
   function renderGame(ses) {
-    if (!ses.alive || !(ses.mode === 'guest' ? ses.V : ses.S)) return;   // 방장: 은행 장부를 여는 동안은 아직 판 없음
+    if (!ses.alive) return;
+    if (ses.rp) { renderReplay(ses); return; }                           // 🎞️ 다시 보기 중엔 그 장면을 그림 (친구 메시지가 와도)
+    if (ses.mode === 'replay' || !(ses.mode === 'guest' ? ses.V : ses.S)) return;   // 방장: 은행 장부를 여는 동안은 아직 판 없음
     const v = getView(ses), me = ses.me, s = v;
     const spect = me < 0;                               // 한 기기에서 다음 사람을 기다리는 동안 (아무 패도 안 보임)
     const mi = spect ? 0 : me;
     const watch = ses.mode === 'watch';
-    $('lbl').textContent = watch ? '🍿 AI 섯다 구경' : ses.net ? `👥 친구랑 섯다 (${ses.net.code})` : ses.mode === 'hot' ? '📱 한 기기 섯다' : `🔥 정통 섯다 · ${TIER[opt.tier].name}`;
+    $('lbl').textContent = watch ? '🍿 AI 섯다 구경' : ses.drill ? '🎮 연습 · 그 장면부터' : ses.net ? `👥 친구랑 섯다 (${ses.net.code})` : ses.mode === 'hot' ? '📱 한 기기 섯다' : `🔥 정통 섯다 · ${TIER[opt.tier].name}`;
     $('coinPill').textContent = spect ? '🪙 —' : ses.chipWon ? `💰 내 돈 ${fmtN(Math.round(s.coins[mi] * ses.chipWon))}원` : `🪙 내 칩 ${fmtN(s.coins[mi])}냥`;   // 냥 = 게임 안 연습 칩 (은행 방이면 원)
     $('potVal').textContent = fmtN(s.pot);
     const toCall = spect ? 0 : Math.max(0, s.curBet - s.bets[mi]);
@@ -396,7 +404,7 @@
 
   // 위 막대 작은 글씨: 몇 판째 · 단계. 친구랑에서 내 차례면 금색으로 뛰고 남은 초(⏱)가 같이 떠요
   function drawSub(ses) {
-    if (!ses || !ses.alive || !(ses.mode === 'guest' ? ses.V : ses.S)) return;
+    if (!ses || !ses.alive || ses.rp || !(ses.mode === 'guest' ? ses.V : ses.S)) return;
     const s = getView(ses), me = ses.me;
     const myTurn = !!ses.net && me >= 0 && s.phase === 'bet' && s.turn === me && (ses.mode === 'guest' ? !ses.waiting : !!ses.pending);
     $('sub').textContent = myTurn ? `${s.round}판 · 🔔 내 차례${ses.turnLeft != null ? ` ⏱${ses.turnLeft}` : '예요'}` : `${s.round}판 · ${s.street === 1 ? '1차 오픈 배팅' : '2차 본 배팅'} · ${s.n}명${ses.spec ? ' · 👀 구경' : ''}`;
@@ -405,7 +413,7 @@
   // 점수판 한 줄 (친구랑): 자리마다 전적 · 돈(은행이 있으면 원, 없으면 냥), 지금 차례는 금색, 구경 인원
   function drawScore(ses) {
     const el = $('scoreBar');
-    if (!ses || !ses.alive || !ses.net || !(ses.mode === 'guest' ? ses.V : ses.S)) { el.hidden = true; return; }
+    if (!ses || !ses.alive || !ses.net || ses.rp || !(ses.mode === 'guest' ? ses.V : ses.S)) { el.hidden = true; return; }
     const v = getView(ses), sc = ses.score || {}, turnSeat = v.phase === 'bet' ? v.turn : -1;
     const seatUids = new Set(ses.seats.map(x => x.uid).filter(Boolean));
     const watching = Object.keys(ses.net.players || {}).filter(u => !seatUids.has(u)).length;
@@ -769,6 +777,9 @@
     try {
       while (ses.alive) {
         ses.turnLog = [];
+        // 🎞️ 복기용 기록: 이 판 처음 상태 + 행동 차례 (같은 규칙 엔진으로 그대로 다시 둠). 판 전체를 쥔 쪽만 (손님은 남의 패를 몰라서 안 함)
+        ses.rec = canRecord(ses) ? { at: Date.now(), kind: ses.mode, start: S.fastClone(ses.S), acts: [],
+          seats: ses.seats.map(x => ({ name: x.ctrl === 'me' ? '나' : x.name, em: x.em, tier: x.ctrl === 'ai' ? x.tier : undefined })) } : null;
         publish(ses);
         renderGame(ses);
         while (ses.S.phase === 'bet' && ses.alive) {
@@ -799,6 +810,8 @@
             a = aiChoose(ses, p);
           }
           if (!ses.alive) return;
+          if (!S.isLegal(ses.S, a)) a = S.A_CALL;           // 엔진도 똑같이 콜로 바꿈 — 기록·알림은 실제로 된 행동으로
+          if (ses.rec) ses.rec.acts.push(a);
           sfx(a === S.A_FOLD ? 'lose' : a === S.A_CALL ? 'tap' : 'coin');
           if (ses.mode !== 'watch') toastAct(ses, p, a);
           ses.S = S.step(ses.S, a).state;
@@ -806,11 +819,17 @@
           renderGame(ses);
         }
         if (!ses.alive) return;
+        if (ses.rec && ses.rec.acts.length && ses.S.phase === 'end') saveReplay(ses.rec, ses.S);
         if (ses.mode === 'host') tally(ses);
         publish(ses);
         renderGame(ses);
         const next = await showRoundResult(ses);
         if (!ses.alive) return;
+        if (next === 'retry' && ses.drill) {                 // 🎮 연습: 같은 장면을 한 번 더
+          ses.S = S.fastClone(ses.drill.st); ses.cc = null;
+          C.toast('🔁 그 장면으로 돌아왔어요', 1600);
+          continue;
+        }
         if (next !== 'next') {
           if (ses.mode === 'host' && next === 'lobby' && window.ArenaUI) { ArenaUI.toLobby(); return; }
           goHome();
@@ -874,11 +893,12 @@
     return new Promise(resolve => {
       const v = getView(ses), r = v.result, me = ses.me;
       const solo = ses.mode === 'solo';
+      const drill = !!ses.drill;                            // 🎮 복기에서 '여기서부터 내가 두기' — 전적·칩·장부에 안 넣음
       const myPay = (r.payouts && r.payouts[me]) || 0;
       const iWon = r.kind !== 'rematch' && (r.winners || [r.winner]).includes(me);
       // 재경기(사구파토)는 판돈이 다음 판으로 넘어가 칩이 아직 탁자 위 → 알리지 않음 (다음 판 결과에 합쳐짐)
-      if (ses.mode !== 'guest' && r.kind !== 'rematch') CHIPS.report(ses.mode, { round: v.round, coins: S.fastClone(v.coins), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid })), me });
-      if (solo) {
+      if (ses.mode !== 'guest' && r.kind !== 'rematch' && !drill) CHIPS.report(ses.mode, { round: v.round, coins: S.fastClone(v.coins), seats: ses.seats.map(x => ({ name: x.name, ctrl: x.ctrl, uid: x.uid })), me });
+      if (solo && !drill) {
         stats.played++;
         if (iWon) stats.won++;
         stats.coins = v.coins[me];
@@ -924,13 +944,26 @@
       $('resTitle').innerHTML = title;
       const bigTxt = r.kind === 'rematch' ? `이월 ${fmtN(r.carry || r.pot)}냥` : (hot && r.payouts && r.winner != null ? `+${fmtN(r.payouts[r.winner])}냥` : myPay > 0 ? `+${fmtN(myPay)}냥` : `판돈 ${fmtN(r.pot)}냥`);
       $('resBig').innerHTML = `<div class="resbig">${bigTxt}</div><p class="small" style="margin:2px 0">${esc(r.reason)}</p>`;
-      $('resBody').innerHTML = `<table class="res-tbl">${rows}</table>${coachNote}`;
+      $('resBody').innerHTML = `<table class="res-tbl">${rows}</table>${coachNote}${drill ? '<p class="small rp-note">🎮 연습 판이라 전적·칩 기록에 안 들어가요</p>' : ''}`;
       $('resBtns').innerHTML = '';
       const done = val => { $('resBox').hidden = true; ses.drawReady = null; resolve(val); };
       const mk = (label, cls, fn) => { const b = document.createElement('button'); b.className = 'btn ' + cls; b.textContent = label; b.onclick = () => { sfx('tap'); fn(); }; $('resBtns').append(b); return b; };
       let nb = null, fb = null;
       const nextLabel = r.kind === 'rematch' ? '🔥 묻고 더블 재경기 ▶' : '다음 판 ▶';
-      if (ses.mode === 'guest') {
+      // 🎞️ 다시 보기: 결과 창을 잠깐 내리고 이 판을 처음부터 (끝나면 결과 창으로). 친구 방에선 '여기서부터 내가 두기' 가 안 보임
+      const rec = ses.rec && ses.rec.acts.length ? ses.rec : null;
+      const openInline = () => {
+        $('resBox').hidden = true;
+        runReplay(ses, rec, true).then(res => {
+          if (!ses.alive || SES !== ses) return;
+          if (res && res.branch && startBranch(rec, res.branch.k, res.branch.seat)) { done('branch'); return; }
+          $('resBox').hidden = false;
+        });
+      };
+      if (drill) {
+        mk('🔁 그 장면 다시', 'primary', () => done('retry'));
+        mk('메뉴', '', () => done('menu'));
+      } else if (ses.mode === 'guest') {
         // 손님: '✋ 준비' (구경꾼은 '다음 판에 낄래요') 만 누르고, 시작은 방장이 해요
         const R = readyOf(ses, v.round), paint = () => {
           const on = R.has(ses.net.uid);
@@ -949,12 +982,222 @@
           mk('💰 빌리기', '', () => $('loanBtn').click());
           mk('🏦 정산', '', () => ses.bank.flush().then(() => Bank.panel({ game: 'seotda', gid: ses.bank.gid, tab: 'settle' })));
         }
+        if (rec) mk('🎞️ 다시 보기', '', openInline);
         if (ses.mode === 'host') mk('대기실로', '', () => done('lobby'));
         else mk('메뉴', '', () => done('menu'));
         if (ses.mode === 'host') ses.drawReady = mountReady(ses, v.round, nb, fb, nextLabel);
       }
       $('resBox').hidden = false;
     });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 🎞️ 복기 (다시 보기): 이 기기에 지난 판 10개까지
+  //  · 혼자 · 한 기기 · AI 구경 · 친구랑 방장(판 전체를 쥔 쪽)만 기록. 친구랑 손님은 남의 패를 받지 않아서 기록 안 함
+  //  · 다시 보기에서는 모든 패를 펴서 보여 주고, 🧑‍🏫 선생님은 그 차례 사람 시점(S.view)만으로 계산
+  const RKEY = KEY + 'replays';
+  const REC_HOST = false;                                  // 친구랑은 기록 안 함 — 방장만 친구들의 다이한 패를 다시 보게 되니 (포커와 같음)
+  const MODE_NAME = { solo: '혼자', hot: '한 기기', watch: 'AI 구경', host: '친구랑' };
+  const canRecord = ses => !ses.drill && (ses.mode === 'solo' || ses.mode === 'hot' || ses.mode === 'watch' || (ses.mode === 'host' && REC_HOST));
+  function saveReplay(rec, end) {
+    const r = end && end.result;
+    const wn = r && r.winner != null ? (rec.seats[r.winner] || {}).name || '?' : '';
+    rec.title = !r ? '' : r.kind === 'rematch' ? '🔄 재경기 판' : `${wn === '나' ? '내가' : iga(wn)} 이겼어요${r.winnerHand ? ' · ' + r.winnerHand : r.kind === 'foldWin' ? ' · 기권승' : ''}`;
+    rec.mode = `${MODE_NAME[rec.kind] || ''} · ${end.n}명`;
+    try { const list = C.store(RKEY, []).filter(x => x && x.at !== rec.at); list.unshift(rec); C.save(RKEY, list.slice(0, 10)); } catch (e) {}
+    drawReplayBtn();
+  }
+  function drawReplayBtn() { const b = $('replayBtn'); if (b) b.hidden = !C.store(RKEY, []).length; }
+  const fmtAt = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  function openReplayList() {
+    const list = C.store(RKEY, []).filter(x => x && x.start && Array.isArray(x.acts) && Array.isArray(x.seats));
+    if (!list.length) return C.toast('아직 저장된 판이 없어요');
+    const close = C.modal({
+      title: '🎞️ 지난 판 다시 보기',
+      html: `<p class="small" style="margin:0 0 8px">이 기기에서 한 판 ${list.length}개 (최근 10개까지). 다시 보기에서는 모두의 패가 보여요.</p><div class="rplist">${list.map((x, i) => `<button class="btn" data-i="${i}"><b>${esc(x.title || '판')}</b><span class="small">${fmtAt(x.at)} · ${esc(x.mode || '')} · ${x.seats.slice(0, 6).map(q => esc(q.name)).join(', ')}</span></button>`).join('')}</div>`,
+      buttons: [{ label: '닫기' }], dismiss: true,
+    });
+    document.querySelectorAll('.rplist [data-i]').forEach(b => { b.onclick = () => { sfx('tap'); close(); startReplay(list[+b.dataset.i]); }; });
+  }
+  function startReplay(rec) {
+    endSession();
+    const ses = SES = { alive: true, mode: 'replay', n: rec.start.n, me: -1, S: S.fastClone(rec.start), seats: rec.seats.map(x => ({ ctrl: 'remote', name: x.name, em: x.em })), turnLog: [], coachAvail: false };
+    showScreen('play');
+    runReplay(ses, rec, false).then(res => {
+      if (res && res.branch && SES === ses && startBranch(rec, res.branch.k, res.branch.seat)) return;
+      if (SES === ses) goHome();
+    });
+  }
+  // 🎮 '여기서부터 내가 두기': k 번째 행동 앞 장면(같은 패·같은 판돈)에서 seat 자리를 내가, 나머지는 AI. 선생님 켠 채 시작, 연습 판(기록 안 함)
+  function startBranch(rec, k, seat) {
+    let st = S.fastClone(rec.start);
+    for (let j = 0; j < k && st.phase === 'bet'; j++) st = S.step(st, rec.acts[j]).state;
+    if (st.phase !== 'bet' || !rec.seats[seat] || st.folded[seat]) { C.toast('이미 끝난 장면이에요. 앞으로 돌아가서 눌러 주세요'); return false; }
+    endSession();
+    const tier = TIER[opt.tier] ? opt.tier : 'normal';
+    const seats = rec.seats.map((x, i) => (i === seat ? { ctrl: 'me', name: '나', em: '🎴' }
+      : { ctrl: 'ai', name: x.name === '나' ? '그때의 나' : x.name, em: x.name === '나' ? '🙂' : x.em || '🎴', tier: TIER[x.tier] ? x.tier : tier }));
+    const ses = SES = { alive: true, mode: 'solo', n: st.n, me: seat, S: st, seats, pending: null, turnLog: [], coachAvail: true, coachOn: true, drill: { st: S.fastClone(st), k } };
+    showScreen('play');
+    ensureCoach(ses);
+    if (ses.cp) {                                          // 선생님 창을 펴서 시작 (사용자가 저장해 둔 접힘·끔 설정은 그대로 둠)
+      let keep = null; try { keep = localStorage.getItem(ses.cp.key); } catch (e) {}
+      ses.cp.show(); ses.cp.collapse(false);
+      try { if (keep == null) localStorage.removeItem(ses.cp.key); else localStorage.setItem(ses.cp.key, keep); } catch (e) {}
+    }
+    drawCoachBtn();
+    C.toast(`🎮 ${k}수째 장면부터 내가 해요 · 연습 판이라 기록엔 안 남아요`, 2600);
+    runLoop(ses);
+    return true;
+  }
+  // 고를 자리: 기록에 '나' 가 있고 그 장면에 살아 있으면 그 자리, 아니면 살아 있는 자리 중에서 고름
+  function pickSeat(rec, st) {
+    return new Promise(res => {
+      const ok = rec.seats.map((x, k) => k).filter(k => !st.folded[k]);
+      const mine = rec.seats.findIndex(x => x.name === '나');
+      if (mine >= 0 && ok.includes(mine)) return res(mine);
+      if (!ok.length) return res(-1);
+      C.modal({
+        title: '🎮 어느 자리를 할까요?', dismiss: true,
+        html: `<p class="small" style="margin:0">${mine >= 0 ? '이 장면에선 내가 벌써 다이했어요. ' : ''}고른 자리는 내가, 나머지는 AI 가 이어서 해요.</p>`,
+        buttons: ok.map((k, j) => ({ label: `${rec.seats[k].em || ''} ${rec.seats[k].name}`, primary: j === 0, onClick: () => res(k) })).concat([{ label: '취소', ghost: true }]),
+        onClose: () => res(-1),
+      });
+    });
+  }
+  // 다시 보기 화면: 처음 ⏮ · 한 수 ◀ ▶ · 재생/멈춤 + 🧑‍🏫 선생님 · 🎮 여기서부터 내가 두기. 줄은 내 자리 칸 안(배팅 단추 자리)에 넣어 패를 안 가림
+  //  inline = 판 결과 창에서 (닫으면 결과로). 끝나면 { branch:{k, seat} } 또는 null
+  function runReplay(ses, rec, inline) {
+    return new Promise(resolve => {
+      if (ses.rpClose) ses.rpClose();
+      const acts = rec.acts || [], states = [S.fastClone(rec.start)], log = [];
+      for (let j = 0; j < acts.length && states[j].phase === 'bet'; j++) {
+        const st = states[j], p = st.turn, cost = acts[j] === S.A_FOLD ? 0 : S.actionCost(st, p, acts[j]);
+        log.push(`${(rec.seats[p] || {}).name || `자리${p + 1}`}: ${actLabel(st, p, acts[j])}${cost > 0 ? ' +' + fmtN(cost) : ''}`);
+        states.push(S.step(st, acts[j]).state);
+      }
+      const N = states.length - 1, mine = rec.seats.findIndex(x => x.name === '나');
+      const rp = { rec, states, log, N, i: 0, S: states[0], me: mine >= 0 ? mine : 0, seats: rec.seats, play: true, t: 0, coach: false, panel: null, cc: {}, draw: () => {} };
+      const cpWas = !!(ses.cp && ses.cp.visible);
+      if (cpWas) ses.cp.hide();
+      $('coachPanel').hidden = true; $('coachBtn').hidden = true; $('scoreBar').hidden = true;
+      $('meZone').classList.remove('pulse');
+      const canBranch = !(inline && ses.net);              // 친구 방 결과 창에서는 방을 떠나게 되니 안 보임 (지난 판 목록에서는 됨)
+      const box = document.createElement('div');
+      box.className = 'rpbox';
+      box.innerHTML = `<div class="rpbar"><button data-rp="start" aria-label="처음으로">⏮</button><button data-rp="prev" aria-label="한 수 뒤로">◀</button><button data-rp="play" class="pp" aria-label="재생 · 멈춤"></button><button data-rp="next" aria-label="한 수 앞으로">▶</button><span class="rpn"></span><button data-rp="exit" class="rpx">${inline ? '결과로' : '닫기'}</button></div>`
+        + `<div class="rpgo"><button data-rg="coach" aria-pressed="false">🧑‍🏫 선생님</button>${canBranch ? '<button data-rg="branch" class="br">🎮 여기서부터 내가 두기</button>' : ''}</div>`;
+      $('betGrid').hidden = true;
+      $('meZone').appendChild(box);
+      // 🧑‍🏫 그 장면 차례인 사람 눈(S.view)으로 본 추천 vs 실제로 한 행동
+      const out = html => {
+        if (rp.panel) { rp.panel.set(html); if (!rp.panel.visible) rp.panel.show(); }
+        else { const el = $('coachPanel'); el.hidden = false; el.innerHTML = html; }
+      };
+      const rpCoach = () => {
+        if (!rp.coach) return;
+        const st = rp.S, i = rp.i;
+        if (st.phase !== 'bet' || i >= N) {
+          out(`<p class="cp-desc">${st.phase === 'end' ? `판이 끝났어요${rec.title ? ' — ' + esc(rec.title) : ''}. ◀ 로 돌아가면 장면마다 추천을 볼 수 있어요` : '배팅 장면에서 추천을 보여 드려요 (▶ 로 한 수씩)'}</p>`);
+          return;
+        }
+        const p = st.turn, a = acts[i], who = (rec.seats[p] || {}).name || '?';
+        const c = rp.cc[i] || (rp.cc[i] = AI.coach(S.view(st, p), p));
+        const info = c.byAction[a];
+        const mark = !info ? '' : info.tier === 'best' ? '👑 최선' : `${info.tier === 'good' ? '🟢' : info.tier === 'ok' ? '🟡' : '🔴'} 기댓값 ${Math.round(info.delta)}냥`;
+        // 짧게 (테이블을 덜 가리게): 누구 차례·승률 / 추천 vs 실제 / 행동별 기댓값 / 한 줄 해설
+        out(`<div class="rpc-who"><b>${esc(who)}</b> 차례 · ${st.street}차 · <span class="cp-chip win">승률 ${c.winPct}%</span> <span class="cp-chip odds">팟오즈 ${c.potOddsPct}%</span></div>`
+          + `<div class="rpc-act">👑 추천 <b>[${esc(actLabel(st, p, c.bestAction))}]</b> · 실제 <b>[${esc(actLabel(st, p, a))}]</b> ${mark}</div>`
+          + `${evRow(c)}<p class="cp-desc rpc-desc">${esc(c.detail)} <span class="small">(${esc(who)} 눈으로 본 계산)</span></p>`);
+      };
+      rp.draw = () => {
+        box.querySelector('.pp').textContent = rp.play ? '⏸' : '⏵';
+        box.querySelector('.rpn').textContent = `${rp.i} / ${N}수`;
+        rpCoach();
+      };
+      const go = k => { rp.i = Math.max(0, Math.min(N, k)); rp.S = states[rp.i]; renderGame(ses); };
+      const fwd = () => {
+        if (rp.i >= N) return;
+        const a = acts[rp.i];
+        sfx(a === S.A_FOLD ? 'lose' : a === S.A_CALL ? 'tap' : 'coin');
+        go(rp.i + 1);
+        if (rp.i >= N) { rp.play = false; rp.draw(); C.toast(rec.title ? '끝 — ' + rec.title : '끝까지 봤어요', 2200); }
+        else C.toast(log[rp.i - 1], 900);
+      };
+      const tick = () => {
+        clearTimeout(rp.t);
+        if (!rp.play || ses.rp !== rp) return;
+        rp.t = setTimeout(() => { if (ses.rp !== rp || !rp.play) return; fwd(); tick(); }, 1100);
+      };
+      const close = res => {
+        if (ses.rp !== rp) return;
+        clearTimeout(rp.t);
+        ses.rp = null; ses.rpClose = null;
+        box.remove();
+        if (rp.panel) { try { rp.panel.destroy(); } catch (e) {} }
+        $('coachPanel').hidden = true;
+        $('betGrid').hidden = false;
+        if (cpWas && ses.cp) ses.cp.show();
+        $('coachBtn').hidden = !ses.coachAvail;
+        if (inline && ses.alive) renderGame(ses);
+        resolve(res || null);
+      };
+      ses.rp = rp; ses.rpClose = () => close(null);
+      box.querySelector('.rpbar').onclick = e => {
+        const b = e.target.closest('[data-rp]'); if (!b) return;
+        sfx('tap');
+        const k = b.dataset.rp;
+        if (k === 'exit') { close(null); return; }
+        if (k === 'play') { rp.play = !rp.play; if (rp.play && rp.i >= N) go(0); rp.draw(); tick(); return; }
+        rp.play = false; clearTimeout(rp.t);
+        if (k === 'start') go(0); else if (k === 'prev') go(rp.i - 1); else fwd();
+        rp.draw();
+      };
+      box.querySelector('.rpgo').onclick = e => {
+        const b = e.target.closest('[data-rg]'); if (!b) return;
+        sfx('tap');
+        if (b.dataset.rg === 'coach') {
+          rp.coach = !rp.coach; b.setAttribute('aria-pressed', String(rp.coach)); b.classList.toggle('on', rp.coach);
+          if (rp.coach && !rp.panel && window.CoachPanel) {
+            // 복기 창은 따로 기억 — 처음엔 테이블 오른쪽 아래 (내 자리 칸·다시 보기 줄을 안 가림)
+            const tb = $('tbl').getBoundingClientRect();
+            try { rp.panel = CoachPanel.create({ game: 'seotda-rp', title: 'AI 선생님 · 복기', startHidden: true, bottom: Math.max(8, Math.round(innerHeight - tb.bottom + 6)), right: tb.width ? Math.max(6, Math.round(innerWidth - tb.right + 6)) : 10 }); } catch (err) { rp.panel = null; }
+          }
+          if (rp.coach) { rpCoach(); if (rp.panel && rp.panel.collapsed) rp.panel.collapse(false); }
+          else if (rp.panel) rp.panel.hide();
+          else $('coachPanel').hidden = true;
+          return;
+        }
+        if (rp.S.phase !== 'bet' || rp.i >= N) { C.toast('끝난 장면이에요. ◀ 로 앞으로 가서 눌러 주세요'); return; }
+        rp.play = false; clearTimeout(rp.t); rp.draw();
+        const k = rp.i;
+        pickSeat(rec, rp.S).then(seat => { if (seat >= 0 && ses.rp === rp && ses.alive) close({ branch: { k, seat } }); });
+      };
+      renderGame(ses);
+      tick();
+    });
+  }
+  // 다시 보기 장면 그리기: 모든 패를 펴서, 아래 내 자리 칸엔 기록의 '나'(없으면 1번 자리)
+  function renderReplay(ses) {
+    const rp = ses.rp, s = rp.S, me = rp.me, v = S.fastClone(s);
+    $('lbl').textContent = '🎞️ 다시 보기';
+    $('sub').classList.remove('myturn');
+    $('sub').textContent = rp.i ? `${rp.i}수 · ${rp.log[rp.i - 1]}` : `처음 장면 · ${s.n}명`;
+    $('coinPill').textContent = `🪙 ${fmtN(s.coins[me])}냥`;
+    $('potVal').textContent = fmtN(s.pot);
+    $('potSub').innerHTML = s.phase === 'end' ? esc(s.result ? s.result.reason : '판이 끝났어요') : s.street === 1 ? '첫 장 공개 후 탐색전' : '두 장 완성 후 승부';
+    const html = [];
+    for (let j = 1; j < s.n; j++) html.push(seatHtml(rp, v, (me + j) % s.n));
+    $('seats').innerHTML = html.join('');
+    placeSeats();
+    const seat = rp.seats[me] || { em: '🎴', name: '나' }, h = s.hands[me] || [-1, -1], r = s.result;
+    const pay = s.phase === 'end' && r && r.kind !== 'rematch' && r.payouts ? r.payouts[me] : 0;
+    $('meZone').classList.toggle('turn', s.phase === 'bet' && s.turn === me);
+    $('meName').textContent = `${seat.em || '🎴'} ${seat.name} · ${fmtN(s.coins[me])}냥 · ${s.folded[me] ? '다이' : '배팅 ' + fmtN(s.bets[me])}${pay > 0 ? ` · +${fmtN(pay)}` : ''}`;
+    $('myCards').innerHTML = hwCardHtml(h[0], 'hw-big') + hwCardHtml(h[1], 'hw-big');
+    $('myJokbo').hidden = false;
+    $('myJokbo').textContent = `🎴 ${h[1] >= 0 ? S.evalHand(h[0], h[1]).name : '—'}`;
+    rp.draw();
   }
 
   window.__seotda = { get ses() { return SES; } };        // 시험용 (읽기만)
