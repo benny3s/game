@@ -1368,13 +1368,22 @@
     function rpCoach() {
       if (!rpOn || !rpPanel) return;
       const st = ses.S, p = st.turn, a = acts[i];
-      let html = '<span class="small">패를 내는 장면에서 선생님 추천을 보여 드려요 (▶ 로 한 수씩)</span>';
+      let html = '<span class="small">패를 내는 장면 · 고/스톱에서 선생님 추천을 보여 드려요 (▶ 로 한 수씩)</span>';
+      const who = esc((rec.seats[(st.who || [])[p]] || {}).name || '?');
       const c = st.phase === 'play' && i < acts.length && AI.coachHand ? AI.coachHand(G.view(st, p)) : null;
       if (c && c.bestCard >= 0) {
-        const who = (rec.seats[st.who[p]] || {}).name || '?', ch = cardOfAct(st, p, a), info = ch >= 0 ? c.byCard[ch] : null;
+        const ch = cardOfAct(st, p, a), info = ch >= 0 ? c.byCard[ch] : null;
         const mark = info ? (info.tier === 'best' ? '👑 최선' : (info.tier === 'good' ? '🟢 ' : info.tier === 'ok' ? '🟡 ' : '🔴 ') + esc(info.deltaText || '')) : '';
-        html = `<b>${esc(who)}</b> 차례 · <span class="cb-tag">👑 추천</span> <b>[${esc(c.bestName)}]</b> — ${esc(c.bestWhy)}`
-          + (info ? `<br>실제로 낸 패: <b>[${esc(info.name)}]</b> ${mark}` : '');
+        html = `<b>${who}</b> 차례 · <span class="cb-tag">👑 추천</span> <b>[${esc(c.bestName)}]</b> — ${esc(c.bestWhy)}`;
+        // 🤔 실제로 낸 패의 속뜻 (선생님이 보기에 이 패로 노린 것) — 손해가 크면 노림수보다 실수일 수 있다고
+        if (a === G.A_PASS) html += '<br>실제로 한 것: <b>폭탄패로 더미만 뒤집기</b> <span class="small">— 손패를 아끼고 뒤집은 패에 맡긴 수예요</span>';
+        else if (info && info.card === c.bestCard) html += `<br>실제로도 같은 패 ${mark}`;
+        else if (info) html += `<br>실제로 낸 패: <b>[${esc(info.name)}]</b> ${mark}<br><span class="small">🤔 노린 것: ${esc(info.tag || '')} — ${esc(info.why || '')}`
+          + (info.tier === 'bad' ? ' · 추천보다 손해가 커서 노림수보다는 실수였을 수 있어요' : '') + '</span>';
+      } else if (st.phase === 'goStop' && i < acts.length && AI.coachGoStop) {
+        const g = AI.coachGoStop(G.view(st, p)), did = a === G.A_GO ? '고' : '스톱', rc = g.rec === G.A_GO ? '고' : '스톱';
+        html = `<b>${who}</b> 고/스톱 · <span class="cb-tag">👑 추천</span> <b>${rc}</b> — ${esc(g.why)}<br>실제로 한 것: <b>${did}</b> ${did === rc ? '👑 같음' : '🟡 다름'}`
+          + (did !== rc ? `<br><span class="small">🤔 ${did === '고' ? `더 큰 점수를 노린 승부수예요 (고 했을 때 이길 확률 ${g.winRateGo}% · 고박 위험 ${g.gobakRisk}%)` : `점수를 챙기고 위험(고박 ${g.gobakRisk}%)을 피한 선택이에요`}</span>` : '');
       }
       rpPanel.set(html);
       if (!rpPanel.visible) rpPanel.show();
