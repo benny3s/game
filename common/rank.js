@@ -100,15 +100,16 @@
   const css = `
 .rk-ov{position:fixed;inset:0;z-index:210;background:rgba(4,9,16,.8);backdrop-filter:blur(6px);display:grid;place-items:center;padding:12px}
 .rk-box{position:relative;background:var(--card,#142030);color:var(--ink,#f1f5f9);border:1.5px solid rgba(255,255,255,.15);border-radius:20px;width:min(520px,100%);max-height:100%;overflow:auto;padding:18px 14px 14px;display:grid;gap:12px;font:14px/1.45 var(--text,system-ui,"Malgun Gothic",sans-serif)}
+.rk-box>*{min-width:0}.rk-body{display:grid;gap:10px;min-width:0}
 .rk-box h2{margin:0;font:800 20px var(--round,inherit);color:#fde68a}
 .rk-x{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:inherit;font-size:16px;cursor:pointer}
 .rk-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}.rk-chips::-webkit-scrollbar{display:none}
 .rk-chips button,.rk-seg button{flex:none;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:inherit;border-radius:99px;padding:6px 11px;font:700 13px inherit;cursor:pointer;white-space:nowrap}
 .rk-chips button.on,.rk-seg button.on{background:#f59e0b;color:#1c1917;border-color:#f59e0b}
 .rk-seg{display:flex;gap:6px}
-.rk-t{width:100%;border-collapse:collapse;font-size:13.5px}
+.rk-t{width:100%;border-collapse:collapse;font-size:13px}
 .rk-t th{font-size:12px;color:var(--soft,#94a3b8);font-weight:700;text-align:right;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.1)}
-.rk-t td{text-align:right;padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap}
+.rk-t td{text-align:right;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap}
 .rk-t th:nth-child(-n+2),.rk-t td:nth-child(-n+2){text-align:left}
 .rk-t tr.me td{background:rgba(245,158,11,.12)}.rk-t td b{color:#fde68a}
 .rk-sub{font:800 14px var(--round,inherit);margin:4px 0 -4px}
@@ -161,7 +162,7 @@
         <div class="rk-sub">📅 최근 7일 판 수 · ${esc(NAMES[cur] || cur)}</div>
         <div class="rk-bars">${plays.map(v => `<div style="height:${Math.round(v / mx * 100)}%"><span>${v || ""}</span></div>`).join("")}</div>
         <div class="rk-days">${day7.map(x => `<span>${+x.slice(8)}일</span>`).join("")}</div>`;
-      const on = body.querySelector(".rk-chips .on"); if (on) on.scrollIntoView({ inline: "center", block: "nearest" });
+      const ch = body.querySelector(".rk-chips"), on = ch && ch.querySelector(".on"); if (on) ch.scrollLeft = on.offsetLeft - ch.offsetLeft - (ch.clientWidth - on.offsetWidth) / 2;   // 칩 줄만 옆으로 (창 전체가 밀리지 않게)
     };
     body.addEventListener("click", e => {
       const b = e.target.closest("button"); if (!b) return;
