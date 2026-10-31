@@ -952,7 +952,7 @@ const Gate = (() => {
   }
 
   // 아케이드 첫 화면 '👥 방문자' (관리자만): 지금 · 오늘 · 7일 수와 오늘 온 사람 → 📊 자세히(logs.html)
-  const GAME_KO = { portal: "아케이드", gostop: "고스톱", seotda: "섯다", onecard: "원카드", poker: "포커", baduk: "바둑", omok: "오목", chess: "체스", janggi: "장기", yut: "윷", billiards: "당구", volley: "배구", land: "땅따먹기", nyang: "냥도쿠", snake: "지렁이", cube: "큐브", sc: "스타" };
+  const GAME_KO = { portal: "첫 화면", gostop: "고스톱", seotda: "섯다", onecard: "원카드", poker: "포커", baduk: "바둑", omok: "오목", chess: "체스", janggi: "장기", yut: "윷", billiards: "당구", volley: "배구", land: "땅따먹기", nyang: "냥도쿠", snake: "지렁이", cube: "큐브", sc: "스타" };
   async function mountVisitors(el) {
     injectStyle();
     await ensureFirebase();

@@ -616,8 +616,18 @@ button { font: inherit; cursor: pointer; }
 
 
 /* ── 첫 화면 위쪽: 관리자 패널 3칸 + 모두를 위한 빠른 띠 ── */
-.adm-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: 0 0 12px; align-items: start; }
-.adm-row[hidden], .quick-strip[hidden], .adm-panel[hidden], .q-card[hidden] { display: none !important; }
+.pub-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin: 0 0 14px; align-items: start; }
+.pub-row[hidden], .adm-row[hidden], .adm-tools[hidden], .quick-strip[hidden], .adm-panel[hidden], .q-card[hidden] { display: none !important; }
+/* 👑 관리자 전용 구역: 보라색 테두리 + 머리띠로 '모두에게 보이는' 칸과 뚜렷이 구분 */
+.adm-row { display: grid; gap: 10px; margin: 0 0 14px; padding: 0 10px 10px; border: 1.5px solid rgba(167,139,250,0.7); border-radius: 14px; background: linear-gradient(180deg, rgba(139,92,246,0.14) 0%, rgba(139,92,246,0.04) 100%); box-shadow: 0 4px 18px rgba(139,92,246,0.14); }
+.adm-strip { display: flex; align-items: center; gap: 8px; margin: 0 -10px; padding: 7px 12px; border-radius: 12px 12px 0 0; background: linear-gradient(90deg, rgba(139,92,246,0.5), rgba(139,92,246,0.18)); color: #ede9fe; font: 800 13.5px/1.3 var(--sans); letter-spacing: 0.02em; }
+.adm-strip small { margin-left: auto; font-weight: 500; font-size: 11px; color: #c4b5fd; }
+.adm-row .adm-panel { border-color: rgba(167,139,250,0.35); }
+.adm-row .adm-h { color: #c4b5fd; }
+.adm-row #visitBox { margin: 0; min-width: 0; }
+.adm-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-tool { display: inline-flex; align-items: center; gap: 4px; padding: 7px 13px; border-radius: 99px; border: 1px solid rgba(167,139,250,0.6); background: rgba(139,92,246,0.16); color: #ede9fe; font: 700 13px/1.2 var(--sans); text-decoration: none; cursor: pointer; }
+.adm-tool:hover { background: rgba(139,92,246,0.32); border-color: #c4b5fd; }
 .adm-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
 .adm-h { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: 0; padding: 0; color: var(--steam-blue); font: 700 14px/1.3 var(--sans); text-align: left; }
 .adm-h .adm-n { margin-left: auto; min-width: 24px; text-align: center; padding: 1px 8px; border-radius: 99px; background: rgba(255,255,255,0.07); color: var(--ink); font-size: 12.5px; }
@@ -639,21 +649,22 @@ button { font: inherit; cursor: pointer; }
 .act-top span { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08); }
 .brief-l { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
 .brief-l li { font-size: 12.5px; line-height: 1.45; }
-.quick-strip { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 10px; margin: 0 0 14px; }
-.q-card { display: flex; align-items: center; gap: 10px; min-width: 0; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; color: var(--ink); font: 600 13.5px/1.3 var(--sans); }
+.quick-strip { display: flex; gap: 10px; margin: 0 0 14px; }
+.q-card { flex: 1 1 0; display: flex; align-items: center; gap: 10px; min-width: 0; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; color: var(--ink); font: 600 13.5px/1.3 var(--sans); }
 .q-card:hover { border-color: var(--steam-blue); }
 .q-card .q-ic { font-size: 24px; line-height: 1; flex: none; }
 .q-card .q-tx { min-width: 0; display: grid; gap: 1px; }
 .q-card .q-tx b { color: var(--ink-bright); font-size: 14px; }
 .q-card .q-tx small { color: var(--muted); font-size: 11.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.q-card.q-rank { order: -1; border-color: rgba(251,191,36,0.6); background: linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(251,191,36,0.05) 100%); box-shadow: 0 4px 16px rgba(251,191,36,0.14); }
+.q-card.q-rank { flex: 1.5 1 0; order: -1; border-color: rgba(251,191,36,0.6); background: linear-gradient(135deg, rgba(251,191,36,0.18) 0%, rgba(251,191,36,0.05) 100%); box-shadow: 0 4px 16px rgba(251,191,36,0.14); }
 .q-card.q-rank .q-tx b { color: var(--gold); font-size: 15px; }
 .q-card.q-rank .q-tx small { color: #f3e3b0; }
 .q-card.q-rank:hover { border-color: var(--gold); }
+#rankBtn, #bankBtn { display: none; }   /* 머리글의 랭킹·은행 단추는 모든 폭에서 숨김 — 아래 빠른 띠가 한 곳 (요소·누르기 동작은 다른 코드가 써서 남김) */
 @media (max-width: 640px) {
-  #rankBtn, #bankBtn { display: none; }   /* 폰: 머리글 단추는 아래 빠른 띠로 대신 */
-  .quick-strip { grid-template-columns: 1fr 1fr; }
-  .q-card.q-rank { grid-column: 1 / -1; }
+  .quick-strip { flex-wrap: wrap; }
+  .q-card.q-rank { flex: 1 1 100%; }
+  .q-card { flex: 1 1 calc(50% - 5px); }
 }
 
 @media (max-width: 860px) {
@@ -695,8 +706,9 @@ button { font: inherit; cursor: pointer; }
 </header>
 
 <main class="container">
-  <!-- 관리자만: 🔔 신청자 · 📈 활발한 정도 · 🤖 AI 브리핑 (규칙으로 만든 요약, LLM 호출 없음) -->
+  <!-- 👑 관리자 전용 구역 (보라 테두리): 🔔 신청자 · 👥 방문자(이름 목록) · 관리 도구 바로가기 -->
   <section class="adm-row" id="admRow" hidden>
+    <div class="adm-strip"><span id="admHead">👑 관리자 전용</span><small id="admHint">나(관리자)한테만 보여요</small></div>
     <div class="adm-panel" id="pnlReq">
       <button class="adm-h" id="pnlReqH" type="button" aria-expanded="false"><span>🔔 신청자</span><span class="adm-n" id="pnlReqN">0</span><span class="adm-arr">▾</span></button>
       <div class="adm-b" id="pnlReqB" hidden>
@@ -705,6 +717,16 @@ button { font: inherit; cursor: pointer; }
         <div class="adm-soft" id="reqEmpty">기다리는 신청이 없어요.</div>
       </div>
     </div>
+    <!-- 👥 방문자 이름 목록 (관리자만 — Gate.mountVisitors) -->
+    <section id="visitBox" hidden></section>
+    <div class="adm-tools" id="admTools" hidden>
+      <a class="adm-tool" href="logs.html">📊 게임 기록</a>
+      <button class="adm-tool" id="admDevBtn" type="button">🔧 기기 관리</button>
+      <button class="adm-tool" id="admSettleBtn" type="button">🏦 은행 정산</button>
+    </div>
+  </section>
+  <!-- 모두에게: 📈 활발한 정도 · 🤖 AI 브리핑 (규칙으로 만든 요약, LLM 호출 없음) -->
+  <section class="pub-row" id="pubRow" hidden>
     <div class="adm-panel" id="pnlAct">
       <div class="adm-h"><span>📈 활발한 정도</span><span class="adm-n" id="pnlActN">-</span></div>
       <div class="adm-b" id="pnlActB"><span class="adm-soft">불러오는 중…</span></div>
@@ -714,9 +736,7 @@ button { font: inherit; cursor: pointer; }
       <div class="adm-b" id="pnlBriefB"><span class="adm-soft">불러오는 중…</span></div>
     </div>
   </section>
-  <!-- 👥 방문자 (관리자만 — Gate.mountVisitors) -->
-  <section id="visitBox" hidden style="margin:0 0 14px"></section>
-  <!-- 모두에게: 방문자 수 · 은행 · 랭킹 (랭킹은 크게) -->
+  <!-- 모두에게: 랭킹 · 방문자 수(관리자는 위 구역에서 이름 목록으로) · 은행 (랭킹은 크게) -->
   <section class="quick-strip" id="quickStrip">
     <button class="q-card q-rank" id="qRank" type="button"><span class="q-ic">🏆</span><span class="q-tx"><b>랭킹</b><small id="qRankT">게임별 순위 · 상대 전적 · 최근 7일</small></span></button>
     <button class="q-card q-vis" id="qVis" type="button" hidden><span class="q-ic">👥</span><span class="q-tx"><b>방문자</b><small id="qVisT"></small></span></button>
@@ -791,7 +811,7 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=14"></script>
+<script src="common/gate.js?v=15"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=12"></script>
 <script src="common/rank.js?v=4"></script>
@@ -1292,10 +1312,12 @@ button { font: inherit; cursor: pointer; }
   };
   function mountReqs() {
     try {
-      // 관리자 3칸 줄: 관리자만 (허용 권한만 있는 예전 방장은 🔔 신청자 칸만)
+      // 👑 관리자 전용 구역: 관리자만 (허용 권한만 있는 예전 방장은 🔔 신청자 칸만)
       const adm = isAdm(), appr = !!(window.Gate && Gate.state.canApprove);
       $("admRow").hidden = !(adm || appr);
-      $("pnlAct").hidden = $("pnlBrief").hidden = !adm;
+      $("admHead").textContent = adm ? "👑 관리자 전용" : "🔑 허용 권한";
+      $("admHint").textContent = adm ? "나(관리자)한테만 보여요" : "신청 허용만 가능";
+      $("admTools").hidden = !adm;
     } catch (e) {}
     if (reqMounted || !window.Gate || !Gate.mountRequests || !(isAdmin || Gate.state.isAdmin || Gate.state.canApprove)) return;
     reqMounted = true;
@@ -1374,7 +1396,7 @@ button { font: inherit; cursor: pointer; }
   }
   function drawActivity(sm) {
     const n = $("pnlActN"), b = $("pnlActB");
-    if (!sm) { n.textContent = "-"; b.innerHTML = `<span class="adm-soft">기록을 못 불러왔어요 (실제 사이트에서 로그인하면 보여요)</span>`; return; }
+    if (!sm) { n.textContent = "-"; b.innerHTML = `<span class="adm-soft">기록을 못 불러왔어요</span>`; return; }
     n.textContent = `오늘 ${sm.today}판`;
     const mx = Math.max(1, ...sm.tot), dd = sm.days.map(x => +x.slice(8));
     b.innerHTML = `<div class="act-num"><div><b>${sm.today}</b> <span>오늘 판</span></div><div><b>${sm.week}</b> <span>7일 판</span></div><div><b>${sm.yest}</b> <span>어제</span></div></div>
@@ -1417,13 +1439,13 @@ button { font: inherit; cursor: pointer; }
       rankGame = wg ? wg[0] : "";
       $("qRankT").textContent = t ? `이번 주 1등: ${t.name} (${gName(wg[0])})` : "게임별 순위 · 상대 전적 · 최근 7일";
     } catch (e) {}
-    // 👥 접속자 수 (이름은 관리자 칸에서만): 못 읽는 기기엔 '오늘 N판'으로, 그것도 없으면 숨김
+    // 👥 접속자 수 카드: 관리자는 위 '관리자 전용' 구역의 이름 목록이 대신(중복 방지) · 못 읽는 기기엔 '오늘 N판'으로, 그것도 없으면 숨김
     try {
       const v = $("qVis");
-      if (live) { v.hidden = false; $("qVisT").textContent = `지금 ${live.n}명 접속`; }
+      if (isAdm()) v.hidden = true;
+      else if (live) { v.hidden = false; $("qVisT").textContent = `지금 ${live.n}명 접속`; }
       else if (sm) { v.hidden = false; $("qVisT").textContent = `오늘 ${sm.today}판 플레이`; }
       else v.hidden = true;
-      v.style.cursor = isAdm() ? "pointer" : "default";
     } catch (e) {}
   }
   let homeSig = "", homeBusy = false;
@@ -1433,14 +1455,18 @@ button { font: inherit; cursor: pointer; }
     try {
       const [raw, pres] = await Promise.all([loadHomeStats(), (isAdm() || canHost) ? loadPresence() : null]);
       const sm = raw ? sumHome(raw) : null, live = pres ? liveOf(pres) : null;
-      try { if (isAdm()) { drawActivity(sm); drawBrief(sm, raw, live); } } catch (e) {}
+      try {   // 📈·🤖 는 누구나 (rank_days·rank 는 로그인한 누구나 읽음). '지금 접속'은 game_presence 를 읽는 기기만 (live 없으면 그 줄을 뺌)
+        $("pubRow").hidden = !(sm || isAdm());   // 기록을 못 읽는 손님 화면엔 안내 문구 없이 칸 자체를 숨김
+        drawActivity(sm); drawBrief(sm, raw, live);
+      } catch (e) {}
       drawQuick(sm, raw, live);
     } catch (e) {} finally { homeBusy = false; }
   }
   setInterval(() => { if (!document.hidden && games.length) refreshHome(); }, 90e3);
   $("qRank").onclick = () => { if (window.GRank) GRank.open(rankGame || selectedLibId || featuredId); };
   $("qBank").onclick = () => { if (window.Bank) Bank.panel({}); };
-  $("qVis").onclick = () => { if (isAdm()) { const t = $("visitBox").hidden ? $("admRow") : $("visitBox"); t.scrollIntoView({ behavior: "smooth", block: "center" }); } };
+  $("admDevBtn").onclick = () => { try { if (window.Gate && Gate.openAdminModal) Gate.openAdminModal(); } catch (e) {} };
+  $("admSettleBtn").onclick = () => { try { if (window.Bank) Bank.panel({ tab: "settle" }); } catch (e) {} };
   const allowedNow = () => isAdmin || canHost || !!(window.Gate && Gate.state.allowed);
 
   // 둘러보기는 누구나 — 허용 안 된 기기가 게임을 누르면 그 자리에서 로그인 창 (확인 중이면 그냥 감: 게임 화면이 다시 확인)
