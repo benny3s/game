@@ -336,7 +336,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=5');
+    worker = new Worker('ai-worker.js?v=6');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -1658,7 +1658,7 @@
         case 'ppeok': sfx('ppeok'); C.vibrate([20, 40, 20]); await popup('뻑!', 'sad', e.count >= 2 ? `${nameOf(ses, e.p)} 뻑 ${e.count}번째` : '세 장이 바닥에 남아요'); break;
         case 'jjok': sfx('good'); await popup('쪽!', 'mint', e.steal ? `피 ${e.steal}장씩 받아요` : ''); break;
         case 'ttadak': sfx('good'); await popup('따닥!', 'mint', e.steal ? `네 장 다 · 피 ${e.steal}장씩` : '네 장 다'); break;
-        case 'eat': sfx('good'); await popup(e.own ? '자뻑 먹기!' : '뻑 먹기!', 'mint', e.steal ? `피 ${e.steal}장씩 받아요` : '세 장 한꺼번에'); break;
+        case 'eat': sfx('good'); await popup(e.own ? '자뻑 먹기!' : e.by < 0 ? '깔린 세 장 먹기!' : '뻑 먹기!', 'mint', e.steal ? `피 ${e.steal}장씩 받아요` : '세 장 한꺼번에'); break;
         case 'sweep': sfx('win'); await popup('싹쓸이!', 'gold', e.steal ? `피 ${e.steal}장씩 받아요` : ''); break;
         case 'ppeokBonus': sfx('coin'); await popup(e.k + ' 보너스!', 'gold', `${e.own ? '모두에게서' : tname(ses, ses.who[e.from[0]]) + '에게서'} ${e.pts}점`); break;
         case 'capture': {

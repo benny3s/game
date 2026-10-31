@@ -95,6 +95,7 @@
     { k: 'stealBomb', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '폭탄' },
     { k: 'stealEat', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '남의 뻑 먹기' },
     { k: 'stealSelf', g: 'steal', t: 'num', d: 2, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '자뻑 먹기' },
+    { k: 'stealDealt', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '처음 깔린 세 장 먹기', note: '판 시작 때 바닥에 같은 월 세 장이 깔렸고, 그걸 네 번째 패로 먹을 때 (11-01 훈 님)' },
     { k: 'nagariX', g: 'nagari', t: 'num', d: 2, min: 1, max: 4, unit: '배', label: '나가리 다음 판 배수', note: '나가리가 나면 다음 판 점수에 곱해요 (1배면 없음)' },
     { k: 'nagariMax', g: 'nagari', t: 'num', d: 3, min: 0, max: 5, unit: '번', zero: '안 쌓음', label: '연속 나가리 쌓는 한도', note: '연달아 나가리가 나도 이 횟수까지만 곱해요' },
     { k: 'saleOn', g: 'sale', t: 'bool', d: true, label: '광 팔기', note: '끄면 쉬는 사람은 그냥 쉬어요' },
@@ -580,7 +581,7 @@
       for (const x of T) removeFrom(s.table, x);
       cur.caps.push(c, ...T);
       const own = s.owner[m];
-      const st = own === p ? rulesOf(s).stealSelf : own >= 0 ? rulesOf(s).stealEat : 0;
+      const st = own === p ? rulesOf(s).stealSelf : own >= 0 ? rulesOf(s).stealEat : rulesOf(s).stealDealt;   // own < 0 = 처음부터 깔린 세 장
       cur.steal += st;
       if (ev) ev.push({ t: 'eat', p, m, own: own === p, by: own, steal: st, cards: [c, ...T] });
       eatBonus(s, p, m, ev);
@@ -632,7 +633,7 @@
     if (U.length === 3) {
       for (const x of U) removeFrom(s.table, x);
       cur.caps.push(d, ...U);
-      const own = s.owner[md], st = own === p ? rulesOf(s).stealSelf : own >= 0 ? rulesOf(s).stealEat : 0;
+      const own = s.owner[md], st = own === p ? rulesOf(s).stealSelf : own >= 0 ? rulesOf(s).stealEat : rulesOf(s).stealDealt;
       cur.steal += st;
       if (ev) ev.push({ t: 'eat', p, m: md, own: own === p, by: own, steal: st, cards: [d, ...U], flip: true });
       eatBonus(s, p, md, ev);
