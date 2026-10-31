@@ -16,7 +16,7 @@
     hard:   { em: '🐯', name: '고급', desc: '여러 수 앞을 읽어요', cls: 't-hard' },
   };
   const TIER_IDS = ['easy', 'normal', 'hard'];
-  const tierLabel = t => `${TIERS[t].em} ${TIERS[t].name}`;
+  const tierLabel = t => { const x = TIERS[t] || TIERS.normal || Object.values(TIERS)[0]; return x ? `${x.em} ${x.name}` : ''; };   // 모르는 난이도(예전 저장값·구경 설정 없음)여도 안 멈추게
   const modals = [];
   function modal(o) {
     const oc = o.onClose;
