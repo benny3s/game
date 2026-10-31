@@ -1225,7 +1225,9 @@
         } else if (c) {
           const info = a >= G.A_PLAY && a < G.A_DRAW ? c.byCard[a - G.A_PLAY] : null, sug = c.card >= 0 && c.byCard[c.card] && c.byCard[c.card].suit != null ? ` → ${SYM[c.byCard[c.card].suit]}` : '';
           html = `${who} · <span class="cb-tag">👑 추천</span> <b>${c.card >= 0 ? '[' + esc(c.name) + ']' : esc(c.name)}</b>${sug} — ${esc(c.why)}<br>`
-            + (a === c.a ? '👍 실제로도 추천대로 했어요' : `실제로 한 수: <b>${esc(actText(st, a))}</b>${info ? (c.tag === '끝까지 둬 봄' ? '' : ` <span class="small">(선생님 순위 ${info.rank + 1}/${Object.keys(c.byCard).length + 1})</span>`) + ' — ' + esc(info.why) : a === G.A_DRAW && c.card >= 0 ? ` — ${st.atk > 0 ? '받아칠' : '낼'} 수 있는 카드가 있었어요` : ''}`);
+            + (a === c.a ? '👍 실제로도 추천대로 했어요' : `실제로 한 수: <b>${esc(actText(st, a))}</b>${info ? (c.tag === '끝까지 둬 봄' ? '' : ` <span class="small">(선생님 순위 ${info.rank + 1}/${Object.keys(c.byCard).length + 1})</span>`)
+              + `<br><span class="small">🤔 노린 것: ${esc(info.tag || '')} — ${esc(info.why)}${info.rank >= 2 && info.rank * 2 >= Object.keys(c.byCard).length ? ' · 순위가 낮아 노림수보다는 실수였을 수 있어요' : ''}</span>`
+              : a === G.A_DRAW && c.card >= 0 ? ` — ${st.atk > 0 ? '받아칠' : '낼'} 수 있는 카드가 있었는데 먹었어요 <span class="small">(🤔 손에 쥐고 아끼려 했거나 놓친 수예요)</span>` : ''}`);
         }
       }
       rpPanel.set(html);
