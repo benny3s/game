@@ -4,7 +4,11 @@
        meta(방장만: 단계 lobby/play·설정·최대 인원) · players/{uid}(본인·방장) · rtc/{uid}(WebRTC 연결 소개)
        up/{uid}(친구 → 방장, 최신 값 하나) · upq(친구 → 방장, 꼭 전할 것 줄) · down(방장 → 모두, 최신 값) · downq(방장 → 모두, 꼭 전할 것 줄)
        shared(방장이 쓰는 게임 기록 — 오목 수순처럼 나중에 들어온 사람도 읽어야 하는 것) · chat
-     목록 색인: arena/{게임}/index/{코드} (방장 이름·인원·단계만 — 방 전체를 읽으면 무거움)
+     목록 색인: arena/{게임}/index/{코드} (방장 이름·인원·단계·제목 ti·🔒 lk 만 — 방 전체를 읽으면 무거움)
+   · 🔒 방 제목(≤20자)·비밀번호(영문·숫자 4~8자, 선택): meta.title · meta.lock(true) 만 공개. 비밀번호 확인값은 읽을 수 없는 곳에 둠
+       arena/{게임}/gate/{코드} {h: 비밀번호 해시, k: 초대 토큰}  (방장만 씀, 아무도 못 읽음 — 규칙만 비교)
+       arena/{게임}/pass/{코드}/{uid} = h 또는 k  (들어오려는 사람이 먼저 씀 — 맞아야 쓰여짐) → 있어야 players/{uid} 를 새로 쓸 수 있음
+     초대 링크(inviteUrl)에는 &rk=토큰 이 붙어서 링크로 온 사람은 비밀번호 없이 들어옴 · 한 번 통과한 열쇠는 이 탭(sessionStorage)에 기억 → 다시 들어올 때 안 물음
    · 게임 데이터는 WebRTC 직접 연결(방장 ↔ 친구): 통로 g = 늦으면 버림(매 틱 상태·입력), r = 꼭 도착·순서대로(득점·수 두기)
      직접 연결이 안 되는 네트워크면 RTDB 로 자동 대체 (최신 값은 초당 10~15번까지)
    · ?guest 이면 탭마다 다른 익명 계정 + test/arena 아래를 씀 (한 컴퓨터에서 여러 명 시험, 실제 방 목록을 안 더럽힘)
@@ -13,6 +17,8 @@
    이벤트(on): host → join(uid,p) leave(uid) players(전체) msg(uid,m) p2p(uid,열림) conn(연결됨) chat(m) meta(meta)
               guest → msg(m) meta(meta) players(전체) p2p(열림) conn(연결됨, 까닭) closed() kicked() chat(m)
    players·meta 는 나중에 on 해도 마지막 값을 바로 한 번 받음
+   방 접근: h.setAccess({ title, pw }) (방장만, pw "" = 없애기) · h.access = {title, lock, pw, token} · 친구는 net.meta.title / net.meta.lock
+           join 에서 비밀번호가 필요하면 오류 e.needPw (비밀번호를 settings.pw 로 다시 부름 · e.wrong = 틀림) · host 설정에 title·pw
    게임 기록: h.setShared(키, 값) (방장만) · watchShared(키, cb) (모두, 나중에 들어와도 지금 값부터)
    시험: ?mock + common/arena-mock.js 를 먼저 넣으면 Firebase 없이 같은 브라우저 탭끼리 (지연 흉내 ?mock=80) */
 const Arena = (() => {
@@ -140,6 +146,23 @@ const Arena = (() => {
   const code4 = () => Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("");
   const cleanCode = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
 
+  // ── 🔒 방 제목·비밀번호 도우미
+  const cleanTitle = s => String(s || "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 20);
+  const normPw = s => String(s || "").trim().toLowerCase();                 // 대소문자 구분 안 함 (폰 자동 대문자 때문에)
+  const okPw = s => /^[0-9a-z]{4,8}$/.test(normPw(s));
+  const h53 = (str, seed) => { let a = 0xdeadbeef ^ seed, b = 0x41c6ce57 ^ seed; for (let i = 0; i < str.length; i++) { const c = str.charCodeAt(i); a = Math.imul(a ^ c, 2654435761); b = Math.imul(b ^ c, 1597334677); } a = Math.imul(a ^ (a >>> 16), 2246822507) ^ Math.imul(b ^ (b >>> 13), 3266489909); b = Math.imul(b ^ (b >>> 16), 2246822507) ^ Math.imul(a ^ (a >>> 13), 3266489909); return 4294967296 * (2097151 & b) + (a >>> 0); };
+  const pwKey = (pw, code) => { const t = "arena|" + code + "|" + normPw(pw); return "p" + h53(t, 1).toString(36) + h53(t, 7).toString(36); };   // 비밀번호+방 코드 → 확인값 (글 그대로는 어디에도 안 씀)
+  const rand = n => { const cs = "abcdefghijkmnpqrstuvwxyz23456789"; let o = ""; try { for (const x of crypto.getRandomValues(new Uint8Array(n))) o += cs[x % cs.length]; } catch (e) { for (let i = 0; i < n; i++) o += cs[Math.floor(Math.random() * cs.length)]; } return "t" + o; };   // 초대 토큰 ('t' 로 시작 = 비밀번호 확인값 'p…' 과 구분)
+  const accTok = {};                                                         // 코드 → 초대 토큰 (방장·링크로 들어온 사람만 앎 → inviteUrl 에 붙임)
+  const ACC = "arena.acc.";
+  const keyGet = (game, code) => { try { return sessionStorage.getItem(ACC + game + "." + code) || ""; } catch (e) { return ""; } };
+  const keySet = (game, code, k) => { try { if (k) sessionStorage.setItem(ACC + game + "." + code, k); else sessionStorage.removeItem(ACC + game + "." + code); } catch (e) {} };
+  const urlKey = code => { try { const sp = new URLSearchParams(location.search); if (cleanCode(sp.get("room")) === code) return String(sp.get("rk") || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 32); } catch (e) {} return ""; };
+  // 들어가 볼 열쇠들: 방금 친 비밀번호 > 초대 링크 토큰 > 이 탭이 전에 통과한 열쇠
+  const candKeys = (game, code, settings) => { const c = []; const add = k => { if (k && !c.includes(k)) c.push(k); }; if (settings && settings.pw) add(pwKey(settings.pw, code)); add(urlKey(code)); add(keyGet(game, code)); return c; };
+  const needPwErr = wrong => { const e = new Error(wrong ? "비밀번호가 맞지 않아요" : "🔒 비밀번호가 필요한 방이에요"); e.needPw = true; e.wrong = !!wrong; return e; };
+  const ACCESS_API = { okPw, normPw, cleanTitle };
+
   // 구독을 모아 두었다가 한 번에 끊기 (ref.off()는 자식 위치 구독을 못 끊음)
   function subs() {
     const list = [];
@@ -217,26 +240,41 @@ const Arena = (() => {
   // ── 방장: 방을 만들고 대기실 단계로 시작
   // settings: { name, cfg, max(최대 인원, 기본 2), me(내 자리 정보 더), label(cfg → 방 목록에 보일 짧은 글) }
   async function host(game, settings = {}) {
+    if (settings.pw && !okPw(settings.pw)) throw new Error("비밀번호는 영문·숫자 4~8자로 해 주세요");
     await init();
     const base = db().ref(ROOT + game);
     let code;
     for (let i = 0; i < 6; i++) { code = code4(); if (!(await base.child(`rooms/${code}/meta`).get()).exists()) break; }
     const room = base.child(`rooms/${code}`), idx = base.child(`index/${code}`), S = subs(), E = emitter(["players", "meta"]);
+    const gateRef = base.child(`gate/${code}`), passRef = base.child(`pass/${code}`);
+    let title = cleanTitle(settings.title), pw = settings.pw ? normPw(settings.pw) : "";
+    const tok = rand(10);
     let meta = { host: user.uid, created: Date.now(), phase: "lobby", cfg: settings.cfg || null, max: settings.max || 2, v: 1 };
+    if (title) meta.title = title;
+    if (pw) { meta.lock = true; accTok[code] = tok; }
     let mine = { name: String(settings.name || "방장").slice(0, 12), ...(settings.me || {}) };
     const label = settings.label || (() => "");
     let players = {}, closed = false;
+    // 🔒 비밀번호 방: 확인값(gate)은 방 정보(meta.lock)와 함께 — 이미 앉은 사람(방장이 나중에 건 경우)에게는 통과증(pass)도 줌
+    const writeGate = async () => {
+      if (!pw) return;
+      const h = pwKey(pw, code);
+      await gateRef.set({ h, k: tok });
+      gateRef.onDisconnect().remove(); passRef.onDisconnect().remove();
+      for (const u of Object.keys(players)) if (u !== user.uid) passRef.child(u).set(h).catch(() => {});
+    };
     await room.child("meta").set(meta);
+    await writeGate();
     room.onDisconnect().remove();
     await room.child(`players/${user.uid}`).set({ ...mine, t: TS() });
-    const writeIdx = () => idx.set({ h: mine.name, n: Object.keys(players).length || 1, max: meta.max, ph: meta.phase, m: String(label(meta.cfg) || "").slice(0, 40), t: TS() }).catch(() => {});
+    const writeIdx = () => idx.set({ h: mine.name, n: Object.keys(players).length || 1, max: meta.max, ph: meta.phase, m: String(label(meta.cfg) || "").slice(0, 40), t: TS(), ...(title ? { ti: title } : {}), ...(pw ? { lk: 1 } : {}) }).catch(() => {});
     idx.onDisconnect().remove(); writeIdx();
     E.emit("meta", meta);
     // 방장 인터넷이 잠깐 끊겨 방이 지워졌다가 다시 연결되면: 방 정보와 내 자리를 다시 써 둠 (친구들은 스스로 다시 앉음)
     let conn = true;
     S.on(db().ref(".info/connected"), "value", s => {
       const c = s.val() === true;
-      if (c && !conn && !closed) { room.child("meta").set(meta).then(writeIdx).catch(() => {}); room.child(`players/${user.uid}`).set({ ...mine, t: TS() }).catch(() => {}); room.onDisconnect().remove(); idx.onDisconnect().remove(); }
+      if (c && !conn && !closed) { room.child("meta").set(meta).then(() => { writeIdx(); return writeGate(); }).catch(() => {}); room.child(`players/${user.uid}`).set({ ...mine, t: TS() }).catch(() => {}); room.onDisconnect().remove(); idx.onDisconnect().remove(); }
       conn = c; E.emit("conn", c);
     });
     const peers = new Map();                                                 // uid → WebRTC 연결
@@ -293,7 +331,21 @@ const Arena = (() => {
       setMeta(p) { meta = { ...meta, ...p }; writeIdx(); E.emit("meta", meta); return room.child("meta").update(p); },
       setMe(p) { mine = { ...mine, ...p }; if (p.name) writeIdx(); return room.child(`players/${user.uid}`).update(p); },
       setPlayer(uid, p) { return room.child(`players/${uid}`).update(p); },     // 자리·팀 정하기 (방장만)
-      kick(uid) { return room.child(`players/${uid}`).remove(); },
+      kick(uid) { passRef.child(uid).remove().catch(() => {}); return room.child(`players/${uid}`).remove(); },
+      // 방 제목·비밀번호 바꾸기 (방장만): { title?, pw? } — pw "" = 비밀번호 없애기. 이미 앉은 사람은 그대로 (다시 앉을 때도 안 물음)
+      get access() { return { title, lock: !!pw, pw, token: tok }; },
+      async setAccess(p = {}) {
+        let nt = title, np = pw;
+        if ("title" in p) nt = cleanTitle(p.title);
+        if ("pw" in p) { np = p.pw ? normPw(p.pw) : ""; if (np && !okPw(np)) throw new Error("비밀번호는 영문·숫자 4~8자로 해 주세요"); }
+        const was = pw; title = nt; pw = np;
+        if (pw) await writeGate();
+        const m2 = { ...meta }; if (title) m2.title = title; else delete m2.title; if (pw) m2.lock = true; else delete m2.lock;
+        meta = m2; if (pw) accTok[code] = tok; else delete accTok[code];
+        await room.child("meta").update({ title: title || null, lock: pw ? true : null });
+        if (!pw && was) { gateRef.remove().catch(() => {}); passRef.remove().catch(() => {}); }
+        writeIdx(); E.emit("meta", meta);
+      },
       get gone() { return closed; },
       // 게임 기록(오목 수순처럼 나중에 들어온 사람도 읽어야 하는 것): 방장만 씀, 모두 읽음
       setShared(key, value) { return room.child("shared/" + key).set(value === undefined ? null : value); },
@@ -302,7 +354,8 @@ const Arena = (() => {
       leave() {
         if (closed) return; closed = true;
         clearInterval(healT); clearTimeout(downT); S.off(); E.clear(); for (const p of peers.values()) p.close(); peers.clear();
-        room.onDisconnect().cancel(); idx.onDisconnect().cancel(); room.remove().catch(() => {}); idx.remove().catch(() => {});
+        room.onDisconnect().cancel(); idx.onDisconnect().cancel(); gateRef.onDisconnect().cancel(); passRef.onDisconnect().cancel();
+        room.remove().catch(() => {}); idx.remove().catch(() => {}); gateRef.remove().catch(() => {}); passRef.remove().catch(() => {}); delete accTok[code];
       },
     };
   }
@@ -321,6 +374,17 @@ const Arena = (() => {
     // 이미 앉아 있던 자리(새로 고침·다시 들어오기)는 같은 사람으로 이어서
     if (seated) {}
     else if (Object.keys(pl).length >= (meta0.max || 2) && !settings.watch) throw new Error(`방이 꽉 찼어요 (최대 ${meta0.max || 2}명)`);
+    // 🔒 비밀번호 방(구경도 마찬가지): 열쇠(방금 친 비밀번호 · 초대 링크 토큰 · 이 탭이 전에 통과한 열쇠)를 pass 에 써 보고, 규칙이 받아 주면 통과
+    let key = "";
+    const passRef = db().ref(`${ROOT}${game}/pass/${code}/${user.uid}`);
+    if (meta0.lock && !seated) {
+      const cands = candKeys(game, code, settings);
+      if (!cands.length) throw needPwErr(false);
+      for (const c of cands) { try { await passRef.set(c); key = c; break; } catch (e) {} }
+      if (!key) { keySet(game, code, ""); throw needPwErr(!!settings.pw); }
+      keySet(game, code, key);
+      if (key[0] === "t") accTok[code] = key;
+    }
     const S = subs(), E = emitter(["players", "meta"]);
     let meta = meta0, players = pl, left = false, rtt = 0, peer = null;
     let mine = { name: String(settings.name || "친구").slice(0, 12), ...(settings.me || {}) };
@@ -338,13 +402,15 @@ const Arena = (() => {
       peer = window.RTCPeerConnection ? clientPeer(room, user.uid, onMsg, o => E.emit("p2p", o), () => setTimeout(newPeer, 0)) : null;
     };
     // 내 자리 쓰기 + 끊기면 지워지게 예약 (다시 연결될 때마다 다시)
-    const seat = () => {
-      if (left) return Promise.resolve();
+    const seat = async () => {
+      if (left) return;
+      if (key) await passRef.set(key).catch(() => {});                       // 방장 인터넷이 끊겼다 와서 통과증이 지워졌을 수 있음
       for (const k of ["players", "up", "rtc"]) room.child(`${k}/${user.uid}`).onDisconnect().remove();
       return room.child(`players/${user.uid}`).set({ ...mine, t: TS() });
     };
     newPeer();
-    await seat();
+    try { await seat(); }
+    catch (e) { if (peer) peer.close(); if (!meta0.lock) throw e; keySet(game, code, ""); throw needPwErr(true); }
     S.on(room.child("down"), "value", s => { const v = s.val(); if (v && !(peer && peer.open())) onMsg(v.m); });
     S.on(room.child("downq").orderByChild("t").startAt(joinedAt - 3000), "child_added", s => { const v = s.val(); if (v && (!v.to || v.to === user.uid)) onMsg(v.m); });
     // 방이 잠깐 사라져도(방장 인터넷 끊김) 바로 끝내지 않고 20초 기다림
@@ -359,7 +425,7 @@ const Arena = (() => {
     S.on(room.child("players"), "value", s => {
       players = s.val() || {};
       if (!left && s.exists() && !players[user.uid] && !reseatT) {
-        if (wasSeated && conn && players[meta.host]) { E.emit("kicked"); }
+        if (wasSeated && conn && players[meta.host]) { keySet(game, code, ""); E.emit("kicked"); }
         else reseatT = setTimeout(() => { reseatT = null; seat().catch(() => {}); newPeer(); }, 800);
       }
       wasSeated = !!players[user.uid];
@@ -394,6 +460,7 @@ const Arena = (() => {
         if (left) return; left = true;
         clearInterval(pingT); clearTimeout(goneT); clearTimeout(reseatT); clearTimeout(upT); S.off(); E.clear(); if (peer) peer.close();
         for (const k of ["players", "up", "rtc"]) room.child(`${k}/${user.uid}`).remove().catch(() => {});
+        if (key) passRef.remove().catch(() => {});
       },
     };
   }
@@ -406,7 +473,7 @@ const Arena = (() => {
     const rows = await Promise.all(Object.keys(idx).slice(0, 40).map(async code => {
       const [m, p] = await Promise.all([base.child(`rooms/${code}/meta`).get(), base.child(`rooms/${code}/players`).get()]);
       const meta = m.val(), players = p.val() || {};
-      return { code, ...idx[code], n: Object.keys(players).length, max: (meta && meta.max) || idx[code].max || 2, ph: (meta && meta.phase) || idx[code].ph, empty: !meta || !players[meta.host] };
+      return { code, ...idx[code], n: Object.keys(players).length, max: (meta && meta.max) || idx[code].max || 2, ph: (meta && meta.phase) || idx[code].ph, ti: (meta && meta.title) || idx[code].ti || "", lk: (meta ? meta.lock : idx[code].lk) ? 1 : 0, empty: !meta || !players[meta.host] };
     }));
     return rows.sort((a, b) => (a.empty - b.empty) || ((b.t || 0) - (a.t || 0)));
   }
@@ -414,23 +481,85 @@ const Arena = (() => {
     await init();
     const base = db().ref(ROOT + game);
     await base.child(`rooms/${code}`).remove().catch(() => {});
+    base.child(`gate/${code}`).remove().catch(() => {}); base.child(`pass/${code}`).remove().catch(() => {});   // 방이 없어진 뒤라 규칙이 허락
     return base.child(`index/${code}`).remove();
   }
-  const inviteUrl = code => location.origin + location.pathname + "?room=" + code + (GUEST ? "&guest" : "") + (MOCK ? "&mock" : "");
+  // 비밀번호 방이면 링크에 토큰(rk)이 붙음 → 링크로 온 사람은 비밀번호 없이 들어옴 (토큰을 아는 방장·링크로 들어온 사람의 링크만)
+  const inviteUrl = code => location.origin + location.pathname + "?room=" + code + (accTok[code] ? "&rk=" + accTok[code] : "") + (GUEST ? "&guest" : "") + (MOCK ? "&mock" : "");
   const roomFromUrl = () => {
     const r = new URLSearchParams(location.search).get("room");
     if (!r || r.toLowerCase() === "host") return null;
     return cleanCode(r) || null;
   };
 
+  // ── 시험용(mock) 방 접근 규칙: 진짜 규칙(gate·pass) 대신 방장 탭이 비밀번호 확인값을 들고 있다가 BroadcastChannel 로 '맞나요?' 에 답함
+  //   arena-mock.js(안쪽 mock)는 그대로 두고 host·join·listRooms 만 감싸서 제목·🔒·비밀번호·초대 토큰·기억 동작이 진짜와 같게 시험됨
+  function mockAccess(api) {
+    let bc = null; try { bc = new BroadcastChannel("arena-mock-acc"); } catch (e) {}
+    const hosted = {}, waiters = new Set();                                  // "게임/코드" → { title, pw, tok }
+    const roomInfo = (g, c, keys) => {
+      const a = hosted[g + "/" + c]; if (!a) return null;
+      const m = !a.pw ? "" : (keys || []).find(k => k === pwKey(a.pw, c) || k === a.tok) || "";
+      return { lock: !!a.pw, ok: !a.pw || !!m, key: m, title: a.title };
+    };
+    const listInfo = g => Object.keys(hosted).filter(k => k.startsWith(g + "/")).map(k => ({ code: k.split("/")[1], ti: hosted[k].title, lk: hosted[k].pw ? 1 : 0 }));
+    if (bc) bc.onmessage = e => {
+      const d = e.data || {};
+      if (d.k === "acc?") { const r = roomInfo(d.game, d.code, d.keys); if (r) bc.postMessage({ k: "acc!", id: d.id, ...r }); }
+      else if (d.k === "accl?") bc.postMessage({ k: "accl!", id: d.id, rows: listInfo(d.game) });
+      else for (const w of [...waiters]) w(d);
+    };
+    const ask = (msg, ms, early) => new Promise(ok => {
+      const id = rand(6), got = [];
+      const done = () => { waiters.delete(w); clearTimeout(t); ok(got); };
+      const w = d => { if (d.id === id) { got.push(d); if (early) done(); } };
+      const t = setTimeout(done, ms);
+      waiters.add(w); if (bc) bc.postMessage({ ...msg, id }); else done();
+    });
+    const host0 = api.host, join0 = api.join, list0 = api.listRooms;
+    api.host = async (game, settings = {}) => {
+      if (settings.pw && !okPw(settings.pw)) throw new Error("비밀번호는 영문·숫자 4~8자로 해 주세요");
+      const h = await host0(game, settings), a = { title: cleanTitle(settings.title), pw: settings.pw ? normPw(settings.pw) : "", tok: rand(10) };
+      hosted[game + "/" + h.code] = a;
+      const apply = () => { if (a.pw) accTok[h.code] = a.tok; else delete accTok[h.code]; h.setMeta({ title: a.title || undefined, lock: a.pw ? true : undefined }); };
+      if (a.title || a.pw) apply();
+      h.setAccess = async (p = {}) => {
+        if ("title" in p) a.title = cleanTitle(p.title);
+        if ("pw" in p) { const n = p.pw ? normPw(p.pw) : ""; if (n && !okPw(n)) throw new Error("비밀번호는 영문·숫자 4~8자로 해 주세요"); a.pw = n; }
+        apply();
+      };
+      Object.defineProperty(h, "access", { get: () => ({ title: a.title, lock: !!a.pw, pw: a.pw, token: a.tok }) });
+      const lv = h.leave; h.leave = function () { delete hosted[game + "/" + h.code]; delete accTok[h.code]; return lv.apply(this, arguments); };
+      return h;
+    };
+    api.join = async (game, code, settings = {}) => {
+      code = cleanCode(code);
+      const keys = candKeys(game, code, settings);
+      let r = roomInfo(game, code, keys);
+      if (!r) r = (await ask({ k: "acc?", game, code, keys }, 500, true))[0] || null;   // 아무도 답 안 하면 안쪽 join 이 '그런 방이 없어요' 를 냄
+      if (r && r.lock) {
+        if (!keys.length) throw needPwErr(false);
+        if (!r.ok) { keySet(game, code, ""); throw needPwErr(!!settings.pw); }
+        keySet(game, code, r.key); if (r.key[0] === "t") accTok[code] = r.key;
+      }
+      return join0(game, code, settings);
+    };
+    api.listRooms = async game => {
+      const [rows, got] = await Promise.all([list0(game), ask({ k: "accl?", game }, 350, false)]);
+      const m = {}; for (const d of got) for (const x of d.rows || []) m[x.code] = x;
+      return (rows || []).map(r => m[r.code] ? { ...r, ti: m[r.code].ti || "", lk: m[r.code].lk } : r);
+    };
+    return Object.assign(api, ACCESS_API);
+  }
+
   // ?mock 또는 ?arena=mock (시험 전용): Firebase 대신 같은 브라우저 탭끼리 BroadcastChannel/메모리로 동작
   const sp0 = new URLSearchParams(location.search);
   const MOCK = sp0.has("mock") || sp0.get("arena") === "mock";
   if (MOCK) {
-    if (window.ArenaMock) return window.ArenaMock({ inviteUrl, roomFromUrl, cleanCode });
+    if (window.ArenaMock) return mockAccess(window.ArenaMock({ inviteUrl, roomFromUrl, cleanCode }));
     const mockUid = "mock_" + Math.random().toString(36).slice(2, 8);
     const mockRooms = {};
-    return {
+    return mockAccess({
       mock: true, canHost: true, isAdmin: true, uid: mockUid, ready: true,
       init: async () => true,
       db: () => null,
@@ -470,13 +599,13 @@ const Arena = (() => {
           on: E.on, send: () => {}, watchShared: () => {}, setMe: () => {}, leave: () => E.clear(), close: () => E.clear(),
         };
       },
-    };
+    });
   }
   return {
     init, host, join, listRooms, deleteRoom, inviteUrl, roomFromUrl, cleanCode, now, GUEST, ROOT, mock: false,
     db: () => app && app.database(), get uid() { return user && user.uid; }, get ready() { return !!app; },
     get canHost() { return hostFlag; }, get isAdmin() { return adminFlag; },
-    createHostInvite, claimHostInvite, refreshPerms,
+    createHostInvite, claimHostInvite, refreshPerms, ...ACCESS_API,
   };
 })();
 window.Arena = Arena;   // 은행(bank.js)·포털이 window.Arena 로 찾음 (const 는 window 에 안 붙음)

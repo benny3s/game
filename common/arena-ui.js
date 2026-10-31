@@ -14,7 +14,10 @@
    · 인원은 미리 정하지 않음: 방장이 방을 열면 최대(max) 인원까지 들어오고, min 명 이상이면 방장이 아무 때나 시작
      describe 가 { text, ok: false } 를 돌려주면 시작 버튼을 잠금 (예: 이 설정은 4명이어야 해요)
    · 방 만들기는 관리자·허용된 기기만. 권한이 없으면 Gate.requestHost() 창(기기 허용 / 방 링크 받기)을 띄움
-     ArenaUI.toLobby()  — 방장: 판이 끝난 뒤 모두 대기실로 · ArenaUI.leave() · ArenaUI.net (지금 연결) */
+     ArenaUI.toLobby()  — 방장: 판이 끝난 뒤 모두 대기실로 · ArenaUI.leave() · ArenaUI.net (지금 연결)
+   · 방 제목·비밀번호(선택): 방 만들기 아래 '🔐 제목·비밀번호' 를 펴서 적음 (안 적으면 '{방장}의 방' · 누구나). 대기실에서 방장이 고칠 수 있음
+     비밀번호 방은 목록·코드로 들어갈 때(구경 포함) 물음 — 초대 링크(&rk=토큰)로 오면 안 물음, 한 번 통과하면 이 탭은 다시 안 물음
+     (게임 쪽은 그대로: net.players · watch 는 같음, net.meta.title · net.meta.lock 으로 제목·🔒를 알 수 있음) */
 (() => {
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const css = `
@@ -98,7 +101,11 @@
 .arn-opts>summary::-webkit-details-marker{display:none}
 .arn-opts>summary::after{content:"펼치기 ▾";margin-left:auto;flex:none;font-size:12px;color:var(--soft,#94a3b8)}.arn-opts[open]>summary::after{content:"접기 ▴"}
 .arn-opts>summary small{font-weight:600;font-size:12.5px;color:var(--soft,#94a3b8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.arn-optb{display:grid;gap:10px;padding:0 10px 10px}`;
+.arn-optb{display:grid;gap:10px;padding:0 10px 10px}
+.arn-fld{width:100%;box-sizing:border-box;border:1.5px solid var(--line,rgba(255,255,255,.18));background:rgba(0,0,0,.28);color:inherit;border-radius:12px;padding:10px 12px;font:15px var(--text,inherit);outline:none}
+.arn-fld:focus{border-color:var(--gold,#f59e0b)}
+.arn-rt{text-align:center;font:700 15px/1.3 var(--round,inherit);margin:-6px 0 -2px;overflow-wrap:anywhere}
+.arn-rt:empty{display:none}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
 
@@ -240,7 +247,7 @@
 
   const show = () => { chatDock(null); style(); if (!ov) { ov = document.createElement("div"); ov.className = "arn-ov"; ov.innerHTML = '<div class="arn-box"></div>'; document.body.appendChild(ov); box = ov.firstChild; } ov.hidden = false; };
   const hide = () => { chatDock(null); clearList(); if (ov) ov.hidden = true; };
-  const setUrlRoom = code => { try { const u = new URL(location.href); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} };
+  const setUrlRoom = code => { try { const u = new URL(location.href); if (!code || u.searchParams.get("room") !== code) u.searchParams.delete("rk"); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} };
 
   async function myName() {
     if (window.GME && !Arena.mock) {
@@ -263,6 +270,10 @@
       <h2>친구랑 ${esc(opt.title)}</h2>
       <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${canHost ? '<span style="font-size:12px;background:rgba(63,174,122,.16);color:#2d8a5e;padding:3px 8px;border-radius:99px;white-space:nowrap">✅ 방 만들기 가능</span>' : ''}${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
       <button class="arn-btn${canHost ? " pri" : ""}" id="arCreate" data-host>🏠 방 만들기 (친구 초대)</button>
+      ${canHost ? `<details class="arn-opts" data-newopt><summary>🔐 제목·비밀번호 <small>(선택) 안 적으면 누구나</small></summary><div class="arn-optb">
+        <input class="arn-fld" data-ntitle maxlength="20" placeholder="방 제목 (비우면 ‘${esc(me ? me.name : "")}의 방’)" autocomplete="off" enterkeyhint="next">
+        <input class="arn-fld" data-npw maxlength="8" placeholder="비밀번호 (영문·숫자 4~8자, 비우면 없음)" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
+        <p class="arn-soft">비밀번호를 걸면 목록·코드로 들어올 때 비밀번호를 물어요. 초대 링크로 오면 안 물어요.</p></div></details>` : ""}
       ${canHost ? "" : `<p class="arn-soft" style="margin-top:-6px">방 만들기는 허용된 기기만 돼요. 친구가 보낸 <b>방 링크</b>나 <b>코드</b>로는 바로 들어갈 수 있어요.</p>`}
       <div class="arn-row"><input class="arn-code" maxlength="20" placeholder="방 코드 또는 방 이름 (예: 베니)" autocomplete="off" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
       <div class="arn-msg">${esc(msg)}</div>
@@ -280,7 +291,8 @@
         const full = r.n >= r.max, busy = r.ph === "play";
         const state = r.empty ? "빈 방" : busy ? "게임 중" : full ? "꽉 참" : "기다리는 중";
         const btn = r.empty ? `<button class="arn-btn" data-del="${esc(r.code)}">지우기</button>` : `<button class="arn-btn" data-code="${esc(r.code)}" ${full ? "disabled" : ""}>${busy ? "구경하기" : "들어가기"}</button>`;   // 게임 중인 방도 들어가면 게임이 구경·다음 판으로 받음
-        return `<div class="arn-room"><div class="who"><b>${esc(r.h || "?")}의 방</b><span>${esc(state)} · ${r.n}/${r.max}명${r.m ? " · " + esc(r.m) : ""}</span></div>${btn}</div>`;
+        const nm = r.ti ? esc(r.ti) : esc(r.h || "?") + "의 방";
+        return `<div class="arn-room"><div class="who"><b>${r.lk ? "🔒 " : ""}${nm}</b><span>${r.ti ? esc(r.h || "?") + " · " : ""}${esc(state)} · ${r.n}/${r.max}명${r.m ? " · " + esc(r.m) : ""}</span></div>${btn}</div>`;
       }).join("") : `<p class="arn-soft">${canHost ? "아직 열린 방이 없어요. 방을 만들고 친구에게 초대 링크를 보내 보세요." : "지금 열린 방이 없어요. 초대 링크나 방 코드를 받으면 들어갈 수 있어요."}</p>`;
     };
     draw(); listT = setInterval(draw, 4000);
@@ -292,8 +304,14 @@
     const isHost = net.isHost;
     box.innerHTML = `<button class="arn-x" data-leave aria-label="나가기">✕</button>
       <h2>${esc(opt.title)} 대기실</h2>
+      <div class="arn-rt" data-rt></div>
       <div class="arn-big"><span>방 코드</span><b id="arCode">${esc(net.code)}</b></div>
       <button class="arn-btn" data-share>🔗 초대 링크 보내기</button>
+      ${isHost ? `<details class="arn-opts" data-acc><summary>🔐 방 제목·비밀번호 <small data-accsum></small></summary><div class="arn-optb">
+        <input class="arn-fld" data-atitle maxlength="20" placeholder="방 제목 (비우면 ‘${esc(me ? me.name : "")}의 방’)" autocomplete="off">
+        <input class="arn-fld" data-apw maxlength="8" placeholder="비밀번호 (영문·숫자 4~8자, 비우면 없음)" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button class="arn-btn" type="button" data-accsave>저장</button>
+        <p class="arn-soft" data-accmsg>초대 링크로 오면 비밀번호 없이 들어와요. 이미 앉은 사람은 그대로예요.</p></div></details>` : ""}
       <div class="arn-head"><span>참가자</span><span data-count></span></div>
       <div class="arn-list" data-pl></div>
       <div class="arn-desc" data-desc hidden></div>
@@ -306,8 +324,25 @@
       ${isHost ? `<button class="arn-btn pri" id="arStart" data-start disabled>시작하기</button>` : `<p class="arn-wait">방장이 시작하면 바로 시작돼요</p>`}
       <button class="arn-btn" id="arLeave" data-leave>나가기</button>`;
     const det = box.querySelector("[data-opts]"); det.addEventListener("toggle", () => { optsOpen = det.open; });
-    drawPlayers(); drawSettings(); drawCoach();
+    drawPlayers(); drawSettings(); drawCoach(); drawAccess(true);
     chatDock(box.querySelector("[data-lchat]"));
+  }
+  // 방 제목·🔒 표시 (모두) + 방장 입력칸 (처음 한 번만 채움 — 치는 도중 meta 가 와도 안 지워지게)
+  const accOf = () => { const m = (net && net.meta) || {}, a = (net && net.isHost && net.access) || null; return { title: m.title || "", lock: !!m.lock, pw: (a && a.pw) || "" }; };
+  function drawAccess(fill) {
+    if (!box || !net) return; const rt = box.querySelector("[data-rt]"); if (!rt) return;
+    const a = accOf();
+    rt.textContent = a.title ? (a.lock ? "🔒 " : "") + a.title : a.lock ? "🔒 비밀번호 방" : "";
+    const sum = box.querySelector("[data-accsum]"); if (sum) sum.textContent = a.lock ? "🔒 비밀번호 있음" : a.title ? "비밀번호 없음" : "";
+    if (fill && net.isHost) { const t = box.querySelector("[data-atitle]"), p = box.querySelector("[data-apw]"); if (t) t.value = a.title; if (p) p.value = a.pw; }
+  }
+  async function saveAccess() {
+    if (!net || !net.isHost || !net.setAccess) return;
+    const t = box.querySelector("[data-atitle]"), p = box.querySelector("[data-apw]"), m = box.querySelector("[data-accmsg]"); if (!t || !p) return;
+    const say = (txt, bad) => { if (m) { m.textContent = txt; m.style.color = bad ? "var(--bad,#e5536b)" : "var(--good,#3fae7a)"; } };
+    if (p.value.trim() && !Arena.okPw(p.value)) { say("비밀번호는 영문·숫자 4~8자로 적어 주세요", true); return; }
+    try { await net.setAccess({ title: t.value, pw: p.value.trim() ? Arena.normPw(p.value) : "" }); drawAccess(true); say(p.value.trim() ? "저장했어요. 목록·코드로 오는 사람은 비밀번호를 물어요" : "저장했어요. 누구나 들어올 수 있어요"); }
+    catch (e) { say("저장하지 못했어요: " + e.message, true); }
   }
   let optsOpen = false;                                       // 설정은 접어 두고 한 줄 요약만 (펼친 걸 기억)
   function drawSum() {
@@ -430,7 +465,7 @@
       if (!m) return;
       if (m.phase === "play" && !playing) { playing = true; hide(); logMatch(); connBadge(); opt.onStart && opt.onStart(ctx()); }
       else if (m.phase === "lobby" && playing) { playing = false; opt.onLobby && opt.onLobby(ctx()); lobby(); }
-      else if (!playing) { drawSettings(); drawCoach(); }
+      else if (!playing) { drawSettings(); drawCoach(); drawAccess(false); }
     }));
     if (!net.isHost) {
       offs.push(net.on("closed", () => end("방장이 방을 닫았어요")));
@@ -449,6 +484,7 @@
     if (why) { home(why); }
   }
 
+  let draft = { title: "", pw: "" };                          // 방 만들기 창에서 적은 제목·비밀번호 (기기 허용 창을 거쳐도 남음)
   async function doHost() {
     const b = box.querySelector("[data-host]"); if (b) { b.disabled = true; b.textContent = "방 만드는 중…"; }
     try {
@@ -464,7 +500,8 @@
       }
       cfg = { ...(opt.settings && opt.settings.defaults || {}), ...built, ...(cfg || {}) };
       if (opt.coach) cfg.coach = false;                       // 새 방은 AI 선생님 꺼진 채로 시작
-      net = await Arena.host(opt.game, { name: me.name, me: me.pid ? { pid: me.pid } : {}, cfg, max: opt.max || opt.maxPlayers || 2, label: (opt.settings && opt.settings.label) || opt.renderConfig });
+      const acc = draft; draft = { title: "", pw: "" };
+      net = await Arena.host(opt.game, { name: me.name, me: me.pid ? { pid: me.pid } : {}, cfg, max: opt.max || opt.maxPlayers || 2, label: (opt.settings && opt.settings.label) || opt.renderConfig, title: acc.title, pw: acc.pw });
       playing = false; wire(); setUrlRoom(net.code); lobby();
     } catch (e) { home("방을 못 만들었어요: " + e.message); }
   }
@@ -480,17 +517,31 @@
     if (ok && Arena.canHost !== false) { show(); doHost(); }
     else home(ok ? "허용은 됐는데 확인이 늦어요. 잠시 뒤 다시 눌러 주세요" : "");
   }
-  async function doJoin(code) {
+  // 🔒 비밀번호 방: 링크·저장된 열쇠로 못 들어가면 물어봄 (틀리면 다시)
+  function askPw(code, msg) {
+    show();
+    box.innerHTML = `<button class="arn-x" data-x aria-label="닫기">✕</button><h2>🔒 비밀번호</h2>
+      <p class="arn-soft">방 ${esc(code)} 은(는) 비밀번호가 있어요. 방장에게 물어보거나, 방장이 보낸 초대 링크로 들어오세요. (구경도 같아요)</p>
+      <input class="arn-fld" data-pw maxlength="8" placeholder="비밀번호" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go">
+      <div class="arn-msg" data-msg>${esc(msg || "")}</div>
+      <div class="arn-row"><button class="arn-btn" data-pwno>취소</button><button class="arn-btn pri" data-pwgo="${esc(code)}" style="flex:1">들어가기</button></div>`;
+    const inp = box.querySelector("[data-pw]");
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") box.querySelector("[data-pwgo]").click(); });
+    setTimeout(() => { try { inp.focus(); } catch (e) {} }, 50);
+  }
+  async function doJoin(code, pw) {
     code = Arena.cleanCode(code);
     if (code.length !== 4) { const m = box.querySelector(".arn-msg"); if (m) m.textContent = "코드 4글자를 적어 주세요"; return; }
     show(); box.innerHTML = `<h2>들어가는 중…</h2><p class="arn-wait">방 ${esc(code)}</p>`;
     try {
-      net = await Arena.join(opt.game, code, { name: me.name, me: me.pid ? { pid: me.pid } : {} });
+      net = await Arena.join(opt.game, code, { name: me.name, me: me.pid ? { pid: me.pid } : {}, pw });
       playing = false; wire(); setUrlRoom(net.code);
       if (net.meta && net.meta.phase === "play") { playing = true; hide(); connBadge(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
       else lobby();
     } catch (e) {
-      net = null; setUrlRoom(null);
+      net = null;
+      if (e && e.needPw) { askPw(code, e.wrong ? e.message : ""); return; }   // 방 주소(?room=)는 그대로 둠 — 비밀번호를 맞추면 이어서
+      setUrlRoom(null);
       if (e && e.own) Arena.deleteRoom(opt.game, code).catch(() => {});   // 내가 만든 방 (방장이 새로 고침) → 닫고 처음 화면으로
       home(e.message);
     }
@@ -511,7 +562,8 @@
     const open = rows.filter(r => !r.empty);
     if (code.length === 4 && open.some(r => r.code === code)) return doJoin(code);
     const k = s => String(s || "").toLowerCase().replace(/\s+/g, "").replace(/의방$/, "");
-    const hit = open.filter(r => k(r.h).includes(k(q)) || k(q).includes(k(r.h)) && k(r.h));
+    const kq = k(q), like = s => { const a = k(s); return !!a && !!kq && (a.includes(kq) || kq.includes(a)); };   // 방장 이름 또는 방 제목
+    const hit = open.filter(r => like(r.h) || like(r.ti));
     if (hit.length === 1) return doJoin(hit[0].code);
     if (hit.length > 1) { if (msg) msg.textContent = `'${q}' 이름의 방이 ${hit.length}개예요 — 아래 목록에서 골라 주세요`; return; }
     if (code.length === 4 && /^[A-Z0-9]{4}$/.test(q.toUpperCase())) return doJoin(code);   // 목록에 안 보이는 방도 코드로는 시도
@@ -520,9 +572,17 @@
 
   function onClick(e) {
     const t = e.target.closest("button"); if (!t || !ov || !ov.contains(t)) return;
-    if (t.matches("[data-x]")) { hide(); opt.onLeave && opt.onLeave(""); }
+    if (t.matches("[data-x]")) { if (box.querySelector("[data-pw]")) setUrlRoom(null); hide(); opt.onLeave && opt.onLeave(""); }
     else if (t.matches("[data-rename]")) { if (ov) ov.hidden = true; GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
-    else if (t.matches("[data-host]")) tryHost();
+    else if (t.matches("[data-host]")) {
+      const nt = box.querySelector("[data-ntitle]"), np = box.querySelector("[data-npw]");
+      draft = { title: nt ? nt.value.trim() : "", pw: np ? np.value.trim() : "" };
+      if (draft.pw && !Arena.okPw(draft.pw)) { const d = box.querySelector("[data-newopt]"); if (d) d.open = true; const m = box.querySelector(".arn-msg"); if (m) m.textContent = "비밀번호는 영문·숫자 4~8자로 적어 주세요"; return; }
+      tryHost();
+    }
+    else if (t.matches("[data-pwgo]")) { const v = box.querySelector("[data-pw]").value.trim(); if (!v) { const m = box.querySelector("[data-msg]"); if (m) m.textContent = "비밀번호를 적어 주세요"; } else doJoin(t.dataset.pwgo, v); }
+    else if (t.matches("[data-pwno]")) { setUrlRoom(null); home(); }
+    else if (t.matches("[data-accsave]")) saveAccess();
     else if (t.matches("[data-join]")) findJoin(box.querySelector(".arn-code").value);
     else if (t.matches("[data-admin]")) { if (window.Gate && Gate.openAdminModal) Gate.openAdminModal(); }
     else if (t.dataset.code) doJoin(t.dataset.code);
