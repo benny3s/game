@@ -465,7 +465,9 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .scorebar .sbi.on{background:linear-gradient(180deg,#fde047,#f59e0b);color:#422006;border-color:#fff7ed;box-shadow:0 0 12px rgba(250,204,21,.6)}
 .scorebar .sbi.on b{color:#422006}
 .scorebar .sbi.rest{opacity:.55}
-#sub.myturn{color:#422006;background:linear-gradient(180deg,#fde047,#f59e0b);border-radius:99px;padding:2px 10px;font-weight:800;animation:subpulse 1s ease-in-out infinite}
+/* 내 차례 표시는 크기를 안 바꿈 (11-01: 안쪽 여백이 생겼다 없어지며 위 줄 높이가 바뀌어 판 전체가 다시 그려져 움찔거렸음) */
+#sub{display:block;max-width:100%;padding:2px 10px;border-radius:99px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-sizing:border-box}
+#sub.myturn{color:#422006;background:linear-gradient(180deg,#fde047,#f59e0b);animation:subpulse 1s ease-in-out infinite}
 @keyframes subpulse{0%,100%{box-shadow:0 0 0 0 rgba(250,204,21,.7)}50%{box-shadow:0 0 0 6px rgba(250,204,21,0)}}
 .stage.myturn #zHand{box-shadow:0 0 0 2px #facc15 inset,0 0 18px rgba(250,204,21,.45) inset;border-radius:14px}
 .seat.turn .nm{color:#fde047;text-shadow:0 0 8px rgba(250,204,21,.85),0 1px 3px rgba(0,0,0,.8)}

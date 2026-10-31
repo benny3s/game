@@ -36,12 +36,13 @@
   // 11-01 새 기본값(국진 자동 · 첫뻑 3점 · 연뻑 6점): 예전 기본값 그대로 저장된 기기만 한 번 바꿈
   if (!C.store(KEY + 'rules1101', 0)) {
     const o = {};
-    if (houseRules.kook === 'choose') o.kook = 'auto';
     if (!houseRules.ppeokFirst) o.ppeokFirst = 3;
     if (!houseRules.ppeokYeon) o.ppeokYeon = 6;
     if (Object.keys(o).length) setRules(Object.assign({}, houseRules, o));
     C.save(KEY + 'rules1101', 1);
   }
+  // 11-01 밤 베니 님: 국진은 먹을 때 직접 고르기(열끗/쌍피)가 기본 — 자동으로 저장된 기기는 한 번 고르기로
+  if (!C.store(KEY + 'kookChoose', 0)) { if (houseRules.kook === 'auto') setRules(Object.assign({}, houseRules, { kook: 'choose' })); C.save(KEY + 'kookChoose', 1); }
   const presetName = r => { const p = G.RULE_PRESETS.find(q => q.id === G.matchPreset(r)); return p ? p.name : '직접 고침'; };
   // 규칙 한 줄 요약: 바뀐 것만 (넷까지)
   function ruleSummary(r) {
@@ -374,7 +375,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=7');
+    worker = new Worker('ai-worker.js?v=9');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -1831,7 +1832,11 @@
           await moveTo(e.card, T[e.card], { dur: D(520), arc: 50, z: 490 });
           bounce(e.card);
           await syncAll(ses, D(150));
-          if (e.to === meSeat(ses)) C.toast('피 한 장 가져왔어요', 1100);
+          {                                                   // 무엇을 왜: 쌍피면 '2장 몫', 일반 피가 없어 쌍피를 준 거면 그렇게
+            const v = e.v || 1, kind = v >= 3 ? '쓰리피' : v === 2 ? '쌍피' : '피', why = e.only ? ` — ${e.need || 1}장 몫인데 일반 피가 없어서` : (e.need || 1) > 1 ? ` (${e.need}장 몫)` : '';
+            if (e.to === meSeat(ses)) C.toast(`🃏 ${nameOf(ses, e.from)}에게서 ${kind} 가져왔어요${why}`, 1900);
+            else if (e.from === meSeat(ses)) C.toast(`🃏 ${nameOf(ses, e.to)}에게 ${kind} 줬어요${why}`, 1900);
+          }
           break;
         }
         case 'combo': sfx('good'); await popup(e.name + '!', 'gold', nameOf(ses, e.p)); break;

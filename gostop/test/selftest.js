@@ -656,7 +656,8 @@ section('우리 집 규칙: 총통 · 쓰리뻑 · 국진 · 보너스 피');
   eq([s.phase, s.result, s.ppeok[0]], ['play', null, 3], '쓰리뻑 안 씀: 뻑 세 번째여도 계속');
 
   const kk = rules => { const s = S({ rules, hands: [[34, 44], [36, 38]], table: [32], deck: [24, 25] }); act(s, P(34)); return s; };
-  eq([kk({}).phase, kk({}).kook], ['play', ''], '국진 기본: 자동 (안 물어봄, 정하지 않은 채로)');
+  eq(kk({}).phase, 'kook', '국진 기본: 먹을 때 고르기 (11-01 밤 베니 님)');
+  eq([kk({ kook: 'auto' }).phase, kk({ kook: 'auto' }).kook], ['play', ''], '국진 자동: 안 물어봄, 정하지 않은 채로');
   eq(kk({ kook: 'choose' }).phase, 'kook', '국진 먹을 때 고르기: 물어봄');
   // 자동: 점수 셀 때 가진 사람에게 나은 쪽 — 열끗 4장 + 국진이면 열끗 5장(1점), 피 8장 + 국진이면 쌍피로 피 10장(1점)
   eq(G.tally(S({ cap: [[32, 4, 12, 16, 20], []] }), 0).kookAs, 'Y', '국진 자동: 열끗이 나으면 열끗');

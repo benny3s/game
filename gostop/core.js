@@ -87,7 +87,7 @@
     { k: 'ppeok3Pts', g: 'special', t: 'num', d: 0, min: 0, max: 50, unit: '점', zero: '기준 점수', label: '쓰리뻑 점수', note: '0이면 고/스톱 기준 점수' },
     { k: 'ppeokFirst', g: 'special', t: 'num', d: 3, min: 0, max: 20, unit: '점', zero: '없음', label: '첫뻑 위로금', note: '자기 첫 차례에 뻑을 하면 다른 사람마다 이만큼 받아요 (판 점수와 따로 · 나가리여도)' },
     { k: 'ppeokYeon', g: 'special', t: 'num', d: 6, min: 0, max: 20, unit: '점', zero: '없음', label: '연뻑 위로금', note: '같은 사람이 뻑을 연달아 하면 다른 사람마다 이만큼 받아요' },
-    { k: 'kook', g: 'special', t: 'enum', d: 'auto', label: '국진 (9월 열끗)', note: '9월 술잔 한 장은 열끗도 되고 쌍피(피 2장)도 돼요', opts: [['auto', '자동', '점수 셀 때마다 가진 사람에게 나은 쪽으로'], ['choose', '먹을 때 고르기', '먹는 순간 열끗 / 쌍피를 정함'], ['yeol', '열끗 고정'], ['ssang', '쌍피 고정']] },
+    { k: 'kook', g: 'special', t: 'enum', d: 'choose', label: '국진 (9월 열끗)', note: '9월 술잔 한 장은 열끗도 되고 쌍피(피 2장)도 돼요', opts: [['auto', '자동', '점수 셀 때마다 가진 사람에게 나은 쪽으로'], ['choose', '먹을 때 고르기', '먹는 순간 열끗 / 쌍피를 정함'], ['yeol', '열끗 고정'], ['ssang', '쌍피 고정']] },
     { k: 'bonus', g: 'special', t: 'enum', d: 2, label: '보너스 쌍피', note: '덱에 넣는 보너스 피 장수', opts: [[0, '없음'], [2, '2장', '쌍피 두 장'], [3, '3장', '쌍피 두 장 + 쓰리피']] },
     { k: 'stealJjok', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '쪽' },
     { k: 'stealTtadak', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '따닥' },
@@ -728,7 +728,8 @@
       const pick = best >= 0 ? best : cheap;
       if (pick < 0) return;
       removeFrom(s.cap[from], pick); s.cap[to].push(pick);
-      if (ev) ev.push({ t: 'steal', from, to, card: pick });
+      // v = 이 카드 몫(쌍피 2 · 쓰리피 3), need = 뺏을 몫 전체, only = 몫보다 작은 피가 없어서 큰 걸 줌
+      if (ev) ev.push({ t: 'steal', from, to, card: pick, v: best >= 0 ? bv : cv, need: n, only: best < 0 });
       left -= best >= 0 ? bv : cv;
     }
   }
