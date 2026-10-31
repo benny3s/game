@@ -49,13 +49,21 @@
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); on(b.dataset.v); };
   }
   const stats = () => store('stats', {});
-  const recLine = t => { const r = stats()[t]; return r && (r.w || r.l || r.d) ? `${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}` : ''; };
+  // 🏆 전적 숫자는 메인 랭킹(GRank)에서만 읽음 (11-01) — 기기 저장 값은 화면에 안 씀. 못 받으면 빈칸
+  const recLine = t => { try { return window.GRank ? GRank.line('chess', t) : ''; } catch (e) { return ''; } };
+  const recFill = () => { document.querySelectorAll('#tiers .tier').forEach(b => { const s = b.querySelector('.rec'); if (s) s.textContent = recLine(b.dataset.t); }); };
+  const recLoad = () => { try { if (window.GRank) GRank.mine('chess').then(recFill, () => {}); } catch (e) {} };
+  let rankFresh = false;   // 이번 판 결과가 랭킹에 올라가 다시 읽힌 뒤인가 (그 전엔 옛 숫자라 결과 창에 안 보임)
+  const resRecTxt = g => { const s = rankFresh && window.GRank ? GRank.line('chess', g.cfg.tier) : '', T = TIERS[g.cfg.tier]; return s ? `${T.em} ${T.name} 전적 ${s}` : ''; };
+  const resRecFill = () => { const el = document.getElementById('rkRec'); if (!el || !G || G.mode !== 'ai') return; const t = resRecTxt(G); el.textContent = t; el.style.display = t ? '' : 'none'; };
+  addEventListener('grank', e => { if (!e.detail || e.detail.game !== 'chess') return; rankFresh = true; recFill(); resRecFill(); });
   let seatPick = null;
   function drawMenu() {
     const tabs = { solo: 'tabSolo', duo: 'tabDuo', watch: 'tabWatch' };
     for (const t in tabs) $(tabs[t]).setAttribute('aria-pressed', String(pref.tab === t));
     $('soloBox').hidden = pref.tab !== 'solo'; $('duoBox').hidden = pref.tab !== 'duo'; $('watchBox').hidden = pref.tab !== 'watch';
     $('tiers').innerHTML = TIER_IDS.map(t => `<button class="tier ${TIERS[t].cls}" data-t="${t}" aria-pressed="${pref.tier === t}"><span class="em">${TIERS[t].em}</span><b>${TIERS[t].name}</b><span>${TIERS[t].desc}</span><span class="rec">${recLine(t)}</span></button>`).join('');
+    recLoad();
     $('tiers').onclick = e => { const b = e.target.closest('.tier'); if (!b) return; sfx('tap'); pref.tier = b.dataset.t; savePref(); drawMenu(); };
     seg($('colorSeg'), [['w', '<i class="kp w"></i>백 (먼저)'], ['b', '<i class="kp b"></i>흑'], ['r', '🎲 랜덤']], pref.color, v => { pref.color = v; savePref(); drawMenu(); });
     seg($('clockSeg'), [[0, '없음'], [5, '⏱ 5분'], [10, '⏱ 10분']], pref.clock, v => { pref.clock = +v; savePref(); drawMenu(); });
@@ -86,6 +94,8 @@
     Object.values(stats() || {}).forEach(v => { w += v.w || 0; l += v.l || 0; d += v.d || 0; });
     return { n: w + l + d, w, l };
   }); } catch (e) {}
+  // 🏆 난이도별 예전 기기 전적도 한 번 올림
+  if (window.GRank) try { GRank.migrateTiers('chess', () => stats()); } catch (e) {}
 
   function startFromMenu() {
     if (pref.tab === 'watch') newGame({ mode: 'watch', ww: pref.ww, wb: pref.wb, speed: pref.speed });
@@ -497,6 +507,8 @@
         const ou = g.seats && g.seats[other(g.me)];
         if (ou && !(ON.sub && ON.sub[ou])) { r.mode = 'friend'; r.opp = [{ uid: ou, res }]; }   // AI 가 대신 앉았으면 AI 판
       }
+      if (g.mode === 'ai') r.tier = g.cfg.tier;   // 난이도별 전적 (친구 판은 없음)
+      rankFresh = false;
       GRank.result('chess', r);
     } catch (e) {}
   }
@@ -524,8 +536,8 @@
     const pieceImg = c => `<div class="winp" style="background-image:url('${PIECE(c + 'K')}')"></div>`;
     title = resTitle(g);
     if (g.mode === 'ai') {
-      const T = TIERS[g.cfg.tier], r = stats()[g.cfg.tier] || { w: 0, l: 0, d: 0 };
-      const rec = g.practice ? '<p class="why">🎮 복기에서 이어 둔 연습 판이라 전적엔 안 넣어요</p>' : `<p class="why">${T.em} ${T.name} 전적 ${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}</p>`;
+      const T = TIERS[g.cfg.tier];
+      const rec = g.practice ? '<p class="why">🎮 복기에서 이어 둔 연습 판이라 전적엔 안 넣어요</p>' : `<p class="why" id="rkRec" style="${resRecTxt(g) ? '' : 'display:none'}">${esc(resRecTxt(g))}</p>`;
       if (w === g.me) {
         const stars = 1 + (g.undos ? 0 : 1) + (g.coachUsed ? 0 : 1);
         body = `<div class="stars">${[0, 1, 2].map(j => `<span class="${j < stars ? 'on' : ''}" style="animation-delay:${0.15 + j * 0.25}s">⭐</span>`).join('')}</div>

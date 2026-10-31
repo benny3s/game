@@ -59,9 +59,18 @@
     if (size >= 13) for (const n of [2, 3, 4, 6, 9]) L.push(["h" + n, n + "점 접바둑"]);
     return L;
   }
+  // 🏆 전적 숫자는 메인 랭킹(GRank)에서만 읽음 (11-01) — 기기 저장 값은 화면에 안 씀. 못 받으면 빈칸
+  const recLine = t => { try { return window.GRank ? GRank.line("baduk", t) : ""; } catch (e) { return ""; } };
+  const recFill = () => { document.querySelectorAll("#tiers .tier").forEach(b => { const d = b.querySelector("span:last-child"); if (!d) return; let r = d.querySelector(".rec"); const t = recLine(b.dataset.id); if (!r && !t) return; if (!r) { r = document.createElement("small"); r.className = "rec"; r.style.cssText = "display:block;margin-top:2px;opacity:.85"; d.appendChild(r); } r.textContent = t; }); };
+  const recLoad = () => { try { if (window.GRank) GRank.mine("baduk").then(recFill, () => {}); } catch (e) {} };
+  let rankFresh = false;   // 이번 판 결과가 랭킹에 올라가 다시 읽힌 뒤인가 (그 전엔 옛 숫자라 결과 창에 안 보임)
+  const resRecTxt = g => { const t = g && g.mode === "solo" && g.human ? g.tiers[3 - g.human] : null, s = rankFresh && t && window.GRank ? GRank.line("baduk", t) : "", T = t && TIERS[t]; return s && T ? `${T.em} ${T.name} 전적 ${s}` : ""; };
+  const resRecFill = () => { const el = document.getElementById("rkRec"); if (!el || !G) return; const t = resRecTxt(G); el.textContent = t; el.style.display = t ? "" : "none"; };
+  addEventListener("grank", e => { if (!e.detail || e.detail.game !== "baduk") return; rankFresh = true; recFill(); resRecFill(); });
   function drawMenu() {
     seg($("sizeSeg"), SIZES, cfg.size, v => { cfg.size = +v; if (!handiItems(cfg.size).some(x => x[0] === cfg.handi)) cfg.handi = handiItems(cfg.size)[0][0]; saveCfg(); drawMenu(); });
     Z.tierCards($("tiers"), Object.values(TIERS), id => { cfg.tier = id; saveCfg(); drawMenu(); }, { selected: cfg.tier });
+    recFill(); recLoad();
     seg($("colorSeg"), [["black", stoneEm(BLACK) + " 흑 (먼저 둠)"], ["white", stoneEm(WHITE) + " 백"], ["random", "🎲 랜덤"]], cfg.color, v => { cfg.color = v; saveCfg(); drawMenu(); });
     if (!handiItems(cfg.size).some(x => x[0] === cfg.handi)) cfg.handi = handiItems(cfg.size)[0][0];
     seg($("handiSeg"), handiItems(cfg.size), cfg.handi, v => { cfg.handi = v; saveCfg(); drawMenu(); });
@@ -97,6 +106,12 @@
     for (const r of store("records", [])) if (r && r.mode === "solo" && r.human) { n++; if (r.winner === r.human) w++; else if (r.winner) l++; }
     if (!n) { const d = Z.store("baduk.rec.v1", null); if (d) Object.values(d).forEach(v => { w += (v.w || 0); l += (v.l || 0); }); n = w + l; }
     return { n, w, l };
+  }); } catch (e) {}
+  // 🏆 난이도별 예전 기기 전적도 한 번 올림 (지난 대국 기록의 혼자 두기 판에서)
+  if (window.GRank) try { GRank.migrateTiers("baduk", () => {
+    const o = {};
+    for (const r of store("records", [])) if (r && r.mode === "solo" && r.human && r.tiers) { const t = r.tiers[3 - r.human]; if (!t) continue; const x = o[t] || (o[t] = { w: 0, l: 0, d: 0 }); if (!r.winner) x.d++; else if (r.winner === r.human) x.w++; else x.l++; }
+    return o;
   }); } catch (e) {}
 
   // ── 친구랑: 두 사람이 두고 나머지는 모두 구경 (방 최대 16명). 방장이 판을 쥐고(수 확인·전달), 늦게 온 사람에겐 판 묶음을 보냄
@@ -1064,6 +1079,8 @@
       if (res === "w" && sc) r.score = Math.abs(sc.margin);
       const ou = game.mode === "online" ? game.seats[3 - game.human] : null;
       if (ou && ON && !ON.sub[ou]) { r.mode = "friend"; r.opp = [{ uid: ou, res }]; } else r.mode = "ai";   // AI 가 대신 앉았으면 AI 판
+      if (game.mode === "solo" && game.tiers) r.tier = game.tiers[3 - game.human];   // 난이도별 전적 (친구 판은 없음)
+      rankFresh = false;
       GRank.result("baduk", r);
     } catch (e) {}
   }
@@ -1081,7 +1098,7 @@
       detail = `흑 ${sc.black}집 · 백 ${sc.white}집 + 덤 ${st.komi}`;
     }
     G.phase = "done"; G.gen++; hideBubble();
-    if (!restored) rankReport(game, winner, sc);
+    if (!restored) rankReport(game, winner, sc); else rankFresh = false;
     if (G.mode === "online") { turnStop(); if (ON && ON.goneAsk) { try { ON.goneAsk(); } catch (e) {} } countScore(G, winner); }   // 친구랑: 내 차례 시계 끄기 · '나갔어요' 창 닫기 · 이 방 전적 +1
     updateAll(); coachTurn();
     const humanWon = G.mode === "solo" ? winner === G.human : null;
@@ -1109,7 +1126,7 @@
     later(() => {
       if (G !== game) return;
       const online = game.mode === "online" && !!ON;
-      showResult(title, `<div class="resbig${humanWon === false ? " lose" : ""}">${esc(big)}</div><p class="small" style="margin:0">${esc(detail)}</p>${chips}${cheer ? `<p class="cheer">${cheer}</p>` : ""}${online ? '<div class="rdy" id="rdyBox"></div>' : ""}`,
+      showResult(title, `<div class="resbig${humanWon === false ? " lose" : ""}">${esc(big)}</div><p class="small" style="margin:0">${esc(detail)}</p>${chips}${cheer ? `<p class="cheer">${cheer}</p>` : ""}${game.mode === "solo" ? `<p class="small" id="rkRec" style="margin:6px 0 0;${resRecTxt(game) ? "" : "display:none"}">${esc(resRecTxt(game))}</p>` : ""}${online ? '<div class="rdy" id="rdyBox"></div>' : ""}`,
         online   // 친구랑: 준비 · 시작은 결과 창 안 준비 칸에서 (손님은 ✋ 준비, 방장이 시작) — 판을 보고 싶으면 '판 보기'
           ? [["기보 복사", () => copySGF(rec.sgf), ""], ["판 보기", () => { $("resPill").hidden = false; }, ""]].concat(ON.host && window.ArenaUI ? [["대기실", () => ArenaUI.toLobby(), ""]] : [], [["나가기", exitToMenu, "ghost"]])
           : [["한 판 더", () => again(game), "primary"], ["🎞️ 복기", () => startReview(rec), ""], ["기보 복사", () => copySGF(rec.sgf), ""], ["메뉴", exitToMenu, "ghost"]]);

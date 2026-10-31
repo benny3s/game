@@ -48,7 +48,14 @@
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); on(b.dataset.v); };
   }
   const stats = () => store('stats', {});
-  const recLine = t => { const r = stats()[t]; return r && (r.w || r.l || r.d) ? `${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}` : ''; };
+  // 🏆 전적 숫자는 메인 랭킹(GRank)에서만 읽음 (11-01) — 기기 저장 값은 화면에 안 씀. 못 받으면 빈칸
+  const recLine = t => { try { return window.GRank ? GRank.line('janggi', t) : ''; } catch (e) { return ''; } };
+  const recFill = () => { document.querySelectorAll('#tiers .tier').forEach(b => { const s = b.querySelector('.rec'); if (s) s.textContent = recLine(b.dataset.t); }); };
+  const recLoad = () => { try { if (window.GRank) GRank.mine('janggi').then(recFill, () => {}); } catch (e) {} };
+  let rankFresh = false;   // 이번 판 결과가 랭킹에 올라가 다시 읽힌 뒤인가 (그 전엔 옛 숫자라 결과 창에 안 보임)
+  const resRecTxt = g => { const s = rankFresh && window.GRank ? GRank.line('janggi', g.cfg.tier) : '', T = TIERS[g.cfg.tier]; return s ? `${T.em} ${T.name} 전적 ${s}` : ''; };
+  const resRecFill = () => { const el = document.getElementById('rkRec'); if (!el || !G || G.mode !== 'ai') return; const t = resRecTxt(G); el.textContent = t; el.style.display = t ? '' : 'none'; };
+  addEventListener('grank', e => { if (!e.detail || e.detail.game !== 'janggi') return; rankFresh = true; recFill(); resRecFill(); });
   // ── 🎞️ 지난 대국 (이 기기에 최근 20판): { t, mode, rules, moves(상차림 포함), end(기권), names, me, tier, res, winner, reason, title, n } ──
   const REC_MAX = 20;
   const records = () => { const a = store('records', []); return Array.isArray(a) ? a.filter(r => r && Array.isArray(r.moves)) : []; };
@@ -73,6 +80,7 @@
     for (const t in tabs) $(tabs[t]).setAttribute('aria-pressed', String(pref.tab === t));
     $('soloBox').hidden = pref.tab !== 'solo'; $('duoBox').hidden = pref.tab !== 'duo'; $('watchBox').hidden = pref.tab !== 'watch';
     $('tiers').innerHTML = TIER_IDS.map(t => `<button class="tier ${TIERS[t].cls}" data-t="${t}" aria-pressed="${pref.tier === t}"><span class="em">${TIERS[t].em}</span><b>${TIERS[t].name}</b><span>${TIERS[t].desc}</span><span class="rec">${recLine(t)}</span></button>`).join('');
+    recLoad();
     $('tiers').onclick = e => { const b = e.target.closest('.tier'); if (!b) return; sfx('tap'); pref.tier = b.dataset.t; savePref(); drawMenu(); };
     seg($('sideSeg'), [[0, '<i class="dotc cho"></i>초 (먼저)'], [1, '<i class="dotc han"></i>한'], ['r', '🎲 랜덤']], pref.side, v => { pref.side = v === 'r' ? 'r' : +v; savePref(); drawMenu(); });
     seg($('rotSeg'), [['auto', '🔄 차례마다'], ['fixed', '돌리지 않기']], pref.rot, v => { pref.rot = v; savePref(); drawMenu(); });
@@ -102,6 +110,8 @@
     Object.values(stats() || {}).forEach(v => { w += v.w || 0; l += v.l || 0; d += v.d || 0; });
     return { n: w + l + d, w, l };
   }); } catch (e) {}
+  // 🏆 난이도별 예전 기기 전적도 한 번 올림
+  if (window.GRank) try { GRank.migrateTiers('janggi', () => stats()); } catch (e) {}
   $('mstBtn').onclick = () => { sfx('tap'); if (window.Mistakes) Mistakes.open({ game: 'janggi' }); };
   $('setBtn').onclick = openSettings;
   $('ruleBtn').onclick = () => openRules(pref.rules, r => { pref.rules = r; savePref(); drawMenu(); });
@@ -578,6 +588,8 @@
         const ou = g.seats && g.seats[1 - g.me];
         if (ou && !(ON.sub && ON.sub[ou])) { r.mode = 'friend'; r.opp = [{ uid: ou, res }]; }   // AI 가 대신 앉았으면 AI 판
       }
+      if (g.mode === 'ai') r.tier = g.cfg.tier;   // 난이도별 전적 (친구 판은 없음)
+      rankFresh = false;
       GRank.result('janggi', r);
     } catch (e) {}
   }
@@ -612,8 +624,8 @@
     const pts = s.reason !== 'mate' && s.reason !== 'resign' ? `<p class="pline"><span class="cho">초 ${sc.cho}점</span> : <span class="han">한 ${sc.han}점</span> <small>(덤 1.5 포함)</small></p>` : '';
     let title, body = '';
     if (g.mode === 'ai') {
-      const T = TIERS[g.cfg.tier], r = stats()[g.cfg.tier] || { w: 0, l: 0, d: 0 };
-      const rec = g.branch != null ? `<p class="why">🎮 연습 판 (${g.branch}수째부터) · 전적엔 안 넣어요</p>` : `<p class="why">${T.em} ${T.name} 전적 ${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}</p>`;
+      const T = TIERS[g.cfg.tier];
+      const rec = g.branch != null ? `<p class="why">🎮 연습 판 (${g.branch}수째부터) · 전적엔 안 넣어요</p>` : `<p class="why" id="rkRec" style="${resRecTxt(g) ? '' : 'display:none'}">${esc(resRecTxt(g))}</p>`;
       if (w === g.me) {
         const stars = 1 + (g.undos ? 0 : 1) + (g.coachUsed ? 0 : 1);
         title = '🎉 이겼어요!';

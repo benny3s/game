@@ -65,12 +65,20 @@
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); on(b.dataset.v); };
   }
   const stats = () => store('stats', {});
-  function recLine(t) { const r = stats()[t]; return r && (r.w || r.l || r.d) ? `${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}` : ''; }
+  // 🏆 전적 숫자는 메인 랭킹(GRank)에서만 읽음 (11-01) — 기기 저장 값은 화면에 안 씀. 못 받으면 빈칸
+  function recLine(t) { try { return window.GRank ? GRank.line('omok', t) : ''; } catch (e) { return ''; } }
+  const recFill = () => { document.querySelectorAll('#tiers .tier').forEach(b => { const s = b.querySelector('.rec'); if (s) s.textContent = recLine(b.dataset.t); }); };
+  const recLoad = () => { try { if (window.GRank) GRank.mine('omok').then(recFill, () => {}); } catch (e) {} };
+  let rankFresh = false;   // 이번 판 결과가 랭킹에 올라가 다시 읽힌 뒤인가 (그 전엔 옛 숫자라 결과 창에 안 보임)
+  const resRecTxt = g => { const s = rankFresh && !g.branch && window.GRank ? GRank.line('omok', g.cfg.tier) : '', T = tier(g.cfg.tier); return s ? `${T.em} ${T.name} 전적 ${s}` : ''; };
+  const resRecFill = () => { const el = document.getElementById('rkRec'); if (!el || !G || G.mode !== 'ai') return; const t = resRecTxt(G); el.textContent = t; el.style.display = t ? '' : 'none'; };
+  addEventListener('grank', e => { if (!e.detail || e.detail.game !== 'omok') return; rankFresh = true; recFill(); resRecFill(); });
   function drawMenu() {
     for (const [t, box] of [['solo', 'soloBox'], ['watch', 'watchBox']]) { $('tab' + t[0].toUpperCase() + t.slice(1)).setAttribute('aria-pressed', String(pref.tab === t)); $(box).hidden = pref.tab !== t; }
     seg($('modeSeg'), [['ai', '🤖 AI 대전'], ['two', '👥 한 기기 둘이서']], pref.mode, v => { pref.mode = v; savePref(); drawMenu(); });
     $('aiOpts').hidden = pref.mode !== 'ai'; $('twoDesc').hidden = pref.mode !== 'two';
     $('tiers').innerHTML = TIERS.map(t => `<button class="tier ${tier(t).cls}" data-t="${t}" aria-pressed="${pref.tier === t}"><span class="em">${tier(t).em}</span><b>${tier(t).name}</b><span>${TIER_DESC[t]}</span><span class="rec">${recLine(t)}</span></button>`).join('');
+    recLoad();
     $('tiers').onclick = e => { const b = e.target.closest('.tier'); if (!b) return; sfx('tap'); pref.tier = b.dataset.t; savePref(); drawMenu(); };
     seg($('colorSeg'), [['black', '<i class="dot b"></i>흑 (먼저)'], ['white', '<i class="dot w"></i>백'], ['random', '🎲 랜덤']], pref.color, v => { pref.color = v; savePref(); drawMenu(); });
     const tierItems = TIERS.map(t => [t, tier(t).em + ' ' + tier(t).name]);
@@ -97,6 +105,8 @@
     sum(stats()); if (!(w || l || d)) sum(Cozy.store('omok_stats_v1', null));
     return { n: w + l + d, w, l };
   }); } catch (e) {}
+  // 🏆 난이도별 예전 기기 전적도 한 번 올림
+  if (window.GRank) try { GRank.migrateTiers('omok', () => { const o = stats(); return Object.keys(o || {}).length ? o : Cozy.store('omok_stats_v1', null); }); } catch (e) {}
 
   // ════════ 친구랑: 방 최대 16명 — 2명(상담이면 4명)이 두고 나머지는 실시간 구경 ════════
   // 방장이 판의 주인: 손님 수는 방장에게 보내고, 방장이 확인해 모두에게 (수 번호 n 으로 순서 맞춤). 늦게 온 사람은 'hello' → 방장이 판 전체(sync)
@@ -782,6 +792,8 @@
         const ou = ((g.seats && g.seats[3 - g.me]) || []).filter(u => !(ON && ON.sub[u]));       // AI 가 대신 앉은 자리는 빼고
         if (ou.length) { r.mode = 'friend'; r.opp = ou.map(uid => ({ uid, res })); }
       }
+      if (g.mode === 'ai') r.tier = g.cfg.tier;   // 난이도별 전적 (친구 판은 없음)
+      rankFresh = false;
       GRank.result('omok', r);
     } catch (e) {}
   }
@@ -847,8 +859,8 @@
     let title, body = '';
     const why = s.reason === 'resign' ? ' (기권)' : '';
     if (g.mode === 'ai') {
-      const T = tier(g.cfg.tier), r = stats()[g.cfg.tier] || { w: 0, l: 0, d: 0 };
-      const recTxt = `<p class="why">${T.em} ${T.name} 전적 ${r.w}승 ${r.l}패${r.d ? ` ${r.d}무` : ''}</p>`;
+      const T = tier(g.cfg.tier);
+      const recTxt = `<p class="why" id="rkRec" style="${resRecTxt(g) ? '' : 'display:none'}">${esc(resRecTxt(g))}</p>`;
       if (w === g.me) {
         const st = 1 + (g.undos ? 0 : 1) + (g.coachUsed ? 0 : 1);
         title = '🎉 이겼어요!';
