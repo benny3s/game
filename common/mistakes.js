@@ -43,10 +43,10 @@
     return e.id;
   }
   function fromUrl(game) {
-    const u = new URL(location.href), id = u.searchParams.get("drill");
+    const id = new URLSearchParams(location.search).get("drill");
     if (!id) return null;
-    u.searchParams.delete("drill");
-    try { history.replaceState(history.state, "", u.pathname + u.search + u.hash); } catch (e) {}
+    const qs = location.search.replace(/([?&])drill=[^&]*(&|$)/, (m, a, b) => (b ? a : "")).replace(/[?&]$/, "");   // drill 만 빼고 나머지(?debug 등)는 그대로
+    try { history.replaceState(history.state, "", location.pathname + qs + location.hash); } catch (e) {}
     const list = load(), e = list.find(x => x.id === id);
     if (!e || (game && e.game !== game)) return null;
     e.tries = (e.tries || 0) + 1; e.last = Date.now();
