@@ -297,12 +297,11 @@ section('☝️ 원카드 외치기 · 벌칙');
   eq(r.s.hands[0].length, 4, '벌칙 3장 (집 규칙)');
   r = run(mk({ oneCard: false }), [P(C(H, 4))]);
   eq([r.s.phase, r.s.turn], ['play', 1], '외치기 끄면 창 없음');
-  // K 로 한 장 남으면: 외친 뒤에도 내 차례
+  // K 로 한 장 남으면: 아직 내 차례라 외치기 창 없이 바로 한 번 더 (11-01 — 남이 먼저 잡아 끝내기를 막던 것)
   const s = G.setup({ players: 3, hands: [[C(H, 12), C(H, 3)], [C(CL, 3)], [C(CL, 5)]], pile: [C(H, 8)] });
   r = run(s, [P(C(H, 12))]);
-  eq(r.s.phase, 'call', 'K 로 한 장 → 외치기');
-  r = run(r.s, [G.A_CALL]);
-  eq([r.s.turn, r.s.phase], [0, 'play'], '외친 뒤 K 한 번 더 (내 차례)');
+  eq([r.s.turn, r.s.phase], [0, 'play'], 'K 로 한 장 → 외치기 없이 내 차례');
+  ok(!G.legal(r.s).includes(G.A_CATCH + 1), '이때 남이 잡을 수 없음');
   r = run(r.s, [P(C(H, 3))]);
   eq([r.s.phase, r.s.result.winner], ['end', 0], '마지막 카드로 이김');
   // 7 로 한 장 남으면: 무늬 고른 다음 외치기

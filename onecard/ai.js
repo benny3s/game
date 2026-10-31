@@ -21,7 +21,8 @@
   const now = () => (typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now());
 
   function suitCounts(h) { const c = [0, 0, 0, 0]; for (const x of h) { const su = G.suitOf(x); if (su >= 0) c[su]++; } return c; }
-  const bestSuit = h => { const c = suitCounts(h); let b = 0; for (let i = 1; i < 4; i++) if (c[i] > c[b]) b = i; return b; };
+  // 조커는 낼 수 있는 색 쪽으로 반 장 (흑백 조커 ♠♣ · 컬러 조커 ♥♦) — 남은 게 조커뿐일 때 못 내는 무늬를 고르지 않게
+  const bestSuit = h => { const c = suitCounts(h); for (const x of h) if (G.isJoker(x)) { const red = G.base(x) === G.CJ; for (let su = 0; su < 4; su++) if (G.redSuit(su) === red) c[su] += 0.5; } let b = 0; for (let i = 1; i < 4; i++) if (c[i] > c[b]) b = i; return b; };
   const minOther = (s, p) => { let m = 99; for (let q = 0; q < s.n; q++) if (q !== p && s.out[q] === 0) m = Math.min(m, s.hands[q].length); return m; };
 
   // 이 카드를 낸 뒤 (K·J 로) 한 번 더 낼 때 이어 낼 카드가 있나
@@ -48,7 +49,7 @@
           const sc = 60 + (nThreat ? st * 2 : -st) + (nAtk > 1 ? 2 : 0);
           out.push({ a, sc, why: nThreat ? `다음 사람이 ${nxtCnt}장뿐이라 센 카드로 +${s.atk + st} 을 넘겨요` : `받아쳐서 +${s.atk + st} 을 다음 사람에게 넘겨요 (약한 카드부터 써서 센 카드는 아껴 둬요)`, tag: '받아치기' });
         } else {
-          out.push({ a, sc: nThreat ? 52 : 64, why: `같은 무늬 3 으로 2 공격을 막아요 — 아무도 안 받아요`, tag: '막기' });
+          out.push({ a, sc: nThreat ? 52 : 64, why: `${s.atkKind === '2' ? '같은 무늬 3 으로 2 공격을' : '3 으로 공격을'} 막아요 — 아무도 안 받아요`, tag: '막기' });
         }
       }
       return out;
@@ -60,7 +61,7 @@
       const after = h.slice(); after.splice(after.indexOf(c), 1);
       let sc = 10, why = '', tag = '';
       if (!after.length) { out.push({ a, sc: 1000, why: '마지막 카드! 이걸 내면 이겨요', tag: '끝내기' }); continue; }
-      const sameSuit = su >= 0 ? cnt[su] - 1 : 0;
+      const sameSuit = su >= 0 && !(r === G.R_7 && R.seven) ? cnt[su] - 1 : 0;   // 7 은 무늬를 바꾸니 제 무늬 장수로 점수 주지 않음 (외톨이 7 을 먼저)
       const sameRank = r >= 0 ? after.filter(x => G.rankOf(x) === r).length : 0;
       sc += 1.5 * sameSuit + 0.8 * sameRank;
       if (st > 0) {
@@ -188,7 +189,7 @@
     const tp = seatTiers[p];
     if (tp) { const pr = prof(tp); if (rand() < pr.callP) { const t = between(pr.call, rand); if (t < best.at) best = { a: G.A_CALL, at: t, by: p }; } }
     for (let q = 0; q < s.n; q++) {
-      if (q === p || !seatTiers[q] || s.out[q] === 2) continue;
+      if (q === p || !seatTiers[q] || s.out[q] !== 0) continue;   // 이미 나간 사람은 못 잡음
       const pr = prof(seatTiers[q]);
       if (rand() < pr.catchP) { const t = between(pr.catch, rand); if (t < best.at) best = { a: G.A_CATCH + q, at: t, by: q }; }
     }

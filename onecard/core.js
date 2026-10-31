@@ -147,7 +147,7 @@
       turn: s.turn, dir: s.dir, phase: s.phase, turnNo: s.turnNo,
       deck: s.deck.slice(), pile: s.pile.slice(), hands: sl2(s.hands),
       suit: s.suit, rank: s.rank, atk: s.atk, atkStr: s.atkStr, atkKind: s.atkKind,
-      out: s.out.slice(), order: s.order.slice(), bustAt: s.bustAt.slice(),
+      out: s.out.slice(), order: s.order.slice(), bustAt: s.bustAt.slice(), bustSeq: (s.bustSeq || []).slice(),
       call: s.call ? { p: s.call.p, k: s.call.k } : null, pend: s.pend ? { p: s.pend.p, k: s.pend.k } : null,
       stat: s.stat ? { calls: s.stat.calls.slice(), pens: s.stat.pens.slice(), drawn: s.stat.drawn.slice(), reshuffles: s.stat.reshuffles } : null,
       last: s.last ? Object.assign({}, s.last) : null, result: s.result,
@@ -168,7 +168,7 @@
       turn: 0, dir: 1, phase: 'play', turnNo: 0,
       deck: [], pile: [], hands: arr(n, () => []),
       suit: -1, rank: -1, atk: 0, atkStr: 0, atkKind: '',
-      out: arr(n, 0), order: [], bustAt: arr(n, 0),
+      out: arr(n, 0), order: [], bustAt: arr(n, 0), bustSeq: [],
       call: null, pend: null,
       stat: { calls: arr(n, 0), pens: arr(n, 0), drawn: arr(n, 0), reshuffles: 0 },
       last: null, result: null,
@@ -250,7 +250,7 @@
     if (s.phase === 'suit') return [A_SUIT, A_SUIT + 1, A_SUIT + 2, A_SUIT + 3];
     if (s.phase === 'call') {
       const out = [A_CALL, A_MISS];
-      for (let q = 0; q < s.n; q++) if (q !== s.call.p) out.push(A_CATCH + q);
+      for (let q = 0; q < s.n; q++) if (q !== s.call.p && s.out[q] === 0) out.push(A_CATCH + q);   // 이미 나간 사람(다 털음·파산)은 못 잡음
       return out;
     }
     const out = [];
@@ -292,7 +292,7 @@
   function checkBust(s, p, ev) {
     const R = s.rules;
     if (!R.bust || s.out[p] !== 0 || s.hands[p].length < R.bust) return false;
-    s.bustAt[p] = s.hands[p].length;
+    s.bustAt[p] = s.hands[p].length; (s.bustSeq = s.bustSeq || []).push(p);
     const back = shuffle(s.hands[p].splice(0), () => rnd(s));
     s.deck = back.concat(s.deck);
     s.out[p] = 2;
@@ -319,10 +319,10 @@
     const rest = [];
     for (let q = 0; q < n; q++) if (s.out[q] === 0) rest.push(q);
     // 아직 남은 사람: 손패가 적은 순서 (같으면 차례가 빠른 순서)
-    rest.sort((a, b) => s.hands[a].length - s.hands[b].length || ((a - s.turn + n) % n) - ((b - s.turn + n) % n));
-    const busted = [];
-    for (let q = 0; q < n; q++) if (s.out[q] === 2) busted.push(q);
-    order = order.concat(rest).concat(busted);          // 파산은 맨 끝 (여럿이면 번호순)
+    rest.sort((a, b) => s.hands[a].length - s.hands[b].length || (((a - s.turn) * s.dir % n) + n) % n - ((((b - s.turn) * s.dir % n) + n) % n));
+    const seq = (s.bustSeq || []).filter(q => s.out[q] === 2), busted = seq.slice().reverse();
+    for (let q = 0; q < n; q++) if (s.out[q] === 2 && !busted.includes(q)) busted.push(q);
+    order = order.concat(rest).concat(busted);          // 파산은 맨 끝 (여럿이면 늦게 파산한 사람이 앞)
     const winner = order[0];
     const pts = arr(n, 0), cards = arr(n, 0);
     for (let q = 0; q < n; q++) cards[q] = s.out[q] === 2 ? R.bust + R.bustPay : s.out[q] === 1 ? 0 : s.hands[q].length;
@@ -344,7 +344,8 @@
       setTurn(s, nextActive(s, p, Math.max(1, k)), ev);
       return;
     }
-    if (s.hands[p].length === 1 && s.rules.oneCard) {
+    const again = k === 0 || nextActive(s, p, k) === p;   // K · 둘이서 J 처럼 내가 또 내는 차례면 아직 차례가 안 끝났으니 외치기 창을 열지 않음
+    if (s.hands[p].length === 1 && s.rules.oneCard && !again) {
       s.phase = 'call'; s.call = { p, k }; s.turn = p;
       E(ev, { t: 'callOpen', p });
       return;
