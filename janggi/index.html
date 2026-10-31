@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@900&text=%E8%BB%8A%E5%8C%85%E9%A6%AC%E8%B1%A1%E5%A3%AB%E5%8D%92%E5%85%B5%E5%B0%87%E5%B8%A5%E6%A5%9A%E6%BC%A2&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=12">
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <div class="wrap">
@@ -56,6 +56,7 @@
     </ul>
     <button class="btn primary big" id="startBtn">시작!</button>
     <div class="row center minor">
+      <button class="btn ghost" id="recBtn">🎞️ 지난 대국</button>
       <button class="btn ghost" id="helpBtn">📖 규칙</button>
       <button class="btn ghost" id="setBtn">⚙ 설정</button>
     </div>
@@ -93,6 +94,16 @@
     <button id="againBtn" hidden><span class="ic">↺</span><span>새 판</span></button>
     <button id="rulesBtn"><span class="ic">📖</span><span>규칙</span></button>
   </div>
+  <!-- 🎞️ 복기: 한 수씩 · 선생님 · 여기서부터 내가 두기 -->
+  <div class="dock" id="dockReview" hidden>
+    <button id="rvFirst" aria-label="처음으로"><span class="ic">⏮</span><span>처음</span></button>
+    <button id="rvPrev" aria-label="한 수 뒤로"><span class="ic">◀</span><span>이전</span></button>
+    <span class="rvn" id="rvNum" aria-live="polite"></span>
+    <button id="rvNext" aria-label="한 수 앞으로"><span class="ic">▶</span><span>다음</span></button>
+    <button id="rvLast" aria-label="끝으로"><span class="ic">⏭</span><span>끝</span></button>
+    <button id="rvCoach" aria-pressed="false"><span class="ic">🧑‍🏫</span><span>선생님</span></button>
+    <button id="rvGo"><span class="ic">🎮</span><span>여기서 두기</span></button>
+  </div>
 </section>
 
 <script src="../common/cozy.js?v=11"></script>
@@ -104,7 +115,7 @@
 <script src="../common/hotseat.js?v=2"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
 <script src="core.js?v=1"></script>
-<script src="board.js?v=1"></script>
-<script src="main.js?v=1"></script>
+<script src="board.js?v=2"></script>
+<script src="main.js?v=2"></script>
 </body>
 </html>

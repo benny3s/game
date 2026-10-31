@@ -11,7 +11,7 @@
       this.pcs = new Map(); this.sel = -1; this.tg = []; this.marks = {}; this.arrow = null; this.locked = false;
       el.classList.add('jb');
       el.innerHTML = '<div class="jb-wood"></div><svg class="jb-lines" viewBox="0 0 90 100" preserveAspectRatio="none" aria-hidden="true"></svg><div class="jb-pcs"></div><div class="jb-mk"></div>' +
-        '<svg class="jb-arw" viewBox="0 0 90 100" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="jbHead" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow)"/></marker></defs><g></g></svg><div class="jb-fx" aria-live="polite"></div>';
+        '<svg class="jb-arw" viewBox="0 0 90 100" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="jbHead" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow)"/></marker><marker id="jbHead2" markerWidth="4" markerHeight="4" refX="2.2" refY="2" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L4,2 L0,4 Z" fill="var(--arrow2,#d97706)"/></marker></defs><g></g></svg><div class="jb-fx" aria-live="polite"></div>';
       this.lines = el.children[1]; this.pcLayer = el.children[2]; this.mkLayer = el.children[3]; this.arw = el.children[4]; this.fx = el.children[5];
       this.drawLines();
       el.addEventListener('pointerdown', e => this.tap(e));
@@ -90,16 +90,20 @@
         p.classList.toggle('sel', this.sel === sq);
       }
     }
-    setArrow(a) { this.arrow = a; this.drawArrow(); }
+    // 화살표: a = 추천 수 [from, to] (초록) · real = 복기에서 실제로 둔 수 [from, to] (주황 점선, 없어도 됨)
+    setArrow(a, real) { this.arrow = a; this.real = real || null; this.drawArrow(); }
     drawArrow() {
       const g = this.arw.querySelector('g'); g.innerHTML = '';
-      if (!this.arrow) return;
-      const [x1, y1] = this.disp(this.arrow[0]), [x2, y2] = this.disp(this.arrow[1]);
-      const ax = x1 * 10 + 5, ay = y1 * 10 + 5, bx = x2 * 10 + 5, by = y2 * 10 + 5, len = Math.hypot(bx - ax, by - ay) || 1, k = (len - 4.2) / len;
-      const l = document.createElementNS(NS, 'line');
-      l.setAttribute('x1', ax); l.setAttribute('y1', ay); l.setAttribute('x2', ax + (bx - ax) * k); l.setAttribute('y2', ay + (by - ay) * k);
-      l.setAttribute('class', 'jb-a'); l.setAttribute('marker-end', 'url(#jbHead)');
-      g.appendChild(l);
+      const line = (a, cls, head) => {
+        const [x1, y1] = this.disp(a[0]), [x2, y2] = this.disp(a[1]);
+        const ax = x1 * 10 + 5, ay = y1 * 10 + 5, bx = x2 * 10 + 5, by = y2 * 10 + 5, len = Math.hypot(bx - ax, by - ay) || 1, k = (len - 4.2) / len;
+        const l = document.createElementNS(NS, 'line');
+        l.setAttribute('x1', ax); l.setAttribute('y1', ay); l.setAttribute('x2', ax + (bx - ax) * k); l.setAttribute('y2', ay + (by - ay) * k);
+        l.setAttribute('class', cls); l.setAttribute('marker-end', `url(#${head})`);
+        g.appendChild(l);
+      };
+      if (this.real) line(this.real, 'jb-a real', 'jbHead2');
+      if (this.arrow) line(this.arrow, 'jb-a', 'jbHead');
     }
     clearSel() { this.sel = -1; this.tg = []; this.drawMarks(); }
     select(sq) { this.sel = sq; this.tg = this.o.targets ? this.o.targets(sq) : []; this.drawMarks(); }
