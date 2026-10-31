@@ -1634,11 +1634,7 @@ button { font: inherit; cursor: pointer; }
       const firstF = games[0];                                   // 가장 많이 한 게임이 맨 앞
       if (firstF) featuredId = firstF.id;
       if (isAdmin) {
-        const logLink = document.createElement("a");
-        logLink.className = "nav-pill";
-        logLink.href = "logs.html";
-        logLink.textContent = "📊 기록 (관리자)";
-        $("navLinks").appendChild(logLink);
+        // 📊 게임 기록은 👑 관리자 전용 구역 안 단추 하나만 (위쪽 알약은 겹쳐서 뺌, 11-01)
       }
       renderFeatured();
       renderCatalog();
