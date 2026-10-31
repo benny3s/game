@@ -129,8 +129,11 @@
     }
     draggable(hd, el, null, "p");
     draggable(chip, chip, () => api.collapse(false), "c");
-    minBtn.addEventListener("click", e => { e.stopPropagation(); api.collapse(true); });
-    minBtn.addEventListener("pointerup", e => { e.stopPropagation(); api.collapse(true); });   // 끌기 바로 뒤 톡도 확실히 (여러 번 불려도 같음)
+    // 펼친 직후 잠깐은 − 를 안 받음: 동그라미를 톡 → 창이 그 자리(− 단추가 손가락 밑)에 열리고, 같은 톡의 click 이 − 로 가서 다시 접히던 것(깜빡임, 11-01)
+    let quietUntil = 0;
+    const minTap = e => { e.stopPropagation(); if (Date.now() < quietUntil) return; api.collapse(true); };
+    minBtn.addEventListener("click", minTap);
+    minBtn.addEventListener("pointerup", minTap);   // 끌기 바로 뒤 톡도 확실히 (여러 번 불려도 같음)
     chip.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); api.collapse(false); } });
     chip.addEventListener("click", e => { if (e.detail === 0) api.collapse(false); });   // 키보드 클릭(포인터 없음)만
     const onResize = () => { if (!el.hidden) clamp(el); if (!chip.hidden) clamp(chip); };
@@ -159,6 +162,7 @@
         if (visible && collapsed && !was && !el.hidden) { const r = el.getBoundingClientRect(); st.c = clampXY(chip, r.right - 48, r.top); }
         else if (visible && !collapsed && was && !chip.hidden) { const r = chip.getBoundingClientRect(), w = el.offsetWidth || Math.min(320, vw() * 0.86); st.p = clampXY(el, r.right - w, r.top); }
         st.z = collapsed ? 1 : 0; persist();
+        if (!collapsed && was) quietUntil = Date.now() + 500;
         if (!collapsed) chip.classList.remove("new");
         apply();
         if (!collapsed) body.scrollTop = 0;

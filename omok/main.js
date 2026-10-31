@@ -593,6 +593,7 @@
   };
   // 휴대폰 '뒤로' 몸짓 · 브라우저 뒤로: 페이지를 떠나지 않고 ‹ 단추처럼 (두는 중이면 두 번)
   let histOn = false, backArmed = 0;
+  window.__ownBack = () => histOn;                         // 판 두는 동안(이 게임이 뒤로 칸을 넣은 동안)만 직접, 메뉴·창은 common/backnav.js
   function pushHist() { if (histOn) return; try { history.pushState({ omok: 1 }, ''); histOn = true; } catch (e) {} }
   function popHist() { if (!histOn) return; histOn = false; try { history.back(); } catch (e) {} }
   addEventListener('popstate', () => {

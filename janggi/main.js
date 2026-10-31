@@ -291,6 +291,7 @@
     popHist();
   }
   let histOn = false;
+  window.__ownBack = () => histOn;                         // 판 두는 동안(이 게임이 뒤로 칸을 넣은 동안)만 직접, 메뉴·창은 common/backnav.js
   function pushHist() { if (histOn) return; try { history.pushState({ janggi: 1 }, ''); histOn = true; } catch (e) {} }
   function popHist() { if (!histOn) return; histOn = false; try { history.back(); } catch (e) {} }
   addEventListener('popstate', () => {

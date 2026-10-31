@@ -4,7 +4,7 @@
 //   node test/qa/run.js --quick         빠르게 (~5분): 폰 Chromium 은 혼자 한 판+몽키, PC 는 화면 배치, WebKit 폰은 메뉴+한 판
 //   node test/qa/run.js --games gostop,yut   일부 게임만
 //   node test/qa/run.js --live          https://benny3s.github.io/game/ 에서 (친구랑은 ?guest 시험 공간)
-//   그 밖: --no-selftest  --no-webkit  --no-online  --only selftest,menu,play,monkey,online  --jobs 6  --seed 123  --monkey 20  --out <폴더>
+//   그 밖: --no-selftest  --no-webkit  --no-online  --only selftest,menu,play,nav,monkey,online  --jobs 6  --seed 123  --monkey 20  --out <폴더>
 //
 // 검사 (게임마다): selftest(Node) · menu(오류·404·가로 넘침·화면 밖/가려진 단추·잠금 화면) · play:<모드>(혼자·AI 구경·한 기기를 손잡이로
 //   한 판 끝까지, 멈춤 감지 → 스크린샷) · game-layout(PC 화면) · monkey(보이는 단추·카드 아무거나 누르기) · links(포털 링크)
@@ -219,6 +219,7 @@ async function pool(tasks, n) {
           }
           if (plan.peek && want('play') && modeNames.length) await R.peekMode(page, quickModes[0] || modeNames[0]);
           if (plan.links && want('menu')) await R.linkCheck(page);
+          if (plan.nav && want('nav')) { const p3 = await R.newPage(ctx); if ((await R.load(p3)).ok) await R.navCheck(p3, quickModes[0]); await p3.close().catch(() => {}); }
           if (plan.monkey && want('monkey')) { const p2 = await R.newPage(ctx); await page.close().catch(() => {}); await R.monkey(p2, plan.monkey); }
         }
       } catch (e) {
@@ -228,11 +229,11 @@ async function pool(tasks, n) {
     });
     if (id === 'portal') { unit('chromium', 'phone', { modes: [], links: true, monkey: OPT.quick ? 8000 : 15000 }); unit('chromium', 'desktop', { modes: [] }); unit('webkit', 'phone', { modes: [] }); continue; }
     if (OPT.quick) {
-      unit('chromium', 'phone', { modes: quickModes, monkey: monkeyMs });
+      unit('chromium', 'phone', { modes: quickModes, monkey: monkeyMs, nav: true });
       unit('chromium', 'desktop', { modes: [], peek: true });
       unit('webkit', 'phone', { modes: quickModes.slice(0, 1), monkey: 8000 });
     } else {
-      unit('chromium', 'phone', { modes: modeNames, monkey: monkeyMs });
+      unit('chromium', 'phone', { modes: modeNames, monkey: monkeyMs, nav: true });
       unit('chromium', 'desktop', { modes: (A.desktopModes || modeNames.slice(0, 1)).filter(m => A.modes[m]), peek: true, monkey: monkeyMs / 2 });
       unit('webkit', 'phone', { modes: modeNames, monkey: monkeyMs });
       unit('webkit', 'desktop', { modes: [], peek: true });

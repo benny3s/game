@@ -210,6 +210,62 @@ class GameRun {
   }
 
   // ── 3) 몽키: 아무 데나 누르기
+  // ── 뒤로·창·선생님 (11-01 베니 님이 직접 찾은 것들을 자동으로): 혼자 한 판 도중
+  //   ① 뒤로 한 번 → 게임이 그대로 있어야 함 ② 창(족보·규칙·하는 법)을 열고 뒤로 → 창만 닫히고 게임은 그대로
+  //   ③ AI 선생님 창 접기 → 동그라미 톡(진짜 손가락) → 펼쳐진 채로 있어야 함 (깜빡임·다시 접힘 없음)
+  async navCheck(page, mode) {
+    this.check = 'nav';
+    const A = this.A, t0 = Date.now(), bad = [];
+    const url0 = page.url();
+    const alive = async () => { try { return page.url().split('#')[0] === url0.split('#')[0] && !!(await ev(page, A.ready, null, 4000)); } catch (e) { return false; } };
+    const back = async () => { await page.keyboard.press('Shift').catch(() => {}); await sleep(150); await page.goBack({ waitUntil: 'commit', timeout: 2500 }).catch(() => {}); await sleep(700); };
+    const OPEN = '.overlay:not([hidden]), .modal:not([hidden]), [role="dialog"]:not([hidden]), [aria-modal="true"], dialog[open], .rk-ov';
+    const openCount = () => ev(page, sel => [...document.querySelectorAll(sel)].filter(el => { const r = el.getBoundingClientRect(), cs = getComputedStyle(el); return r.width > 0 && r.height > 0 && cs.display !== 'none' && cs.visibility !== 'hidden' && !el.closest('.arn-ov'); }).length, OPEN).catch(() => -1);
+    try {
+      if (mode && A.modes[mode]) { await ev(page, A.modes[mode].start); await sleep(1800); }
+      // ①
+      await back();
+      if (!(await alive())) {
+        bad.push('뒤로 한 번에 게임이 꺼짐');
+        this.issue({ sev: 'high', title: '뒤로 한 번에 게임 화면을 떠남 (두 번 눌러야 나가야 함)', detail: `${mode || '메뉴'} 도중 history.back 한 번 → ${page.url()}`, shot: await this.shot(page, 'nav_back') });
+        await page.goto(url0, { waitUntil: 'load' }).catch(() => {}); await waitFor(page, A.ready, null, 10000);
+        if (mode && A.modes[mode]) { await ev(page, A.modes[mode].start).catch(() => {}); await sleep(1500); }
+      }
+      // ②
+      const before = await openCount();
+      const opened = await ev(page, () => {
+        const b = [...document.querySelectorAll('button, a[href^="#"], [role="button"]')].find(x => /족보|규칙|하는 ?법|📖|❔/.test(x.textContent || '') && x.offsetParent && !x.closest('.overlay, .modal, [role=dialog], .arn-ov'));
+        if (!b) return null; b.click(); return (b.textContent || '').trim().slice(0, 16);
+      }).catch(() => null);
+      if (opened) {
+        await sleep(500);
+        const mid = await openCount();
+        if (mid > before) {
+          await back();
+          const after = await openCount();
+          if (!(await alive())) { bad.push(`'${opened}' 창에서 뒤로 → 게임이 꺼짐`); this.issue({ sev: 'high', title: `'${opened}' 창을 연 채 뒤로 → 게임 화면을 떠남 (창만 닫혀야 함)`, shot: await this.shot(page, 'nav_modal') }); await page.goto(url0, { waitUntil: 'load' }).catch(() => {}); await waitFor(page, A.ready, null, 10000); }
+          else if (after >= mid) { bad.push(`'${opened}' 창이 뒤로로 안 닫힘`); this.issue({ sev: 'medium', title: `'${opened}' 창을 연 채 뒤로 → 창이 안 닫힘`, shot: await this.shot(page, 'nav_modal_open') }); }
+        }
+      }
+      // ③
+      const vis = sel => ev(page, s => { const el = document.querySelector(s); return !!(el && !el.hidden && el.getBoundingClientRect().width > 0); }, sel).catch(() => false);
+      const has = (await vis('.cpn')) || (await vis('.cpn-chip'));     // 처음부터 접혀 있으면(동그라미만) 펼치기만 시험
+      if (has) {
+        if (await vis('.cpn')) { await page.click('.cpn .cpn-min', { timeout: 3000 }).catch(() => {}); await sleep(400); }
+        const chipOk = await ev(page, () => { const c = document.querySelector('.cpn-chip'); return !!(c && !c.hidden); }).catch(() => false);
+        if (chipOk) {
+          // 폰처럼 터치로 톡 (마우스 click 은 동그라미에 붙잡혀 실제 폰의 '열린 창의 − 로 click 이 가는' 문제가 안 나옴)
+          await page.tap('.cpn-chip', { timeout: 3000 }).catch(() => page.click('.cpn-chip', { timeout: 3000 }).catch(() => {}));
+          const flips = [];
+          for (let i = 0; i < 24; i++) { flips.push(await ev(page, () => { const el = document.querySelector('.cpn'); return el && !el.hidden ? 1 : 0; }).catch(() => -1)); await sleep(50); }
+          const changes = flips.reduce((n, v, i) => n + (i && v !== flips[i - 1] ? 1 : 0), 0);
+          if (flips[flips.length - 1] !== 1 || changes > 1) { bad.push('선생님 창 펼치기가 깜빡이거나 다시 접힘'); this.issue({ sev: 'high', title: 'AI 선생님 동그라미를 누르면 깜빡이거나 다시 접힘', detail: `1.2초 동안 펼침 상태 ${flips.join('')} (1=펼침)`, shot: await this.shot(page, 'nav_coach') }); }
+        }
+      }
+    } catch (e) { this.issue({ sev: 'medium', cat: 'harness', title: 'nav 검사 도구 예외', detail: String(e && e.message) }); }
+    this.result('nav', bad.length ? 'fail' : 'pass', bad.length ? bad.join(' · ') : `뒤로 한 번 버팀 · 창은 뒤로로 닫힘 · 선생님 창 접기/펴기 그대로`, Date.now() - t0);
+  }
+
   async monkey(page, ms) {
     const A = this.A; this.check = 'monkey';
     const t0 = Date.now(); const phone = this.unit.vp === 'phone';

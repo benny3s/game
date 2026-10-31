@@ -445,6 +445,7 @@
     try { if (window.Cozy && Cozy.toast) Cozy.toast("↩️ 한 번 더 누르면 방에서 나가요", 1800); else { const m = box && box.querySelector("[data-msg]"); if (m) m.textContent = "↩️ 한 번 더 누르면 방에서 나가요"; } } catch (e) {}
   }
   function armBack() {
+    if (window.BackNav) return;                               // 모든 게임 공통 뒤로(common/backnav.js)가 있으면 그쪽이 맡음 (두 번 누르기·창 닫기)
     if (backArmed) return; backArmed = true;
     try { history.pushState({ arnGuard: 1 }, ""); } catch (e) {}
   }
