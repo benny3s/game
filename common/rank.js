@@ -89,10 +89,16 @@
   // ── 합치기
   const Z = () => ({ n: 0, w: 0, l: 0, d: 0, p: 0, s: 0, b: null });
   function merge(t, x) { if (!x) return t; for (const k of ["n", "w", "l", "d", "p", "s"]) t[k] += num(x[k]); if (x.b != null) t.b = t.b == null ? num(x.b) : Math.max(t.b, num(x.b)); return t; }
+  // view: "" 전체 · f 친구 판 · a AI 판 (예전 기기 기록 base 는 AI 판으로 셈 — 고스톱처럼 기기 기록에 친구 판이 섞인 게임은
+  //   은행 장부로 채운 친구 판만큼을 base/_ledger 에 마이너스로 넣어 빼 둠, 11-01)
   function totalOf(rec, view) {
     const t = Z(), m = rec.m || {};
     if (view !== "a") merge(t, m.f);
-    if (view !== "f") { merge(t, m.a); merge(t, m.h); for (const b of Object.values(rec.base || {})) merge(t, { ...b, p: num(b.w) }); }
+    if (view !== "f") {
+      merge(t, m.a); merge(t, m.h);
+      const o = Z(); for (const b of Object.values(rec.base || {})) merge(o, { ...b, p: num(b.w) });
+      for (const k of ["n", "w", "l", "d", "p"]) t[k] += Math.max(0, o[k]); if (o.b != null) t.b = t.b == null ? o.b : Math.max(t.b, o.b);
+    }
     return t;
   }
 
@@ -149,14 +155,14 @@
       const plays = day7.map(x => Object.values((days[x] || {})[cur] || {}).reduce((s, v) => s + num(v), 0));
       const mx = Math.max(1, ...plays);
       const vs = my && g[my.pid] && g[my.pid].vs ? Object.entries(g[my.pid].vs) : [];
-      const lastCol = money && view === "f" ? "칩 합" : "승점";
+      const lastCol = money && view === "f" ? "딴 돈" : "승점";
       body.innerHTML = `
         <div class="rk-chips">${games.map(x => `<button data-g="${x}" class="${x === cur ? "on" : ""}">${esc(NAMES[x] || x)}</button>`).join("")}</div>
         <div class="rk-seg">${[["all", "전체"], ["f", "👥 친구 판"], ["a", "🤖 AI 판"]].map(([v, l]) => `<button data-v="${v}" class="${v === view ? "on" : ""}">${l}</button>`).join("")}</div>
         ${rows.length ? `<table class="rk-t"><tr><th>#</th><th>이름</th><th>판</th><th>승</th><th>패</th><th>승률</th><th>${lastCol}</th></tr>
-          ${rows.map((r, i) => `<tr class="${my && r.pid === my.pid ? "me" : ""}"><td>${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</td><td>${esc(r.name)}</td><td>${r.t.n}</td><td>${r.t.w}</td><td>${r.t.l}</td><td>${r.t.n ? Math.round(r.t.w / r.t.n * 100) + "%" : "-"}</td><td><b>${(money && view === "f" ? r.t.s : r.t.p).toLocaleString()}</b></td></tr>`).join("")}</table>`
+          ${rows.map((r, i) => `<tr class="${my && r.pid === my.pid ? "me" : ""}"><td>${i < 3 ? ["🥇", "🥈", "🥉"][i] : i + 1}</td><td>${esc(r.name)}</td><td>${r.t.n}</td><td>${r.t.w}</td><td>${r.t.l}</td><td>${r.t.n ? Math.round(r.t.w / r.t.n * 100) + "%" : "-"}</td><td><b>${money && view === "f" ? (r.t.s > 0 ? "+" : "") + (r.t.s * 100).toLocaleString() + "원" : r.t.p.toLocaleString()}</b></td></tr>`).join("")}</table>`
         : `<p class="rk-soft">아직 기록이 없어요. 한 판 하면 여기에 올라와요.</p>`}
-        <p class="rk-soft">${money && view === "f" ? "친구 판은 딴 칩(점수) 합으로 줄 세워요" : "승점 = 이긴 사람 수 (셋이서 1등이면 2점)"} · 🤖 AI 판에는 예전에 기기에만 있던 기록도 들어 있어요</p>
+        <p class="rk-soft">${money && view === "f" ? "친구 판은 딴 돈 합으로 줄 세워요" : "승점 = 이긴 사람 수 (셋이서 1등이면 2점)"} · 🤖 AI 판에는 랭킹 전 기기에 있던 혼자 하기 기록도 들어 있어요</p>
         ${vs.length ? `<div class="rk-sub">⚔️ 내 상대 전적 (친구 판)</div><table class="rk-t"><tr><th></th><th>상대</th><th>판</th><th>승</th><th>패</th><th>비김</th><th></th></tr>
           ${vs.map(([op, v]) => `<tr><td></td><td>${esc((g[op] && g[op].name) || "?")}</td><td>${num(v.n)}</td><td>${num(v.w)}</td><td>${num(v.l)}</td><td>${num(v.d)}</td><td></td></tr>`).join("")}</table>` : ""}
         <div class="rk-sub">📅 최근 7일 판 수 · ${esc(NAMES[cur] || cur)}</div>
