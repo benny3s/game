@@ -400,8 +400,24 @@
   }
   const ctx = () => ({ net, role: net.isHost ? "host" : "guest", code: net.code, cfg: (net.meta && net.meta.cfg) || cfg, players: net.players, uid: net.uid, name: me && me.name });
 
+  // ↩️ 방에 있는 동안 뒤로 가기(폰 뒤로·브라우저 뒤로)는 두 번 눌러야 나감 — 한 번은 실수로 튕기지 않게 (11-01 베니 님)
+  let backArmed = false, backAt = 0;
+  function onBack() {
+    if (!net) { backArmed = false; return; }
+    if (Date.now() - backAt < 2000) { backArmed = false; end(""); return; }   // 두 번째: 방에서 나가 게임 첫 화면으로 (사이트는 그대로)
+    backAt = Date.now();
+    try { history.pushState({ arnGuard: 1 }, ""); } catch (e) {}
+    try { if (window.Cozy && Cozy.toast) Cozy.toast("↩️ 한 번 더 누르면 방에서 나가요", 1800); else { const m = box && box.querySelector("[data-msg]"); if (m) m.textContent = "↩️ 한 번 더 누르면 방에서 나가요"; } } catch (e) {}
+  }
+  function armBack() {
+    if (backArmed) return; backArmed = true;
+    try { history.pushState({ arnGuard: 1 }, ""); } catch (e) {}
+  }
+  addEventListener("popstate", () => { if (backArmed) onBack(); });
+
   function wire() {
     offs.forEach(f => f()); offs = [];
+    armBack();
     chatOn(); offs.push(net.on("chat", onChat));
     if (net.isHost) {
       logStart(); offs.push(net.on("players", logPlayers)); offs.push(net.on("chat", logChat));
@@ -423,6 +439,7 @@
     }
   }
   function end(why) {
+    backArmed = false;
     logEnd();
     const was = net; net = null; playing = false; offs.forEach(f => f()); offs = []; chatOff();
     if (was) was.leave();
