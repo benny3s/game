@@ -73,7 +73,7 @@ header.top h1{display:flex;align-items:center;gap:10px}
 .bar .t.thinking::after{width:1.1em}
 .play .stage{overflow:visible;flex:none;min-height:140px}
 .play .spring{flex:1 1 0;min-height:0}
-.play ~ .bubble{pointer-events:none;background:rgba(255,251,232,.97);font-size:15.5px;padding:9px 15px}
+.play ~ .bubble{pointer-events:none;background:rgba(255,251,232,.97);color:#3b2f1e;   /* 밝은 바탕 → 진한 글자 (예전엔 흰 글자라 안 보였음) */ font-size:15.5px;padding:9px 15px}
 #board{border-radius:18px;box-shadow:0 10px 26px rgba(140,98,70,.28),0 2px 0 #e0bf88;cursor:pointer}
 #board.wait{cursor:default}
 #loupe{position:fixed;width:132px;height:132px;border-radius:50%;pointer-events:none;z-index:14;box-shadow:0 10px 28px rgba(91,70,54,.38),0 0 0 4px #fff;background:var(--wood)}
