@@ -25,7 +25,7 @@
   for (const id of [13, 17, 25]) RIB[id] = R_CHO;
   RIB[46] = R_PLAIN;
   for (const id of [4, 12, 29]) BIRD[id] = 1;           // 고도리 새 (2·4·8월 열끗)
-  const BONUS_IDS = [48, 49, 50];
+  const BONUS_IDS = [48, 50, 49];                        // 2장 = 쌍피 두 장 (48·50), 3장 = + 쓰리피 49 (10-31 베니 님: 기본 2장, 둘 다 2점짜리)
   const monthOf = c => (c < NBASE ? c >> 2 : -1);
   const isBonus = c => c >= NBASE;
 
@@ -88,7 +88,7 @@
     { k: 'ppeokFirst', g: 'special', t: 'num', d: 0, min: 0, max: 20, unit: '점', zero: '없음', label: '첫뻑 보너스', note: '판의 첫 차례에 난 뻑을 먹으면 싼 사람에게서 받아요 (자뻑이면 모두에게서)' },
     { k: 'ppeokYeon', g: 'special', t: 'num', d: 0, min: 0, max: 20, unit: '점', zero: '없음', label: '연뻑 보너스', note: '같은 사람이 연달아 싼 두 번째 뻑을 먹으면 받아요' },
     { k: 'kook', g: 'special', t: 'enum', d: 'choose', label: '국진 (9월 열끗)', note: '쌍피로 고를 수 있는지', opts: [['choose', '고르기', '먹을 때 열끗 / 쌍피 선택'], ['yeol', '열끗 고정'], ['ssang', '쌍피 고정']] },
-    { k: 'bonus', g: 'special', t: 'enum', d: 0, label: '보너스 쌍피', note: '덱에 넣는 보너스 피 장수', opts: [[0, '없음'], [2, '2장', '쌍피 + 쓰리피'], [3, '3장', '쌍피 두 장 + 쓰리피']] },
+    { k: 'bonus', g: 'special', t: 'enum', d: 2, label: '보너스 쌍피', note: '덱에 넣는 보너스 피 장수', opts: [[0, '없음'], [2, '2장', '쌍피 두 장'], [3, '3장', '쌍피 두 장 + 쓰리피']] },
     { k: 'stealJjok', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '쪽' },
     { k: 'stealTtadak', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '따닥' },
     { k: 'stealSweep', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '싹쓸이' },
@@ -177,7 +177,7 @@
     return o;
   }
 
-  function gameCards(bonus) { const a = []; for (let i = 0; i < NBASE; i++) a.push(i); for (let i = 0; i < bonus; i++) a.push(BONUS_IDS[i]); return a; }
+  function gameCards(bonus) { const a = []; for (let i = 0; i < NBASE; i++) a.push(i); a.push(...BONUS_IDS.slice(0, bonus).sort((x, y) => x - y)); return a; }
 
   // 자리 짜기: 모인 N명(2~5) 중 이번 판에 칠 사람(who)과 쉬는 사람(bench). r = 0부터 센 판 번호
   // 3명 이하는 모두 침. 4~5명은 3명이 치고, 판마다 (N-3)칸씩 돌아가서 오래 친 사람부터 쉼
@@ -660,7 +660,7 @@
     if (cur.caps.length && s.table.length === 0) { cur.steal += rulesOf(s).stealSweep; if (ev) ev.push({ t: 'sweep', p, steal: rulesOf(s).stealSweep }); }
     // 마지막 차례(모두 손패를 다 냄)의 뻑 먹기·따닥·쪽·싹쓸이는 피를 안 받음 (폭탄은 마지막일 수 없음)
     const last = s.hands.every((h, q) => !hasTurns(s, q));
-    if (cur.steal && !last) for (let q = 0; q < s.n; q++) if (q !== p) for (let i = 0; i < cur.steal; i++) stealPi(s, q, p, ev);
+    if (cur.steal && !last) for (let q = 0; q < s.n; q++) if (q !== p) stealPi(s, q, p, cur.steal, ev);
     // 연달아 뻑 센 횟수 (연뻑 보너스용)
     s.streak[p] = cur.ppeok ? s.streak[p] + 1 : 0;
     // 3뻑이면 바로 이김
@@ -695,18 +695,24 @@
     for (const name of out) ev.push({ t: 'combo', p, name });
   }
 
-  // 피 한 장 가져오기: 값이 가장 낮은 피부터 (없으면 못 받음)
-  function stealPi(s, from, to, ev) {
-    let best = -1, bv = 99;
-    for (const c of s.cap[from]) {
-      let v = 0;
-      if (c === KOOK) { if (s.kook === 'P') v = 2; else continue; }
-      else if (KIND[c] === PI) v = PIV[c]; else continue;
-      if (v < bv || (v === bv && c < best)) { bv = v; best = c; }
+  // 피 n 장어치 가져오기 (10-31: 쌍피는 2장 · 쓰리피는 3장 몫으로 셈 — 예전엔 장수로 세서 쌍피도 1장 몫이었음)
+  //   남은 몫 안에서 값이 가장 큰 피부터 (쌍피 한 장 = 2장 몫), 몫보다 작은 피가 없으면 가장 값싼 피 한 장 (없으면 못 받음)
+  function stealPi(s, from, to, n, ev) {
+    for (let left = n; left > 0;) {
+      let best = -1, bv = 0, cheap = -1, cv = 99;
+      for (const c of s.cap[from]) {
+        let v = 0;
+        if (c === KOOK) { if (s.kook === 'P') v = 2; else continue; }
+        else if (KIND[c] === PI) v = PIV[c]; else continue;
+        if (v <= left && (v > bv || (v === bv && c < best))) { bv = v; best = c; }
+        if (v < cv || (v === cv && c < cheap)) { cv = v; cheap = c; }
+      }
+      const pick = best >= 0 ? best : cheap;
+      if (pick < 0) return;
+      removeFrom(s.cap[from], pick); s.cap[to].push(pick);
+      if (ev) ev.push({ t: 'steal', from, to, card: pick });
+      left -= best >= 0 ? bv : cv;
     }
-    if (best < 0) return;
-    removeFrom(s.cap[from], best); s.cap[to].push(best);
-    if (ev) ev.push({ t: 'steal', from, to, card: best });
   }
 
   function scoreCheck(s, ev) {

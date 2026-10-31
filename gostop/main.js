@@ -17,7 +17,7 @@
   const KEY = 'gostop.';
   const opt = {
     tab: C.store(KEY + 'tab', 'solo'), mode: C.store(KEY + 'mode', 2), tier: C.store(KEY + 'tier', 'normal'),
-    bonus: C.store(KEY + 'bonus', 0), speed: C.store(KEY + 'speed', 'normal'), coach: C.store(KEY + 'coach', 1),
+    bonus: C.store(KEY + 'bonus', 2), speed: C.store(KEY + 'speed', 'normal'), coach: C.store(KEY + 'coach', 1),
     wMode: C.store(KEY + 'wMode', 2), wTiers: C.store(KEY + 'wTiers', ['hard', 'normal', 'easy']), wSpeed: C.store(KEY + 'wSpeed', 'normal'),
     bank: C.store(KEY + 'bank', 'gbasic'), bankName: C.store(KEY + 'bankName', '기본 은행'),     // 친구랑: 은행 모임(gid) — 처음엔 🏦 기본 은행, null = 은행 안 씀 (연습 칩)
     lMode: C.store(KEY + 'lMode', 2), lSeats: C.store(KEY + 'lSeats', ['human', 'human', 'normal', 'normal', 'normal']),
@@ -30,6 +30,8 @@
   let houseRules = G.normRules(C.store(KEY + 'rules', null) || { bonus: opt.bonus });
   if (!C.store(KEY + 'chipPer1', 0)) { if (houseRules.chipPer === 10) houseRules.chipPer = 1; C.save(KEY + 'rules', houseRules); C.save(KEY + 'chipPer1', 1); }   // 10-31: 점당 기본 100원
   const setRules = r => { houseRules = G.normRules(r); C.save(KEY + 'rules', houseRules); };
+  // 10-31 베니 님: 기본 보너스 패 2장(둘 다 쌍피) — 예전 기본값(0장)으로 저장된 기기는 한 번만 2장으로
+  if (!C.store(KEY + 'bonus2v', 0)) { if (!houseRules.bonus) setRules(Object.assign({}, houseRules, { bonus: 2 })); C.save(KEY + 'bonus2v', 1); }
   const presetName = r => { const p = G.RULE_PRESETS.find(q => q.id === G.matchPreset(r)); return p ? p.name : '직접 고침'; };
   // 규칙 한 줄 요약: 바뀐 것만 (넷까지)
   function ruleSummary(r) {
@@ -334,7 +336,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=3');
+    worker = new Worker('ai-worker.js?v=4');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }

@@ -451,7 +451,7 @@ section('광 팔기 (쉬는 사람이 쥔 광을 치는 사람이 삼)');
   // 안 팔리면(아무도 안 사면) 더미 아래로 돌아감
   const sd = findSeed(4, 0, s => s.phase === 'buy' && s.sale.offers.length === 1);
   ok(sd > 0, '광을 쥔 쉬는 사람이 있는 판이 나옴 (씨앗 ' + sd + ')');
-  let s = G.create({ players: 4, seed: sd });
+  let s = G.create({ players: 4, seed: sd, bonus: 0 });
   const off = s.sale.offers[0];
   eq([s.phase, s.turn, s.sale.hid.length, s.deck.length, off.cards.every(c => G.KIND[c] === G.GW)], ['buy', s.first, 7, 14, true], '판이 시작되면 광 팔기부터: 선부터 물음 · 쉬는 사람 7장은 더미 위에서 · 내놓는 건 광뿐');
   eq(total(s), G.gameCards(0), '패가 하나도 빠지지 않고 늘 한 번씩');
@@ -468,7 +468,7 @@ section('광 팔기 (쉬는 사람이 쥔 광을 치는 사람이 삼)');
   eq(total(s), G.gameCards(0), '돌려준 뒤에도 패가 그대로');
 
   // 사면: 산 사람 먹은 패로 + 값은 광 장수 × 1점
-  s = G.create({ players: 4, seed: sd });
+  s = G.create({ players: 4, seed: sd, bonus: 0 });
   const buyer = (s.first + 1) % 3;
   act(s, G.A_NOBUY); ev = act(s, G.A_BUY);
   eq([sorted2(s.cap[buyer]), s.phase, s.turn, s.deck.length, has(ev, 'buy')], [sorted2(off.cards), 'play', s.first, 21 - off.cards.length, true], '사면 광이 산 사람 먹은 패로, 나머지 패는 더미 아래로');
@@ -483,7 +483,7 @@ section('광 팔기 (쉬는 사람이 쥔 광을 치는 사람이 삼)');
   // 5명: 쉬는 사람이 둘이라 묶음이 둘 나올 수 있음 → 하나씩 차례로
   const s5 = findSeed(5, 0, st => st.phase === 'buy' && st.sale.offers.length === 2);
   ok(s5 > 0, '5명: 쉬는 두 사람 모두 광이 있는 판이 나옴 (씨앗 ' + s5 + ')');
-  s = G.create({ players: 5, seed: s5 });
+  s = G.create({ players: 5, seed: s5, bonus: 0 });
   eq([s.deck.length, s.sale.hid.length, s.bench.length], [7, 14, 2], '5명: 쉬는 두 사람 14장을 쥐고 더미엔 7장');
   ev = act(s, G.A_BUY);
   eq([s.phase, s.sale.i, s.turn, s.sale.sold.length], ['buy', 1, s.first, 1], '첫 묶음을 사면 두 번째 묶음을 다시 선부터 물음');
@@ -495,7 +495,7 @@ section('광 팔기 (쉬는 사람이 쥔 광을 치는 사람이 삼)');
   // 팔 광이 없으면 바로 본판
   const sn = findSeed(4, 0, st => st.phase === 'play');
   ok(sn > 0, '쉬는 사람에게 광이 없으면 바로 시작');
-  s = G.create({ players: 4, seed: sn });
+  s = G.create({ players: 4, seed: sn, bonus: 0 });
   eq([s.phase, s.deck.length, s.sale.hid.length], ['play', 21, 0], '광이 없으면 광 팔기 없이 시작 · 쉬는 패는 더미 아래로');
   eq(total(s), G.gameCards(0), '패 보존 (광 없음)');
 
@@ -535,11 +535,11 @@ section('광 팔기 (쉬는 사람이 쥔 광을 치는 사람이 삼)');
   console.log('    4~5명 결과: ' + JSON.stringify(kinds) + ' · 광 묶음 ' + offered + '개 중 ' + buys + '개 팔림');
 
   // 결정성 + 숨은 정보: 같은 씨앗·같은 입력 → 같은 지문, view/obs 에 쉬는 사람 패가 안 샘
-  const run = () => { let st = G.create({ players: 5, seed: s5 }), r2 = G.makeRng(11); while (st.phase !== 'end') { const L = G.legal(st); G.apply(st, L[Math.floor(r2() * L.length)], []); } return st; };
+  const run = () => { let st = G.create({ players: 5, seed: s5, bonus: 0 }), r2 = G.makeRng(11); while (st.phase !== 'end') { const L = G.legal(st); G.apply(st, L[Math.floor(r2() * L.length)], []); } return st; };
   eq(G.hash(run()), G.hash(run()), '5명: 같은 씨앗 + 같은 입력 → 같은 지문');
-  s = G.create({ players: 5, seed: s5 });
+  s = G.create({ players: 5, seed: s5, bonus: 0 });
   const w1 = G.step(s, G.A_BUY).state;
-  eq(G.hash(s) === G.hash(G.create({ players: 5, seed: s5 })), true, 'step 은 넣은 상태를 안 바꿈 (광 팔기)');
+  eq(G.hash(s) === G.hash(G.create({ players: 5, seed: s5, bonus: 0 })), true, 'step 은 넣은 상태를 안 바꿈 (광 팔기)');
   eq(JSON.stringify(w1.cap.flat().length), String(s.sale.offers[0].cards.length), '순수 step 으로 사도 같음');
   let leak = 0;
   for (const p of [0, 1, 2]) { const o = G.obs(s, p); if (o.length !== G.OBS_LEN || o.some(x => !Number.isFinite(x))) leak++; }
@@ -555,7 +555,7 @@ section('우리 집 규칙: 검증 · 기본값 · 묶음');
   eq(G.normRules({}), D, '빈 규칙도 기본값');
   ok(G.RULE_DEFS.length >= 30, '규칙 항목이 서른 개 넘게 있음 (' + G.RULE_DEFS.length + ')');
   eq([G.normRules({ goMatgo: 99 }).goMatgo, G.normRules({ goMatgo: -3 }).goMatgo, G.normRules({ goMatgo: 'abc' }).goMatgo, G.normRules({ goMatgo: '9' }).goMatgo, G.normRules({ goMatgo: 8.6 }).goMatgo], [30, 1, 7, 9, 9], '숫자는 범위 안으로 · 글자는 기본값 · 반올림');
-  eq([G.normRules({ chongtong: 'zzz' }).chongtong, G.normRules({ goBonus: 'plus' }).goBonus, G.normRules({ bonus: '3' }).bonus, G.normRules({ bonus: 4 }).bonus], ['score', 'plus', 3, 0], '고르는 값은 목록 안에서만 (숫자 글자도 맞춰 줌)');
+  eq([G.normRules({ chongtong: 'zzz' }).chongtong, G.normRules({ goBonus: 'plus' }).goBonus, G.normRules({ bonus: '3' }).bonus, G.normRules({ bonus: 4 }).bonus], ['score', 'plus', 3, 2], '고르는 값은 목록 안에서만 (숫자 글자도 맞춰 줌 · 틀린 값은 기본 2장)');
   eq([G.normRules({ pibak: false }).pibak, G.normRules({ pibak: 'false' }).pibak, G.normRules({ pibak: 0 }).pibak, G.normRules({ pibak: 1 }).pibak, G.normRules({ pibak: null }).pibak], [false, false, false, true, true], '켬/끔 값 정리');
   ok(!('hacked' in G.normRules({ hacked: 1 })), '모르는 항목은 버림');
   eq(G.normRules(G.normRules({ maxPts: 12, chipPer: 50 })), G.normRules({ maxPts: 12, chipPer: 50 }), '다시 정리해도 그대로');
@@ -719,6 +719,13 @@ section('우리 집 규칙: 피 뺏기 장수');
   const sw = { hands: [[0, 44], [36, 38]], table: [2, 20], deck: [21, 24], cap: [[], [6, 7, 10, 11]] };
   eq([{}, { stealSweep: 2 }, { stealSweep: 0 }].map(r => run(r, sw, 0).s.cap[1].length), [3, 2, 4], '싹쓸이: 기본 1 · 2장 · 0장');
   ok(run({ stealSweep: 0 }, sw, 0).ev.some(e => e.t === 'sweep' && e.steal === 0), '피를 안 뺏어도 싹쓸이 알림은 나옴');
+  // 쌍피는 2장 몫 (10-31): 피 47(12월 쌍피)·41(11월 쌍피) 와 일반피 6·7
+  const swd = (cap1, r) => run(Object.assign({ stealSweep: 2 }, r || {}), Object.assign({}, sw, { cap: [[], cap1] }), 0).s;
+  eq(swd([41, 6, 7]).cap[1].slice().sort((x, y) => x - y), [6, 7], '2장 몫 뺏기: 쌍피 한 장으로 (일반피 두 장은 남음)');
+  eq(swd([6, 41]).cap[1], [6], '2장 몫: 쌍피가 있으면 쌍피 한 장');
+  eq(swd([6, 7]).cap[1], [], '2장 몫: 쌍피가 없으면 일반피 두 장');
+  eq(run({}, Object.assign({}, sw, { cap: [[], [41]] }), 0).s.cap[1], [], '1장 몫인데 쌍피뿐이면 쌍피를 줌');
+  eq(run({}, Object.assign({}, sw, { cap: [[], [41, 6]] }), 0).s.cap[1], [41], '1장 몫: 일반피부터');
   const bm = { hands: [[0, 1, 2, 44], [36, 38, 39, 40]], table: [3, 20], deck: [24, 25, 26, 27], cap: [[], [6, 7, 10, 11]] };
   eq([{}, { stealBomb: 2 }, { stealBomb: 0 }].map(r => { const s = S(Object.assign({ rules: r }, bm)); act(s, G.A_BOMB); return s.cap[1].length; }), [3, 2, 4], '폭탄: 기본 1 · 2장 · 0장');
   const eat = rules => { const s = S({ rules, hands: [[0, 44], [1, 38]], table: [2], deck: [3, 24, 25, 26], cap: [[6, 7, 10], [14]] }); act(s, P(0)); act(s, P(1)); return s.cap[0].length; };
@@ -757,26 +764,26 @@ section('우리 집 규칙: 나가리 · 점수 상한 · 광 팔기');
   eq(G.settle(S({ rules: { maxPts: 5, ppeok3Pts: 12 } }), 0, 'ppeok3').per[0].pay, 5, '쓰리뻑 점수에도 상한');
 
   // 광 팔기
-  const findSeed = (N, pred, rules) => { for (let seed = 1; seed < 4000; seed++) { const s = G.create({ players: N, seed, rules }); if (pred(s)) return seed; } return 0; };
+  const findSeed = (N, pred, rules) => { for (let seed = 1; seed < 4000; seed++) { const s = G.create({ players: N, seed, rules: Object.assign({ bonus: 0 }, rules) }); if (pred(s)) return seed; } return 0; };
   const off = findSeed(4, s => s.phase === 'buy' && s.sale.offers.length === 1, {});
   ok(off > 0, '광 팔기 판 찾음');
-  let s = G.create({ players: 4, seed: off, rules: { saleOn: false } });
+  let s = G.create({ players: 4, seed: off, rules: { saleOn: false, bonus: 0 } });
   eq([s.sale, s.phase, s.deck.length, s.bench.length], [null, 'play', 21, 1], '광 팔기 끔: 쉬는 사람은 패 없이 쉬기만 · 더미는 그대로');
   eq(sorted([...s.deck, ...s.table, ...s.hands.flat(), ...s.cap.flat()]), G.gameCards(0), '광 팔기 끄면 48장이 판에');
-  const price = (rules, skip) => { const t = G.create({ players: 4, seed: off, rules }); const cards = t.sale.offers[0].cards.length; for (let i = 0; i < skip; i++) act(t, G.A_NOBUY); act(t, G.A_BUY); return [t.sale.sold[0].price, cards]; };
+  const price = (rules, skip) => { const t = G.create({ players: 4, seed: off, rules: Object.assign({ bonus: 0 }, rules) }); const cards = t.sale.offers[0].cards.length; for (let i = 0; i < skip; i++) act(t, G.A_NOBUY); act(t, G.A_BUY); return [t.sale.sold[0].price, cards]; };
   const p2 = price({ salePrice: 2 }, 0);
   eq(p2[0], p2[1] * 2, '광 한 장 2점');
   eq(price({ salePrice: 0 }, 0)[0], 0, '광 공짜');
   const p5 = price({ salePrice: 5 }, 1);
   eq(p5[0], p5[1] * 5, '광 한 장 5점 (둘째 사람이 삼)');
-  const sold = G.create({ players: 4, seed: off, rules: { salePrice: 3 } }); act(sold, G.A_BUY);
+  const sold = G.create({ players: 4, seed: off, rules: { salePrice: 3, bonus: 0 } }); act(sold, G.A_BUY);
   eq(G.settle(sold, sold.sale.sold[0].buyer, 'stop').sale[0].price, sold.sale.sold[0].cards.length * 3, '정산에 규칙대로 값이 남음');
   // 살 수 있는 사람
-  const dl = G.create({ players: 4, seed: off, rules: { saleWho: 'dealer' } });
+  const dl = G.create({ players: 4, seed: off, rules: { saleWho: 'dealer', bonus: 0 } });
   eq([dl.phase, dl.turn], ['buy', dl.first], '선만 살 수 있음: 선에게만 물음');
   const ev = act(dl, G.A_NOBUY);
   eq([dl.phase, dl.turn, ev.some(e => e.t === 'unsold')], ['play', dl.first, true], '선이 안 사면 바로 안 팔림');
-  const ot = G.create({ players: 4, seed: off, rules: { saleWho: 'others' } });
+  const ot = G.create({ players: 4, seed: off, rules: { saleWho: 'others', bonus: 0 } });
   eq([ot.phase, ot.turn], ['buy', (ot.first + 1) % 3], '선 빼고: 선 다음 사람부터 물음');
   eq(G.askers(ot), [(ot.first + 1) % 3, (ot.first + 2) % 3], '묻는 순서');
   act(ot, G.A_NOBUY);
