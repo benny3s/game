@@ -279,5 +279,23 @@ function randomCarom(mode, seed) {
   ok(ex && ex.action && typeof ex.rate === 'number' && Array.isArray(ex.rails), 'AI 선생님: 샷 · 성공률 · 쿠션 순서');
 }
 
+// 9) 복기: 기록(처음 상태 + 친 값, JSON 으로 저장했다 꺼냄)에서 다시 치면 상태가 똑같이 나옴
+section('복기 재현');
+{
+  for (const mode of ['3c', '4gu', '8ball']) {
+    let s = B.create({ mode, players: 2, seed: 4040 + mode.length, target: mode === '4gu' ? 200 : 40 });
+    const start = JSON.stringify(s), shots = [], after = [];
+    for (let k = 0; k < 24 && s.phase === 'play'; k++) {
+      const a = AI.choose(s, k % 2 ? 'easy' : 'normal', { seed: 77 + k });
+      const r = B.applyShot(s, a);
+      shots.push(JSON.parse(JSON.stringify(a))); after.push(JSON.stringify(r.state)); s = r.state;
+    }
+    let st = JSON.parse(start), same = 0;
+    const saved = JSON.parse(JSON.stringify(shots));
+    for (let k = 0; k < saved.length; k++) { st = B.applyShot(st, saved[k], { record: false }).state; if (JSON.stringify(st) === after[k]) same++; }
+    ok(same === shots.length, `${mode}: 기록 ${shots.length}샷을 다시 쳐도 상태가 그대로 (${same}/${shots.length})`);
+  }
+}
+
 console.log(`\n${fail ? '❌' : '✅'} ${pass} 통과, ${fail} 실패`);
 process.exit(fail ? 1 : 0);

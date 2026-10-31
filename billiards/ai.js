@@ -307,7 +307,7 @@
     while (!S.step(1e9)) { /* 끝까지 */ }
     return explain(s, S.best().a, S.rng);
   }
-  function explain(s, act, rng) {
+  function explain(s, act, rng, noRate) {
     const pool = s.mode === '8ball', T = B.TABLES[s.table], R = T.R;
     act = Object.assign({}, act); if (act.place == null) delete act.place;
     const r = B.applyShot(s, act);
@@ -332,6 +332,7 @@
       const pe = r.sim.events.find(e => e.k === 'p' && e.a !== 0);
       if (pe) { out.ball = pe.a; out.pocket = pe.b; }
     }
+    if (noRate) return out;
     // 성공률: 중급 정도 손떨림으로 10번 쳐 봄
     let succ = 0; const N = 10;
     for (let k = 0; k < N; k++) {
@@ -343,7 +344,20 @@
     return out;
   }
 
-  const API = { TIERS, choose, chooseAsync, coach, coachAsync, jitter, aimAt, scoreCarom, easyShots };
+  // 복기용: 실제로 친 샷 설명 (두께·쿠션 순서·회전, 성공률은 안 셈)
+  const describe = (s, act) => explain(s, act, null, true);
+  // 샷 하나가 성공했나 (캐롬: 득점 / 포켓볼: 계속 치기·8번 승리, 반칙 아님) + 가까움 v (캐롬 0~1)
+  function shotOk(s, act) {
+    if (s.mode === '8ball') {
+      const q = B.applyShot(s, act, { maxTime: 20, record: false });
+      const ok = (!!q.result.cont && !q.result.foul) || (q.state.phase === 'end' && q.state.winTeam === B.teamOf(s, s.turn));
+      return { ok, v: ok ? 1 : 0, foul: !!q.result.foul };
+    }
+    const r = scoreCarom(s, act, B.cueOf(s, s.turn), true);
+    return { ok: r.ok, v: clamp(r.v, 0, 1), foul: !!r.foul };
+  }
+
+  const API = { TIERS, choose, chooseAsync, coach, coachAsync, jitter, aimAt, scoreCarom, easyShots, describe, shotOk };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.BilliardsAI = API;
 })(this);

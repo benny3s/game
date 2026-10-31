@@ -17,7 +17,7 @@
     game: st('game', '3c'), tab: st('tab', 'ai'), tier: st('tier', 'normal'),
     targets: Object.assign({ '4gu': 80, '3c': 10, '8ball': 1 }, st('targets', {})),
     finish3c: st('finish3c', 0), guide: st('guide', 'basic'), cloth: st('cloth', 'green'),
-    hotN: st('hotN', 2), hotNames: st('hotNames', []), power: st('power', 0.4), coach: st('coach', 0),
+    hotN: st('hotN', 2), hotNames: st('hotNames', []), power: st('power', 0.4), coach: st('coach', 0), rpCoach: st('rpCoach', 1),
   };
   const save = k => C.save(KEY + k, opt[k]);
   const meName = () => (window.GME && GME.me && GME.me.name) || (() => { try { return localStorage.getItem('game.arena.name') || ''; } catch (e) { return ''; } })() || '나';
@@ -70,6 +70,7 @@
     segBtns($('guideSeg'), [['basic', '보통'], ['long', '길게 (초보)'], ['off', '끄기']], opt.guide, v => { opt.guide = v; save('guide'); drawMenu(); });
     segBtns($('clothSeg'), [['green', '초록'], ['blue', '파랑']], opt.cloth, v => { opt.cloth = v; save('cloth'); drawMenu(); });
     $('howto').innerHTML = HOWTO[m].map(s => `<li>${s}</li>`).join('');
+    drawHomeBtns();
     $('startBtn').textContent = tab === 'friend' ? '👥 친구랑 방 열기 · 들어가기' : tab === 'practice' ? '🎱 연습 시작' : tab === 'hot' ? '🎱 같이 시작' : `🎱 ${TIER[opt.tier].em} AI와 시작`;
   }
   $('gameCards').onclick = e => { const b = e.target.closest('.gcard'); if (!b) return; sfx('tap'); opt.game = b.dataset.id; save('game'); drawMenu(); };
@@ -85,6 +86,9 @@
     startLocal(opt.tab);
   };
   $('rulesBtn').onclick = () => showRules(opt.game);
+  $('rpListBtn').onclick = () => { sfx('tap'); openReplayList(); };
+  $('noteBtn').onclick = () => { sfx('tap'); if (window.Mistakes) Mistakes.open({ game: 'billiards' }); };
+  if (window.Mistakes && Mistakes.onChange) Mistakes.onChange(() => drawHomeBtns());
   $('ruleBtn').onclick = () => showRules(SES ? SES.s.mode : opt.game);
 
   function showRules(m) {
@@ -111,6 +115,7 @@
       (SES.netOffs || []).splice(0).forEach(f => { try { f(); } catch (e) {} });
       if (SES.goneAsk) { try { SES.goneAsk.close(); } catch (e) {} SES.goneAsk = null; }
     }
+    rpTeardown();
     SES = null; $('resBox').hidden = true;
     $('sub').classList.remove('myturn');
     if (coachP) coachP.hide();
@@ -144,6 +149,7 @@
     const s = B.create({ mode, players: seats.length, target: opt.targets[mode], finish3c: !!opt.finish3c, seed: rand32(), practice: kind === 'practice' });
     SES = newSes({ kind, mode, s, seats, coachAllowed: true });
     SES.coachOn = !!opt.coach;
+    if (kind !== 'practice') SES.rec = mkRec(SES);
     enterPlay();
     C.howto('billiards', '🎱 당구 하는 법', ['당구대를 <b>누르고 끌면</b> 그쪽으로 겨눠요 (공에서 멀리 끌수록 정밀해요)', '<b>힘 막대</b>를 끌고, 작은 흰 공을 눌러 <b>당점(회전)</b>을 골라요', '<b>샷!</b> 을 누르면 쳐요 · 🔁 다시 보기로 방금 샷을 천천히 볼 수 있어요', '🧑‍🏫 <b>AI 선생님</b>을 켜면 추천 샷과 까닭을 알려 줘요']);
   }
@@ -165,8 +171,8 @@
     const short = land && innerHeight < 520;
     document.body.classList.toggle('short', short);
     // 낮은 가로 화면: 점수판을 조작판 맨 위로 옮김
-    const bd = $('board');
-    if (short && bd.parentNode !== $('ctl')) $('ctl').prepend(bd);
+    const bd = $('board'), side = SES.rp ? $('rp') : $('ctl');
+    if (short && bd.parentNode !== side) side.prepend(bd);
     else if (!short && bd.parentNode !== $('play')) $('play').insertBefore(bd, $('arena'));
     const r = $('stage').getBoundingClientRect();
     if (r.width < 10 || r.height < 10) return;
@@ -179,7 +185,7 @@
 
   // ── 차례
   const seatOf = () => SES.seats[SES.s.turn];
-  const myTurn = () => SES && SES.s && SES.s.phase === 'play' && !SES.anim && !SES.aiBusy && !SES.waiting && seatOf() && seatOf().ctrl === 'me';
+  const myTurn = () => SES && SES.s && !SES.rp && SES.s.phase === 'play' && !SES.anim && !SES.aiBusy && !SES.waiting && seatOf() && seatOf().ctrl === 'me';
   function defaultAim() {
     const s = SES.s, cue = B.cueOf(s, s.turn), c = s.balls[cue];
     let tgt = [];
@@ -194,7 +200,7 @@
     D.drawSpinPad($('spin'), 0, 0);
   }
   function startTurn() {
-    if (!SES || !SES.alive) return;
+    if (!SES || !SES.alive || SES.rp) return;
     const s = SES.s;
     SES.coachRes = null; SES.guideKey = ''; SES.remoteAim = null;
     shotTimer();
@@ -262,7 +268,9 @@
       return;
     }
     if (SES.kind === 'practice') { SES.undo.push(B.clone(s)); if (SES.undo.length > 40) SES.undo.shift(); }
+    noteShot(s, act);
     const res = B.applyShot(s, act);
+    if (SES.rec) SES.rec.shots.push({ p: s.turn, a: JSON.parse(JSON.stringify(act)), s: encState(res.state) });
     if (SES.kind === 'online') {
       SES.no++;
       if (res.state.phase === 'end') bumpWins(res.state);
@@ -304,7 +312,7 @@
     }
     flash(r.msg || '', 2600);
     updateHud();
-    if (s.phase === 'end') { const g0 = ses.gid; stopShotTimer(); setTimeout(() => { if (SES === ses && ses.gid === g0) showResult(); }, 900); return; }
+    if (s.phase === 'end') { saveReplay(ses); const g0 = ses.gid; stopShotTimer(); setTimeout(() => { if (SES === ses && ses.gid === g0) showResult(); }, 900); return; }
     startTurn();
   }
 
@@ -450,6 +458,11 @@
   $('shootBtn').onclick = () => { if (!myTurn()) return; sfx('tap'); shoot(currentAction()); };
   addEventListener('keydown', e => {
     if (!SES || $('play').hidden || e.target.closest('input,textarea')) return;
+    if (SES.rp && !document.querySelector('.overlay:not([hidden])')) {
+      const k = e.key === 'ArrowRight' ? 'next' : e.key === 'ArrowLeft' ? 'prev' : (e.key === ' ' || e.key === 'Enter') ? 'play' : e.key === 'Home' ? 'start' : '';
+      if (k) { e.preventDefault(); rpCmd(k); }
+      return;
+    }
     if (!myTurn()) return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); turnAim((e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 0.05 : 0.5)); }
     else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); SES.aim.power = clamp(SES.aim.power + (e.key === 'ArrowUp' ? 0.02 : -0.02), 0.03, 1); opt.power = SES.aim.power; sendAim(); }
@@ -466,7 +479,7 @@
   // ── 화면 위 글 (점수판 · 막대)
   function updateHud() {
     if (!SES) return;
-    const s = SES.s, seat = seatOf(), need = B.needPoints(s);
+    const s = SES.rp ? SES.rp.states[SES.rp.i] : SES.s, seat = SES.seats[s.turn], need = B.needPoints(s);
     const kindName = { practice: '혼자 연습', ai: 'AI와 대결', hot: '여럿이', online: '친구랑' }[SES.kind];
     $('lbl').textContent = `${B.MODES[s.mode].name} · ${kindName}${SES.kind === 'online' && SES.net ? ' ' + SES.net.code : ''}`;
     let sub = '';
@@ -477,6 +490,11 @@
     else sub = SES.kind === 'practice' ? (s.ballInHand ? '프리볼' : '마음껏 쳐 보세요') : `${SES.kind === 'online' && seat.ctrl === 'me' ? '내 차례!' : sname(seat) + ' 차례'}${s.ballInHand ? ' · 프리볼' : ''}${s.run ? ` · ${s.run}연속` : ''}`;
     if (SES.kind === 'online' && SES.shotLeft != null && s.phase === 'play' && !SES.anim) sub += ` · ⏱${SES.shotLeft}`;   // 친구랑: 30초 안에 쳐요
     if (SES.kind === 'online' && SES.spectator) sub = '👀 구경 중 · ' + sub;
+    if (SES.rp) {
+      const rp = SES.rp, n = rp.states.length - 1, sh = rp.rec.shots[rp.i], who = sh && rp.rec.seats[sh.p];
+      $('lbl').textContent = `🎞️ 다시 보기 · ${B.MODES[s.mode].name}`;
+      sub = SES.anim ? '굴러가는 중…' : rp.i >= n ? '끝' : `${who ? who.name : ''} 차례 · ${rp.i + 1}번째 샷`;
+    } else if (SES.isDrill) $('lbl').textContent = `${B.MODES[s.mode].name} · 복기 연습`;
     $('sub').textContent = sub;
     if (s.mode === '8ball') {
       const g = s.groups[B.teamOf(s, s.turn)];
@@ -554,6 +572,7 @@
         fb = add('안 기다리고 시작', '', hostNext);
         add('대기실로', '', () => { $('resBox').hidden = true; ArenaUI.toLobby(); });
       } else nb = add('✋ 준비', 'primary', () => { ses.rdy.add(myId); ses.net.send({ t: 'rdy', gid: ses.gid }, true); ses.drawReady(); });
+      if (ses.lastRec) add('🎞️ 다시 보기', '', () => startReplay(ses.lastRec, true));
       add('나가기', '', () => { ArenaUI.leave(); goHome(); });
       ses.drawReady = () => {
         if (!rb.isConnected || SES !== ses) return;
@@ -581,10 +600,371 @@
       };
       ses.drawReady();
     } else {
-      add('한 판 더', 'primary', () => { $('resBox').hidden = true; const k = SES.kind; startLocal(k); });
+      const ses = SES;
+      if (ses.isDrill && ses.drillSrc) add('🔁 그 장면 다시', 'primary', () => startBranch(ses.drillSrc.rec, ses.drillSrc.k, {}));
+      else add('한 판 더', 'primary', () => { $('resBox').hidden = true; const k = SES.kind; startLocal(k); });
+      if (ses.lastRec) add('🎞️ 다시 보기', '', () => startReplay(ses.lastRec, true));
       add('메뉴', '', () => goHome());
     }
     $('resBox').hidden = false;
+  }
+
+  // ── 🎞️ 복기: 끝난 판을 이 기기에 10개까지 (샷 = 친 사람·친 값, 결정적이라 처음부터 다시 쳐서 그대로 재생)
+  //   샷마다 친 뒤 상태(짧게)도 함께 둠 → 물리가 바뀌거나 다른 기기에서 계산이 어긋나도 점수·자리는 기록대로 맞춤
+  const RKEY = KEY + 'replays';
+  const loadReplays = () => { const v = C.store(RKEY, []); return Array.isArray(v) ? v.filter(x => x && x.start && Array.isArray(x.shots)) : []; };
+  function encState(s) {
+    return { b: s.balls.map(b => b.on ? [Math.round(b.x * 1e5), Math.round(b.y * 1e5)] : 0), t: s.turn, sc: s.scores.slice(), inn: s.innings.slice(), rs: s.runs.slice(), hi: s.high.slice(), r: s.run, g: s.groups.slice(), f: (s.ballInHand ? 1 : 0) | (s.kitchen ? 2 : 0) | (s.breakShot ? 4 : 0), n: s.shots, ph: s.phase, w: s.winner, wt: s.winTeam, rng: s.rng };
+  }
+  function decState(start, c) {
+    const s = B.clone(start);
+    s.balls = c.b.map((p, i) => p ? { x: p[0] / 1e5, y: p[1] / 1e5, on: true } : { x: start.balls[i].x, y: start.balls[i].y, on: false });
+    Object.assign(s, { turn: c.t, scores: c.sc.slice(), innings: c.inn.slice(), runs: c.rs.slice(), high: c.hi.slice(), run: c.r, groups: c.g.slice(), ballInHand: !!(c.f & 1), kitchen: !!(c.f & 2), breakShot: !!(c.f & 4), shots: c.n, phase: c.ph, winner: c.w, winTeam: c.wt, rng: c.rng, last: null });
+    return s;
+  }
+  function sameState(s, c) {
+    if (s.turn !== c.t || s.phase !== c.ph || s.scores.join() !== c.sc.join()) return false;
+    return s.balls.every((b, i) => { const p = c.b[i]; return b.on ? !!p && Math.abs(b.x * 1e5 - p[0]) < 50 && Math.abs(b.y * 1e5 - p[1]) < 50 : !p; });
+  }
+  function mkRec(ses) {
+    return { v: 1, at: Date.now(), mode: ses.s.mode, kind: ses.kind, start: B.clone(ses.s), shots: [], title: '',
+      seats: ses.seats.map((x, i) => ({ name: x.name, em: x.em || '🙂', me: ses.kind === 'hot' ? i === 0 : x.ctrl === 'me' })) };
+  }
+  function recTitle(ses) {
+    const s = ses.s, w = s.winner, ws = ses.seats[w];
+    const sc = s.mode === '8ball' ? '' : ' ' + s.scores.map(x => s.mode === '4gu' ? x * 10 : x).join(':');
+    const who = s.mode === '8ball' && ses.seats.length === 4 ? `${s.winTeam === 0 ? '1·3번' : '2·4번'} 팀 승` : !ws ? '끝' : ws.ctrl === 'me' && ses.kind !== 'hot' ? '내가 이김' : `${ws.name} 승`;
+    return `${B.MODES[s.mode].name} · ${who}${sc}`;
+  }
+  function saveReplay(ses) {
+    const rec = ses.rec; ses.rec = null;
+    if (!rec || !rec.shots.length || ses.isDrill) return;
+    rec.title = recTitle(ses);
+    ses.lastRec = rec;
+    let list = loadReplays().filter(x => x.at !== rec.at); list.unshift(rec); list = list.slice(0, 10);
+    for (let n = list.length; n > 0; n = Math.floor(n / 2)) { try { localStorage.setItem(RKEY, JSON.stringify(list.slice(0, n))); break; } catch (e) {} }   // 저장 공간이 모자라면 오래된 판부터 덜어냄
+    drawHomeBtns();
+  }
+  // 기록 → 장면(샷 전 상태) 목록. upto 까지만 만들 수도
+  function rpBuild(rec, upto) {
+    const states = [B.clone(rec.start)], results = []; let div = 0;
+    const end = Math.min(rec.shots.length, upto == null ? 1e9 : upto);
+    for (let k = 0; k < end; k++) {
+      const prev = states[k], sh = rec.shots[k];
+      if (prev.phase !== 'play' || !sh || !sh.a) break;
+      const r = B.applyShot(prev, sh.a, { record: false });
+      let nx = r.state;
+      if (sh.s && !sameState(nx, sh.s)) { nx = decState(rec.start, sh.s); div++; }
+      states.push(nx); results.push(r.result);
+    }
+    return { states, results, div };
+  }
+  const fmtAt = t => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  function drawHomeBtns() {
+    const a = $('rpListBtn'), b = $('noteBtn');
+    if (a) a.hidden = !loadReplays().length;
+    if (b) b.hidden = !(window.Mistakes && Mistakes.count('billiards'));
+  }
+  function openReplayList() {
+    const list = loadReplays();
+    if (!list.length) return C.toast('아직 저장된 판이 없어요');
+    const close = C.modal({
+      title: '🎞️ 지난 판 다시 보기',
+      html: `<p class="small" style="margin:0 0 8px">이 기기에서 친 판 ${list.length}개 (최근 10개까지). 🧑‍🏫 선생님을 켜면 샷마다 점수와 더 좋은 샷을 알려 줘요.</p><div class="rplist">${list.map((x, i) => `<button class="btn" data-i="${i}"><b>${esc(x.title || '판')}</b><span class="small">${fmtAt(x.at)} · ${x.shots.length}샷 · ${x.seats.map(q => esc(q.name)).join(', ')}</span></button>`).join('')}</div>`,
+      buttons: [{ label: '닫기' }], dismiss: true,
+    });
+    document.querySelectorAll('.rplist [data-i]').forEach(b => b.onclick = () => { sfx('tap'); close(); startReplay(list[+b.dataset.i], false); });
+  }
+  // inline = 결과 창에서 (닫으면 결과로) / 아니면 지난 판 목록에서 (닫으면 메뉴로)
+  function startReplay(rec, inline) {
+    if (!rec) return;
+    const built = rpBuild(rec);
+    if (built.states.length < 2) return C.toast('다시 볼 샷이 없어요');
+    let keep = false;
+    if (inline && SES && !SES.rp && SES.s) keep = true;
+    else {
+      stopSession();
+      SES = newSes({ kind: 'replay', mode: rec.mode, s: built.states[0], seats: rec.seats.map(x => ({ name: x.name, em: x.em, ctrl: 'remote' })), coachAllowed: false });
+      showScreen('play');
+    }
+    const ses = SES;
+    ses.anim = null; ses.sinking = []; ses.aiBusy = false;
+    ses.rp = { rec, inline: !!keep, keep, i: 0, states: built.states, results: built.results, play: false, coach: !!opt.rpCoach, ana: [], noted: 0 };
+    $('resBox').hidden = true; $('msgline').hidden = true; if (coachP) coachP.hide();
+    document.body.classList.add('replaying'); $('rp').hidden = false;
+    $('rp').querySelector('[data-rg="branch"]').hidden = ses.kind === 'online';   // 친구 방 결과 창에서는 방을 떠나게 되니 (지난 판 목록에서는 됨)
+    $('rp').querySelector('.rpx').textContent = keep ? '결과로' : '닫기';
+    V.resetOrient(built.states[0].balls.length);
+    relayout(); updateHud(); rpDraw();
+    if (ses.rp.coach) rpAnalyze(0);
+    if (built.div) C.toast('예전에 친 판이라 공 길이 조금 다를 수 있어요 (점수·자리는 기록대로)', 2800);
+  }
+  function rpTeardown() { document.body.classList.remove('replaying'); const el = $('rp'); if (el) el.hidden = true; }
+  function rpClose(how) {
+    const ses = SES, rp = ses && ses.rp; if (!rp) return;
+    rp.play = false; ses.rp = null; ses.anim = null; ses.sinking = [];
+    rpTeardown();
+    if (how === 'branch') return;
+    if (rp.keep) { V.resetOrient(ses.s.balls.length); relayout(); updateHud(); if (how !== 'silent') showResult(); }
+    else if (how !== 'silent') goHome();
+  }
+  function rpGo(k) {
+    const ses = SES, rp = ses.rp;
+    rp.play = false; ses.anim = null; ses.sinking = [];
+    rp.i = clamp(k, 0, rp.states.length - 1); ses.guideKey = '';
+    V.resetOrient(rp.states[rp.i].balls.length);
+    updateHud(); rpDraw();
+    if (rp.coach) rpAnalyze(rp.i);
+  }
+  function rpNext() {
+    const ses = SES, rp = ses && ses.rp; if (!rp || ses.anim) return;
+    const n = rp.states.length - 1;
+    if (rp.i >= n) { rp.play = false; rpDraw(); return; }
+    const k = rp.i, before = rp.states[k], sh = rp.rec.shots[k];
+    const r = B.applyShot(before, sh.a);
+    const act = (r.state.last && r.state.last.action) || sh.a;
+    ses.anim = {
+      before, frames: r.sim.frames, fps: r.sim.fps, events: r.sim.events, cue: r.sim.cue, act, start: performance.now() + 200, ei: 0, speed: 1, stroke: true, replay: true,
+      done: () => {
+        if (SES !== ses || ses.rp !== rp) return;
+        rp.i = k + 1;
+        const res = rp.results[k] || {};
+        if (res.msg) flash(res.msg, 2200);
+        if ((res.score || 0) > 0 || (res.cont && !res.foul)) sfx('good'); else if (res.foul) sfx('bad');
+        updateHud(); rpDraw();
+        if (rp.coach) rpAnalyze(rp.i);
+        if (rp.i >= n) { rp.play = false; rpDraw(); C.toast(rp.rec.title ? '끝 — ' + rp.rec.title : '끝까지 봤어요', 2200); }
+        else rpContinue(rp.coach ? 1500 : 650);
+      },
+    };
+    ses.sinking = [];
+    updateHud(); rpDraw();
+  }
+  // ⏯ 이어 보기: 선생님이 켜져 있으면 분석이 끝난 뒤 잠깐 보여 주고 침
+  function rpContinue(ms) {
+    const ses = SES, rp = ses && ses.rp; if (!rp || !rp.play || ses.anim) return;
+    const A = rp.ana[rp.i];
+    if (rp.coach && rp.i < rp.states.length - 1 && !(A && A.done)) return;      // 분석이 끝나면 다시 부름
+    const i0 = rp.i;
+    setTimeout(() => { if (SES === ses && ses.rp === rp && rp.play && !ses.anim && rp.i === i0) rpNext(); }, ms);
+  }
+  function rpCmd(k) {
+    const ses = SES, rp = ses && ses.rp; if (!rp) return;
+    sfx('tap');
+    const n = rp.states.length - 1;
+    if (k === 'exit') return rpClose();
+    if (k === 'play') {
+      rp.play = !rp.play;
+      if (rp.play) { if (rp.i >= n) { rpGo(0); rp.play = true; } if (!ses.anim) { const A = rp.ana[rp.i]; if (rp.coach && !(A && A.done)) rpAnalyze(rp.i); else rpNext(); } }
+      rpDraw(); return;
+    }
+    if (k === 'next') { if (ses.anim) return; rp.play = false; rpNext(); return; }
+    rpGo(k === 'start' ? 0 : ses.anim ? rp.i : rp.i - 1);
+  }
+  $('rp').addEventListener('click', e => {
+    const b = e.target.closest('[data-rp],[data-rg]'); if (!b || !SES || !SES.rp) return;
+    if (b.dataset.rp) return rpCmd(b.dataset.rp);
+    const rp = SES.rp;
+    sfx('tap');
+    if (b.dataset.rg === 'coach') {
+      rp.coach = !rp.coach; opt.rpCoach = rp.coach ? 1 : 0; save('rpCoach');
+      if (rp.coach) rpAnalyze(rp.i);
+      rpDraw(); return;
+    }
+    if (b.dataset.rg === 'branch') {
+      if (rp.i >= rp.states.length - 1 || rp.states[rp.i].phase !== 'play') return C.toast('끝난 장면이에요. ◀ 로 앞으로 가서 눌러 주세요');
+      const rec = rp.rec, k = rp.i, st = rp.states[k];
+      rpClose('branch');
+      startBranch(rec, k, { state: st });
+    }
+  });
+  // 복기 판 글: 이 샷 점수 · 추천 샷 · 선 설명
+  function rpDraw() {
+    const ses = SES, rp = ses && ses.rp; if (!rp) return;
+    const el = $('rp'), n = rp.states.length - 1;
+    el.querySelector('.pp').textContent = rp.play ? '⏸' : '⏵';
+    el.querySelector('.rpn').textContent = `${rp.i} / ${n}샷`;
+    const cb = el.querySelector('[data-rg="coach"]'); cb.setAttribute('aria-pressed', String(rp.coach)); cb.classList.toggle('on', rp.coach);
+    const sh = rp.rec.shots[rp.i], who = sh ? rp.rec.seats[sh.p] : null, s = rp.states[rp.i];
+    let h;
+    if (rp.i >= n || !sh) h = `<span>🏁 끝 — ${esc(rp.rec.title || '')}</span><span class="lg">◀ ⏮ 로 돌아가 샷마다 볼 수 있어요</span>`;
+    else if (!rp.coach) h = `<span><b>${esc(who ? who.name : '')}</b> · ${rp.i + 1}번째 샷 — ▶ 를 누르면 쳐요</span><span class="lg">🧑‍🏫 선생님을 켜면 이 샷이 몇 점짜리였는지, 더 좋은 샷이 뭐였는지 알려 줘요</span>`;
+    else {
+      const A = rp.ana[rp.i];
+      h = `<span><b>${esc(who ? who.name : '')}</b> · ${rp.i + 1}번째 샷</span>`;
+      if (!A || !A.done) h += '<span>🧑‍🏫 이 장면에서 여러 샷을 미리 쳐 보는 중…</span>';
+      else {
+        h += `<span class="sc">🎯 이 샷: ${A.score}점 <small>(성공 확률 ${Math.round(A.pm * 100)}%) · ${A.scored ? (s.mode === '8ball' ? '넣었어요 ✅' : '득점 ✅') : A.foul ? '반칙 ⚠️' : '실패 ❌'}</small></span>`;
+        if (A.scored && A.pm < 0.2 && A.pb >= 0.35) h += '<span>🍀 들어가긴 했지만 운이 좀 따랐어요</span>';
+        if (A.same) h += `<span>👍 선생님 추천만큼 좋은 샷이었어요${A.pb > 0 ? ` (추천 ${Math.round(A.pb * 100)}%)` : ''}</span>`;
+        else {
+          h += `<span>👑 <b>더 좋은 샷</b> · 성공 확률 ${Math.round(A.pb * 100)}%</span>`;
+          h += coachLines(s, A.best).map(x => `<span class="cl">${x}</span>`).join('');
+          if (A.why) h += `<span>💡 ${esc(A.why)}</span>`;
+        }
+        h += `<span class="lg"><i></i>실제로 친 길 <i class="b"></i>추천 길 · 성공 확률 = 조금씩 흔들어 ${A.N}번 쳐 본 결과</span>`;
+      }
+    }
+    $('rpInfo').innerHTML = h;
+  }
+  // 한 장면 분석: 선생님 추천(고급 찾기) + 실제 샷·추천 샷을 같은 손떨림(중급)으로 N번씩 → 성공 확률 · 점수
+  const normAct = (s, a) => {
+    const o = { angle: +a.angle || 0, power: Math.max(0.01, Math.min(1, +a.power || 0)), spinX: +a.spinX || 0, spinY: +a.spinY || 0 };
+    if (s.ballInHand) { const c = s.balls[B.cueOf(s, s.turn)], pl = a.place || [c.x, c.y]; o.place = B.fixPlace(s, pl[0], pl[1]); }
+    return o;
+  };
+  function compareShots(s, mine, best, N) {
+    return new Promise(res => {
+      const seed = 9001 + (s.shots | 0) * 31, rM = B.makeRng(seed), rB = B.makeRng(seed);   // 같은 흔들림을 두 샷에 똑같이 (차이가 덜 들쭉날쭉)
+      let k = 0, pm = 0, pb = 0, vm = 0, vb = 0;
+      const tick = () => {
+        const t0 = performance.now();
+        while (k < N && performance.now() - t0 < 10) {
+          const jm = AI.jitter(mine, 'normal', rM), jb = AI.jitter(best, 'normal', rB);
+          if (mine.place) jm.place = mine.place; if (best.place) jb.place = best.place;
+          const m = AI.shotOk(s, jm), b = AI.shotOk(s, jb);
+          pm += m.ok ? 1 : 0; pb += b.ok ? 1 : 0; vm += m.v; vb += b.v; k++;
+        }
+        if (k < N) { setTimeout(tick, 0); return; }
+        res({ pm: pm / N, pb: pb / N, vm: vm / N, vb: vb / N, N });
+      };
+      setTimeout(tick, 0);
+    });
+  }
+  function shotScore(c, scored, foul) {
+    const ref = Math.max(c.pb, c.pm);
+    const choice = ref >= 0.08 ? c.pm / ref : 0.6 * Math.min(1, c.vm / Math.max(c.vb, c.vm, 0.05));   // 아무도 쉽지 않은 장면이면 얼마나 가까이 갔나로
+    let sc = Math.round(100 * (0.8 * choice + 0.2 * (scored ? 1 : 0)));
+    if (foul) sc = Math.min(sc, 40);
+    return clamp(sc, 0, 100);
+  }
+  const cuePath = (sim, cue) => { const F = sim.frames, out = []; for (let k = 0; k < F.length; k += 2) { const x = F[k][2 * cue], y = F[k][2 * cue + 1]; if (!isNaN(x)) out.push([x, y]); } const l = F[F.length - 1]; if (l && !isNaN(l[2 * cue])) out.push([l[2 * cue], l[2 * cue + 1]]); return out; };
+  function rpAnalyze(i) {
+    const ses = SES, rp = ses && ses.rp; if (!rp || rp.ana[i]) return;
+    const s = rp.states[i], sh = rp.rec.shots[i]; if (!sh || !s || s.phase !== 'play') return;
+    if (rp.busy) { rp.want = i; return; }                       // 하나씩만 (빨리 넘기면 마지막 장면만 이어서)
+    rp.busy = true;
+    const A = rp.ana[i] = { done: false };
+    const next = () => { rp.busy = false; const w = rp.want; rp.want = null; if (w != null && SES === ses && ses.rp === rp && rp.coach && w === rp.i) rpAnalyze(w); };
+    rpDraw();
+    const mine = normAct(s, sh.a), res = rp.results[i] || {};
+    AI.coachAsync(B.clone(s)).then(best => {
+      if (SES !== ses || ses.rp !== rp) return;
+      return compareShots(s, mine, best.action, 24).then(c => {
+        if (SES !== ses || ses.rp !== rp) return;
+        const scored = s.mode === '8ball' ? (!!res.cont && !res.foul) || !!res.win : (res.score || 0) > 0;
+        const cue = B.cueOf(s, s.turn), me = AI.describe(s, mine);
+        Object.assign(A, c, {
+          best, mine: me, scored, foul: !!res.foul, score: shotScore(c, scored, res.foul), same: c.pm >= c.pb - 0.08,
+          minePath: cuePath(B.applyShot(s, mine).sim, cue), bestPath: cuePath(B.applyShot(s, best.action).sim, cue),
+          bestPlace: best.action.place && s.ballInHand ? best.action.place : null, done: true,
+        });
+        A.why = A.same ? '' : whyText(s, me, best);
+        if (rp.i === i) rpDraw();
+        noteMistake(rp, i, A);
+        if (rp.play && rp.i === i) rpContinue(1600);
+      });
+    }).then(next, e => { next(); console.error(e); A.done = true; A.err = true; A.score = 0; A.pm = A.pb = 0; A.N = 0; A.best = null; A.same = true; if (SES === ses && ses.rp === rp && rp.i === i) rpDraw(); });
+  }
+  // 짧은 샷 설명 (노트·비교용)
+  function shotDesc(s, ex) {
+    if (!ex) return '';
+    const a = ex.action, tail = `${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`;
+    if (s.mode === '8ball') return (ex.ball != null && ex.ok ? `${ex.ball}번 공 → ${pocketName(ex.pocket)} 포켓` : '안전한 샷') + ' · ' + tail;
+    if (ex.firstBall == null) return '공을 못 맞힌 샷 · ' + tail;
+    const first = ex.bankFirst ? `쿠션 먼저 → ${ballName(s, ex.firstBall)}` : `${ballName(s, ex.firstBall)} ${ex.side === 'left' ? '왼쪽' : '오른쪽'} ${thickLabel(ex.thick)}`;
+    return `${first}${ex.second != null ? (ex.rails && ex.rails.length ? ` · 쿠션 ${ex.rails.length}번` : ' · 쿠션 없이') : ''} · ${tail}`;
+  }
+  function whyText(s, me, best) {
+    const a = me.action, b = best.action;
+    if (s.mode === '8ball') {
+      if (best.ball != null && best.ok && best.ball !== me.ball) return `${best.ball}번 공을 노리는 게 더 쉬워요`;
+    } else {
+      if (me.firstBall == null) return '공을 하나도 못 맞혔어요 · 초록 길처럼 겨눠 봐요';
+      if (best.firstBall != null && me.firstBall !== best.firstBall) return `${ballName(s, best.firstBall)}부터 치는 길이 더 쉬워요`;
+      if (!!best.bankFirst !== !!me.bankFirst) return best.bankFirst ? '쿠션 먼저 치는 길이 더 안전해요' : '공을 먼저 맞히는 길이 더 쉬워요';
+      if (best.thick != null && me.thick != null && Math.abs(best.thick - me.thick) >= 0.2) return `지금보다 ${best.thick > me.thick ? '두껍게' : '얇게'} 맞혀 보세요 (${thickLabel(best.thick)})`;
+      if (best.second != null && me.second != null && (best.rails || []).length !== (me.rails || []).length) return `쿠션 ${best.rails.length}번 길이 더 잘 맞아요`;
+    }
+    if (Math.hypot(a.spinX - b.spinX, a.spinY - b.spinY) > 0.35) return `당점을 ${spinText(b.spinX, b.spinY)}로 바꿔 보세요`;
+    if (Math.abs(a.power - b.power) >= 0.12) return `힘을 ${Math.round(b.power * 100)}%로 ${b.power > a.power ? '더 세게' : '더 약하게'}`;
+    return '겨냥을 조금만 바꾸면 훨씬 잘 맞아요';
+  }
+  // 📒 내 샷이 추천보다 많이 손해였으면 '아쉬운 장면' 노트에 (그 장면만 짧게 담음)
+  function noteMistake(rp, i, A) {
+    if (!window.Mistakes || !A.done || A.err || !A.best) return;
+    const sh = rp.rec.shots[i], seat = sh && rp.rec.seats[sh.p];
+    if (!seat || !seat.me || A.pb - A.pm < 0.3) return;
+    const s = rp.states[i], loss = Math.round((A.pb - A.pm) * 100);
+    const drillRec = { v: 1, at: rp.rec.at, mode: rp.rec.mode, kind: rp.rec.kind, start: B.clone(s), shots: [sh], seats: rp.rec.seats, title: rp.rec.title, base: i };
+    try {
+      Mistakes.add({ game: 'billiards', title: `당구 · ${rp.rec.title || B.MODES[s.mode].name}`, scene: `${i + 1}번째 샷`, my: shotDesc(s, A.mine), best: shotDesc(s, A.best), why: A.why || '', sev: loss, lossText: `성공 확률 −${loss}%p`, drill: { rec: drillRec, k: i } });
+      if (!rp.noted++) C.toast('📒 아쉬운 장면 노트에 담았어요', 1800);
+      drawHomeBtns();
+    } catch (e) { console.error(e); }
+  }
+
+  // 🎮 여기서부터 내가 치기: 그 샷 장면(그때 친 사람 자리)을 내가, 나머지는 AI. 선생님 켜고 시작 · 기록·전적 안 남김
+  //   o.state = 이미 만든 장면 · o.note = 📒 노트에서 온 연습 (첫 장면은 답을 가림)
+  function startBranch(rec, k, o) {
+    o = o || {};
+    let st = o.state ? B.clone(o.state) : rec.base === k ? B.clone(rec.start) : (rpBuild(rec, k).states[k] || null);
+    if (!st || st.phase !== 'play') return C.toast('이미 끝난 장면이에요');
+    const p = st.turn, tier = TIER[opt.tier] ? opt.tier : 'normal';
+    stopSession();
+    const aiName = x => /AI/.test(x.name) ? `${TIER[tier].em} ${TIER[tier].name} AI` : `${TIER[tier].em} ${x.me ? '그때의 나' : x.name}`;
+    const seats = rec.seats.map((x, j) => j === p ? { name: meName(), em: '🙂', ctrl: 'me' } : { name: aiName(x), em: TIER[tier].em, ctrl: 'ai', tier });
+    st.practice = false;
+    SES = newSes({ kind: 'ai', mode: st.mode, s: st, seats, coachAllowed: true, isDrill: true, drillSrc: { rec, k } });
+    SES.coachOn = true;
+    if (o.note) { SES.note = { id: o.note.id, atShots: st.shots, done: false }; SES.noteHide = true; }
+    enterPlay();
+    if (!o.note) C.toast(`🎮 ${k + 1}번째 샷 장면부터 내가 쳐요 · 🧑‍🏫 선생님 켜짐`, 2400);
+  }
+  // 노트 장면 첫 샷인가 (답 가림 · 친 뒤 확인)
+  const noteScene = () => !!(SES && SES.note && !SES.note.done && SES.s && SES.s.shots === SES.note.atShots && seatOf() && seatOf().ctrl === 'me' && SES.noteHide);
+  function noteShot(s, act) {
+    const ses = SES, nt = ses && ses.note;
+    if (!nt || nt.done || s.shots !== nt.atShots || !seatOf() || seatOf().ctrl !== 'me') return;
+    nt.done = true; ses.noteHide = false;
+    const st = B.clone(s), mine = normAct(st, act), have = ses.coachRes && ses.coachRes.action;
+    (have ? Promise.resolve({ action: have }) : AI.coachAsync(B.clone(st))).then(best => compareShots(st, mine, normAct(st, best.action), 24)).then(c => {
+      if (c.pm >= c.pb - 0.1) { try { Mistakes.solved(nt.id); } catch (e) {} C.toast(`✅ 이번엔 추천만큼 좋은 샷! (성공 확률 ${Math.round(c.pm * 100)}%) 노트에서 해결로 옮겼어요`, 3200); drawHomeBtns(); }
+      else C.toast(`🤏 이번 샷 성공 확률 ${Math.round(c.pm * 100)}% · 추천 ${Math.round(c.pb * 100)}% — 다음엔 💡 답도 봐요`, 3200);
+    }).catch(e => console.error(e));
+  }
+  // 선생님 설명 줄 (게임 중 창 · 복기 판이 같이 씀)
+  function coachLines(s, r) {
+    const L = []; if (!r) return L;
+    const a = r.action;
+    if (s.mode === '8ball') {
+      if (r.ball != null && r.ok) {
+        const cut = r.thick != null ? Math.round(Math.asin(clamp(1 - r.thick, 0, 1)) / DEG) : null;
+        L.push(`🎯 <b>${r.ball}번 공</b>을 <b>${pocketName(r.pocket)}</b> 포켓으로${cut != null ? ` · 컷 약 ${cut}°` : ''}`);
+        if (a.place) L.push('✋ 프리볼: 수구를 추천 자리에 놓았어요');
+        L.push(`🎱 당점: ${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`);
+        if (a.spinY < -0.2) L.push('↩️ 끌어치기로 수구를 세워 다음 공 자리를 잡아요');
+        else if (a.spinY > 0.2) L.push('➡️ 밀어치기로 수구가 따라 나가요');
+      } else {
+        L.push('🤔 확실히 넣을 공이 안 보여요');
+        L.push('🛡️ 내 공을 먼저 맞히고 쿠션에 닿게 하는 <b>안전한 샷</b>이에요');
+        L.push(`🎱 당점: ${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`);
+      }
+    } else {
+      const cue = B.cueOf(s, s.turn);
+      if (r.firstBall != null) {
+        if (r.bankFirst) L.push(`🎯 <b>쿠션 먼저</b>(빈 쿠션) 쳐서 <b>${ballName(s, r.firstBall)}</b>부터 맞혀요`);
+        else L.push(`🎯 <b>${ballName(s, r.firstBall)}</b>의 <b>${r.side === 'left' ? '왼쪽' : '오른쪽'}</b>을 <b>${thickLabel(r.thick)}</b>로 맞혀요`);
+      }
+      if (r.second != null) {
+        const rails = r.rails.map(x => (x === 1 || x === 3) ? '짧은' : '긴');
+        L.push(`↪️ ${rails.length ? `쿠션 ${rails.length}번 (${rails.join(' → ')})` : '바로'} → <b>${ballName(s, r.second)}</b>`);
+      }
+      L.push(`🎱 당점: ${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`);
+      if (s.mode === '4gu') L.push(`⚠️ ${B.CAROM_NAMES[1 - cue]}은 건드리지 않게!`);
+      if (!r.ok) L.push('🤔 확실한 길이 안 보여서 가장 가까이 가는 샷이에요');
+    }
+    return L;
   }
 
   // ── AI 선생님 (common/coach.js 가 있으면 그 창, 없으면 간단한 창)
@@ -601,6 +981,7 @@
       coachP = { el, body, set(h) { body.innerHTML = h; return this; }, show() { el.hidden = false; return this; }, hide() { el.hidden = true; return this; }, collapse() { return this; }, get visible() { return !el.hidden; } };
     }
     coachP.body.addEventListener('click', e => {
+      if (e.target.closest('[data-reveal]') && SES) { sfx('pop'); SES.noteHide = false; renderCoach(); return; }
       const b = e.target.closest('[data-apply]'); if (!b || !SES || !SES.coachRes || !myTurn()) return;
       const a = SES.coachRes.action; sfx('pop');
       SES.aim.angle = a.angle; SES.aim.power = a.power; SES.aim.spinX = a.spinX; SES.aim.spinY = a.spinY;
@@ -634,41 +1015,14 @@
   }
   function renderCoach() {
     if (!coachP || !SES) return;
-    if (!SES.coachOn || !SES.coachAllowed) { coachP.hide(); return; }
+    if (!SES.coachOn || !SES.coachAllowed || SES.rp) { coachP.hide(); return; }
     const seat = seatOf();
     if (SES.s.phase !== 'play') { coachP.set('경기가 끝났어요. 수고했어요! 🎉'); return; }
     if (SES.anim) { coachP.set('🧑‍🏫 공이 어떻게 구르는지 잘 봐요…'); return; }
     if (!myTurn()) { coachP.set(`🧑‍🏫 ${esc(seat ? seat.name : '')} 차례예요. 내 차례가 오면 추천 샷을 알려 줄게요`); return; }
+    if (noteScene()) { coachP.set('<span class="cl">📒 아쉬웠던 그 장면이에요 — 이번엔 직접 찾아보세요</span><button class="cbtn" data-reveal>💡 답 보기</button>'); return; }
     const r = SES.coachRes; if (!r) return;
-    const s = SES.s, L = [];
-    const a = r.action;
-    if (s.mode === '8ball') {
-      if (r.ball != null && r.ok) {
-        const cut = r.thick != null ? Math.round(Math.asin(clamp(1 - r.thick, 0, 1)) / DEG) : null;
-        L.push(`🎯 <b>${r.ball}번 공</b>을 <b>${pocketName(r.pocket)}</b> 포켓으로${cut != null ? ` · 컷 약 ${cut}°` : ''}`);
-        if (a.place) L.push('✋ 프리볼: 수구를 추천 자리에 놓았어요');
-        L.push(`🎱 당점: ${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`);
-        if (a.spinY < -0.2) L.push('↩️ 끌어치기로 수구를 세워 다음 공 자리를 잡아요');
-        else if (a.spinY > 0.2) L.push('➡️ 밀어치기로 수구가 따라 나가요');
-      } else {
-        L.push('🤔 확실히 넣을 공이 안 보여요');
-        L.push('🛡️ 내 공을 먼저 맞히고 쿠션에 닿게 하는 <b>안전한 샷</b>이에요');
-        L.push(`🎱 당점: ${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`);
-      }
-    } else {
-      const cue = B.cueOf(s, s.turn);
-      if (r.firstBall != null) {
-        if (r.bankFirst) L.push(`🎯 <b>쿠션 먼저</b>(빈 쿠션) 쳐서 <b>${ballName(s, r.firstBall)}</b>부터 맞혀요`);
-        else L.push(`🎯 <b>${ballName(s, r.firstBall)}</b>의 <b>${r.side === 'left' ? '왼쪽' : '오른쪽'}</b>을 <b>${thickLabel(r.thick)}</b>로 맞혀요`);
-      }
-      if (r.second != null) {
-        const rails = r.rails.map(x => (x === 1 || x === 3) ? '짧은' : '긴');
-        L.push(`↪️ ${rails.length ? `쿠션 ${rails.length}번 (${rails.join(' → ')})` : '바로'} → <b>${ballName(s, r.second)}</b>`);
-      }
-      L.push(`🎱 당점: ${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`);
-      if (s.mode === '4gu') L.push(`⚠️ ${B.CAROM_NAMES[1 - cue]}은 건드리지 않게!`);
-      if (!r.ok) L.push('🤔 확실한 길이 안 보여서 가장 가까이 가는 샷이에요');
-    }
+    const L = coachLines(SES.s, r);
     coachP.set(L.map(x => `<span class="cl">${x}</span>`).join('') + `<button class="cbtn" data-apply>👉 이대로 겨누기</button> <span class="rate" title="조금씩 흔들어 10번 쳐 본 결과">성공률 약 ${r.rate}%</span>`);
   }
 
@@ -741,6 +1095,7 @@
     ses.seats = Array.from({ length: n }, (_, i) => ids[i] ? { uid: ids[i], name: (pl[ids[i]] || {}).name || `친구${i + 1}`, em: '🙂', ctrl: ids[i] === net.uid ? 'me' : 'remote' } : { uid: null, name: '🐱 중급 AI', em: '🐱', ctrl: 'ai', tier: 'normal' });
     ses.s = B.create({ mode: cfg.mode, players: n, target: cfg.target, finish3c: !!cfg.finish3c, seed: rand32() });
     ses.gid++; ses.no = 0; ses.rdy = new Set(); ses.pick = {}; ses.lastTurn = -1; ses.last = null; ses.anim = null; ses.waiting = false; ses.spectator = false;
+    ses.rec = mkRec(ses); ses.lastRec = null;
   }
   // 방장: 같은 방에서 다음 판 — 앉았던 사람 중 아직 방에 있는 사람 + 방장이 체크한 구경꾼 (최대 4명)
   function hostNext() {
@@ -782,6 +1137,7 @@
   }
   function hostMsg(uid, m) {
     const s = SES.s, seat = SES.seats[s.turn];
+    if (SES.rp && (m.t === 'shot' || m.t === 'aim')) return;
     if (m.t === 'shot') {
       if (seat && seat.uid === uid && !seat.sub && !SES.anim && s.phase === 'play' && m.no === SES.no && (m.gid | 0) === SES.gid && m.a) shoot(m.a);
     } else if (m.t === 'aim') {
@@ -811,11 +1167,13 @@
   }
   function applySnap(sn) {
     const ses = SES, first = !ses.s, g = sn.gid | 0, fresh = first || g > ses.gid;
+    if (ses.rp) rpClose('silent');                                // 복기 보는 중에 판이 바뀌면 복기를 닫음
     ses.s = sn.s; ses.no = sn.no; ses.gid = g;
     if (fresh) { ses.anim = null; ses.last = null; ses.lastTurn = -1; ses.waiting = false; ses.rdy = new Set(); ses.pick = {}; ses.drawReady = null; $('resBox').hidden = true; }   // 새 판: 결과 창·준비 목록 치움
     if (sn.wins) ses.wins = sn.wins;
     ses.seats = sn.seats.map(x => ({ uid: x.uid, name: x.name, em: '🙂', ctrl: x.uid && x.uid === ses.net.uid ? 'me' : 'remote', sub: !!x.sub }));
     ses.spectator = !ses.seats.some(x => x.ctrl === 'me');
+    if (fresh) { ses.rec = ses.s.phase === 'play' ? mkRec(ses) : null; ses.lastRec = null; } else ses.rec = null;
     if (fresh) enterPlay(); else startTurn();
     if (ses.s.phase === 'end') showResult();
   }
@@ -837,6 +1195,7 @@
       if (m.wins) ses.wins = m.wins;
       if (m.no > ses.no + 1 || ses.anim) { applySnap({ s: m.s, no: m.no, gid: ses.gid, wins: m.wins, seats: ses.seats.map(x => ({ uid: x.uid, name: x.name, sub: x.sub })) }); return; }
       const traj = B.unpackTraj(m.traj);
+      if (ses.rec) ses.rec.shots.push({ p: ses.s.turn, a: m.a, s: encState(m.s) });
       playShot(ses.s, traj, m.a, an => { ses.no = m.no; afterShot({ state: m.s, result: m.result }, an); });
     }
   }
@@ -964,7 +1323,7 @@
     }
   }
   function draw() {
-    const ses = SES, s = ses.s, n = s.balls.length, R = V.V.T.R, ctx = V.ctx, now = performance.now();
+    const ses = SES, s = ses.rp ? ses.rp.states[ses.rp.i] : ses.s, n = s.balls.length, R = V.V.T.R, ctx = V.ctx, now = performance.now();
     let pos = new Float32Array(2 * n), animFrame = -1, a = ses.anim;
     if (a) {
       const t = (now - a.start) / 1000 * a.fps * a.speed;
@@ -991,11 +1350,11 @@
       }
     } else {
       for (let i = 0; i < n; i++) { const b = s.balls[i]; pos[2 * i] = b.on ? b.x : NaN; pos[2 * i + 1] = b.on ? b.y : NaN; }
-      if (s.ballInHand && ses.place) { const c = B.cueOf(s, s.turn); pos[2 * c] = ses.place[0]; pos[2 * c + 1] = ses.place[1]; }
+      if (s.ballInHand && ses.place && !ses.rp) { const c = B.cueOf(s, s.turn); pos[2 * c] = ses.place[0]; pos[2 * c + 1] = ses.place[1]; }
     }
     V.roll(pos);
     V.clear();
-    const aiming = !a && s.phase === 'play' && (myTurn() || ses.aiBusy || (ses.remoteAim && seatOf().ctrl !== 'me'));
+    const aiming = !a && !ses.rp && s.phase === 'play' && (myTurn() || ses.aiBusy || (ses.remoteAim && seatOf().ctrl !== 'me'));
     const aim = (!myTurn() && !ses.aiBusy && ses.remoteAim) ? ses.remoteAim : ses.aim;
     const place = (!myTurn() && ses.remoteAim) ? ses.remoteAim.place : ses.place;
     // 프리볼 놓는 곳 (부엌 = 헤드 스트링 뒤)
@@ -1021,6 +1380,15 @@
       line(g.after, g.long ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.6)', 1.6, [2, 4]);
       if (g.obj) line(g.obj, 'rgba(253,224,71,.85)', 2, null);
     }
+    // 🎞️ 복기 선생님: 실제로 친 길(흰 점선) · 추천 길(초록)
+    if (ses.rp && ses.rp.coach) {
+      const A = ses.rp.ana[ses.rp.i];
+      if (A && A.done) {
+        if (!a && A.minePath) line(A.minePath, 'rgba(255,255,255,.6)', 1.8, [5, 5]);
+        if (A.bestPath) line(A.bestPath, 'rgba(52,211,153,.92)', 2.4, null);
+        if (A.bestPlace && !a) { const q = V.toS(A.bestPlace[0], A.bestPlace[1]); ctx.save(); ctx.strokeStyle = 'rgba(52,211,153,.92)'; ctx.lineWidth = 1.6; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(q[0], q[1], R * V.V.s * 1.15, 0, TAU); ctx.stroke(); ctx.restore(); }
+      }
+    }
     // 그림자 → 공
     for (let i = 0; i < n; i++) if (!isNaN(pos[2 * i])) V.shadow(pos[2 * i], pos[2 * i + 1]);
     for (let i = 0; i < n; i++) if (!isNaN(pos[2 * i])) V.ball(i, pos[2 * i], pos[2 * i + 1]);
@@ -1032,7 +1400,7 @@
       ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.4; ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.arc(q[0], q[1], R * V.V.s, 0, TAU); ctx.stroke(); ctx.restore();
     }
     // 프리볼 표시
-    if (!a && s.ballInHand && s.phase === 'play' && place) {
+    if (!a && !ses.rp && s.ballInHand && s.phase === 'play' && place) {
       const q = V.toS(place[0], place[1]), pr = R * V.V.s * (1.7 + 0.15 * Math.sin(now / 220));
       ctx.save(); ctx.strokeStyle = 'rgba(253,224,71,.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(q[0], q[1], pr, 0, TAU); ctx.stroke();
       ctx.font = `${Math.max(12, R * V.V.s * 1.4)}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('✋', q[0], q[1] - pr - 4); ctx.restore();
@@ -1058,6 +1426,11 @@
   showScreen('home');
   if (window.GME && GME.onChange) GME.onChange(() => drawMenu());
   if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
+  // 📒 아쉬운 장면 노트에서 왔으면 (?drill=) 그 장면부터 연습
+  try {
+    const m = window.Mistakes && Mistakes.fromUrl('billiards');
+    if (m && m.drill && m.drill.rec) { startBranch(m.drill.rec, m.drill.k, { note: m }); C.toast('📒 아쉬웠던 장면부터 다시 — 이번엔 추천 샷을 찾아보세요', 3000); }
+  } catch (e) { console.error(e); }
   // 시험·디버그용 (헤드리스 브라우저 확인)
   window.__billiards = { get ses() { return SES; }, opt, startLocal, shoot: a => shoot(a || currentAction()), V };
 })();

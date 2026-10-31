@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08160f">
 <title>당구 — 베니 게임 포털</title>
 <link rel="stylesheet" href="../common/cozy.css?v=12">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <div class="wrap" id="home">
@@ -41,6 +41,7 @@
       <ul class="howto" id="howto"></ul>
       <button class="btn primary big" id="startBtn">시작하기</button>
       <button class="btn ghost" id="rulesBtn">📖 규칙 보기</button>
+      <div class="row homex"><button class="btn ghost" id="rpListBtn" hidden>🎞️ 지난 판</button><button class="btn ghost" id="noteBtn" hidden>📒 아쉬운 장면</button></div>
     </div>
   </section>
 </div>
@@ -87,6 +88,11 @@
         <button id="ruleBtn"><span class="ic">📖</span><span>규칙</span></button>
       </div>
     </div>
+    <div class="rp" id="rp" hidden>
+      <div class="rpbar"><button data-rp="start" aria-label="처음으로">⏮</button><button data-rp="prev" aria-label="한 샷 뒤로">◀</button><button data-rp="play" class="pp" aria-label="재생 · 멈춤">⏵</button><button data-rp="next" aria-label="한 샷 앞으로">▶</button><span class="rpn"></span><button data-rp="exit" class="rpx">닫기</button></div>
+      <div class="rpgo"><button data-rg="coach" aria-pressed="false">🧑‍🏫 선생님</button><button data-rg="branch" class="br">🎮 <span>여기서부터 </span>내가 치기</button></div>
+      <div class="rpinfo" id="rpInfo"></div>
+    </div>
   </div>
 </section>
 
@@ -100,9 +106,10 @@
 <script src="../common/arena.js?v=9"></script>
 <script src="../common/arena-ui.js?v=10"></script>
 <script src="../common/coach.js?v=2"></script>
-<script src="core.js?v=1"></script>
-<script src="ai.js?v=1"></script>
+<script src="../common/mistakes.js?v=1"></script>
+<script src="core.js?v=2"></script>
+<script src="ai.js?v=2"></script>
 <script src="draw.js?v=1"></script>
-<script src="main.js?v=3"></script>
+<script src="main.js?v=4"></script>
 </body>
 </html>

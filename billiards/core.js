@@ -20,10 +20,10 @@
     // 9피트 포켓볼
     pool: { kind: 'pool', L: 2.54, W: 1.27, R: 0.028575, rail: 0.13, diamonds: [8, 4], cornerGap: 0.08, sideGap: 0.066 },
   };
-  // 물리 상수 (게임 느낌에 맞춰 조금 손봄)
+  // 물리 상수 (게임 느낌에 맞춰 조금 손봄) · bbMu = 공-공 마찰 μ(미끄러짐 속도) = a + b·e^(−c·v) (Alciatore·Marlow 측정값: 느릴수록 던짐이 큼)
   const PHYS = {
-    carom: { mus: 0.2, mur: 0.0125, damp: 0.035, eb: 0.94, ec: 0.82, muc: 0.28, spinDecay: 14, keepRoll: 0.3, muBB: 0.05, vmax: 7.2, tipMax: 0.55 },
-    pool: { mus: 0.2, mur: 0.0135, damp: 0.04, eb: 0.96, ec: 0.78, muc: 0.22, spinDecay: 16, keepRoll: 0.3, muBB: 0.06, vmax: 9.5, tipMax: 0.55 },
+    carom: { mus: 0.2, mur: 0.0125, damp: 0.035, eb: 0.94, ec: 0.82, muc: 0.28, spinDecay: 14, keepRoll: 0.3, bbMu: [0.00995, 0.108, 1.088], vmax: 7.2, tipMax: 0.55 },
+    pool: { mus: 0.2, mur: 0.0135, damp: 0.04, eb: 0.96, ec: 0.78, muc: 0.22, spinDecay: 16, keepRoll: 0.3, bbMu: [0.00995, 0.108, 1.088], vmax: 9.5, tipMax: 0.55 },
   };
   const MODES = {
     '4gu': { id: '4gu', name: '4구', table: 'carom4', targets: [30, 50, 80, 100, 150, 200], defTarget: 80 },
@@ -106,8 +106,8 @@
     if (record) snap();
     const maxF = Math.round((opt.maxTime || 40) * FPS);
     const lastCush = new Int32Array(n).fill(-99), lastCushRail = new Int32Array(n).fill(-1);
-    let frame = 0, stopped = false;
-    const mus = P.mus, mur = P.mur, damp = P.damp, eb = P.eb, ec = P.ec, muc = P.muc, keep = P.keepRoll, muBB = P.muBB, sd = P.spinDecay;
+    let frame = 0, stopped = false, hcur = FDT;
+    const mus = P.mus, mur = P.mur, damp = P.damp, eb = P.eb, ec = P.ec, muc = P.muc, keep = P.keepRoll, bbA = P.bbMu[0], bbB = P.bbMu[1], bbC = P.bbMu[2], sd = P.spinDecay;
     const pool = T.kind === 'pool', segs = gm.segs, jaws = gm.jaws;
     const cornerCut = pool ? T.cornerGap * 0.62 : 0;
     const energy = opt.energy ? [] : null, I = 0.4 * R * R;
@@ -129,7 +129,8 @@
       const svx = R * b.wy, svy = -R * b.wx, svn = svx * nx + svy * ny;
       const nsx = svx - (1 - keep) * svn * nx, nsy = svy - (1 - keep) * svn * ny;
       b.wy = nsx / R; b.wx = -nsy / R;
-      if (pen > 0) { b.x += nx * pen; b.y += ny * pen; }
+      // 밀어내기: 겹친 만큼 + 닿은 뒤 튀어 나왔을 거리(ec × 겹침, 이번 칸에 움직인 만큼까지) → 잘게 쪼갠 칸 위치에 따라 길이 몇 mm 씩 흔들리지 않게
+      if (pen > 0) { const k = pen + ec * Math.min(pen, -vn * hcur); b.x += nx * k; b.y += ny * k; }
       b.mv = true;
       if (-vn > 0.02 && !(lastCushRail[i] === rail && frame - lastCush[i] < 3)) emit({ k: 'c', a: i, b: rail, v: -vn });
       lastCush[i] = frame; lastCushRail[i] = rail;
@@ -140,7 +141,7 @@
       for (let i = 0; i < n; i++) { const b = B[i]; if (!b.on || !b.mv) continue; any = true; const sp = Math.hypot(b.vx, b.vy); if (sp > vmax) vmax = sp; }
       if (!any) break;
       const sub = Math.min(80, Math.max(1, Math.ceil(vmax * FDT / (0.3 * R))));
-      const h = FDT / sub;
+      const h = FDT / sub; hcur = h;
       for (let st = 0; st < sub && !stopped; st++) {
         // 1) 마찰·이동
         for (let i = 0; i < n; i++) {
@@ -203,20 +204,37 @@
               const c = B[j]; if (!c.on || (!a.mv && !c.mv)) continue;
               const dx = c.x - a.x, dy = c.y - a.y, dd = dx * dx + dy * dy;
               if (dd >= R2s) continue;
-              const d = Math.sqrt(dd) || 1e-9, nx = dx / d, ny = dy / d;
-              const vrel = (a.vx - c.vx) * nx + (a.vy - c.vy) * ny;
-              const pen = (R2 - d) / 2;
-              a.x -= nx * pen; a.y -= ny * pen; c.x += nx * pen; c.y += ny * pen;
-              if (vrel <= 0) continue;
+              let d = Math.sqrt(dd) || 1e-9, nx = dx / d, ny = dy / d;
+              let vrel = (a.vx - c.vx) * nx + (a.vy - c.vy) * ny;
+              // 닿은 순간으로 되감기: 잘게 쪼갠 한 칸 안에서 겹친 깊이만큼 법선이 틀어지면 두께(컷 각)가 최대 5~7° 흔들림
+              //   → 두 공을 지금 속도로 뒤로 돌려 딱 닿는 자리에서 법선을 잡고, 충돌 뒤 같은 시간만큼 새 속도로 보냄
+              let tb = 0;
+              if (vrel > 0) {
+                const rvx = c.vx - a.vx, rvy = c.vy - a.vy, A = rvx * rvx + rvy * rvy, Bq = dx * rvx + dy * rvy;
+                if (A > 1e-12) { const t0 = (Bq + Math.sqrt(Math.max(0, Bq * Bq - A * (dd - R2s)))) / A; if (t0 > 0 && t0 <= h) tb = t0; }
+              }
+              if (tb > 0) {
+                a.x -= a.vx * tb; a.y -= a.vy * tb; c.x -= c.vx * tb; c.y -= c.vy * tb;
+                const ex = c.x - a.x, ey = c.y - a.y; d = Math.hypot(ex, ey) || 1e-9; nx = ex / d; ny = ey / d;
+                vrel = (a.vx - c.vx) * nx + (a.vy - c.vy) * ny;
+              } else {
+                const pen = (R2 - d) / 2;
+                a.x -= nx * pen; a.y -= ny * pen; c.x += nx * pen; c.y += ny * pen;
+              }
+              if (vrel <= 0) { if (tb > 0) { a.x += a.vx * tb; a.y += a.vy * tb; c.x += c.vx * tb; c.y += c.vy * tb; } continue; }
               hit = true;
               const jn = (1 + eb) / 2 * vrel;
               a.vx -= jn * nx; a.vy -= jn * ny; c.vx += jn * nx; c.vy += jn * ny;
-              // 던짐: 닿는 면의 미끄러짐을 마찰로 조금 줄임 (옆 회전이 상대 공 방향을 살짝 바꿈)
+              // 던짐: 닿는 면의 미끄러짐을 마찰로 조금 줄임 (옆 회전·얇은 두께가 상대 공 방향을 살짝 바꿈)
+              //   마찰은 미끄러짐이 빠를수록 작고, 밀어치기·끌어치기의 위아래 미끄러짐이 섞이면 옆으로 미는 몫이 줄어듦 (굴러가는 공은 던짐이 적음)
               const tx = -ny, ty = nx;
               const s = (a.vx - c.vx) * tx + (a.vy - c.vy) * ty + R * (a.wz + c.wz);
-              let jt = -s / 7; const lim = muBB * jn; if (jt > lim) jt = lim; else if (jt < -lim) jt = -lim;
+              const sz = R * ((a.wx + c.wx) * ny - (a.wy + c.wy) * nx), sAll = Math.hypot(s, sz);
+              const mu = bbA + bbB * Math.exp(-bbC * sAll);
+              let jt = -s / 7; const lim = mu * jn * (sAll > 1e-9 ? Math.abs(s) / sAll : 1); if (jt > lim) jt = lim; else if (jt < -lim) jt = -lim;
               a.vx += jt * tx; a.vy += jt * ty; c.vx -= jt * tx; c.vy -= jt * ty;
               a.wz += 2.5 * jt / R; c.wz += 2.5 * jt / R;
+              if (tb > 0) { a.x += a.vx * tb; a.y += a.vy * tb; c.x += c.vx * tb; c.y += c.vy * tb; }
               a.mv = c.mv = true;
               if (pass === 0 || vrel > 0.01) emit({ k: 'b', a: i, b: j, v: vrel });
             }

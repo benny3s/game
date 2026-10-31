@@ -170,3 +170,42 @@ body.land.short .bar .mid .t{display:inline}
 .rdy-row>span.gone{background:rgba(127,29,29,.35);border-color:#f87171}
 .rdy-w{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;opacity:.92}
 .rdy-w label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
+
+/* 🎞️ 복기 (지난 판 다시 보기) — 조작판 자리에 (당구대를 덜 가림) */
+.homex{justify-content:center}
+.homex .btn[hidden]{display:none}
+.rplist{display:grid;gap:6px;max-height:52vh;overflow:auto;text-align:left}
+.rplist .btn{display:grid;gap:2px;justify-items:start;text-align:left;padding:10px 12px}
+.rplist .small{opacity:.8}
+body.replaying .ctl{display:none}
+.rp{flex:none;display:grid;gap:6px;background:rgba(8,22,15,.9);border:1px solid rgba(212,175,106,.28);border-radius:16px;padding:7px 8px;min-width:0}
+.rp[hidden]{display:none}
+.rpbar{display:flex;align-items:center;justify-content:center;gap:4px}
+.rpbar button{width:40px;height:36px;border-radius:12px;border:0;background:rgba(255,255,255,.1);color:#fff;font-size:16px;cursor:pointer;flex:none;touch-action:manipulation}
+.rpbar button.pp{background:#16a34a}
+.rpbar .rpn{font:700 13px/1 var(--round);color:#fde68a;padding:0 6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rpbar .rpx{width:auto;padding:0 12px;font:700 13px var(--round)}
+.rpgo{display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+.rpgo button{height:32px;padding:0 12px;border-radius:99px;border:1px solid rgba(255,255,255,.22);background:rgba(10,18,14,.86);color:#fff;font:700 13px/1 var(--round);cursor:pointer;white-space:nowrap;touch-action:manipulation}
+.rpgo button.on{background:#065f46;border-color:#34d399}
+.rpgo button.br{background:#b45309;border-color:#fbbf24}
+.rpgo button[hidden]{display:none}
+.rpinfo{display:grid;gap:2px;font-size:12.5px;line-height:1.45;color:var(--ink);max-height:124px;overflow:auto;padding:0 2px}
+.rpinfo .sc{font:800 14.5px var(--round);color:#fde68a}
+.rpinfo .sc small{font:700 12px var(--text);color:var(--ink)}
+.rpinfo .cl{padding-left:6px;color:var(--soft)}
+.rpinfo .cl b{color:var(--ink)}
+.rpinfo .lg{font-size:11px;color:var(--soft)}
+.rpinfo .lg i{display:inline-block;width:16px;height:0;border-top:2px dashed rgba(255,255,255,.75);vertical-align:middle;margin:0 3px 0 6px}
+.rpinfo .lg i:first-child{margin-left:0}
+.rpinfo .lg i.b{border-top:2.5px solid #34d399}
+body.land .rp{width:230px;display:flex;flex-direction:column;overflow:hidden}
+body.land .rpbar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+body.land .rpbar button{width:auto;height:32px}
+body.land .rpbar .rpn{grid-column:1 / span 2;text-align:center;padding:0}
+body.land .rpbar .rpx{grid-column:3 / span 2;white-space:nowrap}
+body.land .rpgo{flex-wrap:nowrap}
+body.land .rpgo button{height:30px;padding:0 10px;font-size:12.5px}
+body.land .rpgo .br span{display:none}
+body.land .rpinfo{flex:1 1 auto;min-height:0;max-height:none}
+body.land.short .rp .board{flex-direction:column;align-items:stretch;gap:4px}
