@@ -185,14 +185,14 @@
   // 🏦 은행 (친구랑에서 방장이 모임을 고른 방만): 💰 빌리기 · 🏦 잔액·정산 창
   function drawBankBtns(ses) {
     const on = !!(ses && ses.bank);
-    $('loanBtn').hidden = !on;
+    $('loanBtn').hidden = true;   // 11-01 베니 님: 빌리기 없음 — 바닥나면 자동으로 채우고 손익은 마이너스로
     $('bankBtn').hidden = !on;
   }
   function bankEvent(ses, ev) {
     if (!ses.alive || !ev) return;
     if (ev.op === 'queued') C.toast(ev.mine || ses.mode === 'guest' ? `💰 다음 판에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님이 ${fmtN(ev.n)}칩 빌리기 (다음 판에)`, 2200);
     else if (ev.op === 'loan') {
-      C.toast(`💰 ${ev.name} 님이 은행에서 ${fmtN(ev.n)}칩 빌렸어요`, 2200);
+      C.toast(`🎟️ ${ev.name} 님 칩이 바닥나 다시 채웠어요 — 손익은 마이너스로 이어져요`, 2400);
       if (ses.mode === 'host' && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
     } else if (ev.op === 'no' || ev.op === 'error') C.toast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'), 2600);
   }
@@ -996,14 +996,12 @@
         };
         nb = mk('', 'primary', () => { R.add(ses.net.uid); ses.net.send({ t: '_ready', round: v.round }, true); paint(); if (ses.drawReady) ses.drawReady(); });
         paint();
-        if (ses.bank && !ses.spec) mk('💰 빌리기', '', () => $('loanBtn').click());      // 결과 창이 아래 단추를 가리므로 여기에도
         mk('나가기', '', () => { $('resBox').hidden = true; goHome(); });
         ses.drawReady = mountReady(ses, v.round, nb, null, nextLabel);
       } else {
         nb = mk(nextLabel, 'primary', () => done('next'));
         if (ses.mode === 'host') fb = mk('안 기다리고 시작', '', () => done('next'));
         if (ses.mode === 'host' && ses.bank && window.Bank) {
-          mk('💰 빌리기', '', () => $('loanBtn').click());
           mk('🏦 정산', '', () => ses.bank.flush().then(() => Bank.panel({ game: 'seotda', gid: ses.bank.gid, tab: 'settle' })));
         }
         if (rec) mk('🎞️ 다시 보기', '', openInline);

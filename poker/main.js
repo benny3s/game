@@ -115,14 +115,14 @@
   // 🏦 은행 (친구랑에서 방장이 모임을 고른 방만): 💰 빌리기 · 🏦 잔액·정산 창
   function drawBankBtns(ses) {
     const on = !!(ses && ses.bank);
-    $('loanBtn').hidden = !on;
+    $('loanBtn').hidden = true;   // 11-01 베니 님: 빌리기 없음 — 바닥나면 자동으로 채우고 손익은 마이너스로
     $('bankBtn').hidden = !on;
   }
   function bankEvent(ses, ev) {
     if (!ses.alive || !ev) return;
     if (ev.op === 'queued') showToast(ev.mine || ses.mode === 'guest' ? `💰 다음 핸드에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님 ${fmtN(ev.n)}칩 빌리기 (다음 핸드에)`);
     else if (ev.op === 'loan') {
-      showToast(`💰 ${ev.name} 님이 은행에서 ${fmtN(ev.n)}칩 빌렸어요`);
+      showToast(`🎟️ ${ev.name} 님 칩이 바닥나 다시 채웠어요 — 손익은 마이너스로 이어져요`);
       if (ses.mode === 'host' && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
     } else if (ev.op === 'no' || ev.op === 'error') showToast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'));
   }
@@ -1035,7 +1035,6 @@
       const key = readyKey(v);
       if (ses.mode === 'guest') {
         const list = [guestReadyBtn(ses, key)];
-        if (ses.bank && !ses.spec) list.push({ label: '💰 빌리기', onClick: () => $('loanBtn').click() });
         list.push({ label: '나가기', onClick: () => { $('endModal').hidden = true; if (window.ArenaUI) ArenaUI.leave(); else openMenu(); } });
         const bs = setEndButtons(list);
         ses.readyBtn = bs[0]; guestReadyBtn.paint(ses, key);
@@ -1052,7 +1051,6 @@
         if (rec && rec.acts.length) list.push({ label: '🎞️ 다시 보기', onClick: () => { clearTimeout(autoT); runReplay(rec, true); } });
         if (ses.mode === 'host') list.push({ label: '안 기다리고 시작', onClick: () => done('next') });
         if (ses.mode === 'host' && ses.bank && window.Bank) {
-          list.push({ label: '💰 빌리기', onClick: () => $('loanBtn').click() });
           list.push({ label: '🏦 정산', onClick: () => ses.bank.flush().then(() => Bank.panel({ game: 'poker', gid: ses.bank.gid, tab: 'settle' })) });
         }
         list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });

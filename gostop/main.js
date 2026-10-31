@@ -592,7 +592,7 @@
     const host = ses.cfg.role === 'host';
     if (ev.op === 'queued') C.toast(ev.mine || !host ? `💰 다음 판에 ${fmtN(ev.n)}칩을 받아요` : `💰 ${ev.name} 님이 ${fmtN(ev.n)}칩 빌리기 (다음 판에)`, 2200);
     else if (ev.op === 'loan') {
-      C.toast(ev.start ? `💰 ${ev.name} 님 시작 돈 ${ses.chipWon ? fmtN(Math.round(ev.n * ses.chipWon)) + '원' : fmtN(ev.n) + '칩'} (마이너스로 가도 돼요)` : `💰 ${ev.name} 님이 은행에서 ${ses.chipWon ? fmtN(Math.round(ev.n * ses.chipWon)) + '원' : fmtN(ev.n) + '칩'} 빌렸어요${ev.auto ? ' (바닥나서 자동)' : ''}`, 2600);
+      if (!ev.start) C.toast(`🎟️ ${ev.name} 님 칩이 바닥나 다시 채웠어요 — 손익은 마이너스로 이어져요`, 2400);   // 시작 돈은 장부 안에서만 (화면은 0원에서 시작)
       if (host && ses.net) ses.net.broadcast({ t: '_bank', op: 'loan', name: ev.name, n: ev.n }, true);
     } else if (ev.op === 'no' || ev.op === 'error') C.toast('🏦 ' + (ev.msg || '은행 장부에 못 썼어요'), 2600);
   }
@@ -2384,7 +2384,6 @@
       if (ses.rec && ses.rec.acts.length && !ses.isDrill) mk('🎞️ 다시 보기', '', { replay: ses.rec });
       mk(watch ? '그만 보기' : '메뉴', '', 'menu');
       if (ses.bank) {                                          // 결과 창이 아래 단추를 가리므로 여기에도
-        const lb = document.createElement('button'); lb.className = 'btn'; lb.textContent = '💰 빌리기'; lb.onclick = () => $('loanBtn').click(); $('resBtns').appendChild(lb);
         if (ses.cfg.role === 'host') { const sb = document.createElement('button'); sb.className = 'btn'; sb.textContent = '🏦 정산'; sb.onclick = () => ses.bank.flush().then(() => Bank.panel({ game: 'gostop', gid: ses.bank.gid, tab: 'settle' })); $('resBtns').appendChild(sb); }
       }
       let autoT = 0;
