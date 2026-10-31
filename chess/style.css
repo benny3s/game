@@ -18,6 +18,7 @@
   --selc:rgba(99,102,241,.55);
   --dot:rgba(24,20,45,.34);
   --arrow:rgba(16,185,129,.88);
+  --arrow2:rgba(96,165,250,.9);
 }
 body{background:var(--bg-grad)}
 body.playing{background:radial-gradient(110% 90% at 50% 35%,#1d2346 0%,#11152b 70%,#090b16 100%)}
@@ -139,6 +140,8 @@ header.top h1{display:flex;align-items:center;gap:8px}
 .ch-sub{margin-top:3px;font-size:12px;color:var(--soft)}
 .ch-rev{margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed var(--line)}
 .ch-rev.bad b{color:#fca5a5}
+.ch-real{margin-top:3px;font-size:13.5px}
+.ch-real b{font:800 15px var(--round);color:#93c5fd}
 
 /* 결과 창 */
 .winp{width:64px;height:64px;margin:0 auto;background:center/contain no-repeat;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
@@ -203,3 +206,19 @@ body.playing .bar .t.myturn{color:#422006;background:linear-gradient(180deg,#fde
 .rdy-w label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
 .rdy-act{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
 .rdy-act .btn{flex:1 1 auto}
+
+/* ── 🎞️ 복기: 한 수씩 단추 줄 · 기보 눌러 옮기기 · 지난 대국 목록 ── */
+#dockReview{gap:2px;padding:0 2px}
+#dockReview button{min-width:0;flex:1 1 0;max-width:76px}
+#dockReview button .ic{width:44px;height:44px;font-size:19px}
+#dockReview button>span:last-child{font-size:11px;letter-spacing:-.02em}
+#dockReview button:disabled{opacity:.3}
+.moves.rv .m{cursor:pointer}
+.moves.rv .m.later{color:var(--soft);opacity:.7}
+.reclist{max-height:min(56dvh,430px);overflow:auto;text-align:left}
+.reclist li{flex-wrap:nowrap;padding:8px 10px;cursor:pointer}
+.reclist .inf{display:grid;line-height:1.3;min-width:0;flex:1}
+.reclist .inf b{font:800 15px var(--round)}
+.reclist .inf .small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.reclist .btn{flex:none;padding:8px 11px;font-size:13.5px;white-space:nowrap}
+@media (max-width:350px){ #dockReview button .ic{width:40px;height:40px} #dockReview button>span:last-child{font-size:10px} }

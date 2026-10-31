@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0f1222">
 <title>체스</title>
 <link rel="stylesheet" href="../common/cozy.css?v=12">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 <link rel="preload" as="image" href="vendor/pieces/chessnut/wP.svg">
 <link rel="preload" as="image" href="vendor/pieces/chessnut/bP.svg">
 </head>
@@ -55,6 +55,7 @@
     </ul>
     <button class="btn primary big" id="startBtn">시작!</button>
     <div class="row center minor">
+      <button class="btn ghost" id="recBtn">🎞️ 지난 대국</button>
       <button class="btn ghost" id="helpBtn">❓ 하는 법</button>
       <button class="btn ghost" id="setBtn">⚙ 설정</button>
     </div>
@@ -85,6 +86,14 @@
     <button id="againBtn" hidden><span class="ic">↺</span><span>새 판</span></button>
     <button id="sndBtn"><span class="ic">🔊</span><span>소리 켬</span></button>
   </div>
+  <div class="dock" id="dockReview" hidden>
+    <button id="rvFirst" aria-label="처음 장면"><span class="ic">⏮</span><span>처음</span></button>
+    <button id="rvPrev" aria-label="한 수 뒤로"><span class="ic">◀</span><span>이전</span></button>
+    <button id="rvNext" aria-label="한 수 앞으로"><span class="ic">▶</span><span>다음</span></button>
+    <button id="rvLast" aria-label="마지막 장면"><span class="ic">⏭</span><span>끝</span></button>
+    <button id="rvCoach" aria-pressed="false" aria-label="AI 선생님 켜고 끄기"><span class="ic">🧑‍🏫</span><span>선생님</span></button>
+    <button id="rvGo" aria-label="여기서부터 내가 두기"><span class="ic">🎮</span><span>여기서 두기</span></button>
+  </div>
 </section>
 
 <script src="../common/cozy.js?v=11"></script>
@@ -97,7 +106,7 @@
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
 <script src="vendor/chess.js?v=1"></script>
 <script src="core.js?v=1"></script>
-<script src="board.js?v=1"></script>
-<script src="main.js?v=3"></script>
+<script src="board.js?v=2"></script>
+<script src="main.js?v=4"></script>
 </body>
 </html>
