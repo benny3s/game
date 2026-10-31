@@ -190,7 +190,9 @@ section('공격 · 받아치기 (쌓기) · 받기');
   r = run(s, [P(BJ)]);
   eq([r.s.atk, r.s.suit], [5, -1], '흑백 조커 공격 5 · 무늬 자유');
   L = G.legal(r.s);
-  ok(L.includes(P(C(S, 0))) && L.includes(P(CJ)) && !L.includes(P(C(H, 0))) && !L.includes(P(C(H, 5))), '조커 위: ♠A·컬러 조커만 받아침');
+  ok(!L.includes(P(C(S, 0))) && L.includes(P(CJ)) && !L.includes(P(C(H, 0))) && !L.includes(P(C(H, 5))), '조커 위: 조커만 받아침 (기본 — 조커는 조커로만)');
+  s.rules = G.normRules({ jokerOnly: false, oneCard: false }); r = run(s, [P(BJ)]); L = G.legal(r.s);
+  ok(L.includes(P(C(S, 0))) && L.includes(P(CJ)) && !L.includes(P(C(H, 0))), "'조커는 조커로만' 끄면: ♠A(5)·컬러 조커 받아침, ♥A(3) 안 됨");
   r = run(r.s, [P(CJ)]);
   eq(r.s.atk, 12, '흑백 5 + 컬러 7 = 12');
   // 조커 색: ♥2 공격 위에 흑백 조커 안 됨 (색), 컬러 조커 됨
@@ -263,9 +265,12 @@ section('특수 카드 (J 건너뛰기 · Q 방향 · K 한 번 더 · 7 무늬 
     eq([r.s.atk, r.ev.some(e => e.t === 'block')], [0, true], '막으면 공격이 사라짐');
     r = run(atkA({ block3All: 'two' }), [P(C(H, 0))]);
     ok(!G.legal(r.s).includes(P(C(H, 2))), "'2 공격만'이면 A 는 3 으로 못 막음");
-    const tj = G.setup({ players: 2, hands: [pad([52, C(S, 9)]), pad([C(CL, 2), C(H, 5)])], pile: [C(S, 8)] });
+    const tj = G.setup({ players: 2, hands: [pad([52, C(S, 9)]), pad([C(CL, 2), C(S, 2), C(S, 0), 53])], pile: [C(S, 8)] });
     r = run(tj, [P(52)]);
-    ok(G.legal(r.s).includes(P(C(CL, 2))), '조커 공격엔 아무 3 으로 막음'); }
+    ok(!G.legal(r.s).includes(P(C(CL, 2))) && !G.legal(r.s).includes(P(C(S, 2))), '조커 공격은 3 으로 못 막음');
+    ok(!G.legal(r.s).includes(P(C(S, 0))), '조커 공격은 ♠A 로 못 받아침 (조커는 조커로만)');
+    ok(G.legal(r.s).includes(P(53)), '조커 공격은 조커로 받아침');
+    tj.rules = G.normRules({ jokerOnly: false }); }
   r = run(two([C(H, 10), C(S, 9)]), [P(C(H, 10))]);
   eq(r.s.turn, 0, '둘이서 J = 내가 또');
   // 집 규칙으로 끄면 그냥 카드

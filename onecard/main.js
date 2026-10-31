@@ -231,7 +231,7 @@
       <tr><td><span class="cardrow">${mini(14)}${mini(27)}</span></td><td>2 → 다음 사람이 <b>${R.atk2}장</b></td></tr>
       <tr><td><span class="cardrow">${mini(13)}${mini(26)}</span></td><td>A → <b>${R.atkA}장</b> · ♠A 는 <b>${R.atkSA}장</b> ${mini(0)}</td></tr>
       <tr><td><span class="cardrow">${mini(52)}${mini(53)}</span></td><td>흑백 조커 → <b>${R.atkBJ}장</b> · 컬러 조커 → <b>${R.atkCJ}장</b></td></tr>
-    </table><ul><li>${counter}. 받아치면 장수가 <b>쌓여서</b> 다음 사람에게 넘어가요</li>${R.block3 ? (R.block3All === 'two' ? '<li><b>3 으로 2 막기</b>: 2 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요</li>' : '<li><b>3 은 방어 카드</b>: 2 · A · 조커 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요 (조커 공격엔 아무 3)</li>') : ''}<li>못 받아치면 쌓인 장수만큼 먹고 차례가 넘어가요</li></ul>
+    </table><ul><li>${counter}. 받아치면 장수가 <b>쌓여서</b> 다음 사람에게 넘어가요</li>${R.jokerOnly ? '<li><b>조커 공격은 조커로만</b> 받아칠 수 있어요</li>' : ''}${R.block3 ? (R.block3All === 'two' ? '<li><b>3 으로 2 막기</b>: 2 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요</li>' : '<li><b>3 은 방어 카드</b>: 2 · A 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요 (조커는 못 막아요)</li>') : ''}<li>못 받아치면 쌓인 장수만큼 먹고 차례가 넘어가요</li></ul>
     <h3>🎴 특수 카드</h3><table>
       ${R.jSkip ? '<tr><td>J</td><td>다음 사람을 <b>건너뛰어요</b> (둘이면 내가 또)</td></tr>' : ''}
       ${R.qRev ? `<tr><td>Q</td><td>도는 <b>방향을 바꿔요</b> (${R.qTwo === 'again' ? '둘이면 건너뛰기처럼 내가 한 번 더' : '둘이면 그냥 상대 차례'})</td></tr>` : ''}
@@ -287,7 +287,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=4');
+    worker = new Worker('ai-worker.js?v=5');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -1431,7 +1431,7 @@
     finishHuman(ses, AI.choose(G.view(ses.S, ses.S.turn), 'normal', { seed: rand32() }));
   }
   function whyNot(s, c) {
-    if (s.atk > 0) return `+${s.atk} 공격을 받는 중이에요 — 받아칠 수 있는 공격 카드${s.rules.block3 && (s.rules.block3All !== 'two' || s.atkKind === '2') ? (s.suit < 0 ? '나 3' : '나 같은 무늬 3') : ''}만 낼 수 있어요`;
+    if (s.atk > 0) return `+${s.atk} 공격을 받는 중이에요 — 받아칠 수 있는 공격 카드${s.rules.block3 && (s.atkKind === '2' || (s.atkKind === 'A' && s.rules.block3All !== 'two')) ? '나 같은 무늬 3' : ''}${s.rules.jokerOnly && s.atkKind === 'J' ? ' (조커 공격은 조커로만)' : ''}만 낼 수 있어요`;
     if (s.suit < 0) return '지금은 아무 카드나 낼 수 있어요';
     return `${SYM[s.suit]} 무늬${s.rank >= 0 ? `나 ${G.RANK_NAME[s.rank]}` : ''} 를 내야 해요${G.isJoker(c) ? ` (조커는 ${s.rules.jokerPlay === 'any' ? '아무 때나' : '색이 맞을 때'})` : ''}`;
   }

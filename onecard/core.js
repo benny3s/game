@@ -64,8 +64,9 @@
     { k: 'atkBJ', g: 'atk', t: 'num', d: 5, min: 1, max: 10, unit: '장', label: '흑백 조커 공격' },
     { k: 'atkCJ', g: 'atk', t: 'num', d: 7, min: 1, max: 15, unit: '장', label: '컬러 조커 공격' },
     { k: 'counter', g: 'atk', t: 'enum', d: 'stronger', label: '받아치기 (공격 쌓기)', note: '공격받은 사람이 공격 카드로 넘길 수 있는지', opts: [['stronger', '같거나 센 것', '방금 공격과 같거나 센 공격 카드로'], ['any', '아무 공격 카드', '세기 상관없이 공격 카드면'], ['same', '같은 숫자만', '2엔 2, A엔 A, 조커엔 조커'], ['off', '못 받아침', '쌓기 없음 — 바로 받아요']] },
-    { k: 'block3', g: 'atk', t: 'bool', d: true, label: '3 으로 막기', note: '공격을 같은 무늬 3 으로 막으면 아무도 안 받아요 (조커 공격엔 아무 3)' },
-    { k: 'block3All', g: 'atk', t: 'enum', d: 'all', label: '3 이 막는 공격', note: '11-01 베니 님: 기본은 모든 공격', opts: [['all', '모든 공격', '2 · A · 조커 공격 다 막아요'], ['two', '2 공격만', '예전 규칙 — 2 공격만 막아요']] },
+    { k: 'block3', g: 'atk', t: 'bool', d: true, label: '3 으로 막기', note: '2·A 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요 (조커는 못 막음)' },
+    { k: 'block3All', g: 'atk', t: 'enum', d: 'all', label: '3 이 막는 공격', note: '11-01 베니 님: 기본은 2·A', opts: [['all', '2 · A 공격', '같은 무늬 3 으로 2 와 A 공격을 막아요'], ['two', '2 공격만', '예전 규칙 — 2 공격만 막아요']] },
+    { k: 'jokerOnly', g: 'atk', t: 'bool', d: true, label: '조커는 조커로만', note: '조커 공격은 조커로만 받아쳐 넘길 수 있어요 (A·2 로는 못 넘김)' },
     { k: 'jokerPlay', g: 'special', t: 'enum', d: 'color', label: '조커 내기', note: '언제 조커를 낼 수 있는지', opts: [['color', '색 맞춰서', '흑백 조커는 ♠♣ 위에, 컬러 조커는 ♥♦ 위에'], ['any', '아무 때나', '어떤 카드 위에도']] },
     { k: 'seven', g: 'special', t: 'bool', d: true, label: '7 무늬 바꾸기', note: '7 을 낸 사람이 다음 무늬를 정해요' },
     { k: 'jSkip', g: 'special', t: 'bool', d: true, label: 'J 건너뛰기', note: '다음 사람을 건너뛰어요' },
@@ -110,7 +111,7 @@
   const RULE_PRESETS = [
     { id: 'basic', name: '기본', desc: '2는 2장 · A 3장 · ♠A·흑백 조커 5장 · 컬러 조커 7장, 같거나 센 카드로 받아쳐요', rules: {} },
     { id: 'mild', name: '순한 맛', desc: '공격 쌓기 없음 · 조커 아무 때나 · 파산 30장 · 아이와 함께', rules: { counter: 'off', jokerPlay: 'any', bust: 30, callSec: 5 } },
-    { id: 'spicy', name: '화끈한 집', desc: '공격이 더 세요 (2→3 · A→5 · ♠A→7 · 조커 7·10) · 아무 공격 카드로 받아치기 · 벌칙 2장', rules: { atk2: 3, atkA: 5, atkSA: 7, atkBJ: 7, atkCJ: 10, counter: 'any', callPen: 2, bustPay: 20 } },
+    { id: 'spicy', name: '화끈한 집', desc: '공격이 더 세요 (2→3 · A→5 · ♠A→7 · 조커 7·10) · 아무 공격 카드로 받아치기 · 벌칙 2장', rules: { atk2: 3, atkA: 5, atkSA: 7, atkBJ: 7, atkCJ: 10, counter: 'any', jokerOnly: false, callPen: 2, bustPay: 20 } },
     { id: 'quick', name: '빠른 판', desc: '5장씩 · 파산 15장 · 외칠 시간 2초', rules: { deal: 5, bust: 15, callSec: 2 } },
     { id: 'rank', name: '끝까지 등수', desc: '한 사람이 털어도 계속 — 꼴찌까지 등수를 가려요', rules: { rankAll: true } },
   ];
@@ -236,12 +237,13 @@
   function canCounter(s, c) {
     const R = s.rules || DEF_RULES, st = atkOf(c, R);
     if (R.counter === 'off' || st <= 0 || !matches(s, c)) return false;
+    if (R.jokerOnly && s.atkKind === 'J' && atkKind(c) !== 'J') return false;   // 조커 공격은 조커로만 (11-01 베니 님)
     if (R.counter === 'any') return true;
     if (R.counter === 'same') return atkKind(c) === s.atkKind;
     return st >= s.atkStr;
   }
-  // 3 으로 막기: 같은 무늬 3 (조커 공격 뒤엔 무늬가 없어 아무 3) · '2 공격만'이면 2 공격일 때만
-  function canBlock(s, c) { const R = s.rules || DEF_RULES; return !!R.block3 && (R.block3All !== 'two' || s.atkKind === '2') && rankOf(c) === R_3 && (s.suit < 0 || suitOf(c) === s.suit); }
+  // 3 으로 막기: 같은 무늬 3 으로 2·A 공격 (조커는 못 막음) · '2 공격만'이면 2 공격일 때만
+  function canBlock(s, c) { const R = s.rules || DEF_RULES; return !!R.block3 && (s.atkKind === '2' || (s.atkKind === 'A' && R.block3All !== 'two')) && rankOf(c) === R_3 && suitOf(c) === s.suit; }
   function canPlay(s, c) { return s.atk > 0 ? canCounter(s, c) || canBlock(s, c) : matches(s, c); }
   function playable(s, p) { const h = s.hands[p == null ? s.turn : p]; return h.filter(c => c >= 0 && canPlay(s, c)); }
 
