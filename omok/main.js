@@ -627,7 +627,7 @@
     setTimeout(() => { if (G && G.s === s) advance(); }, cfg.mode === 'watch' ? 500 : 250);
   }
   function stopAll() {
-    clearTimeout(aiTimer); clearInterval(tickT); reqId++; turnStop();
+    clearTimeout(aiTimer); clearInterval(tickT); reqId++; turnStop(); rvHide();
     if (G) G.thinking = false;
     hideBubble();
   }
@@ -772,7 +772,7 @@
     // 기록 (AI 대전 · 둘이서만)
     if (g.mode !== 'watch' && !(g.mode === 'online' && !g.me)) {      // 구경한 판은 남기지 않음
       addRecord({ t: Date.now(), rec: O.encode(s), mode: g.mode, rule: g.rule, tier: g.cfg.tier, me: g.me, res, win: w, n: s.moves.length, secs: g.secs });
-      if (g.mode === 'ai') { const st = stats(); const r = st[g.cfg.tier] || { w: 0, l: 0, d: 0 }; r[res]++; st[g.cfg.tier] = r; save('stats', st); }
+      if (g.mode === 'ai' && !g.branch) { const st = stats(); const r = st[g.cfg.tier] || { w: 0, l: 0, d: 0 }; r[res]++; st[g.cfg.tier] = r; save('stats', st); }   // 복기에서 이어 둔 연습 판은 전적에 안 넣음
     }                                                                  // AI 구경 판은 남기지 않음 (내 대국 기록이 밀려나지 않게, 복기는 끝나자마자 볼 수 있음)
     syncAll();
     setTimeout(() => { if (G === g && !g.review) showResult(); }, s.reason === 'resign' ? 500 : 1500);
@@ -854,6 +854,7 @@
   // 친구랑: 복기를 접고 판 화면으로 (아래 단추 줄 · AI 선생님 되살리기)
   function exitReview() {
     if (!G || !G.review) return;
+    rvHide();
     G.review = null; $('dockReview').hidden = true; $('dockPlay').hidden = false;
     board.setForbidden(null); syncAll(); coachSetup();
   }
@@ -862,16 +863,58 @@
     coachOff(); $('coachBtn').hidden = true;
     $('dockPlay').hidden = true; $('dockWatch').hidden = true; $('dockReview').hidden = false; showConfirm(false);
     board.setForbidden(null); board.setGhost(null); board.setHint(-1);
-    sfx('flip'); syncAll();
+    sfx('flip'); syncAll(); rvCoach();
   }
   function reviewTo(k) {
     const R = G && G.review; if (!R) return;
     k = Math.max(0, Math.min(G.s.moves.length, k));
     if (k === R.k) return;
     const fwd = k === R.k + 1;
-    R.k = k; syncAll();
+    R.k = k; board.setHint(-1); syncAll(); rvCoach();
     if (fwd) { const i = G.s.moves[k - 1]; board.drop(i, k % 2 ? 1 : 2); sfx('stone', { pitch: k % 2 ? 0.94 : 1.06 }); } else sfx('tap');
   }
+  // 🧑‍🏫 복기 선생님: 그 장면에서 둘 차례라면 어디? + 실제로 둔 곳 · 🎮 여기서부터 내가 두기 (상대는 AI, 전적엔 안 넣음)
+  let rvP = null, rvOn = false, rvSeq = 0;
+  const stateAt = k => { const s = O.create(15, G.s.rule); for (let i = 0; i < k; i++) O.play(s, G.s.moves[i]); return s; };
+  function rvHide() { rvSeq++; if (rvP) rvP.hide(); board.setHint(-1); }
+  function rvCoach() {
+    $('rvCoach').setAttribute('aria-pressed', String(rvOn));
+    if (!rvOn || !rvP || !G || !G.review) return;
+    const k = G.review.k, s = stateAt(k), real = G.s.moves[k], id = ++rvSeq;
+    if (!rvP.visible) rvP.show();
+    if (s.over || k >= G.s.moves.length && G.s.over) { board.setHint(-1); rvP.set('판이 끝난 장면이에요. ◀ 로 앞으로 가 보세요'); return; }
+    rvP.set(`${COLOR_NAME[s.turn]} 차례 · 🤔 좋은 자리를 찾는 중…`);
+    think(O.toJSON(s), { tier: 'hard', hint: true, timeMs: 700, seed: k * 7919 + 13 }).then(res => {
+      if (id !== rvSeq || !G || !G.review || !rvOn || !res || res.move < 0) return;
+      board.setHint(res.move);
+      rvP.set(`${COLOR_NAME[s.turn]} 차례라면 <b>💡 ${coordOf(res.move)}</b> — ${esc(coachReason(s, res.move, res.kind))}`
+        + (real != null ? `<br>🎞️ 실제로 둔 곳: <b>${coordOf(real)}</b>${real === res.move ? ' 👑 추천과 같아요' : ''}` : ''));
+    }).catch(() => {});
+  }
+  $('rvCoach').onclick = () => {
+    if (!G || !G.review) return;
+    sfx('tap'); rvOn = !rvOn;
+    if (rvOn && !rvP && window.CoachPanel) { try { rvP = CoachPanel.create({ game: 'omok-rp', title: 'AI 선생님 · 복기', startHidden: true }); rvP.onChange(() => { if (!rvP.visible && rvOn) { rvOn = false; rvHide(); rvCoach(); } }); } catch (e) { rvP = null; } }
+    if (rvOn) { if (rvP && rvP.collapsed) rvP.collapse(false); rvCoach(); } else { rvHide(); rvCoach(); }
+  };
+  $('rvGo').onclick = () => {
+    if (!G || !G.review) return;
+    const k = G.review.k, s = stateAt(k);
+    if (s.over) { Cozy.toast('끝난 장면이에요. ◀ 로 앞으로 가서 눌러 주세요'); return; }
+    sfx('tap');
+    const go = me => {
+      const ai = G.players[3 - me], tierId = (ai && ai.tier) || G.cfg.tier || pref.tier || 'normal';
+      rvHide();
+      newGame({ mode: 'ai', rule: s.rule, tier: tierId, color: me === 2 ? 'white' : 'black' });
+      G.s = s; G.branch = k; syncAll();
+      if (coachP) { coachP.show(); if (coachP.collapsed) coachP.collapse(false); coachTick(true); }
+      Cozy.toast(`🎮 ${k}수째부터 ${COLOR_NAME[me]}으로 내가 둬요 — 🧑‍🏫 선생님을 켜고 끄며 해 보세요`, 2600);
+      setTimeout(() => { if (G && G.s === s) advance(); }, 300);
+    };
+    if (G.mode === 'ai' && G.me) return go(G.me);
+    Cozy.modal({ title: '🎮 어느 쪽을 둘까요?', html: '<p class="small" style="margin:0">고른 쪽은 내가, 다른 쪽은 AI 가 이어서 둬요.</p>', dismiss: true,
+      buttons: [{ label: '⚫ 흑', primary: s.turn === 1, onClick: () => go(1) }, { label: '⚪ 백', primary: s.turn === 2, onClick: () => go(2) }] });
+  };
   $('rvFirst').onclick = () => reviewTo(0);
   $('rvPrev').onclick = () => reviewTo(G.review.k - 1);
   $('rvNext').onclick = () => reviewTo(G.review.k + 1);

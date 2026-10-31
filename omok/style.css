@@ -160,3 +160,8 @@ body.playing .bar .t.myturn{color:#422006;background:linear-gradient(180deg,#fde
   .rbar{grid-column:2;grid-row:3;align-self:start;margin-top:0}
   .viewbar{grid-row:3;align-self:end}
 }
+/* 🎞️ 복기 단추 7개 (선생님 · 이어 두기 더함) — 폰에서 한 줄에 */
+#dockReview{gap:2px;padding-left:4px;padding-right:4px}
+#dockReview button{min-width:0;flex:1 1 0;padding-left:0;padding-right:0}
+#dockReview button .ic{width:40px;height:40px;font-size:18px}
+#dockReview button>span:last-child{font-size:11.5px;white-space:nowrap}
