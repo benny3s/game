@@ -209,10 +209,11 @@ section('공격 · 받아치기 (쌓기) · 받기');
   s.rules = G.normRules({ oneCard: false, block3: false });
   r = run(s, [P(C(H, 1))]);
   ok(!G.legal(r.s).includes(P(C(H, 2))), '3 막기 끄면 못 막음');
-  // A 공격은 3 으로 못 막음
+  // '2 공격만' 규칙이면 A 공격은 3 으로 못 막음 (기본은 모든 공격을 막음 — 아래 특수 카드 시험)
   s = A({ players: 2, hands: [[C(H, 0), C(S, 9)], [C(H, 2)]], pile: [C(H, 8)] });
+  s.rules = G.normRules({ oneCard: false, block3All: 'two' });
   r = run(s, [P(C(H, 0))]);
-  ok(!G.legal(r.s).includes(P(C(H, 2))), 'A 공격은 3 으로 못 막음');
+  ok(!G.legal(r.s).includes(P(C(H, 2))), "'2 공격만'이면 A 공격은 3 으로 못 막음");
   // 공격 중에는 일반 카드·7·J 못 냄
   s = A({ players: 2, hands: [[C(H, 1), C(S, 9)], [C(H, 6), C(H, 10), C(H, 9)]], pile: [C(H, 8)] });
   r = run(s, [P(C(H, 1))]);
@@ -249,8 +250,22 @@ section('특수 카드 (J 건너뛰기 · Q 방향 · K 한 번 더 · 7 무늬 
   // 둘이서: Q 는 건너뛰기, J 도 내가 또
   const two = h0 => G.setup({ players: 2, hands: [pad(h0), [C(CL, 3), C(CL, 4)]], pile: [C(H, 8)] });
   r = run(two([C(H, 11), C(S, 9)]), [P(C(H, 11))]);
-  eq(r.s.turn, 0, '둘이서 Q = 건너뛰기 (내가 또)');
-  ok(r.ev.some(e => e.t === 'reverse' && e.asSkip), 'reverse asSkip');
+  eq(r.s.turn, 1, '둘이서 Q 기본 = 그냥 상대 차례');
+  ok(r.ev.some(e => e.t === 'reverse' && !e.asSkip), 'reverse (asSkip 아님)');
+  { const t = two([C(H, 11), C(S, 9)]); t.rules = G.normRules({ qTwo: 'again' });
+    r = run(t, [P(C(H, 11))]);
+    eq(r.s.turn, 0, "둘이서 Q '한 번 더' = 건너뛰기 (내가 또)"); ok(r.ev.some(e => e.t === 'reverse' && e.asSkip), 'reverse asSkip'); }
+  // 3 은 방어 카드: A·조커 공격도 막음 (기본) · '2 공격만'이면 A 는 못 막음 · 조커 공격엔 아무 3
+  { const atkA = rules => { const t = G.setup({ players: 2, hands: [pad([C(H, 0), C(S, 9)]), pad([C(H, 2), C(CL, 2)])], pile: [C(H, 8)] }); if (rules) t.rules = G.normRules(rules); return t; };
+    r = run(atkA(), [P(C(H, 0))]);
+    ok(G.legal(r.s).includes(P(C(H, 2))), '♥A 공격을 ♥3 으로 막을 수 있음 (기본)');
+    r = run(r.s, [P(C(H, 2))]);
+    eq([r.s.atk, r.ev.some(e => e.t === 'block')], [0, true], '막으면 공격이 사라짐');
+    r = run(atkA({ block3All: 'two' }), [P(C(H, 0))]);
+    ok(!G.legal(r.s).includes(P(C(H, 2))), "'2 공격만'이면 A 는 3 으로 못 막음");
+    const tj = G.setup({ players: 2, hands: [pad([52, C(S, 9)]), pad([C(CL, 2), C(H, 5)])], pile: [C(S, 8)] });
+    r = run(tj, [P(52)]);
+    ok(G.legal(r.s).includes(P(C(CL, 2))), '조커 공격엔 아무 3 으로 막음'); }
   r = run(two([C(H, 10), C(S, 9)]), [P(C(H, 10))]);
   eq(r.s.turn, 0, '둘이서 J = 내가 또');
   // 집 규칙으로 끄면 그냥 카드

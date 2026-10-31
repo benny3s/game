@@ -68,12 +68,12 @@
         else if (after.length <= 2) { sc += 4; why = `카드가 얼마 안 남아서 공격 카드도 털어요 (+${st})`; tag = '공격'; }
         else if (nAtk >= 2) { sc += 1; why = `공격 카드가 여러 장이라 하나는 써도 돼요 (+${st})`; tag = '공격'; }
         else { sc -= G.isJoker(c) ? 9 : 5; why = `공격 카드는 받아칠 때 쓰려고 아껴 두는 게 좋아요`; tag = '아끼기'; }
-      } else if (r === G.R_3 && R.block3) { sc -= 1.5; why = '3 은 2 공격을 막을 수 있어서 조금 아껴요'; tag = '무난'; }
+      } else if (r === G.R_3 && R.block3) { sc -= 1.5; why = R.block3All === 'two' ? '3 은 2 공격을 막을 수 있어서 조금 아껴요' : '3 은 공격을 막을 수 있어서 조금 아껴요'; tag = '무난'; }
       else if (r === G.R_7 && R.seven) {
         const bs = bestSuit(after), k = suitCounts(after)[bs];
         sc += after.length <= 2 ? 2 : -4; sc += k * 0.6;
         why = `7 로 내가 많이 가진 ${G.SUIT_SYM[bs]}(${k}장)로 바꿔요${after.length > 2 ? ' — 다른 카드가 있으면 아껴도 좋아요' : ''}`; tag = '무늬 바꾸기';
-      } else if ((r === G.R_K && R.kAgain) || (two && ((r === G.R_J && R.jSkip) || (r === G.R_Q && R.qRev)))) {
+      } else if ((r === G.R_K && R.kAgain) || (two && ((r === G.R_J && R.jSkip) || (r === G.R_Q && R.qRev && R.qTwo === 'again')))) {
         const f = followUps(s, c, after);
         if (f) { sc += 8; why = `${G.RANK_NAME[r]} 로 한 번 더 — 이어 낼 카드가 ${f}장 있어서 두 장을 털어요`; tag = '한 번 더'; }
         else { sc -= 8; why = `${G.RANK_NAME[r]} 를 내면 한 번 더 내야 하는데 이어 낼 카드가 없어요`; tag = '아쉬움'; }

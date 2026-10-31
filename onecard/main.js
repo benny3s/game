@@ -231,10 +231,10 @@
       <tr><td><span class="cardrow">${mini(14)}${mini(27)}</span></td><td>2 → 다음 사람이 <b>${R.atk2}장</b></td></tr>
       <tr><td><span class="cardrow">${mini(13)}${mini(26)}</span></td><td>A → <b>${R.atkA}장</b> · ♠A 는 <b>${R.atkSA}장</b> ${mini(0)}</td></tr>
       <tr><td><span class="cardrow">${mini(52)}${mini(53)}</span></td><td>흑백 조커 → <b>${R.atkBJ}장</b> · 컬러 조커 → <b>${R.atkCJ}장</b></td></tr>
-    </table><ul><li>${counter}. 받아치면 장수가 <b>쌓여서</b> 다음 사람에게 넘어가요</li>${R.block3 ? '<li><b>3 으로 2 막기</b>: 2 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요</li>' : ''}<li>못 받아치면 쌓인 장수만큼 먹고 차례가 넘어가요</li></ul>
+    </table><ul><li>${counter}. 받아치면 장수가 <b>쌓여서</b> 다음 사람에게 넘어가요</li>${R.block3 ? (R.block3All === 'two' ? '<li><b>3 으로 2 막기</b>: 2 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요</li>' : '<li><b>3 은 방어 카드</b>: 2 · A · 조커 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요 (조커 공격엔 아무 3)</li>') : ''}<li>못 받아치면 쌓인 장수만큼 먹고 차례가 넘어가요</li></ul>
     <h3>🎴 특수 카드</h3><table>
       ${R.jSkip ? '<tr><td>J</td><td>다음 사람을 <b>건너뛰어요</b> (둘이면 내가 또)</td></tr>' : ''}
-      ${R.qRev ? '<tr><td>Q</td><td>도는 <b>방향을 바꿔요</b> (둘이면 건너뛰기와 같아요)</td></tr>' : ''}
+      ${R.qRev ? `<tr><td>Q</td><td>도는 <b>방향을 바꿔요</b> (${R.qTwo === 'again' ? '둘이면 건너뛰기처럼 내가 한 번 더' : '둘이면 그냥 상대 차례'})</td></tr>` : ''}
       ${R.kAgain ? '<tr><td>K</td><td><b>한 장 더</b> 내요. 낼 게 없으면 한 장 먹어요</td></tr>' : ''}
       ${R.seven ? '<tr><td>7</td><td>낸 사람이 <b>다음 무늬</b>를 정해요 (♠ ♥ ♦ ♣)</td></tr>' : ''}
       ${!R.jSkip && !R.qRev && !R.kAgain && !R.seven ? '<tr><td>—</td><td>이 집은 J·Q·K·7 을 그냥 카드로 써요</td></tr>' : ''}
@@ -287,7 +287,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=2');
+    worker = new Worker('ai-worker.js?v=3');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -784,6 +784,8 @@
       const R = V.rules;
       if (R.oneCard && k === 2) act += `<button class="arm" type="button" id="armBtn" aria-pressed="${!!ses.armed}">${ses.armed ? '☝️ 준비됨' : '☝️ 원카드 준비'}</button>`;
       act += `<button class="act${V.atk > 0 ? ' hurt' : ''}" type="button" id="drawAct">${V.atk > 0 ? `😵 ${V.atk}장 받기` : '🃏 한 장 먹기'}</button>`;
+    } else if (b === me && me >= 0 && V.phase !== 'end' && V.out[b] === 0 && !ses.cfg.watch && !ses.replaying) {
+      act += `<button class="act" type="button" id="drawAct" disabled>🃏 한 장 먹기</button>`;   // 늘 같은 자리에 (내 차례에 갑자기 생기지 않게) — 차례가 아니면 흐리게
     }
     const nm = ses.cfg.watch || ses.replaying ? st.name : b === me && !ses.hot ? '나' : st.name;
     const html = `<span class="tag"><span class="av">${esc(ses.cfg.watch || ses.replaying || ses.hot ? st.em : '나')}</span><span class="nm">${esc(nm)}</span>${status}${k === 1 && V.out[b] === 0 ? '<span class="one">☝️</span>' : ''}</span>${act}`;
@@ -1429,7 +1431,7 @@
     finishHuman(ses, AI.choose(G.view(ses.S, ses.S.turn), 'normal', { seed: rand32() }));
   }
   function whyNot(s, c) {
-    if (s.atk > 0) return `+${s.atk} 공격을 받는 중이에요 — 받아칠 수 있는 공격 카드${s.rules.block3 && s.atkKind === '2' ? '나 같은 무늬 3' : ''}만 낼 수 있어요`;
+    if (s.atk > 0) return `+${s.atk} 공격을 받는 중이에요 — 받아칠 수 있는 공격 카드${s.rules.block3 && (s.rules.block3All !== 'two' || s.atkKind === '2') ? (s.suit < 0 ? '나 3' : '나 같은 무늬 3') : ''}만 낼 수 있어요`;
     if (s.suit < 0) return '지금은 아무 카드나 낼 수 있어요';
     return `${SYM[s.suit]} 무늬${s.rank >= 0 ? `나 ${G.RANK_NAME[s.rank]}` : ''} 를 내야 해요${G.isJoker(c) ? ` (조커는 ${s.rules.jokerPlay === 'any' ? '아무 때나' : '색이 맞을 때'})` : ''}`;
   }
@@ -1487,7 +1489,7 @@
     const co0 = coachOn(ses) && !ses.hide ? AI.coach(G.view(s, me)) : null, hid = !!co0 && mHide(ses);   // 📒 노트 연습 첫 장면: 💡 를 누르면 추천 표시
     const co = hid ? null : co0;
     const close = C.modal({
-      title: '🎨 다음 무늬를 골라요',
+      title: '🎨 다음 무늬를 골라요 (손패를 보고 골라요)', cls: 'suitov',
       html: `<div class="suits">${[0, 1, 2, 3].map(su => `<button type="button" data-su="${su}" class="${co && co.suit === su ? 'rec' : ''}">${ART.pip(su)}<span>${G.SUIT_NAME[su]}</span><small>내 손에 ${cnt[su]}장${co && co.suit === su ? ' · 🧑‍🏫 추천' : ''}</small></button>`).join('')}</div>${hid ? `<p class="small" style="margin:8px 0 0">${MHIDE_HTML}</p>` : ''}`,
       buttons: [], dismiss: false,
     });

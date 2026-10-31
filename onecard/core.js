@@ -64,11 +64,13 @@
     { k: 'atkBJ', g: 'atk', t: 'num', d: 5, min: 1, max: 10, unit: '장', label: '흑백 조커 공격' },
     { k: 'atkCJ', g: 'atk', t: 'num', d: 7, min: 1, max: 15, unit: '장', label: '컬러 조커 공격' },
     { k: 'counter', g: 'atk', t: 'enum', d: 'stronger', label: '받아치기 (공격 쌓기)', note: '공격받은 사람이 공격 카드로 넘길 수 있는지', opts: [['stronger', '같거나 센 것', '방금 공격과 같거나 센 공격 카드로'], ['any', '아무 공격 카드', '세기 상관없이 공격 카드면'], ['same', '같은 숫자만', '2엔 2, A엔 A, 조커엔 조커'], ['off', '못 받아침', '쌓기 없음 — 바로 받아요']] },
-    { k: 'block3', g: 'atk', t: 'bool', d: true, label: '3 으로 2 막기', note: '2 공격을 같은 무늬 3 으로 막으면 아무도 안 받아요' },
+    { k: 'block3', g: 'atk', t: 'bool', d: true, label: '3 으로 막기', note: '공격을 같은 무늬 3 으로 막으면 아무도 안 받아요 (조커 공격엔 아무 3)' },
+    { k: 'block3All', g: 'atk', t: 'enum', d: 'all', label: '3 이 막는 공격', note: '11-01 베니 님: 기본은 모든 공격', opts: [['all', '모든 공격', '2 · A · 조커 공격 다 막아요'], ['two', '2 공격만', '예전 규칙 — 2 공격만 막아요']] },
     { k: 'jokerPlay', g: 'special', t: 'enum', d: 'color', label: '조커 내기', note: '언제 조커를 낼 수 있는지', opts: [['color', '색 맞춰서', '흑백 조커는 ♠♣ 위에, 컬러 조커는 ♥♦ 위에'], ['any', '아무 때나', '어떤 카드 위에도']] },
     { k: 'seven', g: 'special', t: 'bool', d: true, label: '7 무늬 바꾸기', note: '7 을 낸 사람이 다음 무늬를 정해요' },
     { k: 'jSkip', g: 'special', t: 'bool', d: true, label: 'J 건너뛰기', note: '다음 사람을 건너뛰어요' },
-    { k: 'qRev', g: 'special', t: 'bool', d: true, label: 'Q 방향 바꾸기', note: '둘이면 건너뛰기와 같아요' },
+    { k: 'qRev', g: 'special', t: 'bool', d: true, label: 'Q 방향 바꾸기', note: '도는 방향을 바꿔요' },
+    { k: 'qTwo', g: 'special', t: 'enum', d: 'pass', label: '둘이서 Q', note: '둘이 할 때 Q 를 내면', opts: [['pass', '그냥 넘김', '방향만 바뀌고 상대 차례 (11-01 기본)'], ['again', '한 번 더', '건너뛰기처럼 내가 한 번 더']] },
     { k: 'kAgain', g: 'special', t: 'bool', d: true, label: 'K 한 번 더', note: 'K 를 낸 사람이 한 장 더 내요 (없으면 한 장 먹기)' },
     { k: 'oneCard', g: 'call', t: 'bool', d: true, label: '원카드 외치기', note: '한 장 남으면 ☝️ 원카드! 를 눌러야 해요' },
     { k: 'callPen', g: 'call', t: 'num', d: 1, min: 1, max: 5, unit: '장', label: '못 외치면 벌칙', note: '늦거나 먼저 잡히면 먹는 장수' },
@@ -238,7 +240,8 @@
     if (R.counter === 'same') return atkKind(c) === s.atkKind;
     return st >= s.atkStr;
   }
-  function canBlock(s, c) { const R = s.rules || DEF_RULES; return !!R.block3 && s.atkKind === '2' && rankOf(c) === R_3 && suitOf(c) === s.suit; }
+  // 3 으로 막기: 같은 무늬 3 (조커 공격 뒤엔 무늬가 없어 아무 3) · '2 공격만'이면 2 공격일 때만
+  function canBlock(s, c) { const R = s.rules || DEF_RULES; return !!R.block3 && (R.block3All !== 'two' || s.atkKind === '2') && rankOf(c) === R_3 && (s.suit < 0 || suitOf(c) === s.suit); }
   function canPlay(s, c) { return s.atk > 0 ? canCounter(s, c) || canBlock(s, c) : matches(s, c); }
   function playable(s, p) { const h = s.hands[p == null ? s.turn : p]; return h.filter(c => c >= 0 && canPlay(s, c)); }
 
@@ -432,8 +435,9 @@
     }
     if (r === R_Q && R.qRev) {
       s.dir = -s.dir;
-      E(ev, { t: 'reverse', p, dir: s.dir, asSkip: two });
-      after(s, p, two ? 0 : 1, ev);
+      const again = two && R.qTwo === 'again';           // 둘이서: 기본은 그냥 상대 차례, '한 번 더'면 건너뛰기처럼
+      E(ev, { t: 'reverse', p, dir: s.dir, asSkip: again });
+      after(s, p, again ? 0 : 1, ev);
       return;
     }
     if (r === R_K && R.kAgain) {
