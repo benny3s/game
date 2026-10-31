@@ -1,0 +1,186 @@
+/* 냥스트레이션 — 보라빛 밤 · 크림색 종이 · 고양이 발자국 (cozy.css 위에 :root 만 바꾸고 이 게임 것만 더함) */
+:root{
+  --bg:#16102a;
+  --bg-grad:radial-gradient(120% 90% at 50% 0%,#33235a 0%,#1d1336 60%,#110b22 100%);
+  --card:rgba(42,29,72,.94);
+  --card-border:rgba(255,200,120,.3);
+  --ink:#fbf4ff;
+  --soft:#cdbfe8;
+  --line:rgba(255,200,120,.2);
+  --accent:#f08a3c;
+  --accent-d:#bd5418;
+  --accent2:#7a62e0;
+  --accent2-d:#5441b8;
+  --gold:#ffc861;
+  --paper:rgba(22,14,42,.86);
+  --tint:rgba(255,240,255,.08);
+  --tint2:rgba(20,12,40,.82);
+  --sheet:#fffaf0;
+  --round:"Jua","Pretendard Variable","Pretendard",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --text:"Gowun Dodum","Pretendard Variable","Pretendard",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+}
+
+/* ── 메뉴 ── */
+.top h1{color:#ffe3a3;font-family:var(--round);font-weight:400;font-size:28px;letter-spacing:0}
+.logo{font-size:28px;margin-right:2px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.45))}
+#menuCard{
+  position:relative;
+  background:linear-gradient(170deg,rgba(58,40,98,.96) 0%,rgba(33,22,58,.97) 100%);
+  border:1.5px solid rgba(255,200,120,.42);
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.05),0 18px 44px rgba(0,0,0,.6);
+}
+#menuCard::before,#menuCard::after{   /* 고양이 귀 */
+  content:"";position:absolute;top:-13px;width:26px;height:26px;background:#3a2862;border:1.5px solid rgba(255,200,120,.42);border-bottom:0;border-right:0;
+  border-radius:4px 0 0 0;transform:rotate(45deg);
+}
+#menuCard::before{left:28px}
+#menuCard::after{right:28px;transform:rotate(135deg)}
+.box{display:grid;gap:12px}
+.optrows{display:grid;gap:9px;background:rgba(0,0,0,.22);border:1px solid rgba(255,200,120,.18);border-radius:14px;padding:12px}
+.optrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.optrow>.small{min-width:78px;color:#ffe3a3;font-weight:700}
+@media (max-width:440px){.optrows .optrow>.small{flex:0 0 100%}}
+.tabs .btn{font-size:14px;padding:10px 4px;white-space:nowrap}
+/* cozy.css 의 :hover 가 주황 단추 바탕을 덮어 (손가락을 뗀 뒤에도 :hover 가 남는 폰에서) 회색이 되던 것 */
+.btn.primary:hover:not(:disabled),.btn[aria-pressed="true"]:hover:not(:disabled){background:linear-gradient(135deg,var(--accent) 0%,var(--accent-d) 100%);border-color:rgba(255,255,255,.22)}
+.btn[aria-pressed="true"]:hover:not(:disabled){border-color:var(--gold)}
+.howto li{line-height:1.5}
+
+/* ── 게임 화면 ── */
+body.playing{background:radial-gradient(110% 90% at 50% 20%,#35255e 0%,#1f1438 60%,#100a20 100%)}
+body.playing .play{inset:0 0 var(--gap-b,0px) 0;gap:8px;padding-left:max(12px,env(safe-area-inset-left));padding-right:max(12px,env(safe-area-inset-right))}
+body.playing .bar{background:rgba(32,21,56,.92);border:1.5px solid rgba(255,200,120,.3);grid-template-columns:auto 1fr auto;padding:4px 8px}
+body.playing .bar .iconbtn{background:#43306f;border-color:rgba(255,200,120,.35);color:#ffe3a3}
+body.playing .bar .lbl{color:#ffe3a3;font-family:var(--round);font-weight:400;font-size:17px}
+body.playing .bar .t{font-size:12.5px;color:var(--soft)}
+.barbtns{display:flex;gap:6px;align-items:center}
+#timer{padding:5px 10px;font-size:15px;min-width:62px;text-align:center}
+#timer.hot{color:#fff;background:#d6455d;border-color:#ff9aa9;animation:tickpulse 1s ease-in-out infinite}
+@keyframes tickpulse{50%{transform:scale(1.07)}}
+body.playing #czBug{display:none}                                /* 문제 알리기 손잡이가 그림판 왼쪽 가장자리를 덮지 않게 (메뉴에선 그대로) */
+body.playing .arn-ctab{top:calc(env(safe-area-inset-top,0px) + 70px)}   /* 채팅 손잡이는 맨 위 안내 카드 옆으로 (그림판 위에 안 얹히게) */
+
+.scr{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px}
+.task{flex:none;display:grid;gap:1px;justify-items:center;text-align:center;padding:6px 46px;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:14px;min-height:50px;align-content:center}
+.task small{font:700 12.5px var(--round);color:var(--soft)}
+.task b{font:400 clamp(20px,5.6vw,28px)/1.2 var(--round);color:#ffe3a3;word-break:keep-all;overflow-wrap:anywhere;max-width:100%}
+.task b.sm{font-size:clamp(17px,4.6vw,22px)}
+.scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+
+/* 그림판 */
+.padwrap{flex:1 1 0;min-height:0;container-type:size;display:grid;place-items:center}
+.padwrap canvas{width:min(100cqw,calc(100cqh * 4 / 3));height:auto;aspect-ratio:4/3;border-radius:12px;background:var(--sheet);box-shadow:0 6px 18px rgba(0,0,0,.45),0 0 0 3px rgba(255,200,120,.35);display:block}
+.padwrap canvas.pad{touch-action:none;cursor:crosshair}
+.padwrap.locked canvas{opacity:.55}
+.pal{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;flex:none}
+.pal button{width:100%;max-width:44px;justify-self:center;aspect-ratio:1;border-radius:50%;border:3px solid rgba(255,255,255,.22);padding:0;cursor:pointer;background:var(--c);transition:transform .08s}
+.pal button[aria-pressed="true"]{border-color:#fff;box-shadow:0 0 0 2px var(--gold);transform:scale(1.1)}
+.tl{display:grid;grid-template-columns:repeat(3,1fr) 1.2fr 1fr 1fr;gap:6px;flex:none}
+.tl button{height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:var(--ink);font:400 18px/1 var(--round);display:grid;place-items:center;cursor:pointer;padding:0}
+.tl button:active{transform:translateY(1px)}
+.tl button[aria-pressed="true"]{background:linear-gradient(135deg,var(--accent),var(--accent-d));border-color:var(--gold)}
+.tl button.armed{background:#d6455d;border-color:#ff9aa9}
+.tl button:disabled{opacity:.35}
+.tl .dot{display:block;background:currentColor;border-radius:50%}
+.act{flex:none;display:grid;gap:8px}
+.act .btn.big{padding:13px 16px}
+.fld{font:400 20px/1.3 var(--round);text-align:center;background:var(--paper);color:var(--ink);border:2px solid var(--line);border-radius:14px;padding:11px 12px;width:100%;outline:none;flex:none}
+.fld:focus{border-color:var(--gold)}
+.play input{-webkit-user-select:text;user-select:text}   /* .play 의 user-select:none 때문에 아이폰에서 입력이 안 되는 것 막기 */
+.fld::placeholder{color:rgba(205,191,232,.55)}
+.fform{display:grid;gap:8px;flex:none}
+.frow{display:flex;gap:8px}
+.frow .btn{flex:none}
+.frow .fld{flex:1;min-width:0}
+
+/* 제시어 고르기 */
+.picks{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;overflow-y:auto}
+.picks>:first-child{margin-top:auto}
+.picks>:last-child{margin-bottom:auto}   /* 자리가 남으면 가운데, 모자라면 위에서부터 스크롤 */
+.pick{display:flex;align-items:center;gap:12px;text-align:left;padding:14px 16px;border-radius:16px;border:2px solid var(--line);background:rgba(0,0,0,.28);color:var(--ink);cursor:pointer;font:400 clamp(21px,6vw,28px)/1.2 var(--round);transition:transform .08s}
+.pick:active{transform:scale(.985)}
+.pick small{margin-left:auto;font:700 12px var(--round);color:var(--soft);white-space:nowrap}
+.pick .em{font-size:26px;flex:none}
+.pick[aria-pressed="true"]{border-color:var(--gold);background:linear-gradient(135deg,rgba(240,138,60,.3),rgba(122,98,224,.25));box-shadow:0 0 0 2px rgba(255,200,97,.35)}
+
+/* 기다리는 화면 */
+.waitbox{flex:1;min-height:0;display:grid;place-content:center;justify-items:center;gap:10px;text-align:center;padding:6px}
+.waitbox .paw{font-size:64px;line-height:1;animation:pawbob 1.8s ease-in-out infinite}
+@keyframes pawbob{50%{transform:translateY(-8px) rotate(6deg)}}
+.waitbox h2{font:400 24px/1.25 var(--round);color:#ffe3a3;margin:0}
+.waitbox p{margin:0;color:var(--soft);font-size:14px}
+.meter{width:min(280px,70vw);height:10px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
+.meter i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:99px;transition:width .3s}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:100%}
+.chip{padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid var(--line);font:700 13.5px var(--round);white-space:nowrap;max-width:46vw;overflow:hidden;text-overflow:ellipsis}
+.chip.ok{border-color:rgba(63,174,122,.7);background:rgba(63,174,122,.2)}
+.chip.gone{opacity:.5;text-decoration:line-through}
+.chip.me{box-shadow:0 0 0 2px rgba(255,200,97,.55)}
+
+/* 공개 */
+.rvlist{display:grid;gap:8px;align-content:start;padding:2px 1px 6px}
+.pg{background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:14px;padding:8px 10px;display:grid;gap:5px;animation:pgin .28s ease-out}
+.pg.first{border-color:rgba(255,200,97,.65)}
+.pg .who{font:700 13px var(--round);color:var(--soft)}
+.pg .txt{font:400 clamp(24px,7vw,34px)/1.25 var(--round);text-align:center;color:#ffe3a3;word-break:keep-all;overflow-wrap:anywhere;padding:6px 0}
+.pg canvas{width:100%;height:auto;aspect-ratio:4/3;border-radius:10px;display:block;background:var(--sheet)}
+.arr{text-align:center;color:var(--soft);line-height:1;font-size:15px;margin:-3px 0}
+@keyframes pgin{from{opacity:0;transform:translateY(10px)}}
+.rvnav{flex:none;display:grid;grid-template-columns:54px 1fr 1.5fr;gap:8px;align-items:stretch}
+.rvnav .btn{padding:12px 6px;font-size:16px}
+.rvinfo{display:grid;place-content:center;text-align:center;font:700 13.5px/1.25 var(--round);color:var(--soft);min-width:0}
+.rvinfo b{color:#ffe3a3;font-size:15px}
+.rvnav.guest{grid-template-columns:1fr auto}
+.rvsave{flex:none}
+
+/* 투표 */
+.vgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;align-content:start;padding:2px 1px 6px}
+.vc{position:relative;display:grid;gap:4px;padding:6px;border-radius:14px;border:2px solid var(--line);background:rgba(0,0,0,.3);color:var(--ink);cursor:pointer;text-align:center;font-family:var(--round);min-width:0}
+.vc canvas{width:100%;height:auto;aspect-ratio:4/3;border-radius:8px;display:block;background:var(--sheet)}
+.vc .cap{font:700 12.5px/1.25 var(--round);color:var(--soft);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vc .cap b{color:#ffe3a3}
+.vc[aria-pressed="true"]{border-color:var(--gold);background:rgba(255,200,97,.16);box-shadow:0 0 0 2px rgba(255,200,97,.45)}
+.vc[aria-pressed="true"]::after{content:"✔";position:absolute;top:2px;right:2px;width:26px;height:26px;border-radius:50%;background:var(--gold);color:#3a2300;display:grid;place-items:center;font:800 14px var(--round)}
+.vc:disabled{opacity:.42;cursor:default}
+.vc.mine::before{content:"내 그림";position:absolute;top:8px;left:8px;background:rgba(0,0,0,.65);color:#fff;font:700 11px var(--round);padding:2px 7px;border-radius:99px;z-index:1}
+@media (min-width:560px){.vgrid{grid-template-columns:repeat(3,1fr)}}
+
+/* 결과 */
+.res{display:grid;gap:10px;align-content:start;padding:2px 1px 8px}
+.winc{display:grid;gap:5px;padding:8px;border-radius:16px;border:2px solid var(--gold);background:linear-gradient(160deg,rgba(255,200,97,.2),rgba(122,98,224,.18));box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.winc canvas{width:100%;height:auto;aspect-ratio:4/3;border-radius:10px;display:block;background:var(--sheet)}
+.winc .cap{text-align:center;font:400 18px/1.3 var(--round);color:#ffe3a3}
+.winc .cap small{display:block;font:700 12.5px var(--round);color:var(--soft)}
+.rks{display:grid;gap:6px}
+.rkrow{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.07);border:1px solid transparent;font:700 15px var(--round)}
+.rkrow.win{border-color:rgba(255,200,97,.6);background:rgba(255,200,97,.14)}
+.rkrow.me{box-shadow:0 0 0 2px rgba(122,98,224,.6)}
+.rkrow i{font-style:normal;color:#ffe3a3}
+.rkrow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rdy{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;font-size:13px;color:var(--soft)}
+.rdy span{padding:3px 9px;border-radius:99px;background:rgba(255,255,255,.08)}
+.rdy span.ok{background:rgba(63,174,122,.22)}
+.rdy label{display:inline-flex;gap:4px;align-items:center;padding:3px 9px;border-radius:99px;background:rgba(255,255,255,.08)}
+.acts{flex:none;display:grid;gap:8px}
+.acts .two{display:flex;gap:8px}
+.acts .two .btn{flex:1}
+.note{margin:0;text-align:center;color:var(--soft);font-size:13px}
+
+/* 가로로 눕힌 폰: 그림판은 왼쪽 큰 칸, 안내·색·도구·낸다 단추는 오른쪽 */
+@media (orientation:landscape) and (max-height:520px){
+  .scr.s-draw,.scr.s-guess{display:grid;grid-template-columns:minmax(0,1fr) min(300px,42vw);grid-template-rows:auto auto auto auto minmax(0,1fr);column-gap:10px;row-gap:6px;align-content:start}
+  .scr.s-draw .padwrap,.scr.s-guess .padwrap{grid-column:1;grid-row:1 / -1}
+  .scr.s-draw>:not(.padwrap),.scr.s-guess>:not(.padwrap){grid-column:2}
+  .scr.s-draw .task,.scr.s-guess .task{padding:4px 12px;min-height:0}
+  body.online .scr.s-draw .padwrap,body.online .scr.s-guess .padwrap{margin-left:42px}   /* 채팅 손잡이 자리 */
+  .pal button{max-width:34px}
+  .tl button{height:38px}
+}
+
+/* 창(규칙 · 하는 법)도 보라빛으로 */
+.overlay>div{background:linear-gradient(165deg,#2e2052 0%,#1b1233 100%);border-color:rgba(255,200,120,.32)}
+.overlay h2{color:#ffe3a3;font-family:var(--round);font-weight:400}
+.overlay .howto{word-break:keep-all;overflow-wrap:anywhere}
+
+/* 알림은 아래 단추를 덮지 않게 위쪽(안내 카드 자리)에 */
+body.playing .toast{bottom:auto;top:calc(env(safe-area-inset-top,0px) + 78px)}

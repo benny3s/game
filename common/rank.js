@@ -21,7 +21,7 @@
   const P = GUEST ? "test/" : "";
   const MODES = { friend: "f", ai: "a", hot: "h", f: "f", a: "a", h: "h" };
   const MONEY = new Set(["gostop", "seotda", "poker"]);                       // 돈 게임: 친구 판은 점수(칩) 합으로 줄 세움
-  const NAMES = { gostop: "고스톱", seotda: "섯다", onecard: "원카드", poker: "홀덤", baduk: "바둑", omok: "오목", cube: "베니큐브", chess: "체스", janggi: "장기", yut: "윷놀이", billiards: "당구", volley: "냥냥 배구", land: "땅따먹기", nyang: "냥도쿠", snake: "지렁이", sc: "스타" };
+  const NAMES = { gostop: "고스톱", seotda: "섯다", onecard: "원카드", poker: "홀덤", baduk: "바둑", omok: "오목", cube: "베니큐브", chess: "체스", janggi: "장기", yut: "윷놀이", billiards: "당구", volley: "냥냥 배구", land: "땅따먹기", nyang: "냥도쿠", snake: "지렁이", sc: "스타", draw: "냥스트레이션" };
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const num = v => (Number.isFinite(+v) ? +v : 0);
   const kstDay = (ms = Date.now()) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
