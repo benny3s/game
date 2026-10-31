@@ -65,7 +65,13 @@
     try { hotPick = HotSeat.setup($('hotSetup'), { game: 'seotda', min: 2, max: MAXP, allowAI: true, tiers: ['easy', 'normal', 'hard'], onChange: () => { $('hotBtn').disabled = !hotPick.valid; } }); $('hotBtn').disabled = !hotPick.valid; } catch (e) { console.error(e); hotPick = null; }
   }
 
+  // 🏆 통산 판·승은 랭킹(GRank)에서만 읽음 (기기 localStorage 로는 안 보여줌) — 못 읽으면 숫자 없이
+  let rk = null;
+  function rankPull() { try { if (window.GRank) GRank.mine('seotda').then(v => { if (v !== rk) { rk = v; if (!SES) drawMenu(); } }, () => {}); } catch (e) {} }
+  try { addEventListener('grank', e => { if (e.detail && e.detail.game === 'seotda') rankPull(); }); } catch (e) {}
+
   function drawMenu() {
+    rankPull();
     ensureHotPick();
     $('hotFallback').hidden = !!hotPick;
     const solo = opt.tab === 'solo';
@@ -75,7 +81,7 @@
     $('soloBox').hidden = !solo;
     $('hotBox').hidden = opt.tab !== 'hot';
     $('watchBox').hidden = opt.tab !== 'watch';
-    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>${fmtN(stats.coins)} 냥</b><span class="small">${stats.played ? `${fmtN(stats.played)}판 중 ${fmtN(stats.won)}판 승리` : '정통 2장 화투 섯다 · 파산 시 500냥 자동 충전'}</span></span>`;
+    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>${fmtN(stats.coins)} 냥</b><span class="small">${rk && rk.all && rk.all.n ? `${fmtN(rk.all.n)}판 중 ${fmtN(rk.all.w)}판 승리` : '정통 2장 화투 섯다 · 파산 시 500냥 자동 충전'}</span></span>`;
     segBtns($('modeSeg'), countItems(), opt.mode, v => { opt.mode = +v; saveOpt('mode'); drawMenu(); });
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })),
       id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
@@ -903,8 +909,9 @@
       const humans = ses.mode === 'solo' ? [] : ses.seats.map((x, i) => ({ x, i })).filter(o => o.i !== me && o.x.uid && o.x.uid !== myUid && !o.x.sub);
       const won = ws.includes(me);
       const score = ((r.payouts && r.payouts[me]) || 0) - ((v.bets && v.bets[me]) || 0);      // 이번 판 순이익 (딴 돈 - 낸 돈)
+      const aiSeat = humans.length ? null : ses.seats.find(x => x && x.ctrl === 'ai' && x.tier);   // 혼자 하기는 AI 난이도(easy·normal·hard)도 같이
       GRank.result('seotda', {
-        mode: humans.length ? 'friend' : 'ai', res: won ? 'w' : 'l',
+        mode: humans.length ? 'friend' : 'ai', tier: aiSeat ? aiSeat.tier : undefined, res: won ? 'w' : 'l',
         beat: won ? Math.max(0, v.n - ws.length) : 0, score,
         opp: humans.map(o => ({ uid: o.x.uid, res: won === ws.includes(o.i) ? 'd' : won ? 'w' : 'l' })),
       });

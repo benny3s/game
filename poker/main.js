@@ -1076,8 +1076,9 @@
       ses.rankDone = true;
       const myUid = ses.net && ses.net.uid, won = !bust && v.champion === me;
       const humans = ses.mode === 'solo' ? [] : ses.seats.map((x, i) => ({ x, i })).filter(o => o.i !== me && o.x.uid && o.x.uid !== myUid && !o.x.sub);
+      const aiSeat = humans.length ? null : ses.seats.find(x => x && x.ctrl === 'ai' && x.tier);   // 혼자 하기는 AI 난이도(easy·normal·hard)도 같이
       GRank.result('poker', {
-        mode: humans.length ? 'friend' : 'ai', res: won ? 'w' : 'l', beat: won ? v.n - 1 : 0,
+        mode: humans.length ? 'friend' : 'ai', tier: aiSeat ? aiSeat.tier : undefined, res: won ? 'w' : 'l', beat: won ? v.n - 1 : 0,
         score: ses.rankStart != null ? v.coins[me] - ses.rankStart : undefined,
         opp: humans.map(o => ({ uid: o.x.uid, res: v.coins[me] > v.coins[o.i] ? 'w' : v.coins[me] < v.coins[o.i] ? 'l' : 'd' })),
       });

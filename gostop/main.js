@@ -75,11 +75,16 @@
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); onPick(b.dataset.v); };
   }
   const foeIdx = t => { const i = (opt.foe && opt.foe[t]) | 0; return i >= 0 && i < TIER[t].names.length ? i : 0; };
+  // 🏆 통산 판·승은 랭킹(GRank)에서만 읽음 (기기 localStorage 로는 안 보여줌) — 못 읽으면 숫자 없이
+  let rk = null;
+  function rankPull() { try { if (window.GRank) GRank.mine('gostop').then(v => { if (v !== rk) { rk = v; if (!SES) drawMenu(); } }, () => {}); } catch (e) {} }
+  try { addEventListener('grank', e => { if (e.detail && e.detail.game === 'gostop') rankPull(); }); } catch (e) {}
   function drawMenu() {
+    rankPull();
     const tab = ['solo', 'watch', 'local'].includes(opt.tab) ? opt.tab : 'solo';
     $('tabSolo').setAttribute('aria-pressed', String(tab === 'solo')); $('tabWatch').setAttribute('aria-pressed', String(tab === 'watch')); $('tabLocal').setAttribute('aria-pressed', String(tab === 'local'));
     $('soloBox').hidden = tab !== 'solo'; $('watchBox').hidden = tab !== 'watch'; $('localBox').hidden = tab !== 'local';
-    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 자금 ${fmtN(coins)}냥</b><span class="small">${stats.played ? `통산 ${fmtN(stats.played)}판 중 ${fmtN(stats.won)}승 · 최고 기록 ${fmtN(stats.best)}점` : '승리 시 점수만큼 판돈이 쌓입니다 (1점 = 10냥)'}</span></span>`;
+    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 자금 ${fmtN(coins)}냥</b><span class="small">${rk && rk.all && rk.all.n ? `통산 ${fmtN(rk.all.n)}판 중 ${fmtN(rk.all.w)}승` : '승리 시 점수만큼 판돈이 쌓입니다 (1점 = 10냥)'}</span></span>`;
     segBtns($('modeSeg'), [[2, '맞고 2인'], [3, '고스톱 3인'], [4, '광팔기 4인'], [5, '광팔기 5인']], opt.mode, v => { opt.mode = +v; saveOpt('mode'); drawMenu(); });
     const mo = G.modeOf(opt.mode);
     $('modeNote').textContent = mo.bench ? `${mo.n}명이 치고 ${mo.bench}명은 판마다 돌아가며 쉬어요. 쉬는 사람이 내놓는 광을 살 수 있어요` : '';
@@ -2248,8 +2253,9 @@
       if (!(mr >= 0)) return;
       const wr = s.who[r.winner];                                                   // 이긴 사람의 방 자리
       const humans = ses.kind === 'solo' ? [] : s.who.filter(rs => rs !== mr && ses.seats[rs] && ses.seats[rs].uid && ses.seats[rs].uid !== myUid && !ses.seats[rs].sub);
+      const aiSeat = humans.length ? null : ses.seats.find(x => x && x.ctrl === 'ai' && x.tier);   // 혼자 하기는 AI 난이도(easy·normal·hard)도 같이
       GRank.result('gostop', {
-        mode: humans.length ? 'friend' : 'ai', res: won ? 'w' : 'l', beat: won ? s.n - 1 : 0,
+        mode: humans.length ? 'friend' : 'ai', tier: aiSeat ? aiSeat.tier : undefined, res: won ? 'w' : 'l', beat: won ? s.n - 1 : 0,
         score: ses.lastDeltas && ses.lastDeltas[mr] != null ? ses.lastDeltas[mr] : undefined,       // 이번 판 칩 손익
         opp: humans.map(rs => ({ uid: ses.seats[rs].uid, res: won ? 'w' : rs === wr ? 'l' : 'd' })),
       });

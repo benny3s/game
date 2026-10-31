@@ -37,12 +37,19 @@
 
   // 🏆 예전 기기 기록(1:1 AI 판)을 공용 랭킹에 한 번 올림
   if (window.GRank) try { GRank.migrateLocal('volley', () => { let n = 0, w = 0, l = 0, b = null; for (const r of Object.values(rec)) { if (!r) continue; w += r.w || 0; l += r.l || 0; if (r.best && (b == null || r.best[0] > b)) b = r.best[0]; } n = w + l; return { n, w, l, b }; }); } catch (e) {}
+  // 예전 난이도별 기록(1:1 AI 판)도 한 번 올림
+  if (window.GRank) try { GRank.migrateTiers('volley', () => { const o = {}; for (const [t, r] of Object.entries(rec)) if (r && (r.w || r.l)) o[t] = { w: r.w || 0, l: r.l || 0 }; return o; }); } catch (e) {}
 
   const R = ART.create($('cv'));
 
   // ════════ 메뉴 ════════
-  function recLine(t) { const r = rec[t]; return r && (r.w || r.l) ? `🏆 ${r.w}승 ${r.l}패` : ''; }
+  // 🏆 난이도별 전적은 랭킹(GRank)에서만 읽음 (기기 volley.rec 는 더 이상 화면에 안 보임) — 못 읽으면 숫자 없이
+  let rk = null;
+  function rankPull() { try { if (window.GRank) GRank.mine('volley').then(v => { if (v !== rk) { rk = v; if (!$('menu').hidden) drawMenu(); } }, () => {}); } catch (e) {} }
+  try { addEventListener('grank', e => { if (e.detail && e.detail.game === 'volley') rankPull(); }); } catch (e) {}
+  function recLine(t) { const r = rk && rk.tier && rk.tier[t]; return r && (r.w || r.l) ? `🏆 ${r.w}승 ${r.l}패` : ''; }
   function drawMenu() {
+    rankPull();
     for (const [id, box, t] of [['tabSolo', 'soloBox', 'solo'], ['tabLocal', 'localBox', 'local'], ['tabWatch', 'watchBox', 'watch']]) { $(id).setAttribute('aria-pressed', String(cfg.tab === t)); $(box).hidden = cfg.tab !== t; }
     const items = TIER_IDS.map(id => ({ id, em: Cozy.TIERS[id].em, name: Cozy.TIERS[id].name, cls: Cozy.TIERS[id].cls, desc: TIER_TXT[id], rec: recLine(id) }));
     items.push({ id: 'local', em: '👫', name: '한 기기에서', cls: 't-master', desc: '둘~넷이 한 화면에서 같이', rec: '' });   // 누르면 '한 기기' 탭으로
@@ -572,7 +579,7 @@
       const g = G, o = g.o; if (!window.GRank) return;
       if (o.kind === 'ai') {
         const won = w === 0;
-        GRank.result('volley', { mode: 'ai', res: won ? 'w' : 'l', beat: won ? g.team : 0, score: g.s.score[0] });
+        GRank.result('volley', { mode: 'ai', tier: o.tier, res: won ? 'w' : 'l', beat: won ? g.team : 0, score: g.s.score[0] });
       } else if (o.kind === 'online' && g.myCat >= 0 && !g.sub[g.myCat]) {
         const mt = g.myCat & 1, won = w === mt, opp = [];
         o.seats.forEach((u, k) => { if (u && (k & 1) !== mt && !g.sub[k]) opp.push({ uid: u, res: won ? 'w' : 'l' }); });

@@ -911,7 +911,8 @@
       const res = st.winner < 0 ? "d" : st.winner === me ? "w" : "l", n = st.n;
       if (G.mode === "solo") {
         rankedSeed = G.roundSeed;
-        GRank.result("cube", { mode: "ai", res, beat: res === "w" ? n - 1 : 0 });
+        const tier = (G.levels || []).find((l) => l && l !== "human" && l !== "remote");   // 혼자 하기는 AI 난이도(easy·normal·hard)도 같이
+        GRank.result("cube", { mode: "ai", tier, res, beat: res === "w" ? n - 1 : 0 });
       } else if (G.mode === "online" && G.net && !G.subs[me]) {
         rankedSeed = G.roundSeed;
         const opp = [];

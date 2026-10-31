@@ -60,11 +60,16 @@
     el.innerHTML = items.map(([v, label]) => `<button class="btn" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}">${label}</button>`).join('');
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); onPick(b.dataset.v); };
   }
+  // 🏆 통산 판·승은 랭킹(GRank)에서만 읽음 (기기 localStorage 로는 안 보여줌) — 못 읽으면 숫자 없이
+  let rk = null;
+  function rankPull() { try { if (window.GRank) GRank.mine('onecard').then(v => { if (v !== rk) { rk = v; if (!SES) drawMenu(); } }, () => {}); } catch (e) {} }
+  try { addEventListener('grank', e => { if (e.detail && e.detail.game === 'onecard') rankPull(); }); } catch (e) {}
   function drawMenu() {
+    rankPull();
     const tab = ['solo', 'watch', 'local'].includes(opt.tab) ? opt.tab : 'solo';
     for (const [id, t] of [['tabSolo', 'solo'], ['tabWatch', 'watch'], ['tabLocal', 'local']]) $(id).setAttribute('aria-pressed', String(tab === t));
     $('soloBox').hidden = tab !== 'solo'; $('watchBox').hidden = tab !== 'watch'; $('localBox').hidden = tab !== 'local';
-    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 ${fmtN(coins)}냥</b><span class="small">${stats.played ? `통산 ${fmtN(stats.played)}판 중 ${fmtN(stats.won)}승 · 한 판 최고 ${fmtN(stats.best)}장 받기` : '이기면 다른 사람이 남긴 카드 한 장마다 10냥'}</span></span>`;
+    $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 ${fmtN(coins)}냥</b><span class="small">${rk && rk.all && rk.all.n ? `통산 ${fmtN(rk.all.n)}판 중 ${fmtN(rk.all.w)}승${rk.all.b != null ? ` · 한 판 최고 ${fmtN(rk.all.b)}장 받기` : ''}` : '이기면 다른 사람이 남긴 카드 한 장마다 10냥'}</span></span>`;
     opt.nAi = clamp(opt.nAi | 0 || 3, 1, 5);
     segBtns($('nSeg'), [1, 2, 3, 4, 5].map(k => [k, `${k}명`]), opt.nAi, v => { opt.nAi = +v; saveOpt('nAi'); drawMenu(); });
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })), id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
@@ -1636,8 +1641,9 @@
       const at = q => r.order.indexOf(q), mine = at(me);
       if (mine < 0) return;
       const friend = ses.kind !== 'solo';
+      const aiSeat = friend ? null : ses.seats.find(x => x && x.ctrl === 'ai' && x.tier);   // 혼자 하기는 AI 난이도(easy·normal·hard)도 같이
       GRank.result('onecard', {
-        mode: friend ? 'friend' : 'ai', res: r.winner === me ? 'w' : 'l', beat: r.order.length - 1 - mine, score: r.pts[me],
+        mode: friend ? 'friend' : 'ai', tier: aiSeat ? aiSeat.tier : undefined, res: r.winner === me ? 'w' : 'l', beat: r.order.length - 1 - mine, score: r.pts[me],
         opp: friend ? ses.seats.map((x, q) => ({ x, q })).filter(o => o.q !== me && !o.x.bot && !o.x.sub && o.x.uid && !String(o.x.uid).startsWith('ai:')).map(o => ({ uid: o.x.uid, res: at(o.q) < 0 || mine < at(o.q) ? 'w' : 'l' })) : undefined,
       });
     } catch (e) { console.warn('[rank]', e); }
