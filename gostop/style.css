@@ -84,7 +84,7 @@ body.playing .bar .pill{
 .stage{display:block;position:relative;touch-action:none;overflow:visible}
 .zone{position:absolute;left:0;top:0;width:0;height:0}
 .layer{position:absolute;inset:0;pointer-events:none;z-index:2}
-.layer .hw{pointer-events:auto}
+.layer .hw,.layer .bombtok{pointer-events:auto}
 
 /* 바닥: 진한 초록 화투 담요 + 금실 테두리 + 원목 액자 그림자 */
 .zone.table{
