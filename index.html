@@ -640,6 +640,7 @@ button { font: inherit; cursor: pointer; }
       </div>
       <button class="host-badge" id="mstBtn" type="button" title="복기에서 모은 아쉬운 장면 다시 해 보기" hidden>📒 아쉬운 장면</button>
       <button class="host-badge active" id="bankBtn" type="button" title="모임 칩 은행 · 잔액 · 정산" hidden>🏦 은행</button>
+      <button class="host-badge active" id="rankBtn" type="button" title="게임별 랭킹 · 상대 전적 · 최근 7일">🏆 랭킹</button>
       <button class="host-badge" id="hostBtn" type="button">👑 출입·기기 관리</button>
     </div>
   </div>
@@ -721,6 +722,7 @@ button { font: inherit; cursor: pointer; }
 <script src="common/gate.js?v=13"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=12"></script>
+<script src="common/rank.js?v=1"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=10"></script>
 <script src="common/bank.js?v=6"></script>
@@ -1350,6 +1352,20 @@ button { font: inherit; cursor: pointer; }
   };
   $("hostCloseBtn").onclick = () => { $("hostModal").hidden = true; };
   $("bankBtn").onclick = () => { if (window.Bank) Bank.panel({}); };
+  $("rankBtn").onclick = () => { if (window.GRank) GRank.open(selectedLibId || featuredId); };
+  // 🏆 이 기기에만 있던 예전 기록을 프로필 랭킹으로 한 번 올림 (게임을 안 열어 봐도) — 게임 안에서도 같은 걸 함(먼저 한 쪽만 올라감)
+  if (window.GRank) {
+    const J = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
+    const wl = d => { let w = 0, l = 0; Object.values(d || {}).forEach(v => { w += (v && v.w) || 0; l += (v && v.l) || 0; }); return { n: w + l, w, l }; };
+    const pl = d => d && d.played ? { n: d.played, w: d.won || 0, l: Math.max(0, d.played - (d.won || 0)) } : null;
+    const MIG = {
+      gostop: () => { const d = J("gostop.stats"); return d && d.played ? { ...pl(d), b: d.best || 0 } : null; },
+      seotda: () => pl(J("seotda.stats")), poker: () => pl(J("poker.stats")),
+      baduk: () => wl(J("baduk.rec.v1")), omok: () => wl(J("omok_stats_v1")), volley: () => wl(J("volley.rec")),
+      cube: () => { const d = J("cube_stats_v1"); return d && d.games ? { n: d.games, w: d.wins || 0, l: Math.max(0, d.games - (d.wins || 0)) } : null; },
+    };
+    for (const [g, f] of Object.entries(MIG)) GRank.migrateLocal(g, f);
+  }
   $("hostSaveBtn").onclick = async () => {
     const nick = $("nickInput").value.trim();
     if (nick) {

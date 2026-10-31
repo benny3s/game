@@ -266,6 +266,7 @@
       ${canHost ? "" : `<p class="arn-soft" style="margin-top:-6px">방 만들기는 허용된 기기만 돼요. 친구가 보낸 <b>방 링크</b>나 <b>코드</b>로는 바로 들어갈 수 있어요.</p>`}
       <div class="arn-row"><input class="arn-code" maxlength="20" placeholder="방 코드 또는 방 이름 (예: 베니)" autocomplete="off" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
       <div class="arn-msg">${esc(msg)}</div>
+      ${window.GRank ? `<button class="arn-btn" data-rank>🏆 ${esc(opt.title)} 랭킹</button>` : ""}
       <p class="arn-soft">열린 방</p><div class="arn-list"><p class="arn-soft">찾는 중…</p></div>
       ${isAdmin && !Arena.mock && window.Gate && Gate.openAdminModal ? `<div style="border-top:1px solid var(--line,rgba(0,0,0,.08));padding-top:10px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="arn-soft" style="font-size:12.5px">👑 다른 기기 허용하기 (코드·요청)</span><button class="arn-btn" data-admin style="padding:8px 12px;font-size:13px">기기 관리</button></div>` : ""}`;
     const inp = box.querySelector(".arn-code");
@@ -446,7 +447,7 @@
       }
       cfg = { ...(opt.settings && opt.settings.defaults || {}), ...built, ...(cfg || {}) };
       if (opt.coach) cfg.coach = false;                       // 새 방은 AI 선생님 꺼진 채로 시작
-      net = await Arena.host(opt.game, { name: me.name, cfg, max: opt.max || opt.maxPlayers || 2, label: (opt.settings && opt.settings.label) || opt.renderConfig });
+      net = await Arena.host(opt.game, { name: me.name, me: me.pid ? { pid: me.pid } : {}, cfg, max: opt.max || opt.maxPlayers || 2, label: (opt.settings && opt.settings.label) || opt.renderConfig });
       playing = false; wire(); setUrlRoom(net.code); lobby();
     } catch (e) { home("방을 못 만들었어요: " + e.message); }
   }
@@ -467,7 +468,7 @@
     if (code.length !== 4) { const m = box.querySelector(".arn-msg"); if (m) m.textContent = "코드 4글자를 적어 주세요"; return; }
     show(); box.innerHTML = `<h2>들어가는 중…</h2><p class="arn-wait">방 ${esc(code)}</p>`;
     try {
-      net = await Arena.join(opt.game, code, { name: me.name });
+      net = await Arena.join(opt.game, code, { name: me.name, me: me.pid ? { pid: me.pid } : {} });
       playing = false; wire(); setUrlRoom(net.code);
       if (net.meta && net.meta.phase === "play") { playing = true; hide(); connBadge(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
       else lobby();
@@ -509,6 +510,7 @@
     else if (t.matches("[data-admin]")) { if (window.Gate && Gate.openAdminModal) Gate.openAdminModal(); }
     else if (t.dataset.code) doJoin(t.dataset.code);
     else if (t.dataset.del) { t.disabled = true; Arena.deleteRoom(opt.game, t.dataset.del).catch(() => {}).then(() => home()); }
+    else if (t.matches("[data-rank]")) { if (window.GRank) GRank.open(opt.game); }
     else if (t.matches("[data-share]")) share();
     else if (t.matches("[data-start]")) { if (net && net.isHost) { const c = (net.meta && net.meta.cfg) || cfg; net.setPhase("play", c); } }
     else if (t.dataset.kick) { if (net && net.isHost) net.kick(t.dataset.kick); }

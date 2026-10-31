@@ -512,7 +512,29 @@
     },
     "test": {
       ".read": "auth != null",
-      "gp": {
+      "rank": {
+        ".read": "auth != null",
+        "$game": {
+          ".validate": "$game.matches(/^[a-z0-9]{2,20}$/)",
+          "$pid": {
+            ".write": "auth != null && newData.exists()",
+            "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
+            "t": { ".validate": "newData.isNumber()" },
+            "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+            "base": { "$dev": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+            "vs": { "$opp": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+            "$other": { ".validate": false }
+          }
+        }
+      },
+      "rank_days": {
+        ".read": "auth != null",
+        "$day": {
+          ".validate": "$day.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+          "$game": { "$pid": { ".write": "auth != null && newData.exists()", ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" } }
+        }
+      },
+            "gp": {
         "players": {
           ".read": "auth != null",
           "$pid": {
@@ -561,6 +583,28 @@
             }
           }
         }
+      }
+    },
+    "rank": {
+      ".read": "auth != null",
+      "$game": {
+        ".validate": "$game.matches(/^[a-z0-9]{2,20}$/)",
+        "$pid": {
+          ".write": "auth != null && newData.exists()",
+          "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
+          "t": { ".validate": "newData.isNumber()" },
+          "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+          "base": { "$dev": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+          "vs": { "$opp": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+    "rank_days": {
+      ".read": "auth != null",
+      "$day": {
+        ".validate": "$day.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        "$game": { "$pid": { ".write": "auth != null && newData.exists()", ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" } }
       }
     },
     "game_plays": {
