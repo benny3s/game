@@ -25,7 +25,7 @@ const Arena = (() => {
   const STUN = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
   let ICE = { iceServers: STUN };
   // 🔁 TURN 중계 (Cloudflare Worker infra/turn-worker): 폰끼리 직접 연결이 막혀도 실시간으로. 비어 있으면 STUN 만 (막히면 서버 경유)
-  const TURN_URL = "";
+  const TURN_URL = "https://benny-turn.benny3s.workers.dev/";
   async function loadIce() {
     if (!TURN_URL) return;
     try { const c = JSON.parse(sessionStorage.getItem("arena.ice") || "null"); if (c && c.exp > Date.now() && Array.isArray(c.s)) { ICE = { iceServers: STUN.concat(c.s) }; return; } } catch (e) {}

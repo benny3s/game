@@ -1,3 +1,4 @@
 firebase/.firebase/
 firebase/*.log
 test/qa/report/
+infra/turn-worker/.wrangler/

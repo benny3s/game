@@ -10,7 +10,21 @@ const NET = (() => {
     databaseURL: "https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app",
   };
   const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
-  const ICE = { iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }] };
+  const STUN = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+  let ICE = { iceServers: STUN };
+  // 🔁 TURN 중계 (common/arena.js 와 같은 Cloudflare Worker · 같은 저장 칸): 직접 연결이 막혀도 서울 중계로
+  const TURN_URL = "https://benny-turn.benny3s.workers.dev/";
+  async function loadIce() {
+    try { const c = JSON.parse(sessionStorage.getItem("arena.ice") || "null"); if (c && c.exp > Date.now() && Array.isArray(c.s)) { ICE = { iceServers: STUN.concat(c.s) }; return; } } catch (e) {}
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 2500);
+      const j = await (await fetch(TURN_URL, { signal: ctl.signal })).json(); clearTimeout(t);
+      if (j && Array.isArray(j.iceServers) && j.iceServers.length) {
+        ICE = { iceServers: STUN.concat(j.iceServers) };
+        try { sessionStorage.setItem("arena.ice", JSON.stringify({ s: j.iceServers, exp: Date.now() + (j.ttl || 3600) * 800 })); } catch (e) {}
+      }
+    } catch (e) {}
+  }
   let app = null, loading = null, user = null, isAdmin = false;
   const load = src => new Promise((ok, bad) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
 
@@ -25,6 +39,7 @@ const NET = (() => {
         await app.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
       } else if (firebase.apps.length) { app = firebase.app(); if (!app.options.databaseURL) app = firebase.initializeApp(FB, "snake"); }
       else app = firebase.initializeApp(FB);
+      loadIce();                                                              // 방에 들어가기 전에 끝나 있으면 TURN 도 씀
       user = await new Promise(ok => { const t = setTimeout(() => ok(null), 8000); const off = app.auth().onAuthStateChanged(u => { clearTimeout(t); off(); ok(u); }); });
       if (!user) user = (await app.auth().signInAnonymously()).user;
       try { isAdmin = (await user.getIdTokenResult()).claims.admin === 1; } catch (e) { isAdmin = false; }

@@ -9,7 +9,21 @@ const NET = (() => {
     databaseURL: "https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app",
   };
   const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
-  const ICE = { iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }] };
+  const STUN = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
+  let ICE = { iceServers: STUN };
+  // 🔁 TURN 중계 (common/arena.js 와 같은 Cloudflare Worker · 같은 저장 칸): 직접 연결이 막혀도 서울 중계로
+  const TURN_URL = "https://benny-turn.benny3s.workers.dev/";
+  async function loadIce() {
+    try { const c = JSON.parse(sessionStorage.getItem("arena.ice") || "null"); if (c && c.exp > Date.now() && Array.isArray(c.s)) { ICE = { iceServers: STUN.concat(c.s) }; return; } } catch (e) {}
+    try {
+      const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 2500);
+      const j = await (await fetch(TURN_URL, { signal: ctl.signal })).json(); clearTimeout(t);
+      if (j && Array.isArray(j.iceServers) && j.iceServers.length) {
+        ICE = { iceServers: STUN.concat(j.iceServers) };
+        try { sessionStorage.setItem("arena.ice", JSON.stringify({ s: j.iceServers, exp: Date.now() + (j.ttl || 3600) * 800 })); } catch (e) {}
+      }
+    } catch (e) {}
+  }
   let app = null, loading = null, user = null;
   const load = src => new Promise((ok, bad) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = bad; document.head.appendChild(s); });
   async function init(separate) {
@@ -20,6 +34,7 @@ const NET = (() => {
       await Promise.all([!firebase.auth && "firebase-auth-compat.js", !firebase.database && "firebase-database-compat.js"].filter(Boolean).map(f => load(SDK + f)));
       // 탭마다 따로 된 임시 계정 (같은 PC에서 방장·친구 시험, 같은 관리자 계정 겹침 방지)
       app = firebase.initializeApp(FB, "sc" + Math.random().toString(36).slice(2, 8));
+      loadIce();                                                              // 방에 들어가기 전에 끝나 있으면 TURN 도 씀
       await app.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
       user = (await app.auth().signInAnonymously()).user;
       return app;
