@@ -1189,14 +1189,20 @@
     const actText = (st, p, a) => { const c = P.actionCost(st, p, a); return a === P.A_FOLD ? '폴드' : a === P.A_CALL ? (c ? `콜 ${fmtN(c)}칩` : '체크') : `${ACT_LABELS[a]} ${fmtN(c)}칩`; };
     const MARK = { best: '✅ 추천과 같아요',good: '🟢 괜찮아요', ok: '🟡 조금 아쉬워요', bad: '🔴 손해가 커요' };
     let rpPanel = null, rpOn = false;
+    const readCache = new Map();
     function rpCoach() {
       if (!rpOn) return;
       const st = rs.S, a = acts[i];
       let html;
       if (st.phase === 'bet' && i < acts.length) {
         const p = st.turn, c = AI.coach(P.view(st, p), p), info = c.byAction[a];    // 그 사람 시점(남의 카드는 가림)으로만 계산
+        // 🤔 이 행동으로 본 패 짐작 (보드·베팅만 보고) + 실제 패는 그 중 어디쯤 — 장면마다 한 번만 셈
+        let rd = readCache.get(i);
+        if (rd === undefined) { try { rd = AI.readAction ? AI.readAction(P.view(st, p), p, a, st.hands[p]) : null; } catch (e) { rd = null; } readCache.set(i, rd); }
+        const KIND = { fold: '폴드', call: '콜·체크', bet: '베팅' };
+        const read = rd ? `<div class="rp-read">🤔 <b>${esc(rd.tag)}</b> — ${esc(rd.why)}<br><span>이 자리에서 ${KIND[rd.kind]}하는 패는 보통 승률 ${rd.avgSame != null ? rd.avgSame + '%' : '?'} 정도 (올 수 있는 패의 ${rd.share}%) · 실제 패는 [${esc(rd.handName)}] 승률 ${rd.equityPct}% · 상위 ${rd.top}%</span></div>` : '';
         html = `<div class="rp-who"><b>${esc(nm(p))}</b> 차례 · ${esc(P.STREET_NAMES[st.street] || '')} <span>(그 사람 카드만 보고)</span></div>`
-          + `<div class="rp-real">👑 추천 <b>${esc(actText(st, p, c.bestAction))}</b> · 실제로 <b>${esc(actText(st, p, a))}</b><br>${info ? MARK[info.tier] + (info.tier !== 'best' ? ` (기댓값 ${Math.round(info.delta)}칩)` : '') : ''}</div>${coachHtml(c)}`;
+          + `<div class="rp-real">👑 추천 <b>${esc(actText(st, p, c.bestAction))}</b> · 실제로 <b>${esc(actText(st, p, a))}</b><br>${info ? MARK[info.tier] + (info.tier !== 'best' ? ` (기댓값 ${Math.round(info.delta)}칩)` : '') : ''}</div>${read}${coachHtml(c)}`;
       } else html = `<div class="coach-detail">핸드 끝 — ${esc(rec.title || '')}. ◀ 로 돌아가면 장면마다 볼 수 있어요</div>`;
       if (rpPanel) { rpPanel.set(html); if (!rpPanel.visible) rpPanel.show(); }
       else { const cp = $('coachPanel'); cp.hidden = false; cp.innerHTML = html; }
