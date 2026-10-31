@@ -87,7 +87,18 @@
 .arn-ctip{font:800 14.5px/1.3 var(--round,system-ui,sans-serif);color:#fde68a;background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.45);border-radius:10px;padding:6px 10px;text-align:center}
 .arn-ctip.hot{color:#fecaca;background:rgba(239,68,68,.2);border-color:rgba(239,68,68,.6)}
 .arn-cq button{flex:none;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:inherit;border-radius:99px;padding:7px 11px;font:600 13.5px var(--text,inherit);cursor:pointer;white-space:nowrap}
-.arn-cin{flex:1;min-width:0;border:1.5px solid var(--line,rgba(255,255,255,.18));background:rgba(0,0,0,.28);color:inherit;border-radius:12px;padding:10px 12px;font:15px var(--text,inherit);outline:none}`;
+.arn-cin{flex:1;min-width:0;border:1.5px solid var(--line,rgba(255,255,255,.18));background:rgba(0,0,0,.28);color:inherit;border-radius:12px;padding:10px 12px;font:15px var(--text,inherit);outline:none}
+.arn-cpan.inl{position:static;transform:none;width:auto;z-index:auto;border:1px solid var(--line,rgba(255,255,255,.12));border-radius:14px;padding:10px;box-shadow:none;background:rgba(0,0,0,.12);gap:6px}
+.arn-cpan.inl .hd{display:none}.arn-cpan.inl .arn-clog{max-height:96px;min-height:40px;font-size:13.5px}
+.arn-cpan.inl .arn-cq{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.arn-cpan.inl .arn-cq::-webkit-scrollbar{display:none}
+.arn-cpan.inl .arn-cin{padding:8px 10px}
+.arn-box [data-start]{position:sticky;bottom:0;z-index:2;box-shadow:0 -8px 16px var(--card,#142030)}
+.arn-opts{border:1px solid var(--line,rgba(255,255,255,.12));border-radius:14px;background:rgba(0,0,0,.1)}
+.arn-opts>summary{cursor:pointer;list-style:none;padding:10px 12px;font:800 14px var(--round,inherit);display:flex;gap:6px;align-items:baseline}
+.arn-opts>summary::-webkit-details-marker{display:none}
+.arn-opts>summary::after{content:"펼치기 ▾";margin-left:auto;flex:none;font-size:12px;color:var(--soft,#94a3b8)}.arn-opts[open]>summary::after{content:"접기 ▴"}
+.arn-opts>summary small{font-weight:600;font-size:12.5px;color:var(--soft,#94a3b8);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.arn-optb{display:grid;gap:10px;padding:0 10px 10px}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
 
@@ -145,12 +156,29 @@
         const b = e.target.closest("button"); if (!b) return;
         if (b.matches("[data-cx]")) pan.hidden = true;
         else if (b.matches("[data-cs]")) { send(chat.inp.value); chat.inp.value = ""; }
-        else if (b.parentNode === chat.cq) { if (lpFired) { lpFired = false; return; } send(b.textContent); pan.hidden = true; }
+        else if (b.parentNode === chat.cq) { if (lpFired) { lpFired = false; return; } send(b.textContent); if (!pan.classList.contains("inl")) pan.hidden = true; }
       });
-      chat.inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) { send(chat.inp.value); chat.inp.value = ""; } });
+      chat.inp.addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter" && !e.isComposing) { send(chat.inp.value); chat.inp.value = ""; } });
+      // 채팅 글자가 게임 단축키(Enter=패 내기 · 숫자=패 고르기 · 방향키·WASD=움직이기)로 새지 않게 — 창 쪽 keydown 처리기는 여기까지 못 옴
+      // (keyup 은 그대로 보냄: 누르고 있던 키를 채팅창에서 떼도 게임이 '뗐다'를 알게)
+      chat.inp.addEventListener("keypress", e => e.stopPropagation());
     }
-    chat.log.innerHTML = ""; chat.unread = 0; chat.badge(); chat.pan.hidden = true; chat.tab.hidden = false; chat.tip.hidden = true;
+    const inl = chat.pan.classList.contains("inl");
+    chat.log.innerHTML = ""; chat.unread = 0; chat.badge(); chat.pan.hidden = !inl; chat.tab.hidden = inl; chat.tip.hidden = true;
     chat.quietUntil = Date.now() + 1500;                      // 들어올 때 받는 지난 대화는 말풍선 없이 기록에만
+  }
+  // 대기실에선 채팅창을 대기실 안에 펼쳐 둠 (slot), 게임이 시작되면 다시 💬 단추로 (slot 없이 부름)
+  function chatDock(slot) {
+    if (!chat) return;
+    const { pan, tab } = chat;
+    if (slot) {
+      pan.classList.add("inl"); pan.hidden = false; tab.hidden = true; slot.appendChild(pan);
+      chat.cq.innerHTML = qLoad().list.map(q => `<button type="button">${esc(q)}</button>`).join("");
+      chat.unread = 0; chat.badge(); chat.log.scrollTop = 1e9;
+    } else if (pan.classList.contains("inl")) {
+      pan.classList.remove("inl"); pan.hidden = true; document.body.appendChild(pan);
+      tab.hidden = !net;
+    }
   }
   // ── 📊 방 기록 (모든 게임 공통, 관리자만 읽음): logs/{게임}/{날짜}/{세션} — 방 · 참가자 들어옴·나감 · 판 시작 · 채팅. 방장만 씀
   let log = null, logSeen = new Set();
@@ -203,15 +231,15 @@
     d.innerHTML = `<b>${esc(c.n || "?")}</b>${esc(c.m)}`;
     chat.log.appendChild(d); while (chat.log.children.length > 60) chat.log.firstChild.remove();
     chat.log.scrollTop = 1e9;
-    if (mine || Date.now() < chat.quietUntil) return;
+    if (mine || Date.now() < chat.quietUntil || chat.pan.classList.contains("inl")) return;   // 대기실(펼친 채팅)에선 말풍선 없이
     if (chat.pan.hidden) { chat.unread++; chat.badge(); }
     const b = document.createElement("div"); b.innerHTML = `<b>${esc(c.n || "?")}</b>${esc(c.m)}`;
     chat.bub.appendChild(b); while (chat.bub.children.length > 3) chat.bub.firstChild.remove();
     setTimeout(() => b.remove(), 4500);
   }
 
-  const show = () => { style(); if (!ov) { ov = document.createElement("div"); ov.className = "arn-ov"; ov.innerHTML = '<div class="arn-box"></div>'; document.body.appendChild(ov); box = ov.firstChild; } ov.hidden = false; };
-  const hide = () => { clearList(); if (ov) ov.hidden = true; };
+  const show = () => { chatDock(null); style(); if (!ov) { ov = document.createElement("div"); ov.className = "arn-ov"; ov.innerHTML = '<div class="arn-box"></div>'; document.body.appendChild(ov); box = ov.firstChild; } ov.hidden = false; };
+  const hide = () => { chatDock(null); clearList(); if (ov) ov.hidden = true; };
   const setUrlRoom = code => { try { const u = new URL(location.href); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} };
 
   async function myName() {
@@ -236,12 +264,11 @@
       <div class="arn-me">👤 <b>${esc(me ? me.name : "")}</b>${canHost ? '<span style="font-size:12px;background:rgba(63,174,122,.16);color:#2d8a5e;padding:3px 8px;border-radius:99px;white-space:nowrap">✅ 방 만들기 가능</span>' : ''}${window.GME && !Arena.mock ? '<button data-rename>이름 바꾸기</button>' : ""}</div>
       <button class="arn-btn${canHost ? " pri" : ""}" id="arCreate" data-host>🏠 방 만들기 (친구 초대)</button>
       ${canHost ? "" : `<p class="arn-soft" style="margin-top:-6px">방 만들기는 허용된 기기만 돼요. 친구가 보낸 <b>방 링크</b>나 <b>코드</b>로는 바로 들어갈 수 있어요.</p>`}
-      <div class="arn-row"><input class="arn-code" maxlength="4" placeholder="방 코드" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
+      <div class="arn-row"><input class="arn-code" maxlength="20" placeholder="방 코드 또는 방 이름 (예: 베니)" autocomplete="off" spellcheck="false" enterkeyhint="go"><button class="arn-btn" data-join>들어가기</button></div>
       <div class="arn-msg">${esc(msg)}</div>
       <p class="arn-soft">열린 방</p><div class="arn-list"><p class="arn-soft">찾는 중…</p></div>
       ${isAdmin && !Arena.mock && window.Gate && Gate.openAdminModal ? `<div style="border-top:1px solid var(--line,rgba(0,0,0,.08));padding-top:10px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span class="arn-soft" style="font-size:12.5px">👑 다른 기기 허용하기 (코드·요청)</span><button class="arn-btn" data-admin style="padding:8px 12px;font-size:13px">기기 관리</button></div>` : ""}`;
     const inp = box.querySelector(".arn-code");
-    inp.addEventListener("input", () => { inp.value = Arena.cleanCode(inp.value); });
     inp.addEventListener("keydown", e => { if (e.key === "Enter") box.querySelector("[data-join]").click(); });
     const draw = async () => {
       const el = box && box.querySelector(".arn-list"); if (!el) return;
@@ -269,12 +296,27 @@
       <div class="arn-head"><span>참가자</span><span data-count></span></div>
       <div class="arn-list" data-pl></div>
       <div class="arn-desc" data-desc hidden></div>
-      <div class="arn-set" data-set></div>
-      ${opt.coach ? `<div data-coach></div>` : ""}
+      <div data-lchat></div>
+      <details class="arn-opts" data-opts${optsOpen ? " open" : ""}><summary>⚙️ 설정 <small data-sum></small></summary><div class="arn-optb">
+        <div class="arn-set" data-set></div>
+        ${opt.coach ? `<div data-coach></div>` : ""}
+      </div></details>
       <div class="arn-msg" data-msg></div>
       ${isHost ? `<button class="arn-btn pri" id="arStart" data-start disabled>시작하기</button>` : `<p class="arn-wait">방장이 시작하면 바로 시작돼요</p>`}
       <button class="arn-btn" id="arLeave" data-leave>나가기</button>`;
+    const det = box.querySelector("[data-opts]"); det.addEventListener("toggle", () => { optsOpen = det.open; });
     drawPlayers(); drawSettings(); drawCoach();
+    chatDock(box.querySelector("[data-lchat]"));
+  }
+  let optsOpen = false;                                       // 설정은 접어 두고 한 줄 요약만 (펼친 걸 기억)
+  function drawSum() {
+    const el = box && box.querySelector("[data-sum]"); if (!el) return;
+    const c = curCfg(), parts = [];
+    try { const l = opt.settings && opt.settings.label ? opt.settings.label(c) : opt.renderConfig ? opt.renderConfig(c) : ""; if (l) parts.push(String(l)); } catch (e) {}
+    if (opt.coach) parts.push(`🧑‍🏫 ${c.coach ? "켬" : "끔"}`);
+    el.textContent = parts.join(" · ");
+    const det = box.querySelector("[data-opts]"), set = box.querySelector("[data-set]");
+    if (det) det.hidden = !opt.coach && !(set && set.childNodes.length);
   }
   const maxOf = () => (net && net.meta && net.meta.max) || opt.max || opt.maxPlayers || 2;
   const minOf = () => opt.min || opt.minPlayers || 2;
@@ -336,12 +378,13 @@
     } else if (opt.renderConfig) {
       el.innerHTML = `<p class="arn-soft" style="text-align:center">${esc(opt.renderConfig(c))}</p>`;
     } else el.innerHTML = "";
-    drawPlayers();                                            // 설정이 바뀌면 describe 글도 다시
+    drawPlayers(); drawSum();                                 // 설정이 바뀌면 describe 글·요약도 다시
   }
   // 'AI 선생님 (모두에게 보이기)' — 방장만 바꾸고, 친구는 보기만
   function drawCoach() {
     if (!box || !net || !opt.coach) return; const el = box.querySelector("[data-coach]"); if (!el) return;
     const on = !!curCfg().coach;
+    drawSum();
     if (net.isHost) {
       const inp = el.querySelector("input");
       if (inp) { inp.checked = on; return; }
@@ -442,12 +485,27 @@
     catch (e) { if (m) { m.style.color = ""; m.textContent = url; } }
   }
 
+  // 방 코드 또는 방 이름('베니의 방' · '베니')으로 들어가기: 열린 방 목록에서 코드 → 이름 순으로 찾음
+  async function findJoin(text) {
+    const q = String(text || "").trim(), code = Arena.cleanCode(q), msg = box && box.querySelector(".arn-msg");
+    if (!q) { if (msg) msg.textContent = "방 코드나 방 이름을 적어 주세요"; return; }
+    let rows = []; try { rows = await Arena.listRooms(opt.game); } catch (e) {}
+    const open = rows.filter(r => !r.empty);
+    if (code.length === 4 && open.some(r => r.code === code)) return doJoin(code);
+    const k = s => String(s || "").toLowerCase().replace(/\s+/g, "").replace(/의방$/, "");
+    const hit = open.filter(r => k(r.h).includes(k(q)) || k(q).includes(k(r.h)) && k(r.h));
+    if (hit.length === 1) return doJoin(hit[0].code);
+    if (hit.length > 1) { if (msg) msg.textContent = `'${q}' 이름의 방이 ${hit.length}개예요 — 아래 목록에서 골라 주세요`; return; }
+    if (code.length === 4 && /^[A-Z0-9]{4}$/.test(q.toUpperCase())) return doJoin(code);   // 목록에 안 보이는 방도 코드로는 시도
+    if (msg) msg.textContent = `'${q}' 방을 못 찾았어요`;
+  }
+
   function onClick(e) {
     const t = e.target.closest("button"); if (!t || !ov || !ov.contains(t)) return;
     if (t.matches("[data-x]")) { hide(); opt.onLeave && opt.onLeave(""); }
     else if (t.matches("[data-rename]")) { if (ov) ov.hidden = true; GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
     else if (t.matches("[data-host]")) tryHost();
-    else if (t.matches("[data-join]")) doJoin(box.querySelector(".arn-code").value);
+    else if (t.matches("[data-join]")) findJoin(box.querySelector(".arn-code").value);
     else if (t.matches("[data-admin]")) { if (window.Gate && Gate.openAdminModal) Gate.openAdminModal(); }
     else if (t.dataset.code) doJoin(t.dataset.code);
     else if (t.dataset.del) { t.disabled = true; Arena.deleteRoom(opt.game, t.dataset.del).catch(() => {}).then(() => home()); }

@@ -122,7 +122,7 @@
     const team = cfg.lteam, N = team * 2, fu = localFurs();
     start({ kind: 'duo', team, seats: cfg.lseat.slice(0, N), furs: fu.slice(0, N), target: cfg.ltarget });
   };
-  const TOUCH_KEYS = '왼쪽 ◀ ▶ 로 움직이고, 오른쪽 점프 · 스매시를 눌러요<br>스매시 단추를 누른 채 위·아래로 끌면 ▲ 위 · ▼ 아래로 쳐요 (◀ ▶ 와 같이 쓰면 앞·뒤)';
+  const TOUCH_KEYS = '왼쪽 ◀ ▶ 로 움직이고, 오른쪽 점프 · 스매시를 눌러요 (🤖 자동 스매시: 점프만 하면 공 가까이서 알아서 쳐요 · ⏸ 에서 끔)<br>스매시 단추를 누른 채 위·아래로 끌면 ▲ 위 · ▼ 아래로 쳐요 (◀ ▶ 와 같이 쓰면 앞·뒤)';
   function keysHtml(duo) {
     const k = s => `<kbd>${s}</kbd>`;
     if (duo && G && G.o.seats) {                                    // 한 기기: 사람 자리마다 키 한 줄
@@ -338,7 +338,9 @@
   const keyMap = () => G && G.o.kind === 'duo' && G.keys ? G.keys : KEYS1;   // 한 기기: 사람 자리마다 키 묶음 (keys.js)
   function recalcKeys() { held.fill(0); const m = keyMap(); for (const c of down) { const k = m[c]; if (k) held[k[0]] |= k[1]; } }
   function clearInput() { down.clear(); ptrs.clear(); latch.fill(0); recalcKeys(); syncPad(); }
-  const readInput = p => { const v = held[p] | touchHeld[p] | latch[p]; latch[p] = 0; return v; };
+  // 🤖 자동 스매시 (폰 기본 켬): 공중에서 공이 앞발 가까이 오면 알아서 휘두름 — 퍼펙트는 없음. ⏸ 창에서 켜고 끔
+  let autoSmash = Cozy.store('volley.autoSmash', true);
+  const readInput = p => { const v = held[p] | touchHeld[p] | latch[p] | (touchUI && autoSmash ? IN.AUTO : 0); latch[p] = 0; return v; };
   const overlayOpen = () => !!document.querySelector('.overlay:not([hidden])');
 
   // Esc 를 누른 순간 '하는 법' 같은 창이 떠 있었나 (Cozy 가 창을 먼저 닫아 버려서 미리 봐 둠 → 창만 닫고 쉬기로 넘어가지 않게)
@@ -849,6 +851,10 @@
   }
   $('sndBtn').onclick = () => { Cozy.sfx.toggle(); drawSnd(); };
   $('pSound').onclick = () => { Cozy.sfx.toggle(); drawSnd(); };
+  const drawAuto = () => { $('pAuto').textContent = autoSmash ? '🤖 자동 스매시 켬' : '✋ 자동 스매시 끔'; $('pAuto').hidden = !touchUI; };
+  $('pAuto').onclick = () => { autoSmash = !autoSmash; Cozy.save('volley.autoSmash', autoSmash); drawAuto(); };
+  new MutationObserver(drawAuto).observe($('pauseBox'), { attributes: true, attributeFilter: ['hidden'] });
+  drawAuto();
 
   // 시험용 손잡이 (자동 시험·디버깅)
   window.__volley = {

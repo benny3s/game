@@ -15,8 +15,8 @@
     CAT_R: 34, CAT_SEG: 12, CAT_HW: 34,                             // 고양이 몸 = 세로 캡슐 (반지름 34, 키 80)
     MOVE_V: 6.2, ACC: 1.5, DEC: 2.3, ACC_AIR: 1.0,                  // 달리기 (금방 붙고 금방 서게)
     JUMP_V: 14.4, G_CAT: 0.8, G_CUT: 2.0, FALL_MAX: 18,             // 점프 (점프를 일찍 떼면 낮게 뜀)
-    E_CAT: 0.8, BUMP_N_MIN: 6.5, BUMP_N_MAX: 12, TAN_K: 0.45,       // 몸으로 받기: 튀는 세기는 범위 안으로
-    POP_MIN: 6.5, POP_K: 3.5, CARRY: 0.35, BUMP_MAX: 16, ASSIST: 1.4,   //   위쪽으로 맞으면 늘 톡 떠오르고, 상대 쪽으로 살짝 밀어 줌
+    E_CAT: 0.8, BUMP_N_MIN: 7.2, BUMP_N_MAX: 12, TAN_K: 0.45,       // 몸으로 받기: 튀는 세기는 범위 안으로 (11-01 베니 님: 6.5 → 7.2, 조금 더 튀게)
+    POP_MIN: 7.2, POP_K: 3.5, CARRY: 0.35, BUMP_MAX: 16, ASSIST: 1.4,   //   위쪽으로 맞으면 늘 톡 떠오르고, 상대 쪽으로 살짝 밀어 줌
     POP_MIN_FAST: 4.5, ASSIST_FAST: 0,                              //   스매시처럼 빠른 공은 덜 뜨고 밀어 주지도 않음 (한 번 더 쳐야 넘어감)
     SWING_T: 12, SWING_CD: 10, PERFECT_T: 3, NOHIT_T: 6, SMASH_VIN: 16.5,   // 공중 스매시: 휘두르는 시간 · 쉼 · 이보다 빠른 공(스매시)은 못 받아침
     PAW_DX: 22, PAW_DY: 74, PAW_R: 40,                              //   앞발이 닿는 범위 (발끝 기준 앞·위)
@@ -34,7 +34,7 @@
     SERVE_X: 160, SERVE_DX: 16, SERVE_Y: 236, SERVE_TOSS: 4,        // 서브: 공이 서버 머리 위(그물 쪽으로 살짝)에서 톡 올라갔다 떨어짐
     D_BACK: 112, D_FRONT: 238, TM_SEP: 58, TM_DY: 70, TM_PUSH: 1.6,  // 2:2 복식: 뒤·앞 자리 · 같은 편끼리는 부드럽게 밀어냄(딱딱하게 부딪히지 않음 → 끼지 않음)
   };
-  const IN = { LEFT: 1, RIGHT: 2, JUMP: 4, SMASH: 8, DOWN: 16, UP: 32 };   // DOWN·UP 은 스매시 방향 전용 (움직임엔 영향 없음)
+  const IN = { LEFT: 1, RIGHT: 2, JUMP: 4, SMASH: 8, DOWN: 16, UP: 32, AUTO: 64 };   // DOWN·UP 은 스매시 방향 전용 (움직임엔 영향 없음) · AUTO = 자동 스매시 켬 (폰)
 
   // 스매시 각도표 [cos, sin] (sin + = 아래로). 삼각함수 대신 숫자로 박아 둠 → 다른 언어에서도 같은 값
   // 가파른 것부터 보고, 그물을 넘는 첫 각도를 씀 (그물 앞에서 치면 바로 뒤로 꽂히고, 멀리서 치면 저절로 납작해짐)
@@ -69,7 +69,7 @@
   // 복식: 이 편에서 지금 뒤(서브 차례)에 서는 고양이
   const backCat = (s, side) => side + 2 * s.rot[side];
   function newCat(i, prevIn, x) {
-    return { x: x == null ? homeX(i) : x, y: 0, vx: 0, vy: 0, ground: true, swing: 0, swingCd: 0, dive: 0, diveDir: 0, rec: 0, noHit: 0, dbuf: 0, prevIn: prevIn || 0 };
+    return { x: x == null ? homeX(i) : x, y: 0, vx: 0, vy: 0, ground: true, swing: 0, swingCd: 0, auto: 0, dive: 0, diveDir: 0, rec: 0, noHit: 0, dbuf: 0, prevIn: prevIn || 0 };
   }
 
   // 새 경기. opts: { target: 7|11|15, maxTouches: 0 = 제한 없음(기본, 가족용) | 3 = 진짜 배구처럼, server: 0|1 (없으면 씨앗으로),
@@ -266,6 +266,13 @@
     return 'lob';
   }
 
+  // 자동 스매시 때: 다음 틱의 공이 앞발 범위(조금 넉넉히) 안이고, 받아칠 수 있는 빠르기인가
+  function autoNear(c, i, b) {
+    if (b.vx * b.vx + b.vy * b.vy >= C.SMASH_VIN * C.SMASH_VIN) return false;
+    const f = i === 0 ? 1 : -1, px = c.x + c.vx + f * C.PAW_DX, py = c.y + c.vy + C.PAW_DY;
+    const dx = b.x + b.vx - px, dy = b.y + b.vy - py, rr = (C.PAW_R + C.BALL_R) * 1.15;
+    return dx * dx + dy * dy < rr * rr;
+  }
   // 공과 고양이 하나의 접촉 (점수 계산 없음, 물리만). 닿았으면 { kind, aim, perfect } 아니면 null
   function contact(c, i, b, ht) {
     if (c.noHit > 0) return null;
@@ -273,7 +280,7 @@
     if (c.swing > 0 && !c.ground && c.dive === 0 && !fast) {        // 공중 스매시: 휘두르는 중 + 앞발 범위 + 너무 빠르지 않은 공
       const px = c.x + f * C.PAW_DX, py = c.y + C.PAW_DY, dx = b.x - px, dy = b.y - py, rr = C.PAW_R + C.BALL_R;
       if (dx * dx + dy * dy < rr * rr) {
-        const perfect = C.SWING_T - c.swing <= C.PERFECT_T;
+        const perfect = !c.auto && C.SWING_T - c.swing <= C.PERFECT_T;   // 자동으로 휘두른 건 퍼펙트 없음 (손으로 맞춘 사람이 더 셈)
         const aim = shoot(b, i, aimOf(c, i), perfect, ht);          // 이 순간 누르고 있는 방향대로
         c.swing = 0; c.noHit = C.NOHIT_T;
         return { kind: 'smash', aim, perfect };
@@ -349,9 +356,12 @@
           if (dir !== 0) startDive(c, i, k, dir, ev);               // 방향키를 누른 채 스매시일 때만 몸을 날림
           else { c.dbuf = C.DIVE_BUF; ev.push({ t: 'swipe', side: i, cat: k }); }   // 방향 없이는 제자리 헛손질 (안 움직임)
         } else if (c.swingCd === 0) {
-          c.swing = C.SWING_T; c.swingCd = C.SWING_T + C.SWING_CD;
+          c.swing = C.SWING_T; c.swingCd = C.SWING_T + C.SWING_CD; c.auto = 0;
           ev.push({ t: 'swing', side: i, cat: k });
         }
+      } else if ((inp & IN.AUTO) && !c.ground && c.swingCd === 0 && s.phase !== 'ready' && autoNear(c, i, s.ball)) {
+        c.swing = C.SWING_T; c.swingCd = C.SWING_T + C.SWING_CD; c.auto = 1;   // 자동 스매시: 공중에서 공이 앞발 가까이 오면 알아서 휘두름
+        ev.push({ t: 'swing', side: i, cat: k });
       }
     }
     if (!c.ground) {

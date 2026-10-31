@@ -1205,7 +1205,8 @@
     VM.slots[si].ids.push(id);
     return si;
   }
-  const capGroup = (s, c) => (c === G.KOOK ? (s.kook === 'P' ? 3 : 1) : G.isBonus(c) ? 3 : [0, 1, 2, 3][G.KIND[c]]);
+  // 국진: 정해졌으면 그대로, '자동'이면 지금 점수 셀 때 쓰는 쪽(쌍피가 나으면 피 줄)에 놓음 → 숫자(끗 n · 피 n)와 놓인 자리가 같게
+  const capGroup = (s, c, ka) => (c === G.KOOK ? ((s.kook || ka) === 'P' ? 3 : 1) : G.isBonus(c) ? 3 : [0, 1, 2, 3][G.KIND[c]]);
   // 모든 패의 목표 자리 계산
   function targets(ses) {
     const s = ses.S, geo = GEO, out = {};
@@ -1257,7 +1258,8 @@
     // 먹은 패
     for (let p = 0; p < s.n; p++) {
       const ca = geo.cap[p], groups = [[], [], [], []];
-      for (const id of VM.cap[p]) groups[capGroup(s, id)].push(id);
+      const ka = !s.kook && VM.cap[p].indexOf(G.KOOK) >= 0 ? G.tally({ cap: VM.cap, kook: s.kook }, p).kookAs : '';
+      for (const id of VM.cap[p]) groups[capGroup(s, id, ka)].push(id);
       groups.forEach((ids, gi) => {
         const g = ca.groups[gi], k = ids.length, w = ca.w;
         const step = k > 1 ? Math.min(w * 0.62, (g.w - w) / (k - 1)) : 0;
