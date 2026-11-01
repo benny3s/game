@@ -309,5 +309,96 @@ for (let g = 0; g < 25; g++) {
   ok(Date.now() - t0 < 300, '6인 코치 계산 300ms 이내');
 }
 
+// 13) 🧑‍🏫 선생님 흐름 (11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음 → 👀 상대 흐름 · 📊 내 흐름 · 👉 수의 의미)
+//     모두에게 보인 것(행동·오픈패·내 패)만 씀 — 상대의 숨은 둘째 장은 이름을 부르면 안 됨
+{
+  ok(typeof AI.noteAct === 'function' && typeof AI.flow === 'function', '흐름 API (noteAct · flow) 가 있음');
+  if (typeof AI.noteAct === 'function' && typeof AI.flow === 'function') {
+    const c3T = findCard(3, 'T'), c4Tt = findCard(4, 'T'), c10Yy = findCard(10, 'Y'), c10Tt = findCard(10, 'T');
+    const c5Y = findCard(5, 'Y'), c6Yy = findCard(6, 'Y'), c2Yy = findCard(2, 'Y');
+    const names = ['나', '짝귀', '독사'];
+    // 내 7끗(3월+4월) · 짝귀 장땡 · 독사 5월+6월: 1차 모두 콜 → 2차 내가 체크, 짝귀 따당, 독사 콜 → 다시 내 차례
+    const play = (hands, acts) => {
+      let s = S.create({ players: 3, seed: 7 });
+      s.hands = hands.map(h => h.slice()); s.turn = 0;
+      const hist = [];
+      for (const a of acts) { hist.push(AI.noteAct(s, a)); s = S.step(s, a).state; }
+      return { s, hist };
+    };
+    const H = [[c3T, c4Tt], [c10Yy, c10Tt], [c5Y, c6Yy]];
+    const A = [S.A_CALL, S.A_CALL, S.A_CALL, S.A_CALL, S.A_DDADANG, S.A_CALL];
+    const g = play(H, A);
+    ok(g.s.street === 2 && g.s.turn === 0 && g.s.phase === 'bet', '흐름 시나리오: 2차 배팅에서 다시 내 차례');
+    ok(g.hist.length === 6 && g.hist[4].p === 1 && g.hist[4].a === S.A_DDADANG && g.hist[4].s === 2, 'noteAct 가 차례마다 공개된 값을 적음');
+    const v = S.view(g.s, 0);
+    const f = AI.flow(v, 0, g.hist, names);
+    ok(f && Array.isArray(f.opp) && f.opp.length >= 1, '👀 상대 흐름 줄이 있음');
+    const oppTxt = f && f.opp ? f.opp.map(o => o.text).join(' / ') : '';
+    ok(/짝귀/.test(oppTxt) && /따당/.test(oppTxt), '👀 짝귀의 따당을 말함: ' + oppTxt);
+    ok(/강|센|블러/.test(oppTxt), '👀 따당이 뜻하는 바(강한 패 · 블러핑)를 말함');
+    ok(/독사/.test(oppTxt) && /콜/.test(oppTxt), '👀 독사의 콜도 (자세히 또는 한 줄로) 나옴');
+    ok(f && /7끗/.test(f.mine), '📊 내 패 7끗: ' + (f && f.mine));
+    ok(f && /\d+%/.test(f.mine) && /(중간|약|강)/.test(f.mine), '📊 내 패 세기 말 + 승률');
+    ok(f && /^👉/.test(f.why) && f.why.length > 12, '👉 수의 의미 줄: ' + (f && f.why));
+    const best = AI.coach(v, 0).bestAction;
+    ok(f && (best !== S.A_FOLD || /짝귀/.test(f.why)), '👉 다이 추천이면 상대(짝귀) 신호를 까닭으로 이음: ' + (f && f.why));
+    // 숨은 패 이름이 새지 않음 (짝귀·독사의 둘째 장), 그리고 숨은 패가 달라도 같은 장면이면 같은 글
+    const all = f ? [oppTxt, f.mine, f.why].join('\n') : '';
+    ok(!all.includes(S.cardName(c10Tt)) && !all.includes(S.cardName(c6Yy)), '숨은 패 이름이 글에 없음');
+    const H2 = [[c3T, c4Tt], [c10Yy, c2Yy], [c5Y, c6Yy]];            // 짝귀의 숨은 둘째 장만 다름 (같은 행동)
+    const g2 = play(H2, A), f2 = AI.flow(S.view(g2.s, 0), 0, g2.hist, names);
+    ok(JSON.stringify(S.view(g2.s, 0)) === JSON.stringify(v), '시점이 같음 (숨은 둘째 장은 내 눈에 안 보임)');
+    ok(JSON.stringify(f2) === JSON.stringify(f), '상대 숨은 패가 달라도 선생님 글은 같음');
+    // '내 지난 차례 뒤' 만: 내 행동 앞의 짝귀 따당은 빠지고, 뒤의 독사 콜만 남음
+    const fx = AI.flow(v, 0, [g.hist[4], g.hist[3], g.hist[5]], names);
+    const tx = fx.opp.map(o => o.text).join(' / ');
+    ok(!/짝귀/.test(tx) && /독사/.test(tx), '👀 내 지난 차례 앞의 행동은 빼고 뒤만: ' + tx);
+    // 아까 승률과 달라지면 📊 에 '아까 N% 에서' 를 붙임
+    const fp = AI.flow(v, 0, g.hist, names, undefined, 60);
+    ok(/아까 60%에서 내려/.test(fp.mine), '📊 승률 변화(아까 60% → 지금): ' + fp.mine);
+    ok(!/아까/.test(f.mine), '아까 값이 없으면 변화 말은 안 붙임');
+    // 1차(둘째 장 받기 전) 행동은 패 단서가 없다고 말함
+    const g1 = play(H, [S.A_CALL, S.A_HALF, S.A_CALL]);              // 나 콜 → 짝귀 하프 → 독사 콜 → 다시 내 차례 (1차)
+    const f1 = AI.flow(S.view(g1.s, 0), 0, g1.hist, names);
+    const t1 = f1 && f1.opp ? f1.opp.map(o => o.text).join(' ') : '';
+    ok(f1 && g1.s.street === 1 && /짝귀/.test(t1) && /하프/.test(t1) && /둘째 장|단서/.test(t1), '1차 흐름: 둘째 장 전이라 패 단서가 없다고 말함: ' + t1);
+    // 아직 아무도 안 움직였을 때
+    const f0 = AI.flow(S.view(play(H, []).s, 0), 0, [], names);
+    ok(f0 && f0.opp.length === 0 && /^📊/.test(f0.mine) && /^👉/.test(f0.why), '내가 먼저일 때도 📊 · 👉 은 나옴');
+    ok(f0 && /첫 장|오픈|3월/.test(f0.mine), '1차 📊 은 첫 장 이야기: ' + (f0 && f0.mine));
+  }
+}
+
+// 14) 선생님 흐름 무작위 대국: 6인까지 매 차례 → 항상 📊 · 👉, 숨은 패 이름 없음, 빠름
+if (typeof AI.noteAct === 'function' && typeof AI.flow === 'function') {
+  let leaks = 0, calls = 0, bad = 0, tMax = 0, haveOpp = 0, haveRead = 0;
+  for (let g = 0; g < 24; g++) {
+    const n = 2 + (g % 5);
+    let s = S.create({ players: n, seed: 3100 + g });
+    const hist = [], names = Array.from({ length: n }, (_, i) => (i ? 'AI' + i : '나'));
+    let guard = 0;
+    while (s.phase === 'bet' && guard++ < 80) {
+      const p = s.turn, v = S.view(s, p);
+      if (p === 0) {
+        const t0 = Date.now(), f = AI.flow(v, 0, hist, names), dt = Date.now() - t0;
+        tMax = Math.max(tMax, dt); calls++;
+        const txt = [].concat(f.opp.map(o => o.text), f.mine, f.why).join('\n');
+        for (let q = 1; q < n; q++) if (s.hands[q][1] >= 0 && txt.includes(S.cardName(s.hands[q][1]))) leaks++;
+        if (!/^📊/.test(f.mine) || !/^👉/.test(f.why) || /undefined|NaN|null/.test(txt)) bad++;
+        if (f.opp.length) haveOpp++;
+        if (f.opp.some(o => o.read)) haveRead++;
+      }
+      const a = p === 0 ? (g % 3 === 0 ? S.A_CALL : AI.choose(v, 'normal', { seed: 11 + guard })) : AI.choose(v, ['easy', 'normal', 'hard'][(g + p) % 3], { seed: 5 + guard });
+      hist.push(AI.noteAct(s, S.isLegal(s, a) ? a : S.A_CALL));
+      s = S.step(s, a).state;
+    }
+  }
+  ok(calls > 20, `흐름 무작위 대국에서 내 차례 ${calls}번 읽음`);
+  ok(leaks === 0, `숨은 패 이름이 글에 샌 곳 ${leaks}`);
+  ok(bad === 0, `줄 모양 · undefined/NaN 이상한 곳 ${bad}`);
+  ok(haveOpp > 5 && haveRead > 0, `상대 흐름 줄 ${haveOpp}번 · 그 중 패 짐작 ${haveRead}번`);
+  ok(tMax < 700, `흐름 계산 한 번 최대 ${tMax}ms`);
+} else ok(false, '흐름 무작위 대국을 못 돌림 (flow 없음)');
+
 console.log(`seotda selftest: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

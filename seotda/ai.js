@@ -304,7 +304,145 @@
     return { kind: 'bet', tier: info.tier, miss, loss, sev: sevOf(loss), my: lab(a), best: lab(c.bestAction), why, lossText: `기댓값 −${Math.round(loss)}냥` };
   }
 
-  const API = { analyzeEquity, coach, choose, readAction, review, REVIEW, TIER_IDS: ['easy', 'normal', 'hard'] };
+  // ── 🧑‍🏫 흐름 읽기 (11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음 → 👀 상대 흐름 · 📊 내 흐름 · 👉 수의 의미) ──
+  //   모두에게 보인 것(행동 · 오픈패 · 내 패)만 씀. 상대의 숨은 둘째 장은 '가능한 패 전부'를 넣어 보기만 하고 이름은 안 부름
+  //   hist = 이 판에서 이미 한 행동들 — 차례마다 noteAct(그 장면 상태, 행동) 로 공개된 값만 적어 둠 (친구 방은 방장이 손님에게도 보냄)
+  function noteAct(st, a) {
+    const p = st.turn;
+    return { p, a, s: st.street, tc: Math.max(0, st.curBet - st.bets[p]), co: S.actionCost(st, p, a), po: st.pot, rs: st.raises, lr: st.lastRaise, cn: st.coins[p],
+      fo: st.folded.reduce((m, f, q) => (f ? m | (1 << q) : m), 0) };
+  }
+  const actWord = (a, tc) => (a === A_CALL && !tc ? '체크' : ACT_NAME[a] || '콜');
+  const kindOf = x => (x === A_FOLD ? 'fold' : x === A_CALL ? 'call' : 'bet');
+  // 족보 이름 짧게 (땡 · 끗은 숫자로)
+  function handShort(e) {
+    if (!e) return '내 패';
+    if (e.isDdaeng) return e.ddaengMonth === 10 ? '장땡' : `${e.ddaengMonth}땡`;
+    if (e.code && e.code[0] === 'K') { const k = e.rank - 100; return k === 9 ? '갑오(9끗)' : k === 0 ? '망통' : `${k}끗`; }
+    return String(e.name || '내 패').replace(/\s*\(.*?\)/g, '').trim();
+  }
+  // 두 장 조합 190가지 중 내 패가 이기는 비율 → 세기 말 (특수 패는 상대에 따라 달라서 따로)
+  const COMBO = (() => { const r = []; for (let a = 0; a < 20; a++) for (let b = a + 1; b < 20; b++) r.push(S.evalHand(a, b).rank); return r; })();
+  const beatPct = rank => Math.round((100 * COMBO.filter(x => x < rank).length) / COMBO.length);
+  const strengthWord = pct => (pct >= 92 ? '아주 강해요' : pct >= 75 ? '강한 편' : pct >= 45 ? '중간쯤' : pct >= 20 ? '약한 편' : '아주 약한 편');
+  const SPECIAL_NOTE = { ddaengjabi: '땡잡이는 상대가 1~9땡일 때만 이겨요', amhaeng: '암행어사는 13·18광땡을 잡을 때만 세요', gusa: '구사는 알리 이하만 남으면 판이 무효예요', mung94: '멍텅구리 구사는 9땡 이하만 남으면 판이 무효예요' };
+  // 패 부류 (상대가 이 행동을 하는 패의 '가운데' 가 어디쯤인지 말할 때): 0 땡 이상 · 1 알리급 · 2 8~9끗 · 3 5~7끗 · 4 그 아래
+  const clsOf = r => (r >= 2000 ? 0 : r >= 1100 ? 1 : r >= 108 ? 2 : r >= 105 ? 3 : 4);
+  const MED_BET = ['땡 이상 센 패가 많아요', '알리 이상 센 패가 많아요', '8끗 이상 좋은 패가 많아요', '5끗 이상 평범한 패도 섞여요', '약한 패도 섞여요 (블러핑 가능)'];
+
+  // 상대 q 의 한 행동(e) 읽기: 그 장면(공개된 판돈 · 오픈패)에서 선생님 기준으로 같은 행동을 하는 숨은 패가 얼마나 되고 얼마나 센가
+  //   (v = 내 눈 view, me = 나) → { p, a, label, kind, street, noHole, n, k, share, med(가운데 패 부류 0~4), weak(%), strong(센 신호?), meaning }
+  function readOpp(v, me, e) {
+    const p = e.p, k = kindOf(e.a), label = actWord(e.a, e.tc);
+    const r = { p, a: e.a, label, kind: k, street: e.s, noHole: false, n: 0, k: 0, share: 0, med: null, weak: 0, strong: false, meaning: '' };
+    if (k === 'fold') { r.meaning = '접었어요'; return r; }
+    const c1 = (v.hands[p] || [])[0];
+    if (e.s !== 2 || !(c1 >= 0)) {            // 둘째 장을 받기 전 행동은 숨은 패가 없어 짐작할 게 없음
+      r.noHole = true;
+      r.meaning = k === 'bet' ? '둘째 장 받기 전이라 단서 없음, 판을 키우는 스타일' : '둘째 장 받기 전이라 단서가 없어요';
+      return r;
+    }
+    const open = new Set(); v.hands.forEach(h => { if (h && h[0] >= 0) open.add(h[0]); });
+    const mine2 = (v.hands[me] || [])[1];
+    const same = [];
+    for (let c2 = 0; c2 < 20; c2++) {
+      if (open.has(c2) || c2 === mine2) continue;
+      // p 의 눈: 모두의 오픈패 + 자기 둘째 장(후보) — 내 둘째 장은 모름
+      const hv = Object.assign({}, v, {
+        hands: v.hands.map((h, q) => (q === p ? [c1, c2] : [h[0], -1])),
+        street: 2, phase: 'bet', turn: p, pot: e.po, raises: e.rs, lastRaise: e.lr, curBet: e.tc,
+        bets: v.bets.map(() => 0), coins: v.coins.map((x, q) => (q === p ? e.cn : x)), folded: v.folded.map((_, q) => !!((e.fo >> q) & 1)),
+      });
+      const c = coach(hv, p);
+      r.n++;
+      if (kindOf(c.bestAction) === k) same.push(c.handEval ? c.handEval.rank : 0);
+    }
+    r.k = same.length;
+    r.share = r.n ? Math.round((100 * same.length) / r.n) : 0;
+    if (same.length) {
+      same.sort((x, y) => y - x);
+      r.med = clsOf(same[Math.floor(same.length / 2)]);
+      r.weak = Math.round((100 * same.filter(x => x < 105).length) / same.length);
+      r.strong = k === 'bet' && r.med <= 2;
+    }
+    const rare = r.share <= 25, common = r.share >= 80;
+    if (!r.k) r.meaning = k === 'bet' ? '보통 안 하는 큰 베팅 — 블러핑일 수 있어요' : '보통 접거나 키울 자리에서 따라왔어요 — 애매한 패거나 함정';
+    else if (k === 'bet') r.meaning = (rare ? '드문 수 — ' : '') + MED_BET[r.med] + (r.med <= 3 && r.weak >= 25 ? ', 블러핑일 수도' : '');
+    else if (e.tc > 0) r.meaning = common ? '누구나 하는 수라 단서가 적어요' : r.med <= 2 ? '받아칠 만한 패 (센 패를 숨겼을 수도)' : '무난한 패 같아요';
+    else r.meaning = '판을 안 키웠어요 — 약하거나 센 패를 숨겼을 수도';
+    return r;
+  }
+
+  // 선생님 글 세 덩어리 (모두 글자만 — 화면에서 꾸밈):
+  //   opp = [{ p, text, read }] 👀 내 지난 차례 뒤 상대가 한 일과 그 뜻 · mine = '📊 …' 내 패 세기 · 승률 · 판돈 · why = '👉 …' 추천 행동의 뜻과 까닭 (상대 흐름과 이어서)
+  //   prev = 이 판 내 지난 차례의 승률(%) — 있으면 '아까보다 올랐나 내렸나' 를 📊 에 붙임
+  //   (이름 뒤 조사를 피하려고 '—' · 괄호로 이음)
+  function flow(v, me, hist, names, c, prev) {
+    names = names || [];
+    const nm = q => String(names[q] || `자리${q + 1}`);
+    c = c || coach(v, me);
+    const tc = Math.max(0, v.curBet - (v.bets[me] || 0));
+    const out = { opp: [], mine: '', why: '', hist: Array.isArray(hist) };       // hist: false 면 행동 기록을 못 받은 것 (👀 줄은 안 그림)
+    const oppAlive = v.folded.filter((f, q) => q !== me && !f).length;
+
+    // 👀 내 지난 차례 뒤 (이번 단계에서) 상대들이 한 일. 내가 아직 한 번도 안 했으면 이 단계 처음부터
+    let hot = null, calm = false;
+    if (Array.isArray(hist)) {
+      let last = -1; hist.forEach((e, i) => { if (e.p === me) last = i; });
+      const by = {}, order = [];
+      hist.slice(last + 1).filter(e => e.p !== me && e.s === v.street).forEach(e => { if (!by[e.p]) { by[e.p] = []; order.push(e.p); } by[e.p].push(e); });
+      const rows = order.map(q => {
+        const es = by[q], main = es.reduce((m, e) => (e.a >= m.a ? e : m), es[0]);
+        return { q, main, seq: es.map(e => actWord(e.a, e.tc)).join('→'), w: main.a === A_FOLD ? 0 : main.a === A_CALL ? (main.tc ? 1 : 0.5) : 2 + main.a / 10 };
+      }).sort((x, y) => y.w - x.w);
+      const det = rows.filter(r => r.main.a !== A_FOLD).slice(0, 2), raisers = [];
+      for (const r of det) {
+        const rd = readOpp(v, me, r.main);
+        out.opp.push({ p: r.q, text: `${nm(r.q)} ${r.seq} — ${rd.meaning}`, read: rd.noHole ? null : rd });
+        if (r.main.a > A_CALL) raisers.push({ name: nm(r.q), label: actWord(r.main.a, r.main.tc), strong: rd.strong, noHole: rd.noHole });
+      }
+      hot = raisers.find(x => x.strong) || raisers[0] || null;
+      const rest = rows.filter(r => det.indexOf(r) < 0);
+      if (rest.length) out.opp.push({ p: -1, text: `${rest.map(r => `${nm(r.q)} ${r.seq}`).join(' · ')}${rest.some(r => r.main.a === A_FOLD) ? ` (남은 상대 ${oppAlive}명)` : ''}`, read: null });
+      calm = rows.length > 0 && rows.every(r => r.main.a <= A_CALL) && !v.raises;
+      if (!rows.length && v.street === 2) {             // 2차 첫 차례: 1차에서 판을 키운 사람이 있었으면 한마디
+        const pr = hist.filter(e => e.p !== me && e.s === 1 && e.a > A_CALL), z = pr[pr.length - 1];
+        if (z) out.opp.push({ p: z.p, text: `${nm(z.p)} 1차에서 ${actWord(z.a, z.tc)} — 둘째 장 받기 전이라 단서는 적어요`, read: null });
+      }
+    }
+
+    // 📊 내 패 · 승률 · 판돈
+    const mine = v.hands[me] || [], bets = v.bets[me] || 0, pot = v.pot;
+    const money = `판돈 ${pot}냥(내가 ${bets})`;
+    if (!(mine[1] >= 0)) {
+      out.mine = `📊 첫 장 ${S.cardOf(mine[0]).m}월 — 둘째 장에 따라 갈려요 · 지금 승률 ${c.winPct}% 쯤${prev != null && Math.abs(c.winPct - prev) >= 5 ? ` (아까 ${prev}%)` : ''} · ${money}`;
+    } else {
+      const e = c.handEval, gap = Math.abs(c.winPct - c.rawPct) >= 4, mv = prev != null && Math.abs(c.winPct - prev) >= 5;
+      const note = [mv ? `아까 ${prev}%에서 ${c.winPct > prev ? '올라' : '내려'}` : '', gap ? `패만 보면 ${c.rawPct}%` : ''].filter(Boolean).join(', ');
+      out.mine = `📊 내 ${handShort(e)} — ${e.special ? SPECIAL_NOTE[e.special] : strengthWord(beatPct(e.rank))} · 승률 ${c.winPct}%${note ? ` (${note})` : ''} · ${money}`;
+    }
+
+    // 👉 추천 행동의 뜻 + 까닭 (상대 흐름과 이어서)
+    const best = c.bestAction, label = actWord(best, tc), w = c.winPct, o = c.potOddsPct;
+    let why;
+    if (best === A_FOLD) {
+      why = hot && hot.strong
+        ? `${label} — ${hot.name} ${hot.label}(센 패 신호)인데 내 승률은 ${w}%. 접으면 낸 ${bets}냥만 잃어요`
+        : `${label} — 승률 ${w}%가 본전 ${o}%에 못 미쳐요. 접으면 낸 ${bets}냥만 잃어요`;
+    } else if (best === A_CALL) {
+      why = tc > 0
+        ? `${label} — ${tc}냥으로 판돈 ${pot + tc}냥을 노려요. 승률 ${w}%가 본전 ${o}%${w - o >= 8 ? '보다 높아 따라갈 만해요' : '와 비슷해 해볼 만해요'}${hot ? ` (${hot.name} ${hot.label} 조심)` : ''}`
+        : `${label} — 돈 안 걸고 ${calm ? '조용한 상대의 ' : ''}다음 움직임을 봐요 (승률 ${w}%)`;
+    } else {                                             // 레이즈 (쿼터·하프·따당)
+      const lead = w >= 55 ? `승률 ${w}%로 앞서요` : w >= 40 ? `승률 ${w}%로 팽팽해요` : `승률은 ${w}%로 낮아요`;
+      const act = w >= 40 ? '키워서 더 받아내거나 상대를 접게 해요' : '상대가 접을 때가 많아 키워서 압박하는 쪽이 이득이에요 (블러핑에 가까워요)';
+      why = `${label} — ${calm ? '상대가 조용해요. ' : hot ? `${hot.name} ${hot.label}에도 ` : ''}${lead}. ${act}`;
+    }
+    out.why = '👉 ' + why;
+    return out;
+  }
+
+  const API = { analyzeEquity, coach, choose, readAction, review, noteAct, readOpp, flow, REVIEW, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.SeotdaAI = API;
 })(this);

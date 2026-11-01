@@ -171,6 +171,7 @@
   function endSession() {
     if (SES) {
       SES.alive = false;
+      clearTimeout(SES.flowT);
       if (SES.rpClose) { try { SES.rpClose(); } catch (e) {} }     // 🎞️ 다시 보기 줄·창 정리
       if (SES.cpBtn) { try { SES.cpBtn.destroy(); } catch (e) {} }
       if (SES.cp) { try { SES.cp.destroy(); } catch (e) {} }
@@ -328,10 +329,30 @@
     const items = Object.values(c.byAction || {}).map(x => `<span class="ev-chip ${x.tier}">${x.action === c.bestAction ? '👑 ' : ''}${ACT_NAME[x.action]} ${x.evText}</span>`);
     return items.length ? `<div class="ev-row">${items.join('')}</div>` : '';
   }
-  function coachHtml(c) {
-    return `<div class="cp-top"><span class="cp-title">${esc(c.headline)}</span><div class="cp-meters"><span class="cp-chip win">승률 ${c.winPct}%</span><span class="cp-chip odds">팟오즈 ${c.potOddsPct}%</span></div></div>
+  // 👀 상대 흐름 · 📊 내 흐름 · 👉 수의 의미 (AI.flow 글을 꾸밈). f 가 아직 없으면 예전 한 줄 해설을 대신 보임
+  function flowHtml(f) {
+    const opp = f.opp.length
+      ? f.opp.map((o, i) => `<p class="cp-line${i ? ' sub' : ''}">${i ? '' : '👀 '}${esc(o.text)}</p>`).join('')
+      : f.hist === false ? '' : '<p class="cp-line">👀 아직 상대가 한 일이 없어요 (내가 먼저예요)</p>';       // 행동 기록을 못 받은 손님(옛 방장 화면)은 👀 줄 없이
+    return `${opp}<p class="cp-line">${esc(f.mine)}</p><p class="cp-line why">${esc(f.why)}</p>`;
+  }
+  function coachHtml(c, f) {
+    const chips = f ? '' : `<div class="cp-meters"><span class="cp-chip win">승률 ${c.winPct}%</span><span class="cp-chip odds">팟오즈 ${c.potOddsPct}%</span></div>`;
+    return `<div class="cp-top"><span class="cp-title">${esc(c.headline)}</span>${chips}</div>
       <div class="cp-bar"><div class="cp-fill" style="width:${Math.max(4, Math.min(100, c.winPct))}%"></div></div>
-      <p class="cp-desc">${esc(c.detail)}</p>${evRow(c)}`;
+      ${f ? flowHtml(f) : `<p class="cp-desc">${esc(c.detail)}</p>`}${evRow(c)}`;
+  }
+  // 추천(제목 줄)을 먼저 보이고 읽기는 한 숨 뒤에 채움 — 상대 숨은 패를 하나씩 가정해 여러 번 셈하느라 조금 걸려서 (그 사이 새 장면이 되면 버림)
+  function flowLater(ses, cc, v, me) {
+    if (!AI.flow || !AI.noteAct) return;
+    clearTimeout(ses.flowT);
+    ses.flowT = setTimeout(() => {
+      if (!ses.alive || ses.cc !== cc || cc.flow || !ses.coachAvail || ses.me !== me) return;     // (한 기기: 그 사이 다음 사람으로 넘어갔으면 앞사람 패 글은 버림)
+      const names = ses.seats.map(x => (x.ctrl === 'me' ? '나' : x.name));
+      try { cc.flow = AI.flow(v, me, ses.hist, names, cc.data, ses.prevWin && ses.prevWin.r === v.round && ses.prevWin.s === v.street ? ses.prevWin.w : null); } catch (e) { console.error(e); cc.flow = null; return; }
+      if (mHide(ses) || !isCoachOn(ses)) return;
+      showCoach(ses, coachHtml(cc.data, cc.flow));
+    }, 30);
   }
   function showCoach(ses, html) {
     if (!ses.coachAvail) return;
@@ -379,11 +400,15 @@
     let coachData = null;
     const coachOn = isCoachOn(ses);
     if (ses.coachAvail && !watch && !spect && s.phase === 'bet' && (coachOn || myTurn)) {
-      const key = `${s.round}|${s.street}|${s.turn}|${s.pot}|${s.raises}|${me}`;
-      if (!ses.cc || ses.cc.key !== key) ses.cc = { key, data: AI.coach(v, me) };
+      const key = `${s.round}|${s.street}|${s.turn}|${s.pot}|${s.raises}|${me}|${(ses.hist || []).length}`;
+      // 남의 차례에도 '내가 지금 둔다면' 으로 셈 (차례가 남이면 그 사람 기준으로 합법 수를 가리던 것을 내 차례로 맞춤)
+      if (!ses.cc || ses.cc.key !== key) ses.cc = { key, data: AI.coach(s.turn === me ? v : Object.assign({}, v, { turn: me }), me), flow: null };
       coachData = ses.cc.data;
       if (mHide(ses) && myTurn) { showCoach(ses, `<p class="cp-desc">${MHIDE_HTML}</p>`); coachData = null; }   // 📒 노트 연습 첫 장면: 💡 를 누를 때까지 추천을 감춤
-      else showCoach(ses, coachHtml(coachData));
+      else {
+        showCoach(ses, coachHtml(coachData, ses.cc.flow));
+        if (coachOn && !ses.cc.flow) flowLater(ses, ses.cc, v, me);            // 추천이 먼저, 👀 · 📊 · 👉 는 뒤에 채움
+      }
     } else if (ses.coachAvail && (spect || s.phase === 'end')) {
       showCoach(ses, `<p class="cp-desc">${spect ? (ses.spec ? '구경 중이에요. 판이 끝나면 방장이 다음 판에 넣어 줄 수 있어요' : '다음 사람 차례를 기다려요') : '판이 끝났어요. 결과를 확인해 보세요 🙂'}</p>`);
     }
@@ -472,6 +497,7 @@
     if (!ses.coachAvail || !ses.cc || !ses.cc.data) return;
     const c = ses.cc.data, ch = c.byAction[a];
     if (ch) ses.turnLog.push({ street: v.street, chosenAct: a, bestAct: c.bestAction, delta: ch.delta, winPct: c.winPct, headline: c.headline });
+    ses.prevWin = { r: v.round, s: v.street, w: c.winPct };            // 다음 차례 📊 에 '아까 N% 에서 올랐나 내렸나'
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -661,7 +687,7 @@
   // 그 사람 시점 상태 한 묶음 (i = -1 이면 구경꾼: 아무 패도 안 보임)
   function packSt(ses, i) {
     const left = ses.clock && ses.S.phase === 'bet' ? Math.max(0, Math.ceil((ses.clock.end - Date.now()) / 1000)) : null;
-    return { t: 'st', me: i, v: S.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail, sc: ses.score, left };
+    return { t: 'st', me: i, v: S.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail, sc: ses.score, left, h: ses.coachAvail ? ses.hist : undefined };   // h = 공개된 행동 기록 (선생님 👀 용 — 숨은 패 없음)
   }
   function sendTo(ses, uid, i) {
     try { ses.net.send(uid, packSt(ses, i), true); } catch (e) { console.error(e); }
@@ -743,6 +769,7 @@
     ses.V = m.v; ses.me = m.me; ses.n = m.v.n; ses.waiting = false; ses.spec = m.me < 0;
     ses.seats = m.ro.map(r => ({ name: r.name, em: r.em, ctrl: r.ctrl === 'a' ? 'ai' : 'remote', uid: r.u || null, sub: !!r.b }));
     if (m.sc) ses.score = m.sc;
+    ses.hist = Array.isArray(m.h) ? m.h : null;
     if (!prev || prev.round !== m.v.round) ses.turnLog = [];
     // 내 차례 시계: 방장이 보낸 남은 초부터 세기만 해요 (시간이 다 되면 방장이 AI 로 대신 둠)
     const mine = m.me >= 0 && m.v.phase === 'bet' && m.v.turn === m.me;
@@ -791,6 +818,8 @@
     try {
       while (ses.alive) {
         ses.turnLog = [];
+        ses.hist = ses.hist0 ? ses.hist0.slice() : [];           // 👀 선생님이 읽을 이 판의 공개된 행동들 (AI.noteAct)
+        ses.prevWin = null;
         // 🎞️ 복기용 기록: 이 판 처음 상태 + 행동 차례 (같은 규칙 엔진으로 그대로 다시 둠). 판 전체를 쥔 쪽만 (손님은 남의 패를 몰라서 안 함)
         ses.rec = canRecord(ses) ? { at: Date.now(), kind: ses.mode, start: S.fastClone(ses.S), acts: [],
           seats: ses.seats.map(x => ({ name: x.ctrl === 'me' ? '나' : x.name, em: x.em, tier: x.ctrl === 'ai' ? x.tier : undefined, h: x.ctrl === 'me' || x.ctrl === 'hot' ? 1 : undefined })) } : null;   // h = 이 기기 사람 자리 (📒 아쉬운 장면은 이 자리만)
@@ -828,6 +857,7 @@
           if (!ses.alive) return;
           if (!S.isLegal(ses.S, a)) a = S.A_CALL;           // 엔진도 똑같이 콜로 바꿈 — 기록·알림은 실제로 된 행동으로
           if (ses.rec) ses.rec.acts.push(a);
+          if (AI.noteAct) ses.hist.push(AI.noteAct(ses.S, a));
           sfx(a === S.A_FOLD ? 'lose' : a === S.A_CALL ? 'tap' : 'coin');
           if (ses.mode !== 'watch') toastAct(ses, p, a);
           ses.S = S.step(ses.S, a).state;
@@ -1117,13 +1147,14 @@
   // 🎮 '여기서부터 내가 두기': k 번째 행동 앞 장면(같은 패·같은 판돈)에서 seat 자리를 내가, 나머지는 AI. 선생님 켠 채 시작, 연습 판(기록 안 함)
   function startBranch(rec, k, seat, mid) {
     let st = S.fastClone(rec.start);
-    for (let j = 0; j < k && st.phase === 'bet'; j++) st = S.step(st, rec.acts[j]).state;
+    const hist0 = [];
+    for (let j = 0; j < k && st.phase === 'bet'; j++) { if (AI.noteAct) hist0.push(AI.noteAct(st, rec.acts[j])); st = S.step(st, rec.acts[j]).state; }
     if (st.phase !== 'bet' || !rec.seats[seat] || st.folded[seat]) { C.toast('이미 끝난 장면이에요. 앞으로 돌아가서 눌러 주세요'); return false; }
     endSession();
     const tier = TIER[opt.tier] ? opt.tier : 'normal';
     const seats = rec.seats.map((x, i) => (i === seat ? { ctrl: 'me', name: '나', em: '🎴' }
       : { ctrl: 'ai', name: x.name === '나' ? '그때의 나' : x.name, em: x.name === '나' ? '🙂' : x.em || '🎴', tier: TIER[x.tier] ? x.tier : tier }));
-    const ses = SES = { alive: true, mode: 'solo', n: st.n, me: seat, S: st, seats, pending: null, turnLog: [], coachAvail: true, coachOn: true, drill: { st: S.fastClone(st), k }, mdrill: mid ? { id: mid, pending: true, hide: true } : null };
+    const ses = SES = { alive: true, mode: 'solo', n: st.n, me: seat, S: st, seats, pending: null, turnLog: [], coachAvail: true, coachOn: true, drill: { st: S.fastClone(st), k }, hist0, mdrill: mid ? { id: mid, pending: true, hide: true } : null };
     showScreen('play');
     ensureCoach(ses);
     if (ses.cp) {                                          // 선생님 창을 펴서 시작 (사용자가 저장해 둔 접힘·끔 설정은 그대로 둠)
