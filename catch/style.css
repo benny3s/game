@@ -1,0 +1,45 @@
+/* 냥캐치 — 냥스트레이션(draw/style.css) 위에 이 게임 것만 더함 */
+.task b.hint{letter-spacing:.22em;font-size:clamp(24px,7vw,34px)}
+.picks .pick{font-size:clamp(20px,5.4vw,26px)}
+
+/* 채팅 (맨 아래가 최신) */
+.clog{flex:none;height:78px;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:12px;padding:6px 10px;font:400 14px/1.35 var(--text);color:var(--ink)}
+.clog .ln{word-break:keep-all;overflow-wrap:anywhere}
+.clog .ln b{color:#ffe3a3;margin-right:6px;font-family:var(--round);font-weight:400}
+.clog .ln.hit{color:#86efac;font-weight:700}
+.clog .ln.hit b{color:#86efac;margin:0 0 0 4px}
+.clog .ln.close{color:#fcd34d;font-weight:700}
+.clog .ln.sys{color:var(--soft);font-size:12.5px}
+.drawer .clog{height:auto;flex:1 1 0;min-height:54px;max-height:110px;font-size:13px}
+.s-guess .clog{height:auto;flex:1 1 0;min-height:78px;max-height:190px}   /* 그림판은 가로로 크기가 정해져 남는 세로는 채팅이 씀 */
+.chatf{display:flex;gap:8px;flex:none}
+.chatf .fld{flex:1;min-width:0;font-size:18px;padding:9px 12px;text-align:left}
+.chatf .btn{flex:none;padding:0 16px}
+
+/* 점수 줄 */
+.scs{flex:none;display:flex;gap:6px;overflow-x:auto;padding:2px 1px 4px;scrollbar-width:none}
+.scs::-webkit-scrollbar{display:none}
+.sc{flex:none;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid var(--line);font:400 14px var(--round);white-space:nowrap;color:var(--ink)}
+.sc i{font-style:normal;color:#ffe3a3}
+.sc.dr{border-color:var(--gold);background:rgba(255,200,97,.16)}
+.sc.got{background:rgba(63,174,122,.25);border-color:rgba(63,174,122,.75)}
+.sc.gone{opacity:.45}
+.sc.me{box-shadow:0 0 0 2px rgba(255,200,97,.5)}
+button.sc{cursor:pointer;font-size:15px;padding:8px 13px;border-color:rgba(255,200,120,.5);background:rgba(240,138,60,.18)}
+button.sc:active{transform:scale(.96)}
+
+/* 한 기기: 제시어 몰래 보기 · 그만 그리기 */
+.hotrow{display:grid;grid-template-columns:1fr auto;gap:8px;flex:none}
+.hotrow .btn{padding:10px 12px;font-size:15px}
+.hotrow .peek{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.tapnote{text-align:center;margin:0;font-size:13.5px;color:#ffe3a3}
+
+/* 정답 공개 */
+.gains{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;flex:none}
+
+/* 결과: 차례마다 그림 */
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+.gc{display:grid;gap:4px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:6px}
+.gc canvas{width:100%;height:auto;aspect-ratio:4/3;border-radius:8px;background:var(--sheet);display:block}
+.gc .cap{font-size:12.5px;color:var(--soft);text-align:center}
+.gc .cap b{color:#ffe3a3;font-family:var(--round);font-weight:400;font-size:14px}

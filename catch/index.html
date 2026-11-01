@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1230">
+<title>냥캐치 — 베니 게임 포털</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=13">
+<script src="../common/fit.js?v=1"></script>
+<script src="../common/backnav.js?v=3"></script>
+<link rel="stylesheet" href="../draw/style.css?v=1">
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div class="wrap" id="home">
+  <header class="top">
+    <h1><span class="logo" aria-hidden="true">🖍️</span>냥캐치</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section class="card" id="menuCard">
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabLocal" aria-pressed="true">한 기기에서 여럿</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+    </div>
+
+    <!-- 한 기기에서 여럿 (TV·폰 하나를 같이 보며) -->
+    <div id="localBox" class="box">
+      <p class="lede">화면 하나를 같이 봐요. 그리는 사람만 제시어를 몰래 보고, 나머지는 말로 맞혀요. 2~8명 이름을 적어 주세요.</p>
+      <div id="lSeats"></div>
+    </div>
+
+    <div class="optrows" id="optRows">
+      <div class="optrow"><span class="small">그리는 시간</span><div class="seg" id="secSeg"></div></div>
+      <div class="optrow"><span class="small">바퀴</span><div class="seg" id="rndSeg"></div></div>
+    </div>
+    <ul class="howto">
+      <li>한 사람이 <b>제시어</b> 3개 중 하나를 골라 <b>그림</b>으로 그려요</li>
+      <li>나머지는 그림을 보며 <b>채팅으로 맞혀요</b> (한 기기는 말로 외치고, 맞힌 사람 이름을 눌러요)</li>
+      <li>시간이 갈수록 <b>초성 힌트</b>가 나와요. 먼저·빨리 맞힐수록 점수가 커요</li>
+      <li>그린 사람도 맞힌 사람마다 점수! 모두 한 번씩 그리면 끝</li>
+    </ul>
+    <button class="btn primary big" id="startBtn">🖍️ 시작하기</button>
+    <button class="btn ghost" id="rulesBtn">📖 하는 법</button>
+    <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
+  </section>
+</div>
+
+<!-- 게임 화면 (화면 한 장) -->
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid"><span class="lbl" id="lbl">냥캐치</span><span class="t" id="sub"></span></div>
+    <div class="barbtns">
+      <span class="pill" id="timer" hidden></span>
+      <button class="iconbtn sm" id="ruleBtn" aria-label="하는 법">📖</button>
+      <button class="iconbtn sm" id="sndBtn" aria-label="소리">🔊</button>
+    </div>
+  </div>
+  <div class="scr" id="scr"></div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/cozy.js?v=11"></script>
+<script src="../common/me.js?v=12"></script>
+<script src="../common/rank.js?v=9"></script>
+<script src="../common/arena-mock.js?v=7"></script>
+<script src="../common/arena.js?v=11"></script>
+<script src="../common/arena-ui.js?v=14"></script>
+<script src="../common/hotseat.js?v=2"></script>
+<script src="../draw/words.js?v=1"></script>
+<script src="../draw/core.js?v=1"></script>
+<script src="../draw/pad.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

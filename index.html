@@ -816,7 +816,7 @@ button { font: inherit; cursor: pointer; }
 <script src="common/gate.js?v=15"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=12"></script>
-<script src="common/rank.js?v=8"></script>
+<script src="common/rank.js?v=9"></script>
 <script src="common/arena-mock.js?v=7"></script>
 <script src="common/arena.js?v=11"></script>
 <script src="common/bank.js?v=9"></script>
@@ -991,6 +991,27 @@ button { font: inherit; cursor: pointer; }
           <g transform="translate(300,110) rotate(28)"><rect width="70" height="16" rx="8" fill="#ef4444"/><polygon points="70,0 86,8 70,16" fill="#fde68a"/></g>
           <g transform="translate(40,120) rotate(-20)"><rect width="62" height="14" rx="7" fill="#22c55e"/><polygon points="62,0 76,7 62,14" fill="#fde68a"/></g>
           <text x="58" y="70" font-size="34">🖍️</text>
+        </svg>`;
+      case "catch":                                                   // 냥캐치: 그림판 + 말풍선 정답 + 초성 힌트
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#251a44"/>
+          <circle cx="70" cy="36" r="56" fill="#7a62e0" opacity=".3"/>
+          <g transform="translate(36,34) rotate(-3)">
+            <rect width="190" height="140" rx="12" fill="#fffaf0" stroke="#ffc861" stroke-width="3"/>
+            <path d="M44 92 c0 -26 22 -42 52 -42 c30 0 52 16 52 42 c0 14 -24 22 -52 22 c-28 0 -52 -8 -52 -22z" fill="none" stroke="#8a5a3c" stroke-width="5" stroke-linejoin="round"/>
+            <path d="M58 80 q38 -14 76 0 M62 96 q34 -10 68 0" fill="none" stroke="#f5841f" stroke-width="4" stroke-linecap="round"/>
+            <path d="M148 92 l18 -10 l0 22z" fill="#8a5a3c"/>
+            <text x="95" y="32" font-size="15" font-weight="900" fill="#7a62e0" text-anchor="middle" letter-spacing="6">ㅂㅇㅃ</text>
+          </g>
+          <g transform="translate(248,40)">
+            <rect width="128" height="44" rx="22" fill="#3fae5a"/><polygon points="22,40 14,58 38,42" fill="#3fae5a"/>
+            <text x="64" y="29" font-size="18" font-weight="900" fill="#fff" text-anchor="middle">붕어빵! 🎉</text>
+          </g>
+          <g transform="translate(262,104)">
+            <rect width="104" height="36" rx="18" fill="#43306f"/><polygon points="80,32 92,46 72,34" fill="#43306f"/>
+            <text x="52" y="24" font-size="15" font-weight="800" fill="#ffe3a3" text-anchor="middle">물고기?</text>
+          </g>
+          <text x="318" y="182" font-size="30">😺</text>
         </svg>`;
       case "volley":
         return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
