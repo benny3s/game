@@ -439,7 +439,12 @@
   const COACH_MSG = { win: '여기 두면 바로 이겨요!', open4: '여기 두면 열린 사(4), 이길 수 있어요!', vcf: '여기부터 사(4)로 몰아붙이면 이겨요!', vct: '여기부터 몰아붙이면 이길 수 있어요!', block: '상대 사(4)를 꼭 막아야 해요!', lost: '여기를 막아 봐요… 버티는 자리예요', 'defend-vcf': '상대 공격을 미리 끊는 자리예요', 'defend-vct': '상대 공격을 미리 끊는 자리예요' };
   const coordOf = i => 'ABCDEFGHIJKLMNO'[i % 15] + (15 - Math.floor(i / 15));
   // 까닭: AI 가 알려 준 종류가 있으면 그것, 아니면 그 자리에 두었을 때 내 위협 · 상대가 두었을 때 위협으로
-  function coachReason(s, mv, kind) {
+  //   thr = 👀 상대 노림(oppRead 가 알아낸 위협)이 있으면 그것과 견줘서: 막는 자리인지 · 내 공격이 먼저인지 (RV.advise)
+  function coachReason(s, mv, kind, thr) {
+    const base = coachBase(s, mv, kind);
+    return RV && thr ? RV.advise(s, mv, kind, thr, base) : base;
+  }
+  function coachBase(s, mv, kind) {
     if (COACH_MSG[kind]) return COACH_MSG[kind];
     const b = Array.from(s.board), me = s.turn, op = 3 - me, N = s.size || 15;
     b[mv] = me; const mine = O.threatKind(b, N, mv, me, s.rule);
@@ -462,7 +467,7 @@
       try {
         coachP = CoachPanel.create({ game: 'omok', title: 'AI 선생님', startHidden: true });
         CoachPanel.button($('coachBtn'), coachP);
-        coachP.onChange(() => { if (coachOn()) coachTick(true); else board.setHint(-1); });
+        coachP.onChange(() => { if (coachOn()) coachTick(true); else { board.setHint(-1); board.setMarks(null); } });
       } catch (e) { coachP = null; }
     }
     if (!coachP) $('coachBtn').addEventListener('click', coachOnce);
@@ -478,13 +483,14 @@
     if (want !== coachP.visible) { if (want) coachP.show(); else coachP.hide(); }
     if (want) coachTick(true);
   }
-  function coachOff() { if (coachP && coachP.visible) coachP.hide(); board.setHint(-1); }
+  function coachOff() { if (coachP && coachP.visible) coachP.hide(); board.setHint(-1); board.setMarks(null); }
   function coachTick(force) {
     if (!coachP || !coachOn()) return;
     if (!coachAllowed()) { coachP.set('지금은 쉬는 중이에요'); return; }
-    const g = G, s = g.s, key = (g.round || 0) + ':' + s.moves.length + ':' + (s.over ? 'x' : '');
+    const g = G, s = g.s, key = (g.round || 0) + ':' + O.encode(s);     // 수 순서까지 (무르고 다르게 두면 같은 수 번호여도 다른 판)
     if (!force && g.coachKey === key) return;
     g.coachKey = key;
+    board.setMarks(null);                                               // 상대 노림 '!' 는 같은 판일 때만 (아래 show 가 다시 찍음)
     if (s.over) { board.setHint(-1); coachP.set('판이 끝났어요. <b>복기</b>로 어디서 갈렸는지 같이 봐요'); return; }
     const spectator = g.mode === 'online' && !g.me;
     const who = g.mode === 'online' ? OS.mover(g.seats, s.turn, s.moves.length) : null;
@@ -502,20 +508,55 @@
       return;
     }
     const head = g.mode === 'two' ? `${COLOR_NAME[s.turn]} 차례 · ` : spectator ? `👀 ${COLOR_NAME[s.turn]} ${esc(nmOf(who))}님 차례 · ` : '';
+    // 👀 상대 읽기(rd)는 추천 뒤에 채움: 있으면 맨 위에 붙이고 추천 까닭도 상대 노림과 견줘 다시 씀
     const show = res => {
       if (!coachOn() || G !== g || g.coachKey !== key) return;
-      board.setHint(res.move);
-      coachP.set(`${head}<b>💡 ${coordOf(res.move)}</b> — ${esc(coachReason(s, res.move, res.kind))}<br><span style="opacity:.7;font-size:12px">판에 반짝이는 자리예요</span>`);
+      const rd = g.coachCache && g.coachCache.key === key ? g.coachCache.rd : null;
+      let why = ''; try { why = coachReason(s, res.move, res.kind, rd && rd.thr); } catch (e) { why = coachReason(s, res.move, res.kind); }
+      board.setHint(res.move); board.setMarks(rd && rd.mark ? { real: -1, color: 0, num: 0, aim: rd.t } : null);
+      const tip = `판에 반짝이는 자리예요${rd && rd.mark ? ' · 빨간 <b style="color:#d9466f">!</b> 는 상대 노림' : ''}`;
+      coachP.set([rd && rd.html, rd && rd.flow, `${head}<b>💡 ${coordOf(res.move)}</b> 자리 어때요?<br>👉 ${esc(why)}`, `<span style="opacity:.7;font-size:12px">${tip}</span>`].filter(Boolean).join('<br>'));
     };
-    if (g.coachCache && g.coachCache.key === key) { show(g.coachCache.res); return; }
+    const more = () => { if (!spectator) coachRead(g, s, key, show); };
+    if (g.coachCache && g.coachCache.key === key) { show(g.coachCache.res); more(); return; }
     coachP.set(`${head}🤔 좋은 자리를 찾는 중…`);
     const id = ++coachSeq;
     think(O.toJSON(s), { tier: 'hard', hint: true, timeMs: 700, seed: s.moves.length * 7919 + 13 }).then(res => {
       if (id !== coachSeq || G !== g || g.coachKey !== key || !res || res.move < 0) return;
       g.coachCache = { key, res };
       if (g.mode === 'ai' && humanTurn()) g.coachUsed = (g.coachUsed || 0) + 1;   // 별점: AI 선생님을 본 수
-      show(res);
+      show(res); more();
     }).catch(() => {});
+  }
+  // 👀 상대 읽기를 한 번만 (같은 판이면 기억 · 끝나면 같은 판일 때만 창을 고침)
+  function coachRead(g, s, key, show) {
+    const c = g.coachCache;
+    if (!RV || !c || c.key !== key || c.rd !== undefined || c.busy) return;
+    c.busy = true;
+    oppRead(s, g).then(rd => rd, () => null).then(rd => {
+      c.busy = false; c.rd = rd || null;
+      if (rd && G === g && g.coachKey === key && coachOn()) show(c.res);
+    });
+  }
+  // 👀 상대가 방금 둔 수 읽기: 복기 '🤔 노린 것'과 같은 계산(그 수 뒤 상대가 한 번 더 둔다면 AI 가 고르는 곳)을 대국 중에, 지금 둘 사람 쪽 말투로
+  //   → { html, flow(📊 흐름), t(노림 자리), mark(판에 ! 를 찍을지), thr(위협인 노림 — 추천 까닭에 씀) } · 첫 수이거나 읽을 게 없으면 null
+  async function oppRead(s, g) {
+    const n = s.moves.length, last = n ? s.moves[n - 1] : -1, o = last >= 0 ? s.board[last] : 0, two = g.mode === 'two';
+    if (!o || o === s.turn || s.over) return null;
+    const prev = O.clone(s); O.undo(prev);
+    if (prev.turn !== o) return null;
+    const sn = O.clone(s); sn.turn = o;                                  // 내가 손 뺐다고 보고 상대 차례
+    let t = -1, kind = '';
+    try { const r = await think(O.toJSON(sn), { tier: 'hard', hint: true, timeMs: 350, seed: n * 104729 + 7 }); if (r && r.move >= 0) { t = r.move; kind = r.kind; } } catch (e) {}
+    if (G !== g) return null;
+    const w = RV.aimWhy(prev, last, t, kind, () => '@T@', two ? COLOR_NAME[s.turn] + '의' : true);
+    if (w.thr) w.thr.tn = coordOf(w.thr.t);
+    const em = c => (c === 1 ? '⚫' : '⚪') + ' ' + COLOR_NAME[c];
+    const body = [w.done, w.next].filter(Boolean).map(x => esc(x).replace('@T@', `<b>${t >= 0 ? coordOf(t) : ''}</b>`)).join(' · ');
+    return {
+      html: `👀 ${two ? em(o) : '상대'} <b>${coordOf(last)}</b>: ${body}${w.sharp ? ' <b style="color:#d9466f">!</b>' : ''}`,
+      flow: RV.flow(s, two ? { me: COLOR_NAME[s.turn], op: COLOR_NAME[o] } : null), t, mark: w.sharp && t >= 0, thr: w.thr,
+    };
   }
   // 공용 창이 없을 때: 누를 때마다 한 번 (판 반짝임 + 알림)
   async function coachOnce() {
@@ -540,7 +581,7 @@
     '가로·세로·대각선으로 내 돌 <b>다섯 개</b>를 먼저 이으면 이겨요',
     '휴대폰은 한 번 눌러 자리를 보고, <b>한 번 더 누르거나 착수</b>를 누르면 둬요 (⚙ 설정에서 바로 두기로 바꿀 수 있어요)',
     '빨간 <b>✕</b>는 지금 둘 수 없는 금수 자리예요. 규칙마다 금수가 달라요',
-    '막히면 🧑‍🏫 <b>AI 선생님</b>을 켜 보세요 (추천 자리와 까닭), 실수했으면 ↶ 되돌리기 (AI 대전은 내 수와 AI 수를 함께 물러요)',
+    '막히면 🧑‍🏫 <b>AI 선생님</b>을 켜 보세요 (상대가 방금 둔 수의 뜻 · 다음 노림 · 추천 자리와 까닭), 실수했으면 ↶ 되돌리기 (AI 대전은 내 수와 AI 수를 함께 물러요)',
     'PC에선 클릭으로 바로 두고, 방향키로 옮겨 Enter 로 둘 수도 있어요',
     '👥 친구랑: 2명이 두고 더 들어온 친구는 실시간으로 구경해요 (🤝 상담을 켜면 4명이 2:2로 번갈아)',
   ];
@@ -707,7 +748,7 @@
       if (ON.host) ON.net.broadcast(m, true);
       else if (!(info && info.from === 'remote')) ON.net.send(m, true);
     }
-    preview = hover = cursor = -1; showConfirm(false); board.setHint(-1); board.setGhost(null);   // 둔 자리에 미리 보기 · 커서가 남지 않게 (둘이서)
+    preview = hover = cursor = -1; showConfirm(false); board.setHint(-1); board.setMarks(null); board.setGhost(null);   // 둔 자리에 미리 보기 · 커서가 남지 않게 (둘이서)
     let won = null;
     for (const e of ev) {
       if (e.type === 'place') {
@@ -1300,7 +1341,7 @@
       // 내 수를 하나 지우고, 내 차례가 될 때까지
       while (s.moves.length) { const c = s.board[s.moves[s.moves.length - 1]]; popMove(); if (c === G.me && s.turn === G.me) break; }
     }
-    G.undos++; preview = hover = cursor = -1; showConfirm(false); board.setHint(-1); board.setGhost(null);
+    G.undos++; preview = hover = cursor = -1; showConfirm(false); board.setHint(-1); board.setMarks(null); board.setGhost(null);
     sfx('flip'); advance();
   }
   function popMove() { const s = G.s, i = s.moves[s.moves.length - 1], c = s.board[i]; O.undo(s); board.lift(i, c); }

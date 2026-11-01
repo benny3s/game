@@ -1,5 +1,5 @@
 /* 체스 AI 워커 — 수 읽기는 여기서 (화면이 멈추지 않게). 받는 것 { id, game: { start, moves }, opts } · { id, op: 'intent', game, uci, opts } → 보내는 것 { id, res } */
-importScripts('ai.js?v=2');
+importScripts('ai.js?v=3');
 self.onmessage = e => {
   const { id, op, game, uci, opts } = e.data || {};
   let res;

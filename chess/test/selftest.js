@@ -3,6 +3,7 @@
    2) 특수 규칙: 캐슬링(권리·체크 통과 금지) · 앙파상 · 승진(덜 승진 포함) · 체크/메이트/스테일메이트 · 같은 국면 세 번 · 50수 · 기물 부족 · 시간 끝 · 기권 · 무르기 · 기보
    3) 엔진: 한 수 메이트 · 두 수 메이트(chess.js 로 전수 확인) · 공짜 기물 잡기 · 첫 수 책이 모두 합법 · 결정성(같은 씨앗 = 같은 수)
    4) AI 선생님 까닭: 포크 · 핀 · 공짜로 잡기 · 캐슬링 · 메이트
+   4-2) 대국 중 '상대 수 읽기'(read.js): 👀 상대가 방금 한 일 · 다음 노림 · 📊 형세 말 · 👉 추천이 노림을 막는지
    5) AI 끼리 대국 (일꾼 스레드): 고급 > 중급 > 초급, 반칙 없음
    6) 학습 입력(RL.md): 판 18장 · 수 번호 0..4671 겹침 없음 · 합법 수 가림 */
 'use strict';
@@ -273,6 +274,89 @@ const why = (fen, u) => AI.explain({ start: fen, moves: [] }, u, { score: 0, mat
   const bl = it('e2e4 e7e5 f1c4 b8c6 d1h5', 'g8f6');
   ok(bl && bl.mate < 0, '실수: 나f6?? 뒤엔 메이트를 당함', bl && bl.mate);
   ok(AI.intent({ moves: [] }, 'e2e5') === null, '안 되는 수는 null');
+}
+
+// ── 4-2) 대국 중 '상대 수 읽기' (👀 · 📊 · 👉) ──
+section('대국 중 상대 수 읽기 (ChessAI.intent my·skipScore·reply + read.js)');
+{
+  const RD = require('../read.js');
+  const sanOf = (fen, u) => C.sanLine(C.create(fen), [u], 1)[0];
+  // 상대가 둔 수 uci 를 내 쪽(my)에서 읽기: 선생님 추천은 노드 수로 고정해 늘 같은 값
+  const live = (start, before, uci, my, reply) => {
+    const hist = before.split(' ').filter(Boolean).concat(uci);
+    const r = AI.think({ start, moves: hist }, { tier: 'hard', hint: true, explain: true, nodes: 60000, timeMs: 1e9, seed: 7 });
+    const it = AI.intent({ start, moves: hist.slice(0, -1) }, uci, { timeMs: 300, my, skipScore: true, reply: reply || r.move });
+    return { r, it, o: RD.oppRead(it, r, sanOf) };
+  };
+  const FORK = 'r3k3/8/8/3N4/8/8/8/4K3 w - - 0 1', PIN = '4k3/8/2n5/8/8/8/8/4KB2 w - - 0 1', FREE = '4k3/8/8/3q4/8/8/8/3QK3 w - - 0 1';
+  const w = (fen, u, my) => AI.explain({ start: fen, moves: [] }, u, null, my);
+  // 한 일(과거형) — 내 기물은 '내', 둘이서면 색 이름
+  eq(w(FORK, 'd5c7', '내').opp.done, '나이트로 포크를 걸었어요 (내 킹과 룩을 함께 노려요)', '👀 한 일: 포크');
+  eq(w(FORK, 'd5c7', '흑').opp.done, '나이트로 포크를 걸었어요 (흑 킹과 룩을 함께 노려요)', '둘이서면 내 → 색 이름');
+  eq(w(PIN, 'f1b5', '내').opp.done, '비숍으로 핀을 걸었어요 (내 나이트가 킹 앞에서 꼼짝 못 해요)', '👀 한 일: 핀');
+  eq(w(FREE, 'd1d5', '내').opp.done, '내 퀸을 공짜로 잡았어요', '👀 한 일: 공짜로 잡음');
+  ok(AI.explain({ moves: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5'.split(' ') }, 'e1g1', null, '내').opp.done.includes('캐슬링'), '👀 한 일: 캐슬링');
+  ok(AI.explain({ start: FORK, moves: [] }, 'd5c7', null).opp === undefined, 'my 를 안 주면 opp 말은 없음 (복기는 그대로)');
+  eq(w(FORK, 'd5c7', '내').text, '나이트로 포크를 걸어요 (킹과 룩을 함께 노려요)', '복기·추천 말은 그대로');
+  eq(AI.explain({ moves: ['e2e4'] }, 'e7e6', null, '내').opp.done, '폰을 앞으로 밀었어요', '뚜렷한 일이 없으면 있는 그대로 (자리 다졌다는 짐작은 안 함)');
+  // 스칼라 메이트 수: 퀸h5 → 다음 퀸xf7# (메이트 위협) · 추천이 그걸 막으면 👉
+  {
+    const x = live('', 'e2e4 e7e5 f1c4 b8c6', 'd1h5', '내');
+    ok(x.o && x.o.threat && x.o.threat.san === 'Qxf7#' && x.o.threat.text === '메이트 위협' && x.o.threat.from === 'h5' && x.o.threat.to === 'f7', '👀 다음 노림: Qxf7# 메이트 위협 (화살표 h5→f7)', x.o && JSON.stringify(x.o.threat));
+    ok(x.o && /^내 .*노리고 있어요$/.test(x.o.done), '👀 한 일은 내 쪽 말로', x.o && x.o.done);
+    const n = RD.threatNote({ move: x.r.move, why: x.r.why }, x.o.threat, null);
+    ok(n === '상대 노림(Qxf7#)을 막는 수예요', '👉 추천(' + x.r.move + ')이 메이트 노림을 막는 수', n);
+    ok(x.o.threat.after && x.o.threat.after.legal === true && x.o.threat.after.kind !== 'mate', '막은 뒤엔 그 수가 메이트가 아님 (reply 확인)', JSON.stringify(x.o.threat.after));
+    const bad = live('', 'e2e4 e7e5 f1c4 b8c6', 'd1h5', '내', 'a7a6');                                 // 엉뚱한 수를 두면 여전히 메이트
+    ok(bad.o.threat.after && bad.o.threat.after.legal && bad.o.threat.after.kind === 'mate', '막지 않으면 여전히 메이트 (after.kind = mate)', JSON.stringify(bad.o.threat.after));
+  }
+  // 포크 노림: 나g5 → 다음 나xf7 포크
+  {
+    const x = live('', 'e2e4 e7e5 g1f3 b8c6 f1c4 g8f6', 'f3g5', '내');
+    ok(x.o && x.o.threat && x.o.threat.from === 'g5' && x.o.threat.to === 'f7' && /포크/.test(x.o.threat.text) && /내 /.test(x.o.threat.text), '👀 다음 노림: Nxf7 포크 (내 룩·퀸 동시에)', x.o && JSON.stringify(x.o.threat));
+  }
+  // 첫 수 e4 뒤엔 급한 노림이 없음 · 체크를 건 수는 다음 노림을 읽지 않음
+  { const x = live('', '', 'e2e4', '내'); ok(x.o && x.o.threat === null && x.o.done === '폰으로 중앙을 차지했어요', '👀 e4: 급한 노림 없음', x.o && JSON.stringify(x.o)); }
+  { const x = live(FORK, '', 'd5c7', '내'); ok(x.o && x.o.check === true && x.o.threat === null && /포크/.test(x.o.done), '👀 체크를 건 포크: 다음 노림은 안 읽음 · check 표시', x.o && JSON.stringify(x.o)); }
+  { const t0 = Date.now(), it = AI.intent({ moves: ['e2e4'] }, 'e7e5', { timeMs: 200, my: '내', skipScore: true }); ok(it.score === 0 && it.mate === 0 && it.threat && Date.now() - t0 < 700, 'skipScore: 형세 읽기는 건너뜀 (탐색 한 번만)', Date.now() - t0 + 'ms'); }
+  // 📊 형세 말: 실제 AI 없이 만든 값으로 (문구 · 경계)
+  const fl = (sc, mate, o, c) => RD.formLine({ score: sc, mate: mate || 0 }, c || 'w', o);
+  eq(fl(0), '팽팽해요 (비슷해요)', '📊 비슷');
+  eq(fl(200), '내가 폰 2.0개만큼 앞서요', '📊 폰 2개 앞섬');
+  eq(fl(-90), '내가 폰 0.9개만큼 뒤져요', '📊 뒤짐');
+  eq(fl(-450), '내가 폰 4.5개만큼 크게 뒤져요', '📊 크게 뒤짐');
+  eq(fl(29990, 3), '내가 3수 안에 메이트할 수 있어요!', '📊 내가 메이트');
+  eq(fl(-29990, -2), '상대가 2수 안에 메이트할 수 있어요 — 조심!', '📊 상대 메이트');
+  eq(fl(-150, 0, { duo: true }, 'b'), '흑이 폰 1.5개만큼 뒤져요', '📊 둘이서는 색 이름');
+  eq(fl(120, 0, { prev: { score: 300, mate: 0 } }), '내가 폰 1.2개만큼 앞서요 (지난 차례 −1.8)', '📊 지난 차례보다 나빠짐');
+  eq(fl(-40, 0, { prev: { score: -140, mate: 0 } }), '내가 폰 0.4개만큼 뒤져요 (지난 차례 +1.0)', '📊 지난 차례보다 나아짐');
+  eq(fl(100, 0, { prev: { score: 60, mate: 0 } }), '내가 폰 1.0개만큼 앞서요', '📊 조금 달라진 건 말하지 않음');
+  eq(fl(100, 0, { prev: { score: 29990, mate: 2 } }), '내가 폰 1.0개만큼 앞서요', '📊 지난번이 메이트면 비교 안 함');
+  { // oppRead 의 '뚜렷한 노림만' 기준
+    const mk = (kind, sc, mate, next) => ({ why: { opp: { done: '뭔가 했어요' } }, check: false, threat: { move: 'a1a2', fen: 'x', score: sc, mate, why: { kind, opp: { next } } } });
+    const base = { score: 0, mate: 0 };                                     // 내 최선 뒤 상대 쪽 형세 = 0
+    const sn = () => 'Ra2';
+    ok(RD.oppRead(mk('win', 150, 0, '내 폰 잡기'), base, sn).threat.text === '내 폰 잡기', '노림: 한 번 더 두면 1.5점 나아지는 전술은 말함');
+    ok(RD.oppRead(mk('win', 60, 0, '내 폰 잡기'), base, sn).threat === null, '노림: 0.6점짜리는 말하지 않음');
+    ok(RD.oppRead(mk('quiet', 400, 0, ''), base, sn).threat === null, '노림: 그저 자리 좋은 수는 말하지 않음');
+    ok(RD.oppRead(mk('quiet', 29990, 2, ''), base, sn).threat.text === '메이트 위협', '노림: 메이트는 늘 말함');
+    ok(RD.oppRead(mk('win', 29990, 2, '내 폰 잡기'), { score: 29990, mate: 2 }, sn).threat === null, '노림: 내가 먼저 메이트면 말하지 않음');
+    ok(RD.oppRead({ error: 'x' }, base, sn) === null && RD.oppRead(null, base, sn) === null, '읽기 실패는 null (줄을 만들지 않음)');
+  }
+  { // 👉 문구: 추천 수 r 과 상대 노림 T 사이
+    const T = o => Object.assign({ from: 'd1', to: 'f7', san: 'Qxf7#', mate: 1, after: { legal: true, kind: 'mate' } }, o);
+    const R1 = (m, k) => ({ move: m, why: { kind: k } });
+    eq(RD.threatNote(R1('a7a6', 'quiet'), T(), null), '', '👉 받지 않는 까닭이 없으면 말하지 않음');
+    eq(RD.threatNote(R1('a7a6', 'win'), T(), null), '상대 노림(Qxf7#)보다 이 수가 더 급해요', '👉 더 급한 수 (노림이 그대로 통함)');
+    eq(RD.threatNote(R1('g8h6', 'defend'), T({ after: { legal: true, kind: 'trade' } }), null), '상대 노림(Qxf7#)을 막는 수예요', '👉 막는 수');
+    eq(RD.threatNote(R1('f7f6', 'escape'), T({ after: { legal: false, kind: '' } }), s => 'x' + s), '상대 노림(xQxf7#)에 걸린 기물을 피하는 수예요', '👉 노림 받는 기물을 피함 (기보 글자 바꾸기 반영)');
+    eq(RD.threatNote(R1('g8h6', 'escape'), T({ after: { legal: false, kind: '' } }), null), '상대 노림(Qxf7#)을 막는 수예요', '👉 노림 받는 칸이 아닌 곳에서 막으면 막는 수');
+    eq(RD.threatNote(R1('d8d1', 'win'), T({ after: { legal: true, kind: 'mate' } }), null), '상대 노림(Qxf7#)을 하려던 기물을 바로 잡아요', '👉 노림을 하려던 기물을 잡음');
+    eq(RD.threatNote(R1('a7a6', 'win'), T({ mate: 2, after: { legal: true, kind: 'quiet' } }), null), '', '👉 두 수 넘는 메이트는 판 위 사실만으론 못 가려 말하지 않음');
+    eq(RD.threatNote(R1('a7a6', 'win'), T({ mate: 0, san: 'Nxf7', after: { legal: true, kind: 'fork' } }), null), '상대 노림(Nxf7)보다 이 수가 더 급해요', '👉 포크 노림이 그대로면 더 급한 수');
+    eq(RD.threatNote(R1('a7a6', 'win'), null, null), '', '👉 노림이 없으면 말하지 않음');
+    ok(RD.overlaps({ why: { kind: 'defend' } }) && RD.overlaps({ why: { kind: 'escape' } }) && !RD.overlaps({ why: { kind: 'win' } }), '추천 까닭이 지킴·피함이면 한 줄로 합침');
+  }
 }
 
 // ── 6) 학습 입력 ──

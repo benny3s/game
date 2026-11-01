@@ -5,6 +5,7 @@
    3) AI: 한 수 승리 · 사 막기 · 열린 삼 막기 · VCF/VCT 문제(quintet 벤치 판, renjuportal.com 문제) · 금수 이용
    4) quintet wasm 이 있으면: 무작위 렌주 국면에서 VCF 결과를 서로 맞춰 봄 (금수 판정까지 함께 검사됨)
    5) AI 끼리 대국: 난이도 순서(고급 > 중급 > 초급) · 규칙마다 반칙 없음 · 한 수 시간
+   6) AI 선생님(review.js): 상대가 방금 둔 수 읽기 · 상대 노림과 견준 추천 까닭 · 📊 흐름
    빠르게: node selftest.js quick (대국 수를 줄임) */
 'use strict';
 const fs = require('fs'), path = require('path');
@@ -960,6 +961,78 @@ section('AI 선생님 까닭 (threatKind: 내 위협 · 상대 자리 막기)');
   const c = new Array(225).fill(0); [112, 113].forEach(i => { c[i] = 2; });   // 백 가로 둘
   c[114] = 2; eq(O.threatKind(c, N, 114, 2, 'free'), 'three', '상대가 두면 열린 삼 → 막을 자리'); c[114] = 0;
   c[200] = 1; eq(O.threatKind(c, N, 200, 1, 'free'), null, '떨어진 자리는 위협 없음');
+}
+
+// ════════════════════════════════════════════════════════════════
+section('AI 선생님: 상대 수 읽기 · 노림과 견준 까닭 · 흐름 (review.js — main.js 의 oppRead · coachReason 이 그대로 씀)');
+{
+  const RV = require('../review.js');
+  const nm = i => 'ABCDEFGHIJKLMNO'[i % 15] + (15 - Math.floor(i / 15));
+  const seq = (rule, list) => { const s = O.create(15, rule); for (const m of list) { if (O.play(s, P(m))[0].type === 'illegal') throw new Error('illegal ' + m); } return s; };
+  // main.js oppRead 와 같은 순서: 방금 수 전 상태 · 내가 손 뺐다고 보고 상대가 한 번 더 둘 곳(AI) → 한 줄 + 위협
+  const read = (s, who) => {
+    const last = s.moves[s.moves.length - 1], o = s.board[last], prev = O.clone(s); O.undo(prev);
+    const sn = O.clone(s); sn.turn = o;
+    const r = AI.think(sn, { tier: 'hard', hint: true, timeMs: 500, seed: s.moves.length * 104729 + 7 });
+    const w = RV.aimWhy(prev, last, r.move, r.kind, () => '@T@', who || true);
+    if (w.thr) w.thr.tn = nm(w.thr.t);
+    return { w, t: r.move, kind: r.kind, last, prev };
+  };
+
+  // 1) 백이 열린 삼(H10 I10 J10)을 만든 장면 — 흑 차례
+  const s1 = seq('free', ['H8', 'H10', 'I9', 'I10', 'K7', 'J10']);
+  const a1 = read(s1);
+  ok(/열린 삼을 만들었어요/.test(a1.w.done), '상대가 열린 삼을 만들었다고 읽음', a1.w.done);
+  ok(a1.w.thr && a1.w.thr.rank >= 3 && /열린 사\(4\)/.test(a1.w.thr.lab) && [P('G10'), P('K10')].includes(a1.w.thr.t), '다음 노림 = 열린 사(4) 자리 (양 끝 중 하나)', JSON.stringify(a1.w.thr));
+  ok(/^다음 노림 @T@ → 열린 사\(4\)$/.test(a1.w.next) && a1.w.sharp, '노림 문구 · 판에 ! 찍을 만함', a1.w.next);
+  const thr1 = a1.w.thr;
+  ok(/상대 노림\((G10|K10) 열린 사\(4\)\)을 막는 자리예요/.test(RV.advise(s1, P('G10'), 'search', thr1, '기본')), '노림 끝을 막는 추천 → 막는 자리예요');
+  ok(/막는 자리예요/.test(RV.advise(s1, P('K10'), 'search', thr1, '기본')), '반대쪽 끝도 막는 자리');
+  ok(!/막는 자리예요/.test(RV.advise(s1, P('A1'), 'search', thr1, '기본')) && /잊지 마세요/.test(RV.advise(s1, P('A1'), 'search', thr1, '기본')), '엉뚱한 자리면 막는다고 하지 않고 노림을 잊지 말라고만');
+  ok(/^기본 — 내 사\(4\) 연속이 먼저라 상대 노림\(.*\)은 막지 않아도 돼요$/.test(RV.advise(s1, P('A1'), 'vcf', thr1, '기본')), '내 사(4) 연속(vcf)이 먼저면 막지 않아도 된다고 까닭을 말함');
+  ok(/내 열린 사\(4\)가 먼저라/.test(RV.advise(s1, P('A1'), 'open4', thr1, '기본')) && /내 공격이 더 빨라서/.test(RV.advise(s1, P('A1'), 'vct', thr1, '기본')), '열린 사(4) · vct 도 같은 식');
+  ok(/^상대의 사\(4\) 연속 공격을 미리 끊는 자리예요 · 상대 노림\(.*\)도 잊지 마세요$/.test(RV.advise(s1, P('A1'), 'defend-vcf', thr1, '기본')), '연속 사를 끊는 추천은 노림 자리를 막는다고 하지 않고 잊지 말라고 덧붙임');
+  eq(RV.advise(s1, P('A1'), 'win', thr1, '기본'), '기본', '바로 이기는 수는 그대로');
+  eq(RV.advise(s1, P('G10'), 'search', null, '기본'), '기본', '노림이 없으면 기본 까닭 그대로');
+  eq(RV.advise(s1, P('A1'), 'vcf', Object.assign({}, thr1, { rank: 1 }), '기본'), '기본', '상대 노림이 약하면(열린 삼 정도) 막지 않아도 된다는 말은 안 붙임');
+  // AI 추천이 실제로 이 노림을 막는 수로 나오고, 문구가 그걸 알아봄
+  const rec1 = AI.think(s1, { tier: 'hard', hint: true, timeMs: 700, seed: 3 });
+  const why1 = RV.advise(s1, rec1.move, rec1.kind, thr1, '기본');
+  ok(/막는 자리예요|미리 끊는 자리예요/.test(why1), 'AI 추천(' + nm(rec1.move) + ' ' + rec1.kind + ')이 막는 자리로 설명됨', why1);
+  // 둘이서 판: '내' 대신 지금 둘 색 이름으로
+  const a1t = read(s1, '흑의');
+  ok(/흑의 열린 삼이 될 자리를/.test(a1t.w.done) && !/내 /.test(a1t.w.done + a1t.w.next), '둘이서 판은 흑·백으로 말함', a1t.w.done);
+
+  // 2) 백이 사(4)를 만든 장면 (G10 이 막혀 있어 K10 → 사) — 꼭 막아야 함
+  const s2 = seq('free', ['G10', 'H10', 'A1', 'I10', 'A3', 'J10', 'A5', 'K10']);
+  const a2 = read(s2);
+  ok(/사\(4\)를 만들었어요 — 꼭 막아야 해요/.test(a2.w.done), '사(4)를 만든 상대 수를 읽음', a2.w.done);
+  ok(a2.w.thr && a2.w.thr.rank === 5 && a2.w.thr.t === P('L10') && a2.w.thr.lab === '오목', '다음 노림 = 오목 자리 L10', JSON.stringify(a2.w.thr));
+  const rec2 = AI.think(s2, { tier: 'hard', hint: true, timeMs: 300, seed: 3 });
+  eq([rec2.move, rec2.kind], [P('L10'), 'block'], '추천은 L10 막기(block)');
+  eq(RV.advise(s2, rec2.move, rec2.kind, a2.w.thr, '기본'), '상대 노림(L10 오목)을 꼭 막아야 해요', '꼭 막아야 하는 노림 문구');
+
+  // 3) 내 사(4)가 상대의 약한 노림(열린 삼 만들기)보다 먼저
+  const s3 = seq('free', ['C5', 'C4', 'C6', 'H10', 'C7', 'I10', 'H3', 'A15']);   // 흑 C5 C6 C7 (C4 는 백이 막음) · 백 H10 I10 두 개
+  const thr3 = { t: P('J10'), atk: 'three', kind: '', lab: '열린 삼', short: '열린 삼', rank: 1, tn: 'J10' };
+  ok(RV.fx(s3, P('C8')).atk === 'four', '시험 판: C8 은 사(4)');
+  eq(RV.advise(s3, P('C8'), 'search', thr3, '사(4)를 만들어 상대가 막게 해요'), '사(4)를 만들어 상대가 막게 해요 — 내 사(4)가 먼저라 상대 노림(J10 열린 삼)은 바로 막지 않아도 돼요', '내 사(4)가 먼저라 바로 막지 않아도 돼요');
+
+  // 4) 복기(opp 없이)는 예전 말투 그대로 · 첫 돌에는 다음 노림을 말하지 않음
+  const rv = RV.aimWhy(a1.prev, a1.last, a1.t, a1.kind, () => '@T@');
+  ok(/^상대 열린 삼 자리를 막으면서 열린 삼을 만들었어요$/.test(rv.done) && /^다음 @T@ 열린 사\(4\)$/.test(rv.next) && rv.thr === null, '복기 말투는 그대로 (thr 없음)', rv.text);
+  eq(RV.aimWhy(O.create(15, 'free'), P('H8'), P('H7'), 'search', () => '@T@', true).next, '', '첫 돌에는 다음 노림을 말하지 않음');
+
+  // 5) 📊 흐름
+  const f1 = RV.flow(s1);
+  ok(/^📊 흐름: 상대 쪽이 앞서요 — 막기 어려운 결정타 자리가 상대 2곳 · 내 0곳$/.test(f1), '상대 열린 삼 → 상대 쪽이 앞서요 (결정타 자리 2곳)', f1);
+  ok(/^📊 흐름: 백 쪽이 앞서요 — 막기 어려운 결정타 자리가 백 2곳 · 흑 0곳$/.test(RV.flow(s1, { me: '흑', op: '백' })), '둘이서 판은 흑·백 이름으로 말함');
+  ok(RV.flow(seq('free', ['H8', 'H9'])) === '', '수가 적은 초반엔 흐름을 말하지 않음');
+  ok(RV.flow(seq('free', ['A1', 'O15', 'A15', 'O1', 'H1', 'H15'])) === '', '아무 일 없는 판은 흐름을 말하지 않음');
+  const pw = RV.power(s1, 2);
+  ok(pw.strong === 2 && pw.five === 0, '백 열린 삼 → 결정타 자리 2곳 (G10 · K10)', JSON.stringify(pw));
+  const t0 = Date.now(); for (let i = 0; i < 20; i++) RV.flow(s1);
+  ok(Date.now() - t0 < 400, '흐름 계산은 빠름 (20번 ' + (Date.now() - t0) + 'ms)');
 }
 
 // ════════════════════════════════════════════════════════════════

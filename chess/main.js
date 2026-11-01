@@ -132,7 +132,7 @@
   let mainAI = null;
   function loadMainAI() {
     if (mainAI) return mainAI;
-    mainAI = new Promise((ok, bad) => { if (window.ChessAI) return ok(window.ChessAI); const sc = document.createElement('script'); sc.src = 'ai.js?v=2'; sc.onload = () => ok(window.ChessAI); sc.onerror = bad; document.head.appendChild(sc); });
+    mainAI = new Promise((ok, bad) => { if (window.ChessAI) return ok(window.ChessAI); const sc = document.createElement('script'); sc.src = 'ai.js?v=3'; sc.onload = () => ok(window.ChessAI); sc.onerror = bad; document.head.appendChild(sc); });
     return mainAI;
   }
   function makeWorker() {
@@ -142,7 +142,7 @@
     const get = () => {
       if (w || !okW) return w;
       try {
-        w = new Worker('ai-worker.js?v=2');
+        w = new Worker('ai-worker.js?v=3');
         w.onmessage = e => { const x = waits.get(e.data.id); if (x) { waits.delete(e.data.id); x.ok(e.data.res); } };
         w.onerror = () => kill();
       } catch (e) { w = null; okW = false; }
@@ -372,8 +372,9 @@
     const rh = G.rv && G.rv.hint && G.rv.hint.k === G.rv.k && coachOpen() ? G.rv.hint : null;   // 복기 선생님: 추천(초록) + 실제로 둔 수(파랑)
     const showHint = !G.rv && G.coachRes && G.coachRes.key === posKey() && coachOpen() && !G.over;
     const hint = rh ? [rh.from, rh.to] : showHint ? [G.coachRes.from, G.coachRes.to] : null;
+    const ot = showHint && G.coachRes.opp && G.coachRes.opp.threat;   // 👀 대국 중: 상대가 다음에 노리는 수 (주황, 창이 열려 있고 같은 판일 때만)
     board.setMarks({ last: s.last ? [s.last.from, s.last.to] : null, check: chk, hint });
-    board.setArrow(hint, rh && rh.real, rh && rh.threat);
+    board.setArrow(hint, rh && rh.real, rh ? rh.threat : ot ? [ot.from, ot.to] : null);
     drawBars(); drawMoves(); drawStat();
   }
   function nameOf(c) {
@@ -477,7 +478,7 @@
     const s = G.s, humanColor = c => G.players[c].kind === 'human';
     let n = 0;
     do { C.undo(s, 1); n++; } while (s.moves.length > G.floor && !humanColor(C.turn(s)));   // 연습 판은 시작 장면 앞으로는 안 물림
-    G.over = false; G.undos++; G.review = null; G.coachRes = null;
+    G.over = false; G.undos++; G.review = null; G.coachRes = null; G.flow = {};
     sfx('flip'); render(null); drawDock();
     if (!tickT) tickT = setInterval(tick, 200);
     if (G.clock) G.clock.at = performance.now();
@@ -589,13 +590,15 @@
 
   // ════════ AI 선생님 (공용 창 CoachPanel + 아래 줄 단추 하나) ════════
   // 혼자·둘이서는 늘, 친구랑은 방장이 대기실에서 켰을 때만 (cfg.coach). 창이 열려 있을 때만 수를 읽음
+  // 내 차례 창: 👀 상대가 방금 둔 수(한 일 · 다음 노림, 판에 주황 화살표) · 📊 형세 · 💡 추천 · 👉 추천이 그 노림을 막는지 — 말 만들기는 read.js, 읽기는 ChessAI.intent (복기 '🤔 노린 것'과 같은 계산)
   let coachBox = null;
+  const CR = window.ChessRead || null;                                   // 상대 수 읽기·형세 말 (read.js) — 없어도 선생님은 예전처럼
   function coachSetup() {
     if (coachBox || !window.CoachPanel) return;
     try {
       coachBox = CoachPanel.create({ game: 'chess', title: 'AI 선생님', startHidden: true });
       CoachPanel.button($('coachBtn'), coachBox, { onToggle: on => { if (on) sfx('hint'); } });
-      coachBox.onChange(() => { requestAnimationFrame(coachPlace); if (G) { if (coachOpen() || G.rv) coachTick(); render(null); } });
+      coachBox.onChange(() => { requestAnimationFrame(coachPlace); if (G) { if (coachOpen() || G.rv) coachTick(); render(null); rvLayout(); } });
       coachBox.body.addEventListener('click', e => { if (e.target.closest('[data-peek]') && G && G.drill) { G.drill.peek = true; sfx('hint'); coachTick(); } });
       addEventListener('resize', () => requestAnimationFrame(coachPlace));
     } catch (e) { coachBox = null; }
@@ -646,7 +649,7 @@
       coachBox.set(`<div class="ch-mv">📒 아쉬웠던 그 장면이에요</div><div class="ch-sub">이번엔 스스로 좋은 수를 찾아봐요 · 막히면 <button type="button" class="ch-peek" data-peek>💡 답 보기</button></div>`);
       return;
     }
-    if (g.coachRes && g.coachRes.key === key) { coachShow(); return; }
+    if (g.coachRes && g.coachRes.key === key) { coachShow(); oppRead(g, key); return; }
     if (g.coachBusy === key) return;
     g.coachBusy = key;
     coachBox.set(revHtml + '💡 좋은 수를 찾는 중…');
@@ -654,20 +657,45 @@
       if (G !== g) return;
       if (g.coachBusy === key) g.coachBusy = null;
       if (posKey() !== key || !res || !res.move) return;
-      const san = C.sanLine(s, res.pv, 4);
-      g.coachRes = { key, move: res.move, from: res.move.slice(0, 2), to: res.move.slice(2, 4), san: san[0] || res.move, line: san, score: res.score, mate: res.mate, why: res.why, c };
+      const san = C.sanLine(s, res.pv, 4), n = s.moves.length, pf = g.flow && g.flow[c];
+      g.coachRes = { key, move: res.move, from: res.move.slice(0, 2), to: res.move.slice(2, 4), san: san[0] || res.move, line: san, score: res.score, mate: res.mate, why: res.why, c,
+        prev: pf && pf.n === n - 2 ? { score: pf.score, mate: pf.mate } : null, opp: null };   // prev = 내 지난 차례 때 형세 (달라진 폭을 말해 주려고)
+      (g.flow = g.flow || {})[c] = { n, score: res.score, mate: res.mate };
       g.coachUsed++;
-      if (coachOpen()) { coachShow(); sfx('hint'); }
+      if (coachOpen()) { coachShow(); sfx('hint'); oppRead(g, key); }
     }).catch(() => { if (G === g && g.coachBusy === key) g.coachBusy = null; });
   }
   function coachShow() {
     const g = G, r = g.coachRes; if (!r || !coachBox) return;
-    const spec = g.mode === 'online' && !g.me;
-    const who = spec || g.mode === 'duo' ? `${CN[r.c]} 차례라면 ` : '';
-    const line = r.line.length > 1 ? `예상 수순: ${r.line.map(lab).join(' ')} · ` : '';
-    coachBox.set(`${reviewHtml()}<div class="ch-mv">💡 ${who}<b>${esc(lab(r.san))}</b> ${r.why ? esc(r.why.text) : ''}</div>
-      <div class="ch-sub">${esc(line)}${esc(evalLine(r, r.c))}${spec ? ' · 👀 구경 중' : ''}</div>`);
-    render(null);
+    const spec = g.mode === 'online' && !g.me, duo = g.mode === 'duo', read = !spec && !!CR;
+    const who = spec || duo ? `${CN[r.c]} 차례라면 ` : '';
+    const line = r.line.length > 1 ? `예상 수순: ${r.line.slice(0, read ? 3 : 4).map(lab).join(' ')}` : '';
+    // 흐름: 👀 상대가 방금 둔 수(한 일 · 다음 노림) → 📊 형세 → 💡 추천 → 👉 추천이 그 노림을 막는지 (구경꾼은 예전처럼 추천 + 형세만)
+    const note = read && r.opp && r.opp.threat ? CR.threatNote(r, r.opp.threat, lab) : '', one = !!note && CR.overlaps(r);   // one = 추천 까닭과 겹치면 한 줄로
+    const sub = read ? line : [line, evalLine(r, r.c), spec ? '👀 구경 중' : ''].filter(Boolean).join(' · ');
+    coachBox.set(`${reviewHtml()}${read ? `${oppHtml(g, r)}<div class="ch-form">📊 형세: ${esc(CR.formLine(r, r.c, { duo, prev: r.prev }))}</div>` : ''}<div class="ch-mv">💡 ${who}<b>${esc(lab(r.san))}</b> ${one ? esc(note) : r.why ? esc(r.why.text) : ''}</div>`
+      + `${note && !one ? `<div class="ch-why">👉 ${esc(note)}</div>` : ''}${sub ? `<div class="ch-sub">${esc(sub)}</div>` : ''}`);
+    render(null); rvLayout();
+  }
+  // 👀 상대가 방금 둔 수 한 줄 (읽는 동안은 '읽는 중…')
+  function oppHtml(g, r) {
+    const s = g.s, last = s.hist[s.moves.length - 1], o = r.opp;
+    if (!last || (o && o.none)) return '';
+    const head = `👀 ${g.mode === 'duo' ? CN[last.color] : '상대'} <b>${esc(lab(last.san))}</b>: `;
+    if (!o) return `<div class="ch-int">${head}읽는 중…</div>`;
+    const next = o.threat ? ` → 🟠 다음 <b>${esc(lab(o.threat.san))}</b> ${esc(o.threat.text)}` : o.check ? '' : ' · 급한 노림은 없어 보여요';
+    return `<div class="ch-int">${head}${esc(o.done)}${next}</div>`;
+  }
+  // 👀 복기 '🤔 노린 것' 과 같은 계산(ChessAI.intent)을 대국 중 상대 쪽에서: 방금 한 일 + 내가 한 수 쉬면 다음에 노리는 수(판에 주황 화살표).
+  //   추천은 먼저 보여 주고 뒤에 채움 · 선생님이 이미 읽은 값을 쓰니 새로 읽는 건 '한 번 더 둔다면' 하나뿐 · 같은 판일 때만 반영
+  function oppRead(g, key) {
+    const r = g.coachRes, s = g.s, n = s.moves.length, last = s.hist[n - 1];
+    if (!CR || !r || r.key !== key || r.opp || r.oppBusy || !last || (g.mode === 'online' && !g.me) || g.rv || g.over) return;
+    const c = C.turn(s), my = g.mode === 'duo' ? CN[c] : '내';
+    r.oppBusy = true;
+    const done = o => { r.oppBusy = false; if (G !== g || g.coachRes !== r || posKey() !== key) return; r.opp = o || { none: true }; if (coachOpen()) coachShow(); };
+    COACHW.intent({ start: s.start, moves: s.moves.slice(0, n - 1) }, last.uci, { timeMs: 400, my, skipScore: true, reply: r.move })
+      .then(it => done(CR.oppRead(it, r, (fen, u) => C.sanLine(C.create(fen), [u], 1)[0]))).catch(() => done(null));
   }
   // 방금 둔 사람 수 돌아보기: 선생님이 본 최선과 견줘 봄 (새 국면을 짧게 읽음)
   function reviewMove() {
@@ -777,16 +805,16 @@
     if (mv) { sfx(mv.promotion ? 'promote' : mv.castle ? 'castle' : mv.captured ? 'capture' : 'move'); if (mv.check) setTimeout(() => sfx('check'), 90); } else sfx('tap');
     rvCoach();
   }
-  // 세로 화면 복기에서 선생님 창이 열려 있으면 판이 창 아래로 숨지 않게 판을 줄임 (창은 내 이름 줄·기보 줄 위에만). 사용자가 옮긴 창이면 그대로
+  // 세로 화면에서 선생님 창이 열려 있으면 판이 창 아래로 숨지 않게 판을 줄임 (창은 내 이름 줄·기보 줄 위에만). 복기도 대국 중도 같은 길 · 사용자가 옮긴 창이면 그대로
   function rvLayout() {
     requestAnimationFrame(() => {
-      const sp = document.querySelector('#play .spring'), R = G && G.rv; if (!sp) return;
+      const sp = document.querySelector('#play .spring'), R = G && (G.rv || G); if (!sp) return;
       let px = 0;
       if (R && coachOpen() && !matchMedia('(orientation:landscape) and (min-width:600px)').matches) {
         let st = null; try { st = JSON.parse(localStorage.getItem('game.coach.chess') || 'null'); } catch (e) {}
         if (!(st && st.p)) px = R.pad = Math.max(R.pad || 0, Math.ceil(coachBox.el.offsetHeight - $('pBot').offsetHeight - $('moves').offsetHeight - 24));   // 커지기만 (판이 출렁이지 않게)
       } else if (R) R.pad = 0;
-      const v = px > 0 ? `0 0 ${px}px` : '';
+      const v = px > 0 ? `${G.rv ? '0 0' : '1 0'} ${px}px` : '';      // 대국 중엔 남는 자리는 그대로 이 칸이 먹음 (단추 줄이 아래에 붙은 채)
       if (sp.style.flex !== v) { sp.style.flex = v; requestAnimationFrame(() => { fit(); coachPlace(); }); }
     });
   }

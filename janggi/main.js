@@ -5,6 +5,7 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const C = window.JanggiCore, Z = window.Cozy, esc = Z.esc;
+  const I = window.JanggiIntent;                                          // 수 읽기(한 일 · 노림 · 까닭) — 복기 '🤔 노린 것'과 대국 중 '👀 상대 수 읽기'가 같이 씀
   const sfx = (n, o) => Z.sfx.play(n, o);
   const store = (k, d) => Z.store('janggi.' + k, d), save = (k, v) => Z.save('janggi.' + k, v);
   const CN = ['초', '한'];
@@ -437,9 +438,10 @@
       board.setMarks({ last, check: chk, hint });
       board.setArrow(hint, real, ti && ti.arrow);
     } else {
-      const showHint = G.coachRes && G.coachRes.key === posKey() && coachOpen() && !G.over && G.coachRes.from != null;
-      board.setMarks({ last, check: chk, hint: showHint ? [G.coachRes.from, G.coachRes.to] : null });
-      board.setArrow(showHint ? [G.coachRes.from, G.coachRes.to] : null);
+      const cr = G.coachRes, live = !!(cr && cr.key === posKey() && coachOpen() && !G.over), showHint = live && cr.from != null;
+      const thr = live && cr.read && cr.read.aim && cr.read.aim.arrow;      // 👀 상대가 다음에 노리는 수 (내가 손 빼면)
+      board.setMarks({ last, check: chk, hint: showHint ? [cr.from, cr.to] : null });
+      board.setArrow(showHint ? [cr.from, cr.to] : null, null, thr || null);
     }
     drawBars(); drawMoves(); drawStat();
   }
@@ -693,8 +695,8 @@
     let st = null; try { st = JSON.parse(localStorage.getItem('game.coach.janggi') || 'null'); } catch (e) {}
     const land = matchMedia('(orientation:landscape) and (min-width:600px)').matches;
     const open = coachBox.visible && !coachBox.collapsed && !(st && st.p);
-    const want = !land && open ? (G && G.rv ? COACH_H + 40 : COACH_H) : 0, sp = $('coachSpace');   // 복기는 설명(추천 · 실제 수 · 노린 것)이 길어 조금 더
-    const tuck = !!want && innerHeight < 760;                         // 낮은 화면: 창이 펼쳐진 동안 기보 줄을 접어 판 크기를 지킴
+    const want = !land && open ? (G && G.rv ? COACH_H + 40 : isSpec() ? COACH_H : COACH_H + 50) : 0, sp = $('coachSpace');   // 복기(추천 · 실제 수 · 노린 것)와 대국 중(👀 상대 수 읽기 · 💡 · 📊)은 설명이 길어 조금 더 — 구경 중엔 짧음
+    const tuck = !!want && innerHeight < (G && !G.rv && !isSpec() ? 860 : 760);   // 낮은 화면: 창이 펼쳐진 동안 기보 줄을 접어 판 크기를 지킴 (대국 중엔 창이 더 커서 조금 더 높은 화면까지)
     if (sp.offsetHeight !== want || $('moves').classList.contains('tuck') !== tuck) { sp.style.height = want + 'px'; $('moves').classList.toggle('tuck', tuck); requestAnimationFrame(fit); }
     coachBox.el.style.maxHeight = want ? (want - 6) + 'px' : '';
     const r = (land ? $('pBot') : $('dock').hidden ? $('dockReview') : $('dock')).getBoundingClientRect(); if (!r.height) return;
@@ -741,28 +743,75 @@
     const revHtml = reviewHtml();
     if (g.review && g.review.score == null && !g.review.busy) reviewMove();
     if (!mine) { coachBox.set(revHtml + (g.mode === 'online' ? '친구 차례예요 · 친구가 두면 다시 알려 드릴게요' : 'AI가 생각하는 중이에요 · 내 차례가 되면 알려 드릴게요')); return; }
-    if (g.coachRes && g.coachRes.key === key) { coachShow(); return; }
+    if (g.coachRes && g.coachRes.key === key) { coachShow(); liveAim(g); return; }
     if (g.coachBusy === key) return;
     g.coachBusy = key;
-    coachBox.set(revHtml + '💡 좋은 수를 찾는 중…');
+    const read = spec ? null : liveRead(g);                              // 👀 상대가 방금 둔 수가 한 일은 바로 (다음 노림은 추천 뒤에 따로 물음)
+    coachBox.set(revHtml + readHtml(read, true) + '💡 좋은 수를 찾는 중…');
     COACHW.think(C.toJSON(s), { tier: 'hard', hint: true, explain: true, timeMs: 900, seed: 7 }).then(res => {
       if (G !== g) return;
       if (g.coachBusy === key) g.coachBusy = null;
       if (posKey() !== key || !res || !res.move) return;
       const pass = res.move === 'pass', m = pass ? -1 : C.parseMove(res.move);
       const label = pass ? '한수 쉼' : C.sqName(m >> 7) + C.pieceName(s.b[m >> 7] & 7, c) + C.sqName(m & 127);
-      g.coachRes = { key, move: res.move, from: pass ? null : m >> 7, to: pass ? null : m & 127, label, score: res.score, mate: res.mate, why: res.why, c };
+      const pf = g.flow && g.flow.c === c && g.flow.n < s.moves.length ? g.flow : null, flat = !!res.mate || Math.abs(res.score) > 15000;   // 지난 내 차례의 점수 (외통 · 점수승 계산은 빼고)
+      g.flow = { c, n: s.moves.length, score: flat ? null : res.score };
+      g.coachRes = { key, move: res.move, from: pass ? null : m >> 7, to: pass ? null : m & 127, label, score: res.score, mate: res.mate, why: res.why, c, read, dScore: pf && pf.score != null && !flat ? res.score - pf.score : null };
       g.coachUsed++;
-      if (coachOpen()) { coachShow(); sfx('hint'); }
+      if (coachOpen()) { coachShow(); sfx('hint'); liveAim(g); }
     }).catch(() => { if (G === g && g.coachBusy === key) g.coachBusy = null; });
   }
   function coachShow() {
     const g = G, r = g.coachRes; if (!r || !coachBox || g.rv) return;
     const spec = isSpec();
     const who = spec || g.mode === 'duo' ? `${CN[r.c]} 차례라면 ` : '';
-    coachBox.set(`${reviewHtml()}<div class="ch-mv">💡 ${who}<b>${esc(r.label)}</b> ${r.why ? esc(r.why.text) : ''}</div>
-      <div class="ch-sub">${esc(evalLine(r, r.c))}${spec ? ' · 👀 구경 중' : ''}</div>`);
+    coachBox.set(`${readHtml(r.read)}<div class="ch-mv lv">💡 ${who}<b>${esc(r.label)}</b> ${esc(I.recText(r.why, r.read && r.read.ctr))}</div>
+      <div class="ch-sub lv">${spec ? esc(evalLine(r, r.c)) + ' · 👀 구경 중' : formLine(r)}</div>${reviewHtml().replace('class="ch-rev', 'class="ch-rev tail')}`);   // 지난 내 수 평가는 맨 아래 (잘려도 덜 중요)
     render(null);
+  }
+  // ── 대국 중 흐름 (복기 '🤔 노린 것'과 같은 읽기를 상대 쪽 수에): 👀 상대가 방금 둔 수(한 일 · 다음 노림, 판엔 보라 점선 화살표) · 📊 형세 · 추천이 노림에 맞서는 법
+  //    G.coachRes.read = { nx(상대 기록), label, who, why(한 일), th(다음 수 · 워커), aim(뚜렷한 노림), ctr(추천이 맞서는 법), state: 'wait'(묻는 중) | 'done' | 'none'(장군 · 한수 쉼 — 안 물음) }
+  function liveRead(g) {
+    const s = g.s, nx = s.hist[s.hist.length - 1];
+    if (!nx || nx.type !== 'move' || nx.side === s.turn || s.phase !== 'play' || s.over) return null;
+    try {
+      const j = C.toJSON(s); j.moves = j.moves.slice(0, -1); j.end = undefined;
+      return { nx, label: C.notation(nx), who: g.mode === 'duo' ? CN[nx.side] : '상대', why: I.why(C.fromJSON(j), s, nx, { opp: true }), th: null, aim: null, ctr: null, state: nx.pass || s.check ? 'none' : 'wait' };
+    } catch (e) { return null; }
+  }
+  // 내가 손 뺀다면(한수 쉼) 상대가 한 번 더 둘 때의 수 — 추천 점수와 비교해 뚜렷할 때만 '다음 노림' (워커 · 판이 그대로일 때만 화면에 반영)
+  function liveAim(g) {
+    const r = g.coachRes, rd = r && r.read, s = g.s;
+    if (!rd || rd.state !== 'wait' || rd.busy || !coachOpen() || r.key !== posKey()) return;
+    rd.busy = true;
+    const me = rd.nx.side, fen = C.toFen(s.b, me), rules = s.rules;
+    COACHW.think({ rules, fen }, { tier: 'hard', hint: true, timeMs: 450, seed: 11 }).then(res => {
+      rd.busy = false;
+      if (G !== g || g.coachRes !== r || r.key !== posKey()) return;
+      if (!res || (!res.move && res.error)) { rd.state = 'none'; if (coachOpen()) coachShow(); return; }   // 못 읽었으면 '급한 노림 없음' 이라고 하지 않고 그냥 뺌
+      let th = null, via = null;
+      if (res.move && res.move !== 'pass') {
+        const m = C.parseMove(res.move), f = m >> 7, t = m & 127, sF = C.create({ rules, fen }), pc = sF.b[f] & 7, cap = sF.b[t] & 7, sF0 = C.fastClone(sF);
+        C.step(sF, res.move);
+        th = { move: res.move, from: f, to: t, piece: pc, captured: cap, check: sF.check, score: res.score, mate: res.mate, side: me };
+        try { via = I.why(sF0, sF, sF.last, { opp: true }); } catch (e) {}   // 그 수가 하는 일 (조용한 수의 노림을 말로)
+      }
+      rd.th = th; rd.state = 'done'; rd.aim = I.aim(me, th, r, { opp: true, via }); rd.ctr = rd.aim && th ? I.counter(g.s, r, th, rd.aim) : null;
+      if (coachOpen()) coachShow();
+    }).catch(() => { rd.busy = false; rd.state = 'none'; });
+  }
+  function readHtml(rd, pre) {
+    if (!rd) return '';
+    const a = rd.aim, w = rd.why, parts = [esc(w ? w.text : '자리를 옮겼어요')];
+    const same = !pre && a && w && w.tg && a.term === '기물 따기' && rd.th && rd.th.from === rd.nx.to && w.tg.includes(rd.th.captured);   // 지금 노리는 것과 다음에 따려는 것이 같으면 한 번만
+    if (same) parts.push('안 막으면 다음에 따려고 해요');
+    else if (!pre) { if (rd.state === 'wait') parts.push('다음 노림을 살피는 중…'); else if (a) parts.push(esc(a.text)); else if (rd.state === 'done') parts.push('급한 노림은 없어요'); }
+    return `<div class="ch-why ch-opp">${a && a.arrow && !pre ? '<i class="lg"></i>' : ''}👀 ${esc(rd.who)} <b>${esc(rd.label)}</b>: ${parts.join(' · ')}</div>`;
+  }
+  // 📊 형세: 둘 차례인 사람 쪽에서 엔진 점수를 말로 · 지난 내 차례보다 1점 넘게 달라졌으면 같이
+  function formLine(r) {
+    const f = I.formText(r, r.c, { duo: !!G && G.mode === 'duo', d: r.dScore });
+    return `📊 형세: ${esc(f.text)}${f.delta ? ` <span style="opacity:.8">(${esc(f.delta)})</span>` : ''}`;
   }
   function reviewMove() {
     const g = G, rv = g.review; if (!rv || rv.busy) return;
@@ -858,59 +907,14 @@
 
   // ── 복기 선생님: 추천 수 · 실제로 둔 수 · 🤔 노린 것(그 수의 까닭 + 다음에 노리는 수) · 손해 ──
   const MISS = 300;                                                      // 추천보다 3점(졸 1.5개) 넘게 손해면 '실수였을 수도' · 📒 노트에
-  const JS = { 궁: 1, 상: 1, 졸: 1, 병: 1 };                              // 받침 있는 기물 이름 (조사)
-  const eul = n => n + (JS[n] ? '을' : '를'), ro = n => n + (JS[n] && n !== '졸' ? '으로' : '로'), wa = n => n + (JS[n] ? '과' : '와'), iga = n => n + (JS[n] ? '이' : '가');
-  const VQ = [0, 99, 3, 3, 5, 13, 7, 2];                                  // 잡힘 판단용 값 (궁은 크게)
   // 분석용 장면 k 판 (끝 장면은 기권 전 판)
   const rvAt = (rv, k) => (k >= rv.n ? rv.last : k === rv.k && rv.s && rv.s !== rv.full ? rv.s : C.fromJSON({ rules: rv.full.rules, moves: rv.full.moves.slice(0, rv.base + k) }));
   const rvMoveLabel = (s, u) => { if (u === 'pass') return '한수 쉼'; const m = C.parseMove(u); return C.sqName(m >> 7) + C.pieceName(s.b[m >> 7] & 7, s.turn) + C.sqName(m & 127); };
-  // 이 편 기물 중 공짜로(또는 손해 보고) 잡힐 것: [자리, 종류, 노리는 상대 자리들]
-  function hangingOf(b0, side) {
-    const L = C.lo, b = b0.slice(), out = [];
-    for (let q = 0; q < 90; q++) {
-      const p = b[q]; if (!p || (p >> 3) !== side || (p & 7) === C.K) continue;
-      const atk = L.attackers(b, q, side ^ 1); if (!atk.length) continue;
-      const low = Math.min(...atk.map(x => VQ[b[x] & 7]));
-      b[q] = C.mk(C.P, side ^ 1); const def = L.attackers(b, q, side).filter(x => x !== q).length; b[q] = p;
-      if (!def || low < VQ[p & 7]) out.push([q, p & 7, atk]);
-    }
-    return out;
-  }
   // 실제로 둔 수(장면 k → k+1)가 한 일: 판에서 바로 보이는 것만 (모르면 null → 다음 노림 · 자리 잡기)
   function rvWhy(rv, k) {
     if (k in rv.why) return rv.why[k];
     const nx = rv.plays[k]; if (!nx) return null;
-    const s0 = rvAt(rv, k), s1 = rvAt(rv, k + 1), L = C.lo, me = nx.side, op = me ^ 1;
-    const mine = t => C.pieceName(t, me), his = t => C.pieceName(t, op);
-    const out = (() => {
-      if (nx.pass) return { term: '한수 쉼', text: '움직이지 않고 넘겼어요' };
-      const b0 = s0.b, b1 = s1.b, f = nx.from, t = nx.to, pc = nx.piece, cap = nx.captured;
-      if (s1.over && s1.reason === 'mate') return { term: '외통', text: '이 수로 외통이에요' };
-      if (s0.check) {
-        if (cap && L.attackers(b0, L.kingSq(b0, me), op).includes(t)) return { term: '장군 피하기', text: `장군을 건 ${eul(his(cap))} 잡았어요` };
-        if (pc === C.K) return { term: '장군 피하기', text: '궁을 옮겨 피했어요' };
-        return { term: '길 막기', text: `${ro(mine(pc))} 장군을 막았어요 (멍군)${s1.check ? ' · 장군까지' : ''}` };
-      }
-      const safe = !L.attacked(b1, t, op), V = C.VAL;
-      if (cap) {
-        if (safe) return { term: '기물 따기', text: `${eul(his(cap))} 공짜로 땄어요${s1.check ? ' · 장군까지' : ''}` };
-        if (V[cap] > V[pc]) return { term: '교환', text: `${ro(mine(pc))} 더 비싼 ${eul(his(cap))} 땄어요 (다시 잡혀도 이득)` };
-        if (V[cap] === V[pc]) return { term: '교환', text: `${wa(mine(pc))} ${eul(his(cap))} 맞바꿔요` };
-        return { term: '기물 따기', text: `${eul(his(cap))} 땄지만 ${iga(mine(pc))} 다시 잡힐 수 있어요` };
-      }
-      if (s1.check) return { term: '장군', text: `${ro(mine(pc))} 궁을 몰아요` };
-      if (nx.bik) return { term: '빅장', text: '궁끼리 마주 보게 했어요' };
-      const h0 = hangingOf(b0, me), h1 = hangingOf(b1, me);
-      if (h0.some(([q]) => q === f) && safe) return { term: '피하기', text: `잡힐 뻔한 ${eul(mine(pc))} 옮겼어요` };
-      const saved = h0.filter(([q]) => q !== f && !h1.some(([x]) => x === q)).sort((x, y) => V[y[1]] - V[x[1]]);
-      if (saved.length) {
-        const [q, tp, atk] = saved[0];
-        const blocked = atk.some(a => b1[a] === b0[a] && !L.attackers(b1, q, op).includes(a));     // 노리던 기물은 그대로인데 이제 못 노림 = 길을 막음
-        return blocked ? { term: '길 막기', text: `${ro(mine(pc))} 길을 막아 ${eul(mine(tp))} 지켰어요` } : { term: '지키기', text: `노려지던 ${eul(mine(tp))} 지켰어요` };
-      }
-      return null;
-    })();
-    return (rv.why[k] = out);
+    return (rv.why[k] = I.why(rvAt(rv, k), rvAt(rv, k + 1), nx));
   }
   // 장면 k 의 추천 수 (워커 · 같은 장면은 한 번만 물어봄) → Promise<추천 | null>
   function rvAsk(rv, k) {
@@ -942,15 +946,8 @@
   }
   // 다음 노림 (뚜렷할 때만): 외통 위협 · 기물 따기 · 장군 · 그 밖의 큰 수 — 그 수 뒤 판 값(상대 차례)보다 한 번 더 두면 1.5점 넘게 좋아질 때
   function rvThreatInfo(rv, k) {
-    const nx = rv.plays[k], nxt = rv.cache[k + 1], th = rv.thr[k]; if (!nx || !nxt) return null;
-    if (nxt.mate < 0) return { term: '외통 위협', text: `상대가 어떻게 받아도 ${-nxt.mate}수 안에 외통이에요`, arrow: th && th.mate > 0 ? [th.from, th.to] : null };
-    if (!th) return null;
-    const gain = th.score + nxt.score, me = nx.side, pn = C.pieceName(th.piece, me), arrow = [th.from, th.to];   // gain = 한 번 더 둘 때 얼마나 좋아지나 (100 = 1점)
-    if (th.mate > 0) return { term: '외통 위협', text: `그냥 두면 ${th.mate}수 안에 외통이에요`, arrow };
-    if (th.captured && gain >= 150) return { term: '기물 따기', text: `다음에 ${ro(pn)} ${eul(C.pieceName(th.captured, me ^ 1))} 따려고 해요`, arrow };
-    if (th.check && gain >= 200) return { term: '장군', text: `다음에 ${ro(pn)} 장군을 노려요`, arrow };
-    if (!th.captured && !th.check && gain >= 400) return { term: '노림', text: `다음에 ${C.sqName(th.from)}${pn}${C.sqName(th.to)} 수를 노려요`, arrow };   // 조용한 수는 아주 클 때만
-    return null;
+    const nx = rv.plays[k], nxt = rv.cache[k + 1]; if (!nx || !nxt) return null;
+    return I.aim(nx.side, rv.thr[k], nxt);
   }
   // 실제로 둔 수가 추천보다 얼마나 손해인가 (둔 쪽 기준 · 100 = 1점) — 아직 모르면 null
   function rvLoss(rv, k) {
@@ -1422,5 +1419,5 @@
   // 📒 아쉬운 장면 노트에서 열림 (?drill=<id>) → 그 장면부터 연습 판
   try { const dm = window.Mistakes && Mistakes.fromUrl('janggi'); if (dm) startDrill(dm); } catch (e) {}
   // 시험용 엿보기 (?debug 일 때만)
-  if (/[?&]debug\b/.test(location.search)) window.__janggi = { get G() { return G; }, get ON() { return ON; }, get TT() { return TT; }, act, C, board, coachTick, AIW, records, openRecord, reviewNow, rvGoto, rvBranch, rvCoachToggle, startDrill, autoScan, COACHW };
+  if (/[?&]debug\b/.test(location.search)) window.__janggi = { get G() { return G; }, get ON() { return ON; }, get TT() { return TT; }, act, C, I, board, coachTick, AIW, records, openRecord, reviewNow, rvGoto, rvBranch, rvCoachToggle, startDrill, autoScan, COACHW };
 })();

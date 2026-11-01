@@ -3,8 +3,8 @@
    쓰는 법 (브라우저·워커: 전역 ChessAI, Node: require):
      ChessAI.think({ start: FEN, moves: ['e2e4', …] }, { tier: 'easy'|'normal'|'hard', seed, timeMs, nodes, explain })
        → { move: 'g1f3', score(지금 둘 쪽 기준 cp), mate(+n 이기는 수 / -n 지는 수), depth, nodes, ms, pv: [...], book, why? }
-     ChessAI.explain(game, uci, res) → { kind, text } — AI 선생님 한 줄 까닭 ('나이트로 포크를 걸어요' …)
-     ChessAI.intent(game, uci, { timeMs }) → 복기: 실제로 둔 수의 까닭 · 이 수 뒤 형세 · 다음 노림(널 무브)
+     ChessAI.explain(game, uci, res, my?) → { kind, text, opp? } — AI 선생님 한 줄 까닭 ('나이트로 포크를 걸어요' …) · my 를 주면 opp = { done, next }: 상대가 둔 수를 내 쪽에서 읽는 말
+     ChessAI.intent(game, uci, { timeMs, my?, skipScore?, reply? }) → 복기·대국 중 '상대 수 읽기': 실제로 둔 수의 까닭 · 이 수 뒤 형세 · 다음 노림(널 무브)
      ChessAI.perft(fen, depth) · ChessAI.evaluate(fen) */
 (function (root, factory) {
   const m = factory();
@@ -613,7 +613,7 @@
     return finish(res);
     function finish(r) {
       r.ms = Date.now() - t0;
-      if (o.explain && r.move) { try { r.why = explain(game, r.move, r); } catch (e) { r.why = null; } }
+      if (o.explain && r.move) { try { r.why = explain(game, r.move, r, o.my); } catch (e) { r.why = null; } }
       return r;
     }
   }
@@ -630,7 +630,8 @@
     for (let s = 0; s < 128; s++) { if (s & 0x88) { s += 7; continue; } const p = b[s]; if (!p || (p & BL) !== cb || (p & 7) === K) continue; if (pos.see(s, c ^ 1) > 0) out.push([s, p & 7]); }
     return out;
   }
-  function explain(game, uci, res) {
+  // my = 읽는 사람 쪽 이름('내' · '백' · '흑'): 주면 같은 수를 '상대가 둔 수를 내 쪽에서 읽는' 말(opp.done 과거 · opp.next 짧은 이름)로도 돌려줌
+  function explain(game, uci, res, my) {
     const pos = setup(game);
     const m = pos.findUci(uci); if (!m) return null;
     const us = pos.side, them = us ^ 1, from = m & 127, to = (m >> 7) & 127, pr = (m >> 14) & 7, fl = m >>> 17;
@@ -689,30 +690,67 @@
     else if (pt === P && passed && ((to >> 4) >= 4 || (us && (to >> 4) <= 3))) { kind = 'passed'; text = '막을 폰이 없는 폰을 앞으로 밀어요'; }
     else if (res && res.score < -250) { kind = 'hold'; text = '어려운 판이에요. 가장 오래 버티는 수예요'; }
     else { kind = 'quiet'; text = pt === K ? '킹 자리를 다지는 수예요' : `${KO[pt]} 자리를 좋게 다지는 수예요`; }
-    return { kind, text };
+    const out = { kind, text };
+    if (my) {
+      const dt = hangBefore.find(([s]) => !hangAfter.some(([s2]) => s2 === s)), f3 = forkT.slice(0, 3);
+      const nm = ts => ts.map(t => KO[t]).join('·');
+      const W = {
+        mate: ['체크메이트!', '메이트'],
+        mateIn: ['메이트를 노려요', '메이트 위협'],
+        promote: [`폰을 ${KO[pr]}${RO[pr]} 승진시켰어요!`, '폰 승진'],
+        fork: [`${KO[mover]}${RO[mover]} 포크를 걸었어요 (${my} ${joinKo(f3)} 함께 노려요)`, `${KO[mover]}${RO[mover]} 포크 — ${my} ${nm(f3)} 동시에`],
+        win: [!defended ? `${my} ${KO[ct]}${EUL[ct]} 공짜로 잡았어요` : `${KO[pt]}${RO[pt]} ${my} ${KO[ct]}${EUL[ct]} 잡아 이득을 봤어요`, `${my} ${KO[ct]}${EUL[ct]} 잡기`],
+        pin: [pin && pin[1] === K ? `${KO[mover]}${RO[mover]} 핀을 걸었어요 (${my} ${KO[pin[0]]}${IGA[pin[0]]} 킹 앞에서 꼼짝 못 해요)` : pin ? `${KO[mover]}${RO[mover]} 핀을 걸었어요 (${my} ${KO[pin[0]]}${IGA[pin[0]]} 움직이면 ${KO[pin[1]]}${IGA[pin[1]]} 잡혀요)` : '', pin ? `${KO[mover]}${RO[mover]} 핀 — ${my} ${KO[pin[0]]}${IGA[pin[0]]} 묶여요` : ''],
+        escape: [`공격받던 자기 ${KO[pt]}${EUL[pt]} 안전한 곳으로 피했어요`, ''],
+        defend: [`위험했던 자기 ${KO[dt ? dt[1] : P]}${EUL[dt ? dt[1] : P]} 지켰어요`, ''],
+        castle: ['캐슬링으로 킹을 숨기고 룩을 꺼냈어요', ''],
+        threat: [`${my} ${KO[threats[0]]}${EUL[threats[0]]} 노리고 있어요`, `${my} ${KO[threats[0]]}${EUL[threats[0]]} 노려요`],
+        check: ['체크를 걸었어요', `체크로 ${my} 킹을 몰아붙여요`],
+        trade: [`${my} ${KO[ct]}${EUL[ct]} 잡아 맞바꿨어요`, `${my} ${KO[ct]}${EUL[ct]} 잡기`],
+        develop: [`${KO[pt]}${EUL[pt]} 전개했어요`, ''],
+        center: ['폰으로 중앙을 차지했어요', ''],
+        passed: ['막을 폰이 없는 폰을 앞으로 밀었어요', ''],
+        hold: ['버티는 수를 뒀어요', ''],
+        quiet: [pt === K ? '킹을 옮겼어요' : pt === P ? '폰을 앞으로 밀었어요' : `${KO[pt]}${EUL[pt]} 옮겼어요`, ''],
+      }[kind] || ['', ''];
+      out.opp = { done: W[0], next: W[1] };
+    }
+    return out;
   }
 
   // ════════ 복기 선생님: 실제로 둔 수가 노린 것 ════════
   // intent(game, uci, { timeMs }) → { score, mate: 둔 쪽 기준 이 수 뒤 형세(상대가 가장 잘 받았을 때), why: explain(실제 수), check,
   //   threat: { move, score, mate, why, fen } | null } — threat = 둔 쪽이 한 번 더 둔다면(널 무브) 가장 좋은 수 = '다음에 노리는 것'.
   //   이 수가 체크면 상대가 차례를 넘길 수 없으니 threat 없음. fen 은 그 '한 번 더' 국면 (SAN 만들기용)
+  //   o.my = '내' 등 → why.opp / threat.why.opp (상대 수를 내 쪽에서 읽는 말) · o.skipScore = 이 수 뒤 형세 읽기는 건너뜀(이미 알 때) ·
+  //   o.reply = 내가 이어 둘 수 → threat.after = { legal, kind }: 그 수를 두고도 같은 노림이 통하나 (읽지 않고 판 위 사실만으로 확인)
   function intent(game, uci, o = {}) {
     const t = o.timeMs || 450, start = (game && game.start) || START, moves = ((game && game.moves) || []).slice();
     const pos = setup(game), m = pos.findUci(uci);
     if (!m) return null;
-    const why = explain(game, uci, null);
+    const why = explain(game, uci, null, o.my);
     const st = start.split(' '), n = moves.length + 1, full = (+st[5] || 1) + Math.floor((n + (st[1] === 'b' ? 1 : 0)) / 2);
     pos.make(m);
     const check = pos.inCheck(), replies = pos.legalMoves().length;
     let score = 0, mate = 0;
     if (!replies) { if (check) { score = MATE - 1; mate = 1; } }
-    else { const r = think({ start, moves: moves.concat(uci) }, { tier: 'hard', hint: true, timeMs: t, seed: 3 }); score = -r.score; mate = -r.mate || 0; }
+    else if (!o.skipScore) { const r = think({ start, moves: moves.concat(uci) }, { tier: 'hard', hint: true, timeMs: t, seed: 3 }); score = -r.score; mate = -r.mate || 0; }
     let threat = null;
     if (!check && replies) {
       pos.makeNull();
       const fen = pos.fen().replace(/ \d+$/, ' ' + full);
-      const r = think({ start: fen, moves: [] }, { tier: 'hard', hint: true, explain: true, timeMs: t, seed: 5 });
+      const r = think({ start: fen, moves: [] }, { tier: 'hard', hint: true, explain: true, timeMs: t, seed: 5, my: o.my });
       if (r.move) threat = { move: r.move, score: r.score, mate: r.mate, why: r.why || null, fen };
+      if (threat && o.reply) {
+        try {
+          const p2 = setup({ start, moves: moves.concat(uci) }), rm = p2.findUci(o.reply);
+          if (rm) {
+            p2.make(rm);
+            const tm = p2.findUci(threat.move);
+            threat.after = tm ? { legal: true, kind: (explain({ start, moves: moves.concat(uci, o.reply) }, threat.move, null) || {}).kind || '' } : { legal: false, kind: '' };
+          }
+        } catch (e) {}
+      }
     }
     return { score, mate, why, check, threat };
   }

@@ -139,6 +139,8 @@ header.top h1{display:flex;align-items:center;gap:8px}
 .ch-mv{font-size:14px}
 .ch-mv b{font:800 16px var(--round);color:#6ee7b7}
 .ch-sub{margin-top:3px;font-size:12px;color:var(--soft)}
+.ch-form{margin-top:3px;font-size:13px;color:#cbd5e1}
+.ch-why{margin-top:3px;font-size:13px;color:#fde68a}
 .ch-rev{margin-bottom:5px;padding-bottom:5px;border-bottom:1px dashed var(--line)}
 .ch-rev.bad b{color:#fca5a5}
 .ch-real{margin-top:3px;font-size:13.5px}

@@ -8,11 +8,13 @@
    5) 아무렇게나 끝까지 둔 판: 반칙 상태 없음 (궁 잡힘 · 궁/사 궁성 밖 · 둔 쪽 궁이 장군에 남음 · 졸 뒤로 …)
    6) AI: 한 수 외통 · 공짜 차 잡기 · 잡힐 기물 피하기 · 결정성 · 선생님 까닭(공짜 · 장군 · 피하기 …)
    7) AI 끼리 (일꾼 스레드): 🐯 고급 > 🐱 중급 > 🐣 초급, 반칙 없음
-   8) 학습 입력(RL.md): 관찰 길이 · 행동 번호 겹침 없음 · 합법 수 가림 */
+   8) 학습 입력(RL.md): 관찰 길이 · 행동 번호 겹침 없음 · 합법 수 가림
+   9) AI 선생님 흐름(intent.js): 상대가 둔 수 읽기('내 차' 말투) · 다음 노림 · 추천이 노림에 맞서는 법 · 형세 말 · 복기 말투는 그대로 */
 'use strict';
 const path = require('path');
 const C = require('../core.js');
 const AI = require('../ai.js');
+const I = require('../intent.js');
 const QUICK = process.argv.includes('quick');
 const GAMES = +((process.argv.find(a => a.startsWith('games=')) || '').split('=')[1] || (QUICK ? 4 : 8));
 const T0 = Date.now();
@@ -431,6 +433,84 @@ section('AI · 선생님');
   const rh = AI.think(gh, { tier: 'normal', seed: 1 });
   const th = C.fromJSON(gh); C.step(th, rh.move);
   ok(!th.over && !th.bik, '중급: 점수에서 뒤지면 빅장을 풀음', `${rh.move}`);
+}
+
+// ════════ 9) AI 선생님 흐름: 👀 상대 수 읽기 ════════
+section('AI 선생님 흐름 (상대 수 읽기 · 노림 · 추천이 맞서는 법)');
+{
+  const FR = fen => C.fromJSON({ fen, rules: { bik: 'off' } });
+  const read = (fen, f, t, opp) => { const s0 = FR(fen), mv = C.legal(s0).find(x => x.from === f && x.to === t); if (!mv) return null; const s1 = C.fastClone(s0); C.step(s1, mv.uci); return I.why(s0, s1, s1.last, { opp }); };
+  // 조사
+  ok(I.eul('상') === '상을' && I.eul('차') === '차를' && I.ro('졸') === '졸로' && I.ro('궁') === '궁으로' && I.ro('차') === '차로' && I.iga('병') === '병이' && I.wa('포') === '포와', '조사: 받침 따라 (졸로 · 궁으로 · 병이 …)');
+  // 상대(한)가 둔 수를 내(초) 쪽에서 읽기 vs 복기(둔 쪽에서)
+  const cap = '4k4/9/9/r8/9/9/9/9/4K4/C8 h', capF = sq(1, 4), capT = sq(1, 10);
+  let a = read(cap, capF, capT, true), b = read(cap, capF, capT, false);
+  ok(a && a.text === '내 포를 공짜로 땄어요', '상대 수 읽기: 내 포를 공짜로 땄어요', a && a.text);
+  ok(b && b.text === '포를 공짜로 땄어요', '복기 말투는 그대로 (내 없음)', b && b.text);
+  const chk = '4k4/9/9/9/9/9/9/9/4K4/r8 h';
+  a = read(chk, sq(1, 10), sq(5, 10), true); b = read(chk, sq(1, 10), sq(5, 10), false);
+  ok(a && a.text === '차로 내 궁에 장군을 걸었어요' && b && b.text === '차로 궁을 몰아요', '장군: 상대가 걸면 "내 궁에 장군", 복기는 "궁을 몰아요"', `${a && a.text} / ${b && b.text}`);
+  a = read('4k4/9/9/r8/9/9/9/9/4K4/1H7 h', sq(1, 4), sq(2, 4), true);
+  ok(a && a.term === '노림' && a.text === '차로 내 마를 노려요' && a.tg.includes(C.H), '조용한 수도 새로 노리게 된 내 기물을 말함', a && a.text);
+  ok(read('4k4/9/9/r8/9/9/9/9/4K4/1H7 h', sq(1, 4), sq(2, 4), false) === null, '복기는 조용한 수를 말하지 않음 (기존 그대로)');
+  a = read('4k4/9/9/9/1p7/9/9/9/4K4/R8 h', sq(2, 5), sq(1, 5), true);
+  ok(a && a.term === '무리수' && /잡힐 수 있는 자리/.test(a.text), '잡힐 자리에 놓은 수를 알려 줌', a && a.text);
+  a = read('4k4/9/9/9/4p4/9/9/9/4K4/9 h', sq(5, 5), sq(4, 5), true);
+  ok(a && /병을 옆으로 옮겼어요/.test(a.text), '조용한 병 수: 옆으로 옮겼어요', a && a.text);
+  // 다음 노림
+  const th0 = { move: 'x', from: 19, to: 64, piece: C.R, captured: C.C, check: false, score: 700, mate: 0 };
+  let n = I.aim(1, th0, { score: 0, mate: 0 }, { opp: true });
+  ok(n && n.term === '기물 따기' && n.text === '다음에 차로 내 포를 따려고 해요' && n.arrow.join() === '19,64' && /내 포 따기/.test(n.lab), '노림: 다음에 차로 내 포를 따려고 해요 (+ 화살표)', n && n.text);
+  n = I.aim(1, th0, { score: 0, mate: 0 });
+  ok(n && n.text === '다음에 차로 포를 따려고 해요', '노림 복기 말투 (내 없음)', n && n.text);
+  ok(I.aim(1, Object.assign({}, th0, { score: 100 }), { score: 0, mate: 0 }, { opp: true }) === null, '1.5점 안 되게 좋아지는 노림은 말하지 않음');
+  n = I.aim(1, null, { score: 0, mate: -2 }, { opp: true });
+  ok(n && n.term === '외통 위협' && /2수 안에 외통을 당해요/.test(n.text), '내가 어떻게 받아도 외통이면 알림', n && n.text);
+  n = I.aim(1, Object.assign({}, th0, { captured: 0, mate: 3 }), { score: 0, mate: 0 }, { opp: true });
+  ok(n && /막지 않으면 3수 안에 외통/.test(n.text), '막지 않으면 외통 위협', n && n.text);
+  n = I.aim(1, { move: 'x', from: 19, to: 20, piece: C.H, captured: 0, check: false, score: 900, mate: 0 }, { score: 0, mate: 0 }, { opp: true, via: { term: '노림', text: '마로 내 상을 노려요', next: '마로 내 상을 노려요' } });
+  ok(n && n.text === '다음에 마로 내 상을 노려요', '조용한 큰 수는 그 수가 하는 일로 설명', n && n.text);
+  // 추천이 노림에 맞서는 법 (내 포 · 한 차가 포를 노림)
+  const T = (fenH, f, t, piece, capd) => ({ move: C.legal(FR(fenH)).find(x => x.from === f && x.to === t).uci, from: f, to: t, piece, captured: capd, check: false, score: 700, mate: 0, side: 1 });
+  const ctr = (fen, th, from, to, kind) => { const s = FR(fen + ' c'), u = C.legal(s).find(x => x.from === from && x.to === to); if (!u) return { kind: 'NOMOVE' }; return I.counter(s, { move: u.uci, why: { kind } }, th, I.aim(1, th, { score: 0, mate: 0 }, { opp: true })); };
+  let f1 = '4k4/9/1r7/9/9/3R5/9/1H7/4K4/9', t1 = T(f1 + ' h', sq(2, 3), sq(2, 8), C.R, C.H), c1 = ctr(f1, t1, sq(2, 8), sq(3, 6), 'develop');
+  ok(c1 && c1.kind === 'escape' && c1.text === '상대 노림(차로 내 마 따기)을 피하는 수예요', '추천: 노려진 기물을 옮김 → 피하는 수', c1 && c1.text);
+  f1 = '4k4/9/1r7/9/9/3R5/9/1C7/4K4/9'; t1 = T(f1 + ' h', sq(2, 3), sq(2, 8), C.R, C.C); c1 = ctr(f1, t1, sq(4, 6), sq(2, 6), 'develop');
+  ok(c1 && c1.kind === 'block' && c1.text === '상대 노림(차로 내 포 따기)을 막는 수예요', '추천: 길을 막음 → 막는 수예요', c1 && c1.text);
+  c1 = ctr(f1, t1, sq(4, 6), sq(5, 6), 'check');
+  ok(c1 && c1.kind === 'check' && /장군으로 상대 노림/.test(c1.text), '추천: 장군으로 먼저 막음', c1 && c1.text);
+  f1 = '4k4/9/1r4R2/9/9/9/9/1C7/4K4/9'; t1 = T(f1 + ' h', sq(2, 3), sq(2, 8), C.R, C.C); c1 = ctr(f1, t1, sq(7, 3), sq(2, 3), 'free');
+  ok(c1 && c1.kind === 'take' && /노리던 상대 차를 잡아/.test(c1.text), '추천: 노리던 기물을 잡음', c1 && c1.text);
+  f1 = '4k4/9/1r7/9/9/3R4c/9/1C7/4K4/9'; t1 = T(f1 + ' h', sq(2, 3), sq(2, 8), C.R, C.C); c1 = ctr(f1, t1, sq(4, 6), sq(9, 6), 'free');
+  ok(c1 && c1.kind === 'bigger' && /더 커요/.test(c1.text), '추천: 더 큰 수(공짜 잡기)면 노림보다 크다고 말함', c1 && c1.text);
+  f1 = '4k4/9/1r7/9/9/5R3/9/1C7/4K4/9'; t1 = T(f1 + ' h', sq(2, 3), sq(2, 8), C.R, C.C); c1 = ctr(f1, t1, sq(6, 6), sq(6, 8), 'develop');
+  ok(c1 && c1.kind === 'defend' && /지켜 주는 수/.test(c1.text), '추천: 차로 받침 → 지켜 주는 수', c1 && c1.text);
+  f1 = '4k4/9/1r7/9/9/9/9/1C3R3/4K4/9'; t1 = T(f1 + ' h', sq(2, 3), sq(2, 8), C.R, C.C); c1 = ctr(f1, t1, sq(5, 9), sq(4, 9), 'develop');
+  ok(c1 && c1.kind === 'recap', '추천: 원래 받쳐져 있으면 잡혀도 되잡을 수 있다고 말함', c1 && c1.kind);
+  f1 = '4k4/9/1r7/9/9/9/9/1C7/4K4/9'; t1 = T(f1 + ' h', sq(2, 3), sq(2, 8), C.R, C.C); c1 = ctr(f1, t1, sq(5, 9), sq(4, 9), 'plain');
+  ok(c1 && c1.kind === 'other' && /받지 않아도/.test(c1.text), '추천: 막지도 않으면 그 사정을 짧게 말함', c1 && c1.text);
+  ok(I.recText({ kind: 'plain', text: '형세를 차분히 다져요' }, c1) === '형세를 차분히 다져요 — 상대 노림은 받지 않아도 된다고 읽었어요', '까닭 합치기: 덧붙임');
+  ok(I.recText({ kind: 'defend', text: '포를 지켜요' }, { kind: 'block', text: '상대 노림(…)을 막는 수예요' }) === '상대 노림(…)을 막는 수예요', '까닭 합치기: 막는 수가 주인공');
+  ok(I.recText({ kind: 'free', text: '차가 공짜로 잡혀요' }, { kind: 'take', text: '노리던 상대 차를 잡아 없애요' }) === '차가 공짜로 잡혀요 · 노리던 상대 차를 잡아 없애요', '까닭 합치기: 뚜렷한 까닭은 같이');
+  ok(I.recText({ kind: 'plain', text: 'A' }, null) === 'A' && I.recText(null, null) === '', '까닭 합치기: 노림 없으면 그대로');
+  // 형세 말
+  let f = I.formText({ score: -390, mate: 0 }, 0, { d: -120 });
+  ok(f.text === '내가 약 3.9점 뒤져요' && f.delta === '지난 차례보다 −1.2점', '형세: 내가 약 3.9점 뒤져요 (지난 차례보다 −1.2점)', JSON.stringify(f));
+  f = I.formText({ score: 250, mate: 0 }, 1, { d: 40 });
+  ok(f.text === '내가 약 2.5점 앞서요' && f.delta === '', '형세: 변화 1점 미만이면 말하지 않음', JSON.stringify(f));
+  ok(I.formText({ score: 20, mate: 0 }, 0).text === '팽팽해요' && /한이 약 1\.0점 앞서요/.test(I.formText({ score: 100, mate: 0 }, 1, { duo: true }).text), '형세: 팽팽 · 둘이서는 초가/한이');
+  ok(/상대가 3수 안에 외통/.test(I.formText({ score: 0, mate: -3 }, 0).text) && /내가 2수 안에 외통을 만들/.test(I.formText({ score: 0, mate: 2 }, 0).text) && /점수로 이겨요/.test(I.formText({ score: 16000, mate: 0 }, 0).text), '형세: 외통 · 점수 승');
+  // 엔진까지: 한 차가 내 포를 노리며 도망온 장면 → 읽기 + 추천이 노림에 맞섬 (노드 수 고정 = 같은 결과)
+  const s0 = FR('4k4/9/3r5/9/9/3R5/9/1C7/4K4/9 h'), mv0 = C.legal(s0).find(x => x.from === sq(4, 3) && x.to === sq(2, 3)), s1 = C.fastClone(s0); C.step(s1, mv0.uci);
+  const nx = s1.last, hint = AI.think(C.toJSON(s1), { tier: 'hard', hint: true, explain: true, nodes: 40000, timeMs: 1e9, seed: 7 });
+  const fen1 = C.toFen(s1.b, nx.side), r1 = AI.think({ rules: s1.rules, fen: fen1 }, { tier: 'hard', hint: true, nodes: 30000, timeMs: 1e9, seed: 11 });
+  const m1 = C.parseMove(r1.move), sF = C.create({ rules: s1.rules, fen: fen1 }), sF0 = C.fastClone(sF), pc1 = sF.b[m1 >> 7] & 7, cp1 = sF.b[m1 & 127] & 7; C.step(sF, r1.move);
+  const th1 = { move: r1.move, from: m1 >> 7, to: m1 & 127, piece: pc1, captured: cp1, check: sF.check, score: r1.score, mate: r1.mate };
+  const aim1 = I.aim(nx.side, th1, hint, { opp: true, via: I.why(sF0, sF, sF.last, { opp: true }) }), why1 = I.why(s0, s1, nx, { opp: true }), ct1 = aim1 && I.counter(s1, hint, th1, aim1);
+  ok(why1 && why1.text === '잡힐 뻔한 자기 차를 옮겼어요', '흐름: 상대가 한 일 = 잡힐 뻔한 자기 차를 옮김', why1 && why1.text);
+  ok(aim1 && aim1.term === '기물 따기' && /내 포를 따려고/.test(aim1.text), '흐름: 다음 노림 = 차로 내 포를 따려고 함', aim1 && aim1.text);
+  ok(ct1 && /^상대 노림\(차로 내 포 따기\)|^상대 노림보다|^노리던|^장군으로 상대 노림/.test(ct1.text), '흐름: 추천이 그 노림에 어떻게 맞서는지 말함', `${hint.move} ${ct1 && ct1.text}`);
+  console.log(`  흐름 예: 👀 상대 ${C.notation(nx)}: ${why1 && why1.text} · ${aim1 && aim1.text}  /  💡 ${hint.why && hint.why.text} → ${ct1 && ct1.text}`);
 }
 
 // ════════ 8) 학습 입력 ════════
