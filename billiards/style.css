@@ -153,7 +153,11 @@ body.land.short .bar .mid .t{display:inline}
 /* AI 선생님 내용 */
 .cpn-body .cbtn{margin-top:7px;font:700 12.5px var(--round);border:1px solid var(--gold);background:rgba(217,180,106,.18);color:#fde68a;border-radius:9px;padding:6px 10px;cursor:pointer}
 .cpn-body .rate{display:inline-block;margin-top:4px;font-weight:800;color:#6ee7b7}
+body .cpn{width:min(380px,95vw)}                   /* 읽을 말이 늘어서 조금 넓게 (폰 가로를 거의 다) */
+@media (orientation:landscape){ body .cpn{width:min(500px,64vw);max-height:min(62vh,62dvh)} }   /* 가로 화면은 옆으로 넓게 → 줄 수가 줄어 📊 까지 한눈에 */
 .cpn-body .cl{display:block;margin-top:3px}
+.cpn-body .cl.why{color:#a7f3d0}                 /* 👉 수의 의미 */
+.cpn-body .cl.rd{color:#e2e8f0}                  /* 👀 상대 흐름 · 📊 내 흐름 */
 
 /* 친구랑: 내 차례 강조 (금색 깜빡) · 이긴 횟수 · 구경 인원 */
 #sub.myturn{color:#3b2606;background:linear-gradient(180deg,#fde047,#f59e0b);border-radius:99px;padding:2px 12px;font-weight:800;animation:subpulse 1s ease-in-out infinite}
@@ -209,3 +213,5 @@ body.land .rpgo button{height:30px;padding:0 10px;font-size:12.5px}
 body.land .rpgo .br span{display:none}
 body.land .rpinfo{flex:1 1 auto;min-height:0;max-height:none}
 body.land.short .rp .board{flex-direction:column;align-items:stretch;gap:4px}
+/* 겨누는 동안(판을 끄는 동안)은 선생님 창을 거의 투명하게 — 흐름 줄이 늘어 세로 폰에서 판 윗부분 공을 가림 (11-02) */
+body.aiming .cpn{opacity:.15;pointer-events:none;transition:opacity .12s}

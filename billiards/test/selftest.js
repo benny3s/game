@@ -320,5 +320,143 @@ section('샷 값 검사');
   ok(JSON.stringify(n1) === JSON.stringify(n2), '고칠 수 없는 각도는 0 으로 침 (정상 값은 그대로)');
 }
 
+// 11) AI 선생님 흐름 읽기 (11-01): 👀 상대 흐름 · 📊 내 흐름 · 👉 수의 의미 — 어디 두라고만 하지 않고 까닭을 말로
+section('선생님 흐름 읽기');
+{
+  const has = typeof AI.shotRec === 'function' && typeof AI.flowRead === 'function' && typeof AI.whyShot === 'function';
+  ok(has, 'AI.shotRec · AI.flowRead · AI.whyShot 가 있음');
+  if (has) {
+    const R3 = B.TABLES.carom.R;
+    const names = ['나', '김씨'];
+    const evs = ev => ev.map((e, i) => Object.assign({ f: i, v: 1 }, e));
+    // 가짜 사건으로 친 샷 하나를 기록으로 (judge: 위 규칙 시험의 도우미)
+    const rec = (s, cue, ev, edit) => { const j = judge(s, cue, ev, edit); return { rec: AI.shotRec(s, j.s, j.r, evs(ev), cue), s: j.s, r: j.r }; };
+    const SCORE1 = [{ k: 'c', a: 1, b: 0 }, { k: 'c', a: 1, b: 1 }, { k: 'c', a: 1, b: 2 }, { k: 'b', a: 1, b: 2 }, { k: 'b', a: 1, b: 0 }];   // 노란 공(1번 자리)이 쿠션 3번 뒤 두 공
+    const MYSCORE = [{ k: 'c', a: 0, b: 0 }, { k: 'c', a: 0, b: 1 }, { k: 'c', a: 0, b: 2 }, { k: 'b', a: 0, b: 1 }, { k: 'b', a: 0, b: 2 }];
+    const center = (s, i) => { s.balls[i].x = 1.4; s.balls[i].y = 0.7; return s; };
+
+    // (1) 상대 한 번 실패 → 👀 에 이름 · 실패, 내 공이 쿠션에 붙었으면 그 말
+    {
+      const c = B.create({ mode: '3c', players: 2, target: 10, seed: 1 }); c.turn = 1; c.innings[1] = 1;
+      const a = rec(c, 1, []);
+      ok(a.s.turn === 0, '시험 준비: 상대 실패로 내 차례');
+      const rail = B.clone(a.s); rail.balls[0].x = 1.0; rail.balls[0].y = R3 + 0.002;
+      let F = AI.flowRead(rail, [a.rec], { names, kind: 'ai', rate: 20 });
+      ok(/김씨/.test(F.opp) && /실패/.test(F.opp), `👀 이름 · 실패 (${F.opp})`);
+      ok(/쿠션/.test(F.opp) && /내 공/.test(F.opp), `👀 내 공이 쿠션에 붙은 자리를 말함 (${F.opp})`);
+      const mid = B.clone(a.s);
+      F = AI.flowRead(mid, [a.rec], { names, kind: 'ai', rate: 20 });
+      ok(!/쿠션에 붙|쿠션 가까이/.test(F.opp) && /어려운/.test(F.opp), `👀 쿠션 말이 없으면 성공률로 어려운 자리 (${F.opp})`);
+      F = AI.flowRead(mid, [a.rec], { names, kind: 'ai', rate: 85 });
+      ok(/쉬운/.test(F.opp), `👀 성공률 높으면 쉬운 자리 (${F.opp})`);
+      ok(/나 0/.test(F.race) && /김씨 0/.test(F.race) && /목표 10/.test(F.race), `📊 점수 · 목표 (${F.race})`);
+      // 오래된 기록(샷 수가 안 맞음)은 무시
+      const stale = B.clone(mid); stale.shots += 3;
+      ok(AI.flowRead(stale, [a.rec], { names, kind: 'ai' }).opp === '', '👀 지금 판과 안 맞는 옛 기록은 말하지 않음');
+      ok(AI.flowRead(mid, [], { names, kind: 'ai' }).opp === '' && AI.flowRead(mid, [], { names, kind: 'ai' }).race !== '', '👀 첫 차례는 없음 · 📊 는 있음');
+    }
+    // (2) 상대가 연속 득점하다 실패 + 내 지난 차례 점수
+    {
+      const c = B.create({ mode: '3c', players: 2, target: 10, seed: 1 });
+      const h = [];
+      let x = rec(c, 0, MYSCORE); h.push(x.rec);                 // 내가 1점
+      x = rec(x.s, 0, []); h.push(x.rec);                        // 나 실패 → 상대
+      ok(x.s.turn === 1, '시험 준비: 내 실패 뒤 상대 차례');
+      x = rec(x.s, 1, SCORE1); h.push(x.rec);
+      x = rec(x.s, 1, SCORE1); h.push(x.rec);
+      x = rec(x.s, 1, [{ k: 'b', a: 1, b: 2 }, { k: 'c', a: 1, b: 0 }]); h.push(x.rec);    // 상대 세 번째 실패
+      const F = AI.flowRead(x.s, h, { names, kind: 'ai', rate: 50 });
+      ok(/김씨/.test(F.opp) && /2번 연속 득점/.test(F.opp) && /실패/.test(F.opp), `👀 연속 득점 뒤 실패 (${F.opp})`);
+      ok(/나 1/.test(F.race) && /김씨 2/.test(F.race) && /1점 뒤져요/.test(F.race), `📊 점수 차 (${F.race})`);
+      ok(/지난 차례 \+1/.test(F.race), `📊 내 지난 차례 점수 (${F.race})`);
+    }
+    // (3) 내가 방금 득점해서 계속이면 👀 없음 · 연속 득점 표시
+    {
+      const c = B.create({ mode: '3c', players: 2, target: 10, seed: 1 });
+      const a = rec(c, 0, MYSCORE);
+      const F = AI.flowRead(a.s, [a.rec], { names, kind: 'ai' });
+      ok(F.opp === '' && /득점/.test(F.race), `내가 득점해 계속이면 👀 없음 · 📊 방금 득점 (${F.race})`);
+    }
+    // (4) 4구: 상대가 내 공을 건드려 감점 · 다마 단위
+    {
+      const c = B.create({ mode: '4gu', players: 2, target: 80, seed: 1 }); c.turn = 1; c.innings[1] = 1; c.scores = [3, 2];
+      const a = rec(c, 1, [{ k: 'b', a: 1, b: 0 }]);
+      const F = AI.flowRead(a.s, [a.rec], { names, kind: 'ai', rate: 50 });
+      ok(/감점/.test(F.opp), `👀 4구 감점 (${F.opp})`);
+      ok(/다마/.test(F.race) && /30/.test(F.race) && /10/.test(F.race), `📊 4구는 다마 단위 (${F.race})`);
+    }
+    // (5) 포켓볼: 넣고 → 못 넣음 / 스크래치 반칙
+    {
+      const p = B.create({ mode: '8ball', players: 2, seed: 4 }); p.breakShot = false; p.ballInHand = false; p.kitchen = false; p.groups = ['solid', 'stripe']; p.turn = 1; p.innings[1] = 1;
+      const h = [];
+      const e1 = [{ k: 'b', a: 0, b: 9 }, { k: 'p', a: 9, b: 1 }], e2 = [{ k: 'b', a: 0, b: 10 }, { k: 'c', a: 10, b: 1 }];
+      const j1 = judge(p, 0, e1, f => { f[9].on = false; });
+      h.push(AI.shotRec(p, j1.s, j1.r, evs(e1), 0));
+      const j2 = judge(j1.s, 0, e2);
+      h.push(AI.shotRec(j1.s, j2.s, j2.r, evs(e2), 0));
+      ok(j2.s.turn === 0, '시험 준비: 포켓볼 상대 차례 끝');
+      const F = AI.flowRead(j2.s, h, { names, kind: 'ai' });
+      ok(/김씨/.test(F.opp) && /1개/.test(F.opp) && /넣/.test(F.opp), `👀 포켓볼 넣은 개수 (${F.opp})`);
+      ok(/남음/.test(F.race), `📊 포켓볼 남은 공 (${F.race})`);
+      // 스크래치 반칙 → 내가 프리볼
+      const e3 = [{ k: 'b', a: 0, b: 10 }, { k: 'p', a: 0, b: 2 }];
+      const j3 = judge(p, 0, e3, f => { f[0].on = false; });
+      const F3 = AI.flowRead(j3.s, [AI.shotRec(p, j3.s, j3.r, evs(e3), 0)], { names, kind: 'ai' });
+      ok(/반칙/.test(F3.opp) && /프리볼/.test(F3.opp), `👀 포켓볼 반칙 → 프리볼 (${F3.opp})`);
+    }
+    // (6) 한 기기 여럿: 이름으로 부름 ('나' 아님)
+    {
+      const c = B.create({ mode: '3c', players: 2, target: 5, seed: 1 }); c.turn = 1; c.innings[1] = 1;
+      const a = rec(c, 1, []);
+      const F = AI.flowRead(a.s, [a.rec], { names: ['지민', '명재'], kind: 'hot' });
+      ok(/명재/.test(F.opp) && /지민 0/.test(F.race) && !/나 0/.test(F.race), `한 기기 여럿은 이름 그대로 (${F.race})`);
+      const F2 = AI.flowRead(a.s, [a.rec], { names: ['나', '친구 2'], kind: 'hot' });
+      ok(/친구 2: 0/.test(F2.race), `이름이 숫자로 끝나면 점수와 안 헷갈리게 (${F2.race})`);
+    }
+    // (7) 혼자 연습: 상대 대신 방금 내 샷 · 성공/시도
+    {
+      const c = B.create({ mode: '3c', players: 1, target: 10, seed: 1, practice: true });
+      const a = rec(c, 0, []);
+      const F = AI.flowRead(a.s, [a.rec], { names: ['나'], kind: 'practice', pr: { tries: 3, ok: 2, run: 0, best: 2 } });
+      ok(/방금 내 샷/.test(F.opp) && /2\/3/.test(F.race), `연습: 방금 내 샷 · 성공 수 (${F.opp} / ${F.race})`);
+    }
+
+    // (8) 👉 수의 의미
+    {
+      const c = B.create({ mode: '3c', players: 2, target: 10, seed: 1 });
+      const base = { ok: true, mode: '3c', firstBall: 1, thick: 0.5, side: 'left', rails: [], second: 2, action: { angle: 0, power: 0.55, spinX: 0, spinY: 0 } };
+      const rail = B.clone(c); rail.balls[0].x = 1.0; rail.balls[0].y = R3 + 0.002;
+      let w = AI.whyShot(rail, Object.assign({}, base, { bankFirst: true, rails: [3, 0, 1], firstBall: 2, second: 1 }));
+      ok(/쿠션에 붙/.test(w) && /짧은 쿠션/.test(w), `👉 쿠션에 붙은 공 → 짧은 쿠션 먼저 (${w})`);
+      w = AI.whyShot(center(B.clone(c), 0), Object.assign({}, base, { ok: false }));
+      ok(/확실한/.test(w), `👉 길이 안 보이면 솔직히 (${w})`);
+      const nice = center(B.clone(c), 0);
+      const end = nice.balls.map(b => ({ x: b.x, y: b.y, on: true })); end[0].x = 1.2; end[0].y = 0.7; end[1].x = 1.5; end[1].y = 0.8; end[2].x = 1.6; end[2].y = 0.5;   // 수구가 두 공 가까이
+      w = AI.whyShot(nice, Object.assign({}, base, { rails: [1, 2, 3], end }));
+      ok(/가까이 남/.test(w) && /3번/.test(w), `👉 성공하면 다음 공이 가까이 남는 길 (${w})`);
+      w = AI.whyShot(nice, Object.assign({}, base, { rails: [1, 2, 3], end: null, action: { angle: 0, power: 0.55, spinX: 0, spinY: -0.6 } }));
+      ok(/끌어치기/.test(w), `👉 회전 이야기 (${w})`);
+    }
+    // (9) 아무 샷이나 설명해도 이상한 글(undefined · NaN)이 안 나옴 + 오류 없음
+    {
+      let bad = 0, n = 0, empty = 0, noEnd = 0;
+      for (const mode of ['3c', '4gu', '8ball']) {
+        for (let k = 0; k < 8; k++) {
+          const s = mode === '8ball' ? B.create({ mode, seed: 60 + k }) : randomCarom(mode, 60 + k);
+          const a = AI.choose(s, 'easy', { seed: k });
+          const r = AI.describe(s, a);
+          let w = ''; try { w = AI.whyShot(s, r); } catch (e) { bad++; console.error(e.message); }
+          let F = null; try { F = AI.flowRead(s, [], { names, kind: 'ai', rate: 40 }); } catch (e) { bad++; console.error(e.message); }
+          n++;
+          if (!Array.isArray(r.end) || r.end.length !== s.balls.length) noEnd++;      // 👉 '성공하면 다음 공도…' 를 읽는 재료: 친 뒤 공 자리
+          if (typeof w !== 'string' || !w) empty++;
+          if (/undefined|NaN|null|\[object/.test(w + (F ? F.race + F.opp : ''))) { bad++; console.error('이상한 글:', w, F && F.race); }
+        }
+      }
+      ok(bad === 0 && empty === 0 && noEnd === 0, `여러 모드 ${n}샷 설명: 오류·이상한 글 ${bad} · 빈 글 ${empty} · 공 자리 없음 ${noEnd}`);
+    }
+  }
+}
+
 console.log(`\n${fail ? '❌' : '✅'} ${pass} 통과, ${fail} 실패`);
 process.exit(fail ? 1 : 0);

@@ -315,6 +315,9 @@
     const cueId = an.cue;
     const c = act.place ? { x: act.place[0], y: act.place[1] } : s.balls[cueId];
     const out = { action: act, mode: s.mode, ok: !!(r.result.score > 0 || r.result.cont) && !r.result.foul, msg: r.result.msg };
+    // 친 뒤 공 자리 (👉 '성공하면 다음 공도 가까이 남는 길' 읽기용) · 포켓볼은 다음 차례에 쉬운 공 수 (내가 계속이면 내 것, 넘기면 상대 것)
+    out.end = r.state.balls.map(b => ({ x: Math.round(b.x * 1000) / 1000, y: Math.round(b.y * 1000) / 1000, on: !!b.on }));
+    if (pool && r.state.phase === 'play') out.easyNext = easyShots(r.state);
     const first = an.contacts[0];
     if (first != null) {
       const fc = B.firstContact(Object.assign({}, s, { balls: s.balls.map((b, i) => i === cueId ? Object.assign({}, b, { x: c.x, y: c.y }) : b) }), act.angle, cueId);
@@ -357,7 +360,185 @@
     return { ok: r.ok, v: clamp(r.v, 0, 1), foul: !!r.foul };
   }
 
-  const API = { TIERS, choose, chooseAsync, coach, coachAsync, jitter, aimAt, scoreCarom, easyShots, describe, shotOk };
+  // ── AI 선생님 읽기 (11-01 베니 님: '어디 두라'고만 하니 뭔 말인지 모르겠고 재미없음) ───────────────────────
+  //   shotRec = 친 샷을 읽기용 기록으로 · flowRead = 👀 상대 흐름 + 📊 내 흐름 · whyShot = 👉 추천 샷의 까닭
+  //   화면 없이 글만 만듦(시험은 selftest). 다시 시뮬레이션하지 않고 이미 나온 사건·점수·공 자리만 읽어서 가벼움.
+  const CNAMES = B.CAROM_NAMES;
+  const railGap = (T, b) => Math.min(b.x, T.L - b.x, b.y, T.W - b.y) - T.R;          // 공 겉면과 가장 가까운 쿠션 사이
+  const stripFree = m => String(m || '').replace(/[\s·]*상대 프리볼$/, '');
+  const gname = g => g === 'solid' ? '단색(1~7)' : '줄무늬(9~15)';
+
+  // 친 샷 하나를 읽기용 기록으로 — 사건(events)만 봄. before = 치기 전 · after = 친 뒤 상태
+  function shotRec(before, after, result, events, cue) {
+    const r = result || {};
+    let first = null, second = null, bank = false, cush = 0;
+    const rails = [], pk = [];
+    for (const e of events || []) {
+      if (e.k === 'c' && e.a === cue) {
+        if (second == null) { cush++; rails.push(e.b); }
+        if (first == null) bank = true;                               // 공보다 쿠션을 먼저 쳤음
+      } else if (e.k === 'b' && (e.a === cue || e.b === cue)) {
+        const o = e.a === cue ? e.b : e.a;
+        if (first == null) first = o; else if (second == null && o !== first) second = o;
+      } else if (e.k === 'p' && e.a !== cue) pk.push(e.a);
+    }
+    return {
+      p: before.turn, n: after.shots, cue, first, second, bank, cush, rails, pk, run: after.run, sc: after.scores.slice(),
+      res: { score: r.score || 0, foul: !!r.foul, cont: !!r.cont, win: !!r.win, lose: !!r.lose, msg: r.msg || '', cushions: r.cushions, tags: r.tags || [] },
+    };
+  }
+
+  // 지금 내 차례 자리가 어떤지 (상대가 남긴 자리) — hard 2 아주 어려움 · 1 어려움 · -1 쉬움 · 0 모름
+  function leaveCarom(s, rate) {
+    const T = B.TABLES[s.table], R = T.R, cue = B.cueOf(s, s.turn), opp = 1 - cue, c = s.balls[cue];
+    const objs = (s.mode === '4gu' ? [2, 3] : [opp, 2]).filter(i => s.balls[i] && s.balls[i].on);
+    if (railGap(T, c) < 0.6 * R) return { hard: 2, text: '내 공이 쿠션에 붙었어요 (어려운 자리)' };
+    if (railGap(T, c) < 2.5 * R) return { hard: 1, text: '내 공이 쿠션 가까이 있어요' };
+    for (const i of objs) if (Math.hypot(s.balls[i].x - c.x, s.balls[i].y - c.y) < 3.2 * R) return { hard: 1, text: '내 공과 목표 공이 바싹 붙었어요 (두께 맞추기 어려운 자리)' };
+    if (objs.some(i => railGap(T, s.balls[i]) < 0.6 * R)) return { hard: 1, text: '목표 공이 쿠션에 붙어 있어요' };
+    if (rate != null && rate <= 30) return { hard: 1, text: `어려운 자리 (최선 성공률 약 ${rate}%)` };
+    if (rate != null && rate >= 70) return { hard: -1, text: `쉬운 자리 (성공률 약 ${rate}%)` };
+    return { hard: 0, text: '' };
+  }
+  function leave8(s) {
+    if (s.ballInHand) return '프리볼이라 수구를 원하는 곳에 놓을 수 있어요';
+    const n = easyShots(s);
+    return n === 0 ? '넣기 쉬운 공이 없어요 (어려운 자리)' : n === 1 ? '넣기 쉬운 공이 1개 있어요' : `넣기 쉬운 공이 ${n}개 열려 있어요`;
+  }
+
+  // 👀 상대 흐름 + 📊 내 흐름 — s: 지금(내 차례) 상태 · hist: shotRec 모음 · o: { names, kind: ai|hot|online|practice, rate, pr }
+  function flowRead(s, hist, o) {
+    o = o || {};
+    const out = { opp: '', race: '' };
+    if (!s || s.phase !== 'play') return out;
+    const cur = s.turn, names = o.names || [], kind = o.kind || 'ai', rate = typeof o.rate === 'number' ? o.rate : null;
+    const nm = i => names[i] || `선수 ${i + 1}`;
+    const lab = n => /[0-9]$/.test(n) ? n + ':' : n;                        // '친구 2' + 점수 0 → '친구 2: 0' (안 헷갈리게)
+    const you = kind === 'hot' ? nm(cur) : '나';                         // 한 기기 여럿은 이름 그대로
+    const pool = s.mode === '8ball', d4 = s.mode === '4gu', mul = d4 ? 10 : 1, unit = d4 ? '다마' : '점';
+    // 기록은 지금 판의 마지막 샷에서 거꾸로 이어지는 것만 (옛 기록 · 빠진 샷은 거기서 끊음) → 같은 사람이 이어 친 묶음(= 한 차례)으로
+    const seq = []; let exp = s.shots;
+    for (let i = (hist || []).length - 1; i >= 0; i--) { const h = hist[i]; if (!h || h.n !== exp) break; seq.unshift(h); exp--; }
+    const runs = [];
+    for (const h of seq) { const l = runs[runs.length - 1]; if (l && l.p === h.p) l.shots.push(h); else runs.push({ p: h.p, shots: [h] }); }
+    const lastRun = runs[runs.length - 1];
+    const cont = !!lastRun && lastRun.p === cur;                            // 내가 득점해서 이어 치는 중
+    const gainOf = run => run.shots.reduce((a, h) => a + h.res.score, 0);
+    let prevMine = null;
+    if (!cont) for (let i = runs.length - 1; i >= 0; i--) if (runs[i].p === cur) { prevMine = runs[i]; break; }
+
+    // ── 혼자 연습: 상대가 없으니 방금 내 샷 + 성공/시도
+    if (kind === 'practice') {
+      if (lastRun) {
+        const h = lastRun.shots[lastRun.shots.length - 1], good = h.res.score > 0 || h.res.cont;
+        out.opp = `방금 내 샷 — ${good ? '성공!' : h.res.foul ? '반칙' : '실패'}${h.res.msg ? ` (${stripFree(h.res.msg)})` : ''}`;
+      }
+      const pr = o.pr || { tries: seq.length, ok: seq.filter(h => h.res.score > 0 || h.res.cont).length, run: 0, best: 0 };
+      out.race = `연습 ${pr.ok}/${pr.tries} 성공 · 지금 ${pr.run}연속 (최고 ${pr.best})`;
+      return out;
+    }
+
+    // ── 👀 상대가 방금 한 일 (내 차례가 끝난 뒤 이어서 친 샷들)
+    if (lastRun && !cont) {
+      const run = lastRun, who = nm(run.p), last = run.shots[run.shots.length - 1];
+      if (!pool) {
+        const okShots = run.shots.filter(h => h.res.score > 0), pts = okShots.length;
+        const best = okShots.reduce((m, h) => (!m || h.cush > m.cush ? h : m), null);
+        const lead = pts === 0 ? '' : pts === 1 ? `${s.mode === '3c' && best ? `${best.bank ? '빈쿠션 먼저 ' : ''}${best.cush}쿠션으로 ` : ''}1점 내고 ` : `${pts}번 연속 득점 후 `;
+        const lv = leaveCarom(s, rate);
+        if (last.res.foul) {
+          const mineBall = (1 - last.cue) === B.cueOf(s, cur);
+          out.opp = `${who} ${lead}감점 — ${mineBall ? '내 공을 건드렸어요' : `${CNAMES[1 - last.cue]}을 건드렸어요`}${lv.text ? ` → ${lv.text}` : ''}`;
+        } else out.opp = `${who} ${lead}실패 — ${lv.text || last.res.msg || '득점하지 못했어요'}`;
+      } else {
+        const potted = run.shots.reduce((a, h) => a + Math.max(0, h.res.score), 0);
+        const myG = s.groups[B.teamOf(s, cur)], newGroup = run.shots.some(h => (h.res.tags || []).includes('group'));
+        out.opp = `${who} ${potted > 0 ? `${potted}개 넣은 뒤 ` : ''}${last.res.foul ? `반칙 — ${stripFree(last.res.msg) || '규칙을 어겼어요'}` : '못 넣고 차례 넘김'}`
+          + `${newGroup && myG ? ` · 이제 내 공은 ${gname(myG)}` : ''} → ${leave8(s)}`;
+      }
+    }
+
+    // ── 📊 내 흐름
+    if (!pool) {
+      const sc = s.scores, head = sc.map((v, i) => `${lab(i === cur ? you : nm(i))} ${v * mul}`).join(' / ') + ` (목표 ${s.target}${unit})`;
+      let diff;
+      if (sc.length === 2) { const d = (sc[cur] - sc[1 - cur]) * mul; diff = d > 0 ? `${d}${unit} 앞서요` : d < 0 ? `${-d}${unit} 뒤져요` : '동점'; }
+      else { const top = Math.max(...sc.filter((_, i) => i !== cur)), d = (sc[cur] - top) * mul; diff = d > 0 ? '내가 1등' : d === 0 ? '공동 1등' : `1등과 ${-d}${unit} 차`; }
+      let tail = '';
+      if (cont) tail = s.run >= 2 ? `${s.run}연속 득점 중!` : '방금 득점해 계속 쳐요';
+      else if (prevMine) { const g = gainOf(prevMine) * mul; tail = g > 0 ? `지난 차례 +${g}${unit}` : g < 0 ? `지난 차례 ${g}${unit}(감점)` : `지난 차례 0${unit}`; }
+      out.race = `${head} · ${diff}${tail ? `, ${tail}` : ''}`;
+    } else {
+      const myG = s.groups[B.teamOf(s, cur)], oppG = myG ? (myG === 'solid' ? 'stripe' : 'solid') : null;
+      let base;
+      if (!myG) base = '오픈 테이블 — 처음 넣은 공 종류가 내 공이 돼요';
+      else { const a = B.remainingOf(s, myG), b = B.remainingOf(s, oppG); base = `내 ${gname(myG)} ${a ? `${a}개 남음` : '다 넣었어요 — 8번만 남음'} · 상대 ${b}개 남음`; }
+      let tail = '';
+      if (cont) tail = s.run >= 2 ? `${s.run}연속으로 넣는 중!` : '방금 넣어 계속 쳐요';
+      else if (prevMine) { const g = gainOf(prevMine); tail = g > 0 ? `지난 차례 +${g}개` : '지난 차례 0개'; }
+      out.race = base + (tail ? ` · ${tail}` : '');
+    }
+    return out;
+  }
+
+  // 👉 추천 샷의 까닭 — 지금 자리 → 그래서 이 길 → (성공하면 / 회전) 한 줄
+  //   공 이름은 말하지 않음 (어느 공인지는 💡 줄이 이미 말함) — 여기선 '왜 그 길인지'만
+  function whyShot(s, r) {
+    if (!r || !r.action) return '';
+    return s.mode === '8ball' ? why8(s, r) : whyCarom(s, r);
+  }
+  function spinWhy(a) {
+    if (a.spinY >= 0.3) return '밀어치기로 수구가 첫 공을 따라가요';
+    if (a.spinY <= -0.3) return '끌어치기로 수구가 되돌아와요';
+    if (Math.abs(a.spinX) >= 0.3) return '옆회전으로 쿠션 각을 맞춰요';
+    return '';
+  }
+  function whyCarom(s, r) {
+    if (!r.ok) return '확실한 득점 길이 안 보여요 → 가장 가까이 가는 샷이에요';
+    const T = B.TABLES[s.table], R = T.R, cueId = B.cueOf(s, s.turn), c = s.balls[cueId], a = r.action;
+    const first = r.firstBall != null ? s.balls[r.firstBall] : null, rails = r.rails || [], nr = rails.length;
+    // 1) 지금 자리
+    let sit = '';
+    if (railGap(T, c) < 0.6 * R) sit = '수구가 쿠션에 붙어 바로 치기 어려워요';
+    else if (railGap(T, c) < 2.5 * R) sit = '수구가 쿠션 가까이 있어 치기 까다로워요';
+    else if (first && railGap(T, first) < 0.6 * R) sit = '첫 공이 쿠션에 붙어 있어요';
+    // 2) 그래서 이 길
+    let how;
+    if (r.bankFirst) how = `${(rails[0] === 1 || rails[0] === 3) ? '짧은' : '긴'} 쿠션을 먼저 쳐서 돌아가요`;
+    else how = nr ? `쿠션 ${nr}번 돌려 ${s.mode === '3c' ? '두 번째 공까지' : '나머지 빨간 공까지'} 가요` : '곧바로 두 공을 이어 맞히는 가장 쉬운 길이에요';
+    // 3) 성공하면 다음 공이 가까이 남는지 / 회전 이야기
+    let extra = '';
+    if (r.end) {
+      const e = r.end, ec = e[cueId], objs = (s.mode === '4gu' ? [2, 3] : [1 - cueId, 2]).filter(i => e[i] && e[i].on);
+      if (ec && ec.on && railGap(T, ec) >= 2.5 * R && objs.length) {
+        const dmin = Math.min(...objs.map(i => Math.hypot(e[i].x - ec.x, e[i].y - ec.y)));
+        if (dmin < 0.6) extra = '성공하면 다음 공도 가까이 남아요';
+      }
+    }
+    if (!extra) extra = spinWhy(a);
+    return `${sit ? `${sit} → ` : ''}${how}${extra ? `, ${extra}` : ''}`;
+  }
+  function why8(s, r) {
+    const a = r.action, free = s.ballInHand && a.place && !s.breakShot;
+    if (s.breakShot) return '브레이크 — 힘껏 쳐서 공을 넓게 흩어 놓아요';
+    const cut = r.thick != null ? Math.round(Math.asin(clamp(1 - r.thick, 0, 1)) * 180 / Math.PI) : null;
+    let how;
+    if (r.ball != null && r.ok) {
+      how = cut == null ? '가장 넣기 쉬운 공이에요'
+        : cut <= 20 ? `거의 정면으로 들어가는 쉬운 길 (컷 약 ${cut}°)`
+          : cut <= 45 ? `무난한 각으로 넣는 길 (컷 약 ${cut}°)`
+            : `컷이 약 ${cut}°로 큰 편이지만 가장 넣을 만한 길`;
+    } else {
+      how = `넣을 공이 마땅치 않아 → ${s.groups[B.teamOf(s, s.turn)] ? '내 공' : '공'}을 맞히고 쿠션에 보내 상대가 치기 어렵게 해요${r.easyNext != null ? ` (상대에게 쉬운 공 ${r.easyNext}개)` : ''}`;
+    }
+    let extra = '';
+    if (r.ball != null && r.ok && r.easyNext > 0) extra = `성공하면 다음 공도 쉬운 자리가 ${r.easyNext}개 열려요`;
+    else if (a.spinY < -0.2) extra = '끌어치기로 수구를 세워 다음 공 자리를 잡아요';
+    else if (a.spinY > 0.2) extra = '밀어치기로 수구가 따라 나가요';
+    return `${free && r.ball != null && r.ok ? '프리볼이라 수구를 그 공 뒤 일직선에 놓고, ' : ''}${how}${extra ? `, ${extra}` : ''}`;
+  }
+
+  const API = { TIERS, choose, chooseAsync, coach, coachAsync, jitter, aimAt, scoreCarom, easyShots, describe, shotOk, shotRec, flowRead, whyShot };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   else root.BilliardsAI = API;
 })(this);

@@ -133,7 +133,7 @@
   function newSes(o) {
     return Object.assign({
       alive: true, aim: { angle: 0, power: opt.power, spinX: 0, spinY: 0 }, place: null, anim: null, sinking: [], last: null, undo: [],
-      no: 0, coachTok: 0, coachRes: null, aiBusy: false, guideKey: '', guide: null, pr: { tries: 0, ok: 0, run: 0, best: 0 }, remoteAim: null, waiting: false,
+      no: 0, coachTok: 0, coachRes: null, hist: [], cf: null, aiBusy: false, guideKey: '', guide: null, pr: { tries: 0, ok: 0, run: 0, best: 0 }, remoteAim: null, waiting: false,
       gid: 0, wins: {}, rdy: new Set(), pick: {}, netOffs: [], shotLeft: null, goneAsk: null,   // 친구랑: 판 번호 · 이긴 횟수(uid별) · 준비한 사람 · 방장이 고른 구경꾼
     }, o);
   }
@@ -296,6 +296,8 @@
     if (an) ses.last = { before: an.before, traj: { frames: an.frames, fps: an.fps, events: an.events, cue: an.cue }, act: an.act };
     ses.anim = null;
     ses.s = res.state;
+    // 선생님 읽기용 기록 (👀 상대 흐름 · 📊 내 흐름): 누가 쳤든 다 쌓음, 최근 16샷만 · 사건만 읽어서 다시 계산하지 않음
+    if (an && an.before && an.events) { try { ses.hist.push(AI.shotRec(an.before, res.state, res.result, an.events, an.cue)); if (ses.hist.length > 16) ses.hist.shift(); } catch (e) { console.error(e); } }
     const r = res.result || {};
     const s = ses.s;
     if (ses.kind === 'practice') {
@@ -342,13 +344,13 @@
   };
   $('undoBtn').onclick = () => {
     if (!SES || SES.anim || !SES.undo.length) return;
-    sfx('tap'); SES.s = SES.undo.pop(); SES.last = null; startTurn();
+    sfx('tap'); SES.s = SES.undo.pop(); SES.last = null; SES.hist.pop(); startTurn();
   };
   $('rackBtn').onclick = () => {
     if (!SES || SES.anim) return;
     sfx('tap'); SES.undo.push(B.clone(SES.s));
     const s = SES.s; const fresh = B.create({ mode: s.mode, players: 1, seed: rand32(), practice: true });
-    SES.s = fresh; startTurn();
+    SES.s = fresh; SES.hist = []; startTurn();
   };
   $('moveBtn').onclick = () => {
     if (!SES) return; sfx('tap'); SES.moveMode = !SES.moveMode;
@@ -386,6 +388,7 @@
     const cue = B.cueOf(s, s.turn), cp = SES.place || [s.balls[cue].x, s.balls[cue].y];
     if (s.ballInHand && Math.hypot(cp[0] - wx, cp[1] - wy) < 3.5 * R) { drag = { kind: 'place', id: e.pointerId }; return; }
     drag = { kind: 'aim', id: e.pointerId };
+    document.body.classList.add('aiming');                   // 겨누는 동안 선생님 창을 거의 투명하게 (밑의 공이 보이게)
     aimAt(wx, wy);
   });
   cv.addEventListener('pointermove', e => {
@@ -396,6 +399,7 @@
     else if (drag.kind === 'ball') { const b = s.balls[drag.i]; b.x = clamp(wx, T.R, T.L - T.R); b.y = clamp(wy, T.R, T.W - T.R); SES.guideKey = ''; }
   });
   const endDrag = e => {
+    document.body.classList.remove('aiming');
     if (!drag || e.pointerId !== drag.id || !SES) return;
     const s = SES.s;
     if (drag.kind === 'place') { SES.place = B.fixPlace(s, SES.place[0], SES.place[1]); requestCoach(); }
@@ -973,7 +977,7 @@
       const cue = B.cueOf(s, s.turn);
       if (r.firstBall != null) {
         if (r.bankFirst) L.push(`🎯 <b>쿠션 먼저</b>(빈 쿠션) 쳐서 <b>${ballName(s, r.firstBall)}</b>부터 맞혀요`);
-        else L.push(`🎯 <b>${ballName(s, r.firstBall)}</b>의 <b>${r.side === 'left' ? '왼쪽' : '오른쪽'}</b>을 <b>${thickLabel(r.thick)}</b>로 맞혀요`);
+        else L.push(`🎯 <b>${ballName(s, r.firstBall)}</b>의 <b>${r.side === 'left' ? '왼쪽' : '오른쪽'}</b>을 <b>${thickTo(r.thick)}</b> 맞혀요`);
       }
       if (r.second != null) {
         const rails = r.rails.map(x => (x === 1 || x === 3) ? '짧은' : '긴');
@@ -1015,7 +1019,7 @@
     if (!SES || !SES.coachOn || !SES.coachAllowed || !myTurn()) { renderCoach(); return; }
     if (SES.coachRes) { renderCoach(); return; }
     const tok = ++SES.coachTok, ses = SES;
-    coach().set('🧑‍🏫 여러 샷을 미리 쳐 보는 중…');
+    coach().set('🧑‍🏫 여러 샷을 미리 쳐 보는 중…' + flowHtml(coachFlow(null)));
     clearTimeout(coachSoonT);
     coachSoonT = setTimeout(() => {
       const s = B.clone(ses.s);
@@ -1023,7 +1027,19 @@
       AI.coachAsync(s).then(res => { if (ses !== SES || tok !== ses.coachTok) return; ses.coachRes = res; renderCoach(); });
     }, 120);
   }
+  // 💡 👉 글에서 부르는 공 이름: 4구의 빨간 공 둘은 화면에서 보이는 자리로 ('왼쪽/오른쪽/위쪽/아래쪽 빨간 공') — '빨간 공(둘째)' 는 어느 공인지 알 수 없어서
+  function ballLbl(s, i) {
+    if (s.mode === '4gu' && (i === 2 || i === 3) && s.balls[2] && s.balls[3] && s.balls[2].on && s.balls[3].on) {
+      try {
+        const a = V.toS(s.balls[2].x, s.balls[2].y), b = V.toS(s.balls[3].x, s.balls[3].y), me = i === 2 ? a : b, other = i === 2 ? b : a, dx = me[0] - other[0], dy = me[1] - other[1];
+        if (isFinite(dx) && isFinite(dy)) return Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? '왼쪽 빨간 공' : '오른쪽 빨간 공') : (dy < 0 ? '위쪽 빨간 공' : '아래쪽 빨간 공');
+      } catch (e) { /* 아직 화면 준비 전이면 기본 이름 */ }
+    }
+    return ballName(s, i);
+  }
   const ballName = (s, i) => s.mode === '8ball' ? `${i}번 공` : i === 3 ? '빨간 공(둘째)' : B.CAROM_NAMES[i];
+  // '…을 ○○ 맞혀요' 에 바로 붙는 말 (조사 포함)
+  const thickTo = t => t >= 0.85 ? '정면으로 두껍게' : t >= 0.62 ? '3/4 두께로' : t >= 0.4 ? '1/2 두께로' : t >= 0.2 ? '1/4 두께로' : '아주 얇게';
   function thickLabel(t) { return t >= 0.85 ? '정면(두껍게)' : t >= 0.62 ? '3/4 두께' : t >= 0.4 ? '1/2 두께' : t >= 0.2 ? '1/4 두께' : '아주 얇게'; }
   function pocketName(pk) {
     const gm = B.geom(SES.s.table), p = gm.pockets[pk]; if (!p) return '';
@@ -1041,9 +1057,40 @@
     if (!myTurn()) { coachP.set(`🧑‍🏫 ${esc(seat ? seat.name : '')} 차례예요. 내 차례가 오면 추천 샷을 알려 줄게요`); return; }
     if (noteScene()) { coachP.set('<span class="cl">📒 아쉬웠던 그 장면이에요 — 이번엔 직접 찾아보세요</span><button class="cbtn" data-reveal>💡 답 보기</button>'); return; }
     const r = SES.coachRes; if (!r) return;
-    const L = coachLines(SES.s, r);
-    coachP.set(L.map(x => `<span class="cl">${x}</span>`).join('') + `<button class="cbtn" data-apply>👉 이대로 겨누기</button> <span class="rate" title="조금씩 흔들어 10번 쳐 본 결과">성공률 약 ${r.rate}%</span>`);
+    const cf = coachFlow(r);
+    coachP.set(`<span class="cl">💡 ${coachBrief(SES.s, r)}</span>${cf.why ? `<span class="cl why">👉 ${esc(cf.why)}</span>` : ''}${flowHtml(cf)}<button class="cbtn" data-apply>🎯 이대로 겨누기</button> <span class="rate" title="조금씩 흔들어 10번 쳐 본 결과">성공률 약 ${r.rate}%</span>`);
   }
+  // 💡 한 줄 추천 (복기 창은 아래 coachLines 로 자세히) — 어디를 어떻게 + 당점·힘
+  function coachBrief(s, r) {
+    const a = r.action, tail = `${spinText(a.spinX, a.spinY)} · 힘 ${Math.round(a.power * 100)}%`;
+    if (s.mode === '8ball') {
+      if (s.breakShot) return `✋ 수구를 점선 뒤에 놓고 <b>브레이크</b> (${tail})`;
+      const free = s.ballInHand && a.place ? '✋ 프리볼 · ' : '';
+      if (r.ball != null && r.ok) {
+        const cut = r.thick != null ? Math.round(Math.asin(clamp(1 - r.thick, 0, 1)) / DEG) : null;
+        return `${free}<b>${r.ball}번 공</b>을 <b>${pocketName(r.pocket)}</b> 포켓으로 (${cut != null ? `컷 약 ${cut}° · ` : ''}${tail})`;
+      }
+      return `${free}<b>안전한 샷</b> — 내 공을 맞히고 쿠션으로 (${tail})`;
+    }
+    let t = '';
+    if (r.firstBall != null) t += r.bankFirst ? `<b>쿠션</b>을 먼저 쳐서 <b>${ballLbl(s, r.firstBall)}</b>부터` : `<b>${ballLbl(s, r.firstBall)}</b>의 <b>${r.side === 'left' ? '왼쪽' : '오른쪽'}</b>을 <b>${thickTo(r.thick)}</b>`;
+    else t += '가장 가까이 가는 길로';
+    if (r.second != null) t += ` → <b>${ballLbl(s, r.second)}</b>`;
+    return `${t} (${tail})`;
+  }
+  // 👉 까닭 · 👀 상대 흐름 · 📊 내 흐름 — 한 번 읽고 그 추천 결과(r)에 붙여 둠 (render 마다 다시 계산하지 않음). r 이 없으면 추천 없이 흐름만
+  function coachFlow(r) {
+    const ses = SES, s = ses.s;
+    if (ses.cf && ses.cf.r === r && ses.cf.shots === s.shots && ses.cf.turn === s.turn) return ses.cf;
+    const cf = { r, shots: s.shots, turn: s.turn, why: '', opp: '', race: '' };
+    try {
+      const F = AI.flowRead(s, ses.hist, { names: ses.seats.map(sname), kind: ses.kind === 'online' ? 'ai' : ses.kind, rate: r && typeof r.rate === 'number' ? r.rate : null, pr: ses.pr });
+      cf.opp = F.opp; cf.race = F.race;
+      if (r) cf.why = AI.whyShot(s, r);
+    } catch (e) { console.error(e); }
+    return (ses.cf = cf);
+  }
+  const flowHtml = cf => (cf.opp ? `<span class="cl rd">👀 ${esc(cf.opp)}</span>` : '') + (cf.race ? `<span class="cl rd">📊 ${esc(cf.race)}</span>` : '');
 
   // ── 친구랑 (온라인)
   function onlineSettings() {
@@ -1113,7 +1160,7 @@
     const n = cfg.mode === '8ball' ? (ids.length >= 3 ? 4 : 2) : Math.min(4, Math.max(2, ids.length));
     ses.seats = Array.from({ length: n }, (_, i) => ids[i] ? { uid: ids[i], name: (pl[ids[i]] || {}).name || `친구${i + 1}`, em: '🙂', ctrl: ids[i] === net.uid ? 'me' : 'remote' } : { uid: null, name: '🐱 중급 AI', em: '🐱', ctrl: 'ai', tier: 'normal' });
     ses.s = B.create({ mode: cfg.mode, players: n, target: cfg.target, finish3c: !!cfg.finish3c, seed: rand32() });
-    ses.gid++; ses.no = 0; ses.rdy = new Set(); ses.pick = {}; ses.lastTurn = -1; ses.last = null; ses.anim = null; ses.waiting = false; ses.spectator = false;
+    ses.gid++; ses.no = 0; ses.hist = []; ses.cf = null; ses.rdy = new Set(); ses.pick = {}; ses.lastTurn = -1; ses.last = null; ses.anim = null; ses.waiting = false; ses.spectator = false;
     ses.rec = mkRec(ses); ses.lastRec = null;
   }
   // 방장: 같은 방에서 다음 판 — 앉았던 사람 중 아직 방에 있는 사람 + 방장이 체크한 구경꾼 (최대 4명)
@@ -1189,7 +1236,7 @@
     const live = !!(ses.s && ses.s.phase === 'play' && g === ses.gid);   // 지켜보던 판이 끝난 것만 랭킹에 (끝난 판에 늦게 들어온 건 제외)
     if (ses.rp) rpClose('silent');                                // 복기 보는 중에 판이 바뀌면 복기를 닫음
     ses.s = sn.s; ses.no = sn.no; ses.gid = g;
-    if (fresh) { ses.anim = null; ses.last = null; ses.lastTurn = -1; ses.waiting = false; ses.rdy = new Set(); ses.pick = {}; ses.drawReady = null; $('resBox').hidden = true; }   // 새 판: 결과 창·준비 목록 치움
+    if (fresh) { ses.anim = null; ses.last = null; ses.hist = []; ses.cf = null; ses.lastTurn = -1; ses.waiting = false; ses.rdy = new Set(); ses.pick = {}; ses.drawReady = null; $('resBox').hidden = true; }   // 새 판: 결과 창·준비 목록 치움
     if (sn.wins) ses.wins = sn.wins;
     ses.seats = sn.seats.map(x => ({ uid: x.uid, name: x.name, em: '🙂', ctrl: x.uid && x.uid === ses.net.uid ? 'me' : 'remote', sub: !!x.sub }));
     ses.spectator = !ses.seats.some(x => x.ctrl === 'me');
