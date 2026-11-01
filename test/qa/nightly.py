@@ -57,20 +57,30 @@ def auto_fix(new, t0):
         return f"🛠 자동 수정 못 돌림: {e}"[:140]
 
 
-def main():
-    t0 = dt.datetime.now()
+def run_once(t0):
+    """run.js 한 번 → (코드, 마지막 줄, 보고서, 새 보고서인가). 오류 글(stderr)은 report/nightly-err.txt 에 남김"""
     args = [NODE, str(QA / "run.js")] + (["--quick"] if "--quick" in sys.argv else [])
     try:
         p = subprocess.run(args, cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=45 * 60, creationflags=NOWIN)
-        code, tail = p.returncode, (p.stdout or "").strip().splitlines()[-1:] or (p.stderr or "").strip().splitlines()[-1:]
+        code, err = p.returncode, (p.stderr or "").strip()
+        tail = (err.splitlines()[:1] if code not in (0, 1) and err else []) or (p.stdout or "").strip().splitlines()[-1:]
     except subprocess.TimeoutExpired:
-        code, tail = -1, ["45분 넘게 안 끝남"]
-    tail = tail[0][:160] if tail else ""
+        code, err, tail = -1, "", ["45분 넘게 안 끝남"]
+    (REP / "nightly-err.txt").write_text(f"{dt.datetime.now():%Y-%m-%d %H:%M} 코드 {code}\n{err[-6000:]}\n", encoding="utf-8")
     try:
         D = json.loads((REP / "report.json").read_text(encoding="utf-8"))
         fresh = D["meta"]["started"] >= (t0 - dt.timedelta(minutes=1)).astimezone(dt.timezone.utc).isoformat()[:19]
     except Exception:
         D, fresh = None, False
+    return code, (tail[0][:160] if tail else ""), D, fresh
+
+
+def main():
+    t0 = dt.datetime.now()
+    code, tail, D, fresh = run_once(t0)
+    if code not in (0, 1) or not fresh:   # 11-01 04:30 한 번 코드 3 (낮에 다시 돌리면 정상, 오류 글은 안 남았음) → 한 번 더 돌려 봄
+        t0 = dt.datetime.now()
+        code, tail, D, fresh = run_once(t0)
     if code not in (0, 1) or not fresh:   # 1 = high 문제 있음 (정상 종료), 그 밖은 점검기 자체 고장
         phone(f"🎮 게임 밤 점검기가 못 돌았어요 (코드 {code}) — {tail}\nClaude 에게 '게임 점검기 봐줘' 하시면 고칩니다.", "game-qa:broken")
         beat(False, f"점검기 고장 코드 {code} {tail}")
