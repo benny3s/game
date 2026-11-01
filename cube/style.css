@@ -229,6 +229,17 @@ body.playing .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 104px)}
 .coachfb .ch span{font:12px var(--text);color:#ccfbf1}
 .coachfb .cb{padding:8px 10px;font-size:13px;line-height:1.45}
 .coachfb.shut .cb{display:none}
+/* 선생님 글: 👀 상대 흐름 · 📊 내 흐름 줄 (공용 창 안, 11-02) */
+.cb-read{display:inline-block;margin-top:3px;font-size:.9em;line-height:1.35;color:var(--soft);opacity:.95}
+.cb-read b{color:var(--ink)}
+.cb-sub{margin-top:1px;padding-left:1.4em;opacity:.85}
+/* 폰: 선생님 창을 조금 넓고 촘촘하게 — 상대 줄 아래 빈 곳(더미 단추 위)에 글이 다 들어가게 */
+@media (max-width:699px){
+  body.playing .cpn{width:min(368px,calc(100vw - 20px));font-size:12.5px;line-height:1.4}
+  body.playing .cpn-hd{padding:2px 5px 2px 10px}
+  body.playing .cpn-min{height:22px}
+  body.playing .cpn-body{padding:4px 10px 5px}
+}
 
 /* ── 친구랑 대기실 설정 ─────────────────────────────────── */
 .fset{display:grid;gap:8px}

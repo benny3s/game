@@ -320,5 +320,123 @@ const AI = require(path.join(__dirname, "..", "ai.js"));
   ok(seenAct < real, "act 만 쓰면 남의 take 를 놓침 (" + Math.round(seenAct) + "/" + real + ")");
 }
 
+{
+  // AI 선생님 흐름 (11-02 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음) — 👀 상대 흐름 · 📊 내 흐름 · 수의 의미.
+  // 공개된 것(버림 · 가져감 · 더미에서 뽑음 · 더미 수)만 읽고, 상대 손패·더미 속은 절대 안 봄.
+  const T2 = (c, v, k = 0) => c * 26 + k * 13 + (v - 1);
+  const NM = ["나", "민수", "서연", "도윤"];
+  const oppText = a => (a.opp || []).map(o => o.text).join(" / ");
+
+  // (1) 손으로 짠 장면 — 내(0)가 버린 노랑 5 를 상대(1)가 가져감, 그다음 내가 더미에서 뽑아 버릴 차례
+  const hand = [T2(0, 1), T2(0, 2), T2(0, 3), T2(0, 8), T2(1, 8), T2(3, 8), T2(1, 10), T2(2, 10), T2(3, 10), T2(2, 4), T2(3, 11), T2(0, 13), T2(1, 5, 1), T2(3, 2), T2(0, 6, 1)];
+  const st1 = { n: 2, rule: "easy", wildFace: null, turn: 0, phase: "discard", deck: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], discards: [[], [T2(1, 3)]], hands: [hand, []] };
+  const log1 = [{ t: "discard", id: T2(2, 5) }, { t: "take" }, { t: "discard", id: T2(1, 3) }, { t: "deck" }];
+  ok(typeof AI.readLog === "function", "AI.readLog(n, log): 공개된 수만 이어 읽기");
+  const plain = AI.advise(st1, 0);
+  ok(plain && plain.id === T2(2, 4), "시험 장면: 상대 정보 없이는 노랑 4 를 버리라 함 (" + (plain && AI.tileName(st1, plain.id)) + ")");
+  const a1 = AI.advise(st1, 0, { log: log1, names: NM, prevUsed: null });
+  ok(a1 && Array.isArray(a1.opp) && a1.opp.length === 1 && a1.opp[0].q === 1, "👀 상대 한 명(민수)의 줄이 있음: " + JSON.stringify(a1 && a1.opp));
+  ok(/내 버림/.test(oppText(a1)) && /노랑 5/.test(oppText(a1)) && /가져감/.test(oppText(a1)), "👀 '내 버림 노랑 5 가져감': " + oppText(a1));
+  ok(/노랑 4·6/.test(oppText(a1)), "👀 가져간 노랑 5 로 보아 노리는 이웃(노랑 4·6)을 말해 줌: " + oppText(a1));
+  ok(a1 && a1.id !== T2(2, 4), "민수가 노랑 5 를 가져갔으니 이어지는 노랑 4 는 건네주지 않음");
+  ok(a1 && /민수가 노랑 5를 가져가서 노랑 4는 건네주지 않아요/.test(a1.why), "수의 의미: 왜 노랑 4 를 아끼는지 (조사 가·를·는까지) 말해 줌: " + (a1 && a1.why));
+  const a1b = AI.advise(st1, 0, { log: log1, names: ["나", "서연(AI)"], prevUsed: null });
+  ok(a1b && a1b.why.startsWith("서연(AI)이 노랑 5를 가져가서"), "조사: 받침 있는 이름(서연(AI))은 '이': " + (a1b && a1b.why));
+  ok(a1 && typeof a1.mine === "string" && /묶음/.test(a1.mine) && /\/14/.test(a1.mine), "📊 내 흐름에 묶음 n/14: " + (a1 && a1.mine));
+
+  {   // 상대가 바로 지난 차례가 아니라 앞서 가져갔을 땐 '앞서' 라고 말함 + 내 버림을 안 가져간 타일은 안전
+    const log1c = log1.slice(0, 3).concat([{ t: "deck" }, { t: "discard", id: T2(0, 9, 1) }, { t: "deck" }, { t: "discard", id: T2(3, 1, 1) }, { t: "deck" }]);
+    const a1c = AI.advise(st1, 0, { log: log1c, names: NM, prevUsed: null });
+    ok(a1c && a1c.why.startsWith("민수가 앞서 노랑 5를 가져가서 노랑 4는"), "앞서 가져간 타일도 기억: " + (a1c && a1c.why));
+    ok(a1c && /내 버림 빨강 9 안 가져가고 더미 뽑음/.test(a1c.opp.map(o => o.text).join(" ")), "👀 이번엔 내 버림을 안 가져감: " + (a1c && a1c.opp.map(o => o.text).join(" / ")));
+  }
+  // (1b) 로그에서 이어 읽은 판이 진짜 판과 같음: 버림 더미 · 차례 · 가져간 타일(공개) — 더미에서 뽑은 타일은 담지 않음
+  {
+    let bad = 0, takes = 0, decks = 0;
+    for (let g = 0; g < 8; g++) {
+      const n = 2 + (g % 3);
+      let s = Cube.create({ players: n, rule: g % 2 ? "classic" : "easy", seed: 6100 + g }), log = [];
+      const mem = AI.newMemory(g);
+      for (let i = 0; i < 400 && s.phase !== "over"; i++) {
+        const act = AI.act(s, s.turn, ["normal", "hard", "easy", "hard"][s.turn], mem);
+        const r = Cube.step(s, act);
+        log.push(act);
+        s = r.state;
+        const tr = AI.readLog(n, log);
+        if (s.phase !== "over" && (tr.turn !== s.turn || JSON.stringify(tr.piles) !== JSON.stringify(s.discards))) bad++;
+        for (const e of r.events) if (e.type === "draw") {
+          const m = tr.drew;
+          if (e.from === "take") { takes++; if (!m || m.took !== e.id) bad++; }
+          else { decks++; if (!m || m.took != null || "id" in m) bad++; }
+        }
+      }
+    }
+    ok(bad === 0 && takes > 20 && decks > 20, "AI.readLog: 버림 더미 · 차례 · 가져간 타일이 진짜 판과 같고 더미에서 뽑은 타일은 안 담김 (어긋남 " + bad + ", 가져감 " + takes + ", 더미 " + decks + ")");
+  }
+
+  // (2) 더미에서 뽑은 경우 — 내 버림을 안 가져감 (연속 3번째)
+  let s2 = Cube.create({ players: 2, rule: "easy", seed: 4242 }), log2 = [];
+  const go2 = a => { s2 = Cube.step(s2, a).state; log2.push(a); };
+  const pickNon = h => h.find(id => id < 104);
+  for (let i = 0; i < 3; i++) {
+    if (i) go2({ t: "deck" });
+    go2({ t: "discard", id: pickNon(s2.hands[0]) });
+    go2({ t: "deck" });
+    go2({ t: "discard", id: pickNon(s2.hands[1]) });
+  }
+  const a2 = AI.advise(s2, 0, { log: log2, names: NM.slice(0, 2), prevUsed: null });
+  ok(a2 && a2.kind === "draw" && /안 가져가고 더미 뽑/.test(oppText(a2)) && /3번째/.test(oppText(a2)), "👀 내 버림을 3번 연속 안 가져가고 더미에서 뽑음: " + oppText(a2));
+  ok(a2 && /더미/.test(a2.mine), "📊 더미 남은 수: " + (a2 && a2.mine));
+
+  // (3) 내 흐름: 지난 차례와 비교
+  const used = 14 - Cube.arrange(s2, s2.hands[0]).rest.length;
+  const up = AI.advise(s2, 0, { log: log2, names: NM.slice(0, 2), prevUsed: used - 3 }), dn = AI.advise(s2, 0, { log: log2, names: NM.slice(0, 2), prevUsed: used + 2 });
+  ok(up && /\+3/.test(up.mine), "📊 지난 차례보다 +3: " + (up && up.mine));
+  ok(dn && /-2/.test(dn.mine), "📊 지난 차례보다 -2: " + (dn && dn.mine));
+
+  // (4) 3~4명 판을 AI 끼리 끝까지: 내 차례마다 선생님 글이 있고, 줄은 짧고, 상대 손패·더미 속을 전혀 안 씀
+  //     (같은 공개 정보 · 다른 숨은 패(남의 손패·더미 순서)로 바꿔도 글이 똑같아야 함)
+  const swapHidden = (s, me, k) => {
+    const alt = JSON.parse(JSON.stringify(s));
+    const pool = alt.deck.slice();
+    for (let q = 0; q < s.n; q++) if (q !== me) pool.push(...alt.hands[q]);
+    let r = (k * 2654435761) >>> 0;
+    for (let i = pool.length - 1; i > 0; i--) { r = (Math.imul(r, 1664525) + 1013904223) >>> 0; const j = r % (i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    let at = 0;
+    for (let q = 0; q < s.n; q++) if (q !== me) { alt.hands[q] = pool.slice(at, at + alt.hands[q].length); at += alt.hands[q].length; }
+    alt.deck = pool.slice(at);
+    return alt;
+  };
+  let positions = 0, leaks = 0, empty = 0, longest = 0, withOpp = 0, withTie = 0;
+  for (let g = 0; g < 6; g++) {
+    const n = 2 + (g % 3);
+    let s = Cube.create({ players: n, rule: g % 2 ? "classic" : "easy", seed: 5100 + g }), log = [], prevUsed = {};
+    const mem = AI.newMemory(g), ctxOf = p => ({ log: log, names: NM.slice(0, n), prevUsed: prevUsed[p] == null ? null : prevUsed[p] });
+    for (let i = 0; i < 500 && s.phase !== "over"; i++) {
+      const p = s.turn;
+      if (i % 4 === 1) {                                          // 네 수에 한 번만 (선생님 글 만들기는 조금 무거움)
+        const a = AI.advise(s, p, ctxOf(p));
+        positions++;
+        if (!a || !a.mine || !Array.isArray(a.opp) || !a.why) empty++;
+        else {
+          for (const l of [a.why, a.mine, ...a.opp.map(o => o.text)]) longest = Math.max(longest, l.length);
+          if (a.opp.length) withOpp++;
+          if (/가져/.test(a.why)) withTie++;
+          const b = AI.advise(swapHidden(s, p, g * 1000 + i), p, ctxOf(p));
+          if (JSON.stringify(a) !== JSON.stringify(b)) leaks++;
+        }
+      }
+      if (s.phase === "draw") prevUsed[p] = 14 - Cube.arrange(s, s.hands[p]).rest.length;
+      const act = AI.act(s, p, ["normal", "hard", "easy", "hard"][p], mem);
+      log.push(act);
+      s = Cube.step(s, act).state;
+    }
+  }
+  ok(positions > 60 && empty === 0, "내 차례마다 선생님 글(추천 · 까닭 · 👀 · 📊)이 있음 (" + positions + "곳, 빠진 곳 " + empty + ")");
+  ok(withOpp > positions * 0.5, "대부분 차례에 상대 움직임 줄이 있음 (" + withOpp + "/" + positions + ")");
+  ok(leaks === 0, "숨은 패(남의 손패 · 더미 순서)를 바꿔도 선생님 글이 똑같음 — 몰래 안 봄 (달랐던 곳 " + leaks + ")");
+  ok(longest <= 90, "한 줄이 길지 않음 (가장 긴 줄 " + longest + "자)");
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

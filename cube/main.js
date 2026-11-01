@@ -234,7 +234,7 @@
       over: false, finished: false, paused: false, speed: 1,
       thinking: -1, flashSeat: -1, lastMsg: "", lastWin: null,
       modalClose: null, drag: null, aiTimer: 0,
-      coachOn: false, coach: null, coachKey: "", viewing: 0, cover: false,
+      coachOn: false, coach: null, coachKey: "", viewing: 0, cover: false, flow: {},
       spec: false, subs: [], drops: [], baseNames: [], ready: new Set(), joinPick: {}, turnT: 0, turnKey: "", turnLeft: null, goneAsk: null, drawReady: null,
     }, o);
   }
@@ -571,7 +571,7 @@
     G.sel = null; G.winMode = false; G.hintId = null; G.hintedPile = null; G.coachKey = "";
     G.over = false; G.finished = false; G.paused = false; G.thinking = -1;
     G.flashSeat = -1; G.lastMsg = ""; G.lastWin = null; G.speed = 1;
-    G.racks = {};
+    G.racks = {}; G.flow = {};
     G.roundBase = G.totals.slice();   // 이 판 시작 때 점수 (끝난 판을 되감아도 두 번 안 쌓이게)
     G.ready = new Set(); G.drawReady = null; clearTurnT(G);
     if (G.mode === "local") { G.mySeat = Math.max(0, G.levels.indexOf("human")); G.viewing = -1; G.cover = true; }
@@ -671,6 +671,31 @@
     const top = rw ? rw.getBoundingClientRect().top - Math.max(0, 3 - rows) * th : 0;
     return top > 200 ? Math.round(window.innerHeight - top + 8) : 88;
   }
+  // 폰(좁은 화면) 처음 자리: 더미 단추 아래 · '내 타일 n장' 줄 위의 빈 곳 (11-02 — 글에 👀 상대 흐름 · 📊 내 흐름이 늘어도 단추·받침대·상대 줄을 안 가림).
+  //   직접 옮긴 자리는 공용 창이 기억해서 그대로.
+  function coachSpot() {
+    if (innerWidth >= 700 || !$("deckBtn") || !$("meLine")) return null;
+    const dk = $("deckBtn").getBoundingClientRect(), me = $("meLine").getBoundingClientRect();
+    if (!(dk.height > 0) || me.top < 200) return null;
+    const top = dk.bottom + 6, e1 = me.top - 6, e2 = me.bottom + 3;       // e1: '내 타일 n장' 줄 바로 위 · e2: 그 줄까지 덮을 때 (글이 길 때만)
+    return { bottom: Math.round(innerHeight - e1), e1: e1, e2: e2, top: top, right: Math.max(4, Math.round((innerWidth - Math.min(368, innerWidth - 20)) / 2)) };
+  }
+  // 수마다 가운데·받침대 높이가 달라지니(15장이면 받침대 3줄) 창 아래 끝과 높이를 다시 맞춤. 직접 옮긴 창은 그대로.
+  function coachFit() {
+    if (!G || !G.coach || innerWidth >= 700 || G.coach.el.hidden) return;
+    const el = G.coach.el;
+    if (el.style.top && el.style.top !== "auto") { el.style.maxHeight = ""; return; }
+    const sp = coachSpot();
+    if (!sp) { el.style.maxHeight = ""; return; }
+    // 글 높이를 재서: ① '내 타일 n장' 줄 위에 들어가면 거기 ② 아니면 그 줄까지 덮고(받침대는 안 가림) ③ 그래도 넘치면 더미 단추 아래까지로 줄이고 안에서 스크롤
+    el.style.maxHeight = "";
+    const need = el.offsetHeight, put = (edge) => { el.style.bottom = Math.round(innerHeight - edge) + "px"; };
+    if (need <= sp.e1 - sp.top) put(sp.e1);
+    else {
+      put(sp.e2);
+      if (need > sp.e2 - sp.top && sp.e2 - sp.top >= 80) el.style.maxHeight = Math.round(sp.e2 - sp.top) + "px";
+    }
+  }
   function setupCoach() {
     const btn = $("coachBtn");
     btn.hidden = !coachAvail();
@@ -678,7 +703,8 @@
     G.coachReady = true;
     if (window.CoachPanel && typeof CoachPanel.create === "function") {
       try {
-        G.coach = CoachPanel.create({ game: "cube", title: "AI 선생님", bottom: coachBottom(), startHidden: !!(CoachPanel.isOff && CoachPanel.isOff("cube")) });
+        const spot = coachSpot();
+        G.coach = CoachPanel.create({ game: "cube", title: "AI 선생님", bottom: spot ? spot.bottom : coachBottom(), right: spot ? spot.right : 10, startHidden: !!(CoachPanel.isOff && CoachPanel.isOff("cube")) });
         G.coachBtn = CoachPanel.button(btn, G.coach);
         G.coachOff = G.coach.onChange ? G.coach.onChange(() => { if (G) { G.coachKey = ""; render(); } }) : null;
       } catch (e) { console.warn(e); G.coach = null; }
@@ -703,8 +729,26 @@
   }
   const coachOpen = () => (G.coach ? G.coach.visible && !G.coach.collapsed : !!G.fbOn && !$("coachFb").classList.contains("shut"));
   function coachSet(html) {
-    if (G.coach) { G.coach.set(html); return; }
+    if (G.coach) { G.coach.set(html); coachFit(); return; }
     $("coachFbBody").innerHTML = html;
+  }
+  // 선생님 글 (11-02 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠고 재미없음):
+  //   💡 추천 먼저 → 👉 그 수의 의미(상대 움직임과 이어서) → 👀 상대 흐름 → 📊 내 흐름. 공개된 것(버림·가져감·더미 수)만 읽음 (ai.js coachRead)
+  function coachBuild(st, me) {
+    const f = G.flow && G.flow[me];
+    const sp = coachSpot(), compact = !!sp && sp.e2 - sp.top < 140;      // 작은 폰: 창 자리가 좁으면 줄여서 보여 줌
+    const a = AI.advise(st, me, { log: G.log, names: G.names, prevUsed: f && f.prev != null ? f.prev : null, compact });
+    if (!a) return { html: "", advice: null };
+    const nm = (q) => esc(G.names[q] || "상대");
+    let html = `💡 <b>${esc(a.text)}</b>${a.kind === "win" || a.kind === "discard" ? " <small>✨ 반짝이는 타일</small>" : ""}<br>👉 ${esc(a.why)}`;
+    const opp = a.opp || [];
+    if (!opp.length) html += `<br><span class="cb-read">👀 아직 상대가 두지 않았어요 — 내가 먼저 시작해요</span>`;
+    else {   // 상대 한 명에 한 줄 (중요한 순) — 좁으면 가장 중요한 한 명만 풀어서, 나머지는 이름만
+      const shown = compact ? opp.slice(0, 1) : opp, rest = compact ? opp.slice(1) : [];
+      for (const o of shown) html += `<br><span class="cb-read">👀 <b>${nm(o.q)}</b>: ${esc(o.text)}${rest.length ? " · 외 " + rest.map((r) => nm(r.q)).join("·") + (rest.every((r) => r.kind === "deck") ? " 더미 뽑음" : "") : ""}</span>`;
+    }
+    html += `<br><span class="cb-read">📊 <b>내 흐름</b> ${esc(a.mine)}</span>`;
+    return { html, advice: a };
   }
   // 그리기 전마다: 차례·수가 바뀌었을 때만 생각하고, 창이 열려 있을 때만 추천 타일을 반짝임
   function coachTick() {
@@ -726,9 +770,9 @@
       else if (hidden) html = "가림막을 걷으면 지금 차례인 사람을 도와줄게요";
       else if (st.turn !== me) html = `${esc(G.names[st.turn])} 차례예요. 내 차례가 오면 도와줄게요`;
       else {
-        const a = AI.advise(st, me);
-        G.advice = a;
-        html = a ? `<b>${esc(a.text)}</b><br>${esc(a.why)}${a.kind === "win" || a.kind === "discard" ? "<br><small>✨ 반짝이는 타일</small>" : ""}` : "";
+        const c = coachBuild(st, me);
+        G.advice = c.advice;
+        html = c.html;
       }
       coachSet(html);
     }
@@ -783,6 +827,15 @@
     applyAction(a, false);
   }
 
+  // 내 차례(뽑기)가 시작될 때마다 내 패에서 묶음에 든 장수를 적어 둠 — 선생님 '📊 내 흐름' 이 지난 차례와 비교하는 값 (내 패만 봄)
+  function noteFlow() {
+    const st = G && G.st;
+    if (!st || st.phase !== "draw" || G.levels[st.turn] !== "human" || !coachAvail()) return;
+    const f = G.flow[st.turn] || (G.flow[st.turn] = { cur: null, prev: null });
+    f.prev = f.cur;
+    f.cur = AI.usedCount(st, st.hands[st.turn]);
+  }
+
   function humanLabel(p) {
     return G.mode !== "watch" && p === mySeat() ? "" : G.names[p];
   }
@@ -813,6 +866,7 @@
       if (G.role === "host") G.net.broadcast(m, true); else if (!remote && !instant) G.net.send(m, true);
     }
     G.st = res.state;
+    noteFlow();
     G.mems.forEach(m => AI.observe(G.st, m));   // 남이 가져간 타일 기억 (자기 차례 사이의 take 도)
     G.sel = null; G.winMode = false; G.hintId = null; G.hintedPile = null; G.thinking = -1;
     if (G.mode !== "watch") syncRack();
@@ -1036,6 +1090,7 @@
       renderMe();
       renderRack();
       renderAct();
+      coachFit();   // 상대 줄·받침대 줄 수가 바뀌면 선생님 창 높이도 다시 맞춤
     }
   }
 
@@ -1534,6 +1589,7 @@
     revealCover: revealCover, openFriend: openFriendModal, Table: Table,
     autoTurn: function () { return autoTurn(G); },          // 시험용: 내 차례를 AI 가 대신
     turnSec: function (n) { TURN_SEC = n; },                // 시험용: 차례 시간을 줄여서 보기
+    coachHtml: function (st) { return G && G.st ? coachBuild(st || G.st, mySeat()).html : ""; },   // 시험용: 선생님 글 (상태를 바꿔 끼워 숨은 패를 안 보는지 확인)
   };
 
   init();
