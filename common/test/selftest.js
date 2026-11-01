@@ -96,6 +96,24 @@ async function bankTests() {
     ok(mr.m_민수 && mr.m_민수.balance === 120 && mr.m_영희.balance === 170 && mr.m_철수.balance === 110, `다음 판 결과가 새 자리 번호대로 장부에 (철수 110·영희 170·민수 120) — ${['철수', '영희', '민수'].map(n => mr['m_' + n] && mr['m_' + n].balance)}`);
     sr.detach();
   });
+
+  // 고스톱 은행 방 (마이너스 · 시작 돈 0): 판 사이 합류자도 잔액 그대로 + 📊 rel0 에 그 사람 통산·두 사람끼리 전적이 들어감
+  await block('reseat gostop', async () => {
+    await B.createGroup({ gid: 'gtestRg', name: '시험rg', chipWon: 10, loanUnit: 100 });
+    const g1 = B.attach({ game: 'gostop', cfg: { bank: 'gtestRg' }, seats: [{ ctrl: 'me', name: '철수' }, { ctrl: 'remote', name: '민수' }], min: 1, start: 0, negative: true });
+    await g1.ready;
+    c.dispatchEvent(new CustomEvent('chips:report', { detail: { game: 'gostop', coins: [-40, 40], round: 1, win: [1], lose: [0] } })); await g1.flush();
+    g1.detach();                                                 // 예전 판: 민수가 철수를 한 번 이김 (40칩)
+    const sd = [{ ctrl: 'me', name: '철수' }, { ctrl: 'remote', name: '영희' }];
+    const g2 = B.attach({ game: 'gostop', cfg: { bank: 'gtestRg' }, seats: sd, min: 1, start: 0, negative: true });
+    await g2.ready;
+    const st = await g2.reseat([sd[0], sd[1], { ctrl: 'remote', uid: 'u3', name: '민수' }], [0, 1]);
+    ok(st[0] === 40, `고스톱 합류자 시작 칩 = 장부 잔액 그대로 (40) — ${st}`);
+    const R = g2.rel0();
+    ok(R.on[2] && R.s0[2] === 40, `rel0 에 합류자 자리가 켜지고 이번 게임 시작 = 40 — on ${R.on[2]} s0 ${R.s0[2]}`);
+    ok(R.pw[2][0] === 1 && R.pm[2][0] === 40 && R.pm[0][2] === -40, `합류자와 철수 두 사람끼리 전적이 장부에서 (민수 1승 · +40칩) — pw ${R.pw[2][0]} pm ${R.pm[2][0]}/${R.pm[0][2]}`);
+    g2.detach();
+  });
 }
 
 // ── 2) 이름 로그인 (me.js) — 진짜 규칙(gp/*) 흉내

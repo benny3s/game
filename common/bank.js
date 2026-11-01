@@ -925,6 +925,12 @@ if (typeof window !== "undefined") (() => {
           const [members, recs] = await Promise.all([getMembers(gid), getRecords(gid).catch(() => ({}))]);
           const seen = new Set(ses.track.filter(Boolean).map(t => t.pid)), out = [];
           for (let k = 0; k < add.length; k++) out.push(await seatIn(keep.length + k, pids[k], seen, members, recs));
+          // 📊 rel0 용: 새로 앉은 사람의 통산 원 · 앉아 있는 사람들과 두 사람끼리 전적 (고스톱이 판에 띄움)
+          const fresh = ses.track.slice(keep.length).filter(Boolean).map(t => t.pid), all = ses.track.filter(Boolean).map(t => t.pid), pks = new Set();
+          for (const a of fresh) for (const b of all) if (a !== b) pks.add(pairKey(a, b));
+          const [tots, pv] = await Promise.all([fresh.length ? loadTotals(gid).catch(() => ({})) : {}, Promise.all([...pks].map(k => S.get(G(gid) + "/pairs/" + k).catch(() => null)))]);
+          for (const a of fresh) if (tots[a]) ses.tots[a] = tots[a];
+          [...pks].forEach((k, i) => { ses.pairs[k] = pv[i] || null; });
           return out;
         }).then(v => v || add.map(() => null));
       },

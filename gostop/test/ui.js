@@ -66,4 +66,40 @@ U.main(async T => {
     const mine = (await U.waitFor(W, () => { const t = document.getElementById('sub').textContent; return /⏱\s*\d+/.test(t) ? t : null; }, null, 6000)) || await W.evaluate(() => document.getElementById('sub').textContent);
     T.ok(/⏱\s*\d+/.test(mine), '③ 손님 자기 차례 남은 초 (그대로) (' + mine + ')');
   }
+
+  // ── ④ 은행 방 판 사이 합류: 구경꾼이 '다음 판에 낄래요' → 다음 판에 연습 칩이 아니라 장부 잔액으로 앉고 장부·📊 통산 기록에도 잡힘
+  //    (전엔 연습 칩으로 앉고 장부엔 안 잡혀 장부 손익에 섞였음 — 원카드·섯다·홀덤과 같은 문제)
+  {
+    const { H, W, code } = await T.pair(A);
+    T.ok(await H.evaluate(() => !!(__gostop.ses && __gostop.ses.bank)), '④ 시험 방이 은행 방임 (기본 은행)');
+    const S = await T.open('gostop/', 'room=' + code);                         // 구경꾼
+    await U.waitFor(S, A.ready, null, 15000);
+    await S.evaluate(() => __gostop.fast(1));
+    await U.waitFor(H, () => Object.keys(ArenaUI.net.players || {}).length >= 3, null, 15000);
+    const n0 = await H.evaluate(() => __gostop.ses.seats.length);
+    const ended = p => p.evaluate(() => { const r = document.getElementById('resBox'); return !!(r && !r.hidden); });
+    let end = false;
+    for (let i = 0; i < 600 && !end; i++) {
+      end = await ended(H);
+      if (!end) { await Promise.all([H, W].map(p => p.evaluate(A.online.drive).catch(() => {}))); await T.sleep(120); }
+    }
+    T.ok(end, '④ 한 판이 끝나 결과 창이 뜸');
+    T.ok(!!(await U.waitFor(S, () => { const r = document.getElementById('resBox'); return r && !r.hidden; }, null, 25000)), '④ 구경꾼에게도 결과 창');
+    const lab = await S.evaluate(() => { const b = document.querySelector('#resBox .btn.primary'); if (b && !b.disabled) { const t = b.textContent; b.click(); return t; } return null; });
+    T.ok(/낄래요/.test(lab || ''), '④ 구경꾼이 낄래요를 누름 (' + lab + ')');
+    await W.evaluate(() => { const b = document.querySelector('#resBox .btn.primary'); if (b && !b.disabled) b.click(); });
+    let next = false;
+    for (let i = 0; i < 60 && !next; i++) {
+      next = await H.evaluate(() => { const b = document.querySelector('#resBox .btn.primary'); if (b && !b.disabled) { b.click(); return true; } return false; });
+      if (!next) await T.sleep(250);
+    }
+    T.ok(next, '④ 방장이 다음 판을 시작');
+    const r = await U.waitFor(H, n0 => { const ses = __gostop.ses, s = __gostop.state; if (!s || s.round < 2 || ses.seats.length <= n0) return null; return { n: ses.seats.length, chips: ses.chips.slice(), tracked: ses.seats.map((_, i) => ses.bank.tracks(i)), pid: ses.bank.pidOf(n0), on: ses.rel && ses.rel.on.slice() }; }, n0, 15000);
+    T.ok(r && r.n === n0 + 1, '④ 다음 판에 구경꾼이 앉음 (' + n0 + ' → ' + (r && r.n) + ')');
+    T.ok(r && r.tracked.every(Boolean), '④ 앉은 모든 자리가 은행 장부에 잡힘 ' + (r && r.tracked.join()));
+    const bal = r && r.pid ? await H.evaluate(pid => Bank.getMembers(__gostop.ses.bank.gid).then(m => (m[pid] ? m[pid].balance : 0)), r.pid) : null;   // 처음 온 사람은 장부에 줄이 없음 = 0 (고스톱은 시작 돈 없이 0 에서)
+    T.ok(r && bal != null && r.chips[n0] === bal, '④ 새 자리 칩 = 장부 잔액 (' + (r && r.chips[n0]) + ' / ' + bal + ')');
+    T.ok(r && r.on && r.on.length === n0 + 1 && r.on.every(Boolean), '④ 📊 통산 기록에도 새 자리가 켜짐 ' + (r && r.on && r.on.join()));
+    for (const p of [H, W, S]) await p.close().catch(() => {});
+  }
 }, 'gostop ui');

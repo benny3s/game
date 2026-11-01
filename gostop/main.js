@@ -669,7 +669,7 @@
           continue;
         }
         const rSeed = ses.cfg.online ? ((baseSeed + (ses.S.round + 1) * 0x9e3779b9) >>> 0) : rand32();
-        s = ses.cfg.online ? hostNextRound(ses, rSeed) : G.nextRound(ses.S, { seed: rSeed });
+        s = ses.cfg.online ? await hostNextRound(ses, rSeed) : G.nextRound(ses.S, { seed: rSeed });
       }
     } catch (e) {
       if (e instanceof Cancel) return;
@@ -696,7 +696,8 @@
     return d.S;
   }
   // 방장: 다음 판 열기. 구경하던 사람(새로 온 사람)은 5명까지 자리에 넣고, 인원이 바뀌면 방식도 바뀜 (2 맞고 → 3 고스톱 …)
-  function hostNextRound(ses, rSeed) {
+  //  은행 방은 장부 연결을 새 자리 번호로 옮기고, 새로 앉은 사람은 장부 잔액 · 📊 통산 기록으로 (안 하면 연습 칩으로 앉고 장부엔 안 잡혀 손익에 섞임)
+  async function hostNextRound(ses, rSeed) {
     const pl = (ses.net && ses.net.players) || {}, have = new Set(ses.seats.map(x => x.uid));
     const prev = ses.S, r = prev.result, old = ses.seats;
     const prevUid = old[prev.who[r && r.winner >= 0 ? r.winner : prev.first]].uid;
@@ -709,10 +710,18 @@
     let s;
     if (add.length || keep.length !== old.length) {
       const gone = old.filter(out).map(x => x.name);
-      ses.seats = keep.map(i => old[i]); ses.chips = keep.map(i => ses.chips[i]);
+      const seats = keep.map(i => old[i]), chips = keep.map(i => ses.chips[i]);
+      for (const u of add) { const i = seats.length; seats.push({ ctrl: 'remote', tier: null, name: (pl[u] && pl[u].name) || `친구${i + 1}`, em: AVS[i % AVS.length], uid: u }); chips.push(CHIPS.start('host', 1)[0]); delete ses.joinPick[u]; }
+      let R0 = null;
+      if (ses.bank) {
+        $('sub').textContent = '🏦 장부를 여는 중…';
+        const st = await ses.bank.reseat(seats, keep); ses.check();
+        st.forEach((v, k) => { if (v != null) chips[keep.length + k] = v; });   // 잔액 그대로 (0·마이너스도)
+        if (ses.rel && ses.bank.rel0) R0 = ses.bank.rel0();
+      }
+      ses.seats = seats; ses.chips = chips;
       if (ses.score) { ses.score.w = keep.map(i => ses.score.w[i]); ses.score.l = keep.map(i => ses.score.l[i]); }
-      if (ses.rel) relRemap(ses, keep, add.length);
-      for (const u of add) { const i = ses.seats.length; ses.seats.push({ ctrl: 'remote', tier: null, name: (pl[u] && pl[u].name) || `친구${i + 1}`, em: AVS[i % AVS.length], uid: u }); ses.chips.push(CHIPS.start('host', 1)[0]); delete ses.joinPick[u]; }
+      if (ses.rel) { relRemap(ses, keep, add.length); if (R0) relJoin(ses, R0, keep.length); }
       const N = ses.seats.length, plan = G.tablePlan(N, prev.round);
       const fi = Math.max(0, ses.seats.findIndex(x => x.uid === prevUid));
       s = G.create({ players: N, rules: ses.nextRules || prev.rules, bonus: ses.nextRules ? ses.nextRules.bonus : prev.bonus, seed: rSeed, first: Math.max(0, plan.who.indexOf(fi)), carry: r && r.kind === 'nagari' ? Math.min(prev.rules.nagariMax, prev.carry + 1) : 0, round: prev.round + 1 });
@@ -931,6 +940,16 @@
     for (const k of ['s0', 'base', 'totWon', 'w', 'l']) R[k] = pick(R[k]).map(v => v ?? 0);
     R.on = keep.map(i => R.on[i]).concat(Array(add).fill(false));
     for (const k of ['pw', 'pm']) R[k] = Array.from({ length: n }, (_, a) => Array.from({ length: n }, (_, b) => (a < keep.length && b < keep.length ? R[k][keep[a]][keep[b]] : 0)));
+  }
+  // 판 사이에 새로 앉은 자리(nKeep 부터)의 📊 통산·두 사람끼리 전적은 장부에서 (R0 = bank.rel0()) — 남은 자리끼리는 이 화면이 판마다 더해 온 값 그대로
+  function relJoin(ses, R0, nKeep) {
+    const R = ses.rel, n = R.on.length;
+    for (let k = nKeep; k < n; k++) {
+      for (const key of ['s0', 'base', 'totWon', 'w', 'l']) R[key][k] = R0[key][k] ?? 0;
+      R.on[k] = !!R0.on[k];
+      for (let i = 0; i < n; i++) for (const key of ['pw', 'pm']) { R[key][k][i] = R0[key][k][i]; R[key][i][k] = R0[key][i][k]; }
+    }
+    R0.base.splice(0, R0.base.length, ...R.base); R.base = R0.base;   // 판 사이 빌리기 때 은행이 같이 올리는 배열(relBase)과 묶어 둠
   }
   const relOn = (ses, i) => !!(ses.rel && ses.rel.on[i] && ses.chips && ses.chips[i] != null);
   const sgnN = v => (v > 0 ? '+' : v < 0 ? '−' : '') + fmtN(Math.abs(v));
