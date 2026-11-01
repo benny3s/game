@@ -401,22 +401,22 @@
   },
   {
     "id": "sc",
-    "name": "스타 대결",
-    "subtitle": "진짜 스타크래프트 1 엔진(BWAPI) 실시간 뮤탈 컨트롤 대결",
-    "desc": "실제 스타1 엔진(방장 PC)으로 친구들과 뮤탈 컨트롤 대결. 방장 PC가 켜져 있을 때 초대 링크로 접속해 브라우저에서 바로 컨트롤합니다.",
-    "emoji": "⚔️",
+    "name": "스타 봇 세상",
+    "subtitle": "진짜 스타1 엔진(OpenBW)과 공개 대회 봇 — 관전 · 나 vs 봇 · 봇 돕기",
+    "desc": "베니 님 PC 에 진짜 엔진 창을 띄워 공개 대회 봇(Stardust · Steamhammer · Iron · Locutus)끼리 관전하거나, 봇과 1대1을 하거나, 내 편 봇에게 운영을 맡기고(F9) 싸움만 직접 합니다.",
+    "emoji": "🤖",
     "category": "action",
-    "players": "1~2명",
+    "players": "1명",
     "modes": [
-      "방장 PC 연동",
-      "친구랑 초대 대결"
+      "봇끼리 관전",
+      "나 vs 봇",
+      "봇 돕기"
     ],
-    "aiTech": "BWAPI 실시간 브릿지",
+    "aiTech": "공개 대회 봇 (BWAPI)",
     "accent": "#a855f7",
     "featured": false,
     "tags": [
       "관리자 전용",
-      "친구랑",
       "PC"
     ],
     "url": "sc/",
