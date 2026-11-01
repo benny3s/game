@@ -95,6 +95,48 @@ U.main(async T => {
     for (const p of [H, W, S]) await p.close().catch(() => {});
   }
 
+  // ── 31) AI 선생님 창 (혼자 하기): 내 차례마다 추천 한 줄 + 👀 상대 흐름 + 📊 내 흐름 + 👉 수의 의미 (11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음)
+  //    · 4~7줄 안에 · 이름으로 말함('다음 사람' 아님) · 보이지 않는 카드(상대가 먹은 카드)는 한 장도 안 나옴
+  //    · 새 판(?mock 첫 화면)에서 열어야 30 번이 바꾸는 localStorage 에 안 걸림 → 30 번보다 앞
+  {
+    const p = await T.open('onecard/');
+    T.ok(!!(await U.waitFor(p, A.ready, null, 15000)), '31 화면 준비');
+    await p.evaluate(() => { __onecard.fast(1); __onecard.start({ seed: 21, n: 3, tier: 'normal', coach: 1 }); });
+    const snaps = [];
+    for (let i = 0; i < 60 && snaps.length < 8; i++) {
+      const got = await U.waitFor(p, () => {
+        const ses = __onecard.ses, s = __onecard.state, pn = __onecard.panel;
+        if (!ses || !s || s.phase === 'end') return { end: true };
+        const cz = document.getElementById('callZone');
+        if (cz && !cz.hidden) { __onecard.call(); return null; }                       // 내가 한 장 남으면 ☝️ 원카드! 를 눌러 줌
+        if (s.phase === 'suit' && s.turn === 0 && ses.pending && !ses.pending.isCall && !ses.pending.isResult) return { suit: true };   // 7 → 무늬 고르기
+        if (!(s.phase === 'play' && s.turn === 0 && ses.pending && !ses.pending.isCall && !ses.pending.isResult)) return null;
+        if (pn && pn.collapsed) { pn.collapse(false); return null; }                  // 폰에선 접힌 동그라미로 시작 → 톡 눌러 폄
+        if (!pn || pn.el.hidden || !/💡/.test(pn.body.textContent)) return null;
+        const vis = new Set(s.pile.concat(s.hands[0]).map(c => OneCard.cardName(c)));
+        const txt = pn.body.innerText;
+        const names = txt.match(/[♠♥♦♣](?:10|[A2-9JQK])|흑백 조커|컬러 조커/g) || [];
+        const log = ses.log || [];
+        return { txt, turnNo: s.turnNo, leak: names.filter(n => !vis.has(n)), lines: txt.split('\n').filter(x => x.trim()).length, log: log.length, fresh: log.length > 0 && log[log.length - 1].p !== 0, nm: ses.seats.map(x => x.name) };
+      }, null, 8000);
+      if (!got || got.end) break;
+      if (got.suit) { await p.evaluate(() => __onecard.act(OneCard.A_SUIT)); continue; }
+      snaps.push(got);
+      await p.evaluate(() => { const L = __onecard.legal(), pl = L.filter(a => a !== OneCard.A_DRAW); __onecard.act(pl.length ? pl[0] : L[0]); });   // 낼 수 있으면 내고 아니면 먹기
+      await T.sleep(60);
+    }
+    T.ok(snaps.length >= 3, '31 내 차례 3번 이상에 선생님 창이 뜸 (' + snaps.length + ')');
+    const fresh = snaps.filter(x => x.fresh);
+    T.ok(fresh.length >= 2, '31 방금 상대가 둔 수가 있는 차례가 2번 이상 (' + fresh.length + ')');
+    T.ok(snaps.length > 0 && snaps.every(x => /👀/.test(x.txt) && /📊/.test(x.txt) && /💡/.test(x.txt) && /👉/.test(x.txt)), '31 모두 👀 📊 💡 👉 줄이 있음:\n' + ((snaps.find(x => !(/👀/.test(x.txt) && /📊/.test(x.txt) && /👉/.test(x.txt))) || snaps[0] || { txt: '(없음)' }).txt));
+    T.ok(snaps.length > 0 && snaps.every(x => x.lines >= 4 && x.lines <= 8), '31 4~8줄 (' + snaps.map(x => x.lines).join(',') + ')');
+    T.ok(snaps.length > 0 && snaps.every(x => !/다음 사람/.test(x.txt)), '31 "다음 사람" 대신 이름으로 말함');
+    T.ok(fresh.length > 0 && fresh.every(x => x.nm.slice(1).some(n => x.txt.includes(n))), '31 👀 에 상대 이름이 나옴');
+    T.ok(snaps.every(x => x.leak.length === 0), '31 보이지 않는 카드 이름이 안 나옴: ' + snaps.map(x => x.leak.join()).join('|'));
+    console.log('  [31] 선생님 창 예:\n' + snaps.slice(0, 3).map(x => '    ' + x.txt.replace(/\n/g, '\n    ')).join('\n    ---\n'));
+    await p.close();
+  }
+
   // ── 30) 3명 방에서 한 명을 '다음 판부터 빼기'로 정한 뒤엔 둘째는 못 뺌 (창 · 결과 창 '👋 빼기')
   {
     await T.ctx.addInitScript(() => { try { localStorage.setItem('onecard.bank', 'null'); } catch (e) {} });   // 은행 방은 자리를 못 빼니 연습 칩 방으로

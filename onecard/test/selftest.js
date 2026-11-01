@@ -491,6 +491,115 @@ section('무작위 판 (2~8명 · 무작위 규칙): 오류 없음 · 할 수 �
   ok(Object.values(specials).every(x => x > 0), '받아치기·막기·건너뛰기·방향·한 번 더·무늬·외치기·잡기·시간 지남·파산·다시 섞기 모두 나옴');
 }
 
+// ── 선생님 흐름 읽기 (11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음) ─────────────
+//   내 차례에 👀 상대가 방금 한 일과 노림 · 📊 내 형세 · 👉 추천이 그것과 어떻게 이어지는지.
+//   AI.record(전 상태, 후 상태, 행동) = 공개 기록(낸 카드 · 장수만) → AI.coach(view, { log, names }) 가 read · mine · mean 을 채움
+section('선생님 흐름 읽기 (👀 상대 · 📊 내 흐름 · 👉 수의 의미)');
+{
+  const names = ['나', '김씨', '박씨', '이씨'];
+  const has = typeof AI.record === 'function';
+  ok(has, 'AI.record (공개 기록) 가 있음');
+  if (has) {
+    const flow = (s, acts, o) => {                               // acts 를 차례로 두며 기록 → 내(0번) 눈으로 선생님
+      const log = []; let t = s;
+      for (const a of acts) { const r = G.step(t, a); log.push(AI.record(t, r.state, a)); t = r.state; }
+      return { s: t, log, c: AI.coach(G.view(t, 0), Object.assign({ log, names }, o)) };
+    };
+    const readText = c => (c.read || []).map(x => x.text).join(' / ');
+    // 1) 박씨가 ♠A 로 나(0)에게 5장 공격 — 나는 같은 무늬 3(♠3)으로 막을 수 있음
+    {
+      const s = G.setup({ players: 3, hands: [[C(H, 4), C(H, 9), C(D, 5), C(CL, 9), C(S, 2), C(H, 0)], [C(CL, 3), C(CL, 4)], [C(S, 0), C(S, 8), C(CL, 11)]], pile: [C(S, 5)], turn: 2 });
+      const { c } = flow(s, [P(C(S, 0))]);
+      ok(Array.isArray(c.read) && c.read.length >= 1, '👀 상대 흐름 줄이 있음');
+      ok(/박씨/.test(readText(c)) && /♠A/.test(readText(c)) && /공격/.test(readText(c)), '👀 박씨 ♠A 공격: ' + readText(c));
+      ok(/나에게 5장/.test(readText(c)), '👀 나에게 5장 먹이려는 수: ' + readText(c));
+      ok(typeof c.mine === 'string' && /내 패 6장/.test(c.mine) && /김씨 2장/.test(c.mine), '📊 내 패 6장 · 김씨 2장: ' + c.mine);
+      ok(/쫓기는/.test(c.mine) && /5장 공격/.test(c.mine) && /막을 3/.test(c.mine), '📊 쫓기는 중 · 5장 공격 · 막을 3 이 있음: ' + c.mine);
+      eq(c.card, C(S, 2), '추천: ♠3 으로 막기');
+      ok(/박씨/.test(c.mean) && /막/.test(c.mean) && !/다음 사람/.test(c.mean), '👉 박씨의 공격을 막는다고 이름으로 말함: ' + c.mean);
+    }
+    // 2) 김씨가 낼 게 없어 한 장 먹음 (♥8 위에서) → 김씨는 ♥·8 이 없다
+    {
+      const s = G.setup({ players: 2, hands: [[C(H, 3), C(S, 7), C(D, 12), C(CL, 5)], [C(CL, 3), C(CL, 4), C(D, 2)]], pile: [C(H, 7)], turn: 1 });
+      const { c } = flow(s, [G.A_DRAW]);
+      ok(/김씨/.test(readText(c)) && /한 장 먹음/.test(readText(c)) && /낼 게 없/.test(readText(c)), '👀 김씨 한 장 먹음 — 낼 게 없었어요: ' + readText(c));
+      ok(/내 패 4장/.test(c.mine) && /김씨 4장/.test(c.mine), '📊 장수 비교: ' + c.mine);
+      const m = c.byCard[C(H, 3)].mean;
+      ok(/김씨/.test(m) && /♥/.test(m) && /먹었/.test(m), '👉 김씨가 ♥ 이 없어 먹었으니 ♥ 로 이어 가기: ' + m);
+    }
+    // 3) 김씨가 ♣7 로 ♥ 바꿈 — ♥ 이 많거나 내 ♣ 을 막으려는 것 / 내 7 은 김씨의 ♥ 을 피해 ♣ 로
+    {
+      const s = G.setup({ players: 2, hands: [[C(H, 6), C(H, 2), C(H, 3), C(CL, 2), C(CL, 3)], [C(CL, 6), C(H, 8), C(H, 9), C(H, 4), C(S, 9)]], pile: [C(CL, 7)], turn: 1 });
+      const { c } = flow(s, [P(C(CL, 6)), G.A_SUIT + H]);
+      ok(/김씨/.test(readText(c)) && /7/.test(readText(c)) && /♥/.test(readText(c)) && /바꿈/.test(readText(c)), '👀 김씨 7 로 ♥ 바꿈: ' + readText(c));
+      ok(/내 ♣/.test(readText(c)), '👀 내 ♣ 을 막으려는 것: ' + readText(c));
+      const base = AI.coach(G.view(G.step(G.step(s, P(C(CL, 6))).state, G.A_SUIT + H).state, 0));
+      eq(base.byCard[C(H, 6)].suit, H, '(기록 없이는 ♥ 도 ♣ 도 2장이면 앞선 ♥)');
+      eq(c.byCard[C(H, 6)].suit, CL, '내 7 은 ♥ 로 바꾼 김씨를 피해 ♣ 로');
+      ok(/피해/.test(c.byCard[C(H, 6)].mean) && /♥/.test(c.byCard[C(H, 6)].mean), '👉 ♥ 로 바꾼 김씨를 피해: ' + c.byCard[C(H, 6)].mean);
+    }
+    // 4) 김씨가 1장 남김 → 원카드 임박
+    {
+      const s = G.setup({ players: 2, hands: [[C(D, 4), C(S, 9), C(CL, 5)], [C(H, 2), C(H, 9)]], pile: [C(H, 7)], turn: 1 });
+      const { c } = flow(s, [P(C(H, 2)), G.A_CALL]);
+      ok(/김씨/.test(readText(c)) && /1장 남음/.test(readText(c)) && /원카드 임박/.test(readText(c)), '👀 김씨 1장 남음 — 원카드 임박!: ' + readText(c));
+    }
+    // 5) 다음 사람이 1장이면 공격 — 이유에 '다음 사람' 대신 이름
+    {
+      const s = G.setup({ players: 3, hands: [[C(H, 1), C(H, 7), C(S, 9)], [C(CL, 3)], [C(CL, 5), C(CL, 6), C(D, 2)]], pile: [C(H, 8)] });
+      const c = AI.coach(G.view(s, 0), { log: [], names });
+      eq(c.card, C(H, 1), '추천: 공격');
+      ok(/김씨/.test(c.mean) && /1장/.test(c.mean) && !/다음 사람/.test(c.mean), '👉 김씨가 1장 남았으니 공격으로 막아요: ' + c.mean);
+      ok(c.read.length === 1 && /아직/.test(c.read[0].text), '👀 아직 상대가 둔 수가 없으면 그렇게 말함: ' + readText(c));
+    }
+    // 6) 내가 둔 뒤의 기록만 '방금'으로 셈 (내 수 앞의 상대 수는 안 나옴)
+    {
+      const s = G.setup({ players: 2, hands: [[C(H, 3), C(H, 5), C(S, 9)], [C(CL, 3), C(CL, 4), C(H, 9), C(D, 2)]], pile: [C(H, 7)], turn: 1 });
+      const { c, log } = flow(s, [P(C(H, 9)), P(C(H, 3)), G.A_DRAW]);
+      ok(log.length === 3 && typeof AI.since === 'function' && AI.since(log, 0).length === 1 && AI.since(log, 0)[0].p === 1, '내 수 뒤 기록만 남김');
+      ok(/한 장 먹음/.test(readText(c)) && !/♥9/.test(readText(c)), '방금(내 수 뒤)만: ' + readText(c));
+    }
+    // 7) 기록 = 장수와 낸 카드만 (먹은 카드 · 남의 손패 안 들어감) + 판 전체를 돌려도 보이는 카드만 말함
+    {
+      const OK = new Set(['p', 'ph', 'a', 'no', 'round', 'cB', 'cA', 'outA', 'atkB', 'atkA', 'kB', 'lp', 'suitB', 'rankB', 'suitA', 'rankA', 'dirB', 'dirA', 'nxB', 'nxA', 'c', 'drew', 'su', 'skip', 'rev', 'again', 'bust', 'pick', 'by', 'pen']);
+      let badKey = 0, leak = 0, texts = 0, tooLong = 0, noRead = 0, noMine = 0, noMean = 0;
+      const rng = G.makeRng(515);
+      const nameRe = /[♠♥♦♣](?:10|[A2-9JQK])|흑백 조커|컬러 조커/g;
+      for (let g = 0; g < 160; g++) {
+        const n = 2 + (g % 5);
+        let s = G.create({ players: n, seed: 3000 + g });
+        const log = [];
+        for (let k = 0; k < 400 && s.phase !== 'end'; k++) {
+          const L = G.legal(s);
+          let a;
+          if (s.phase === 'call') a = rng() < 0.8 ? G.A_CALL : L[Math.floor(rng() * L.length)];
+          else a = rng() < 0.15 ? L[Math.floor(rng() * L.length)] : AI.choose(G.view(s, s.turn), 'normal', { rng });
+          const r = G.step(s, a), rec = AI.record(s, r.state, a);
+          for (const key of Object.keys(rec)) if (!OK.has(key)) badKey++;
+          for (const key of ['cB', 'cA', 'outA']) if (!Array.isArray(rec[key]) || rec[key].length !== n) badKey++;
+          log.push(rec); s = r.state;
+          if (s.phase === 'play' && s.turn === 0 && s.out[0] === 0) {
+            const v = G.view(s, 0), c = AI.coach(v, { log, names: ['나', '가', '나다', '다라', '라마', '마바', '바사', '사아'] });
+            if (!c) continue;
+            texts++;
+            const seen = new Set(v.pile.concat(v.hands[0], log.filter(x => x.c != null).map(x => x.c)).map(G.cardName));   // 다시 섞여 더미로 간 카드도, 방금 누가 냈는지는 모두가 본 것
+            const all = (c.read || []).map(x => x.text).concat([c.mine, c.mean, c.why]).concat(Object.values(c.byCard).map(x => x.mean + ' ' + x.why)).join(' ');
+            for (const m of all.match(nameRe) || []) if (!seen.has(m)) { leak++; if (leak < 4) console.log('    누출?', m, all); }
+            if (!c.read || !c.read.length) noRead++;
+            if (!c.mine) noMine++;
+            if (!c.mean) noMean++;
+            if ((c.read || []).length > 4) tooLong++;
+          }
+        }
+      }
+      eq(badKey, 0, '공개 기록에는 정해진 항목(장수 · 낸 카드)만');
+      ok(texts > 300, `내 차례 ${texts}번에 선생님 글 만듦`);
+      eq(leak, 0, '👀 📊 👉 글에 보이지 않는 카드 이름이 없음');
+      eq([noRead, noMine, noMean, tooLong], [0, 0, 0, 0], '👀 📊 👉 가 늘 있고 👀 는 4줄 이하');
+    }
+  }
+}
+
 (async () => {
   section('AI (할 수 있는 수만 · 같은 씨앗이면 같은 수 · 선생님 · 외치기 경주)');
   {

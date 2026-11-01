@@ -292,7 +292,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=5');
+    worker = new Worker('ai-worker.js?v=6');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -985,6 +985,7 @@
   // ── 한 판 진행 ───────────────────────────────────────────
   async function playRound(ses, s) {
     ses.S = s; ses.V = G.fastClone(s); ses.sel = -1; ses.armed = false; ses.resCounted = false; ses.coachCache = null; ses.busy = -1;
+    ses.log = [];                                            // 👀 선생님이 상대 흐름을 읽을 공개 기록 (판마다 새로 · 낸 카드와 장수만)
     ses.rec = ses.isDrill ? null : { at: Date.now(), start: G.fastClone(s), acts: [], seats: ses.seats.map((x, i) => Object.assign({ name: i === ses.cfg.me && !ses.cfg.watch && !ses.hot ? '나' : x.name, em: x.em }, x.ctrl === 'me' && !ses.cfg.watch ? { h: 1 } : {})) };   // h = 이 기기 사람 자리 (📒 아쉬운 장면은 이 자리만)
     if (ses.hot) ses.hide = true;
     $('resBox').hidden = true; $('callZone').hidden = true;
@@ -1022,7 +1023,8 @@
       ses.seq++;
       ses.check();
       if (!G.isLegal(ses.S, a)) { console.warn('[onecard] 할 수 없는 수', a, ses.S.phase); a = G.legal(ses.S).indexOf(G.A_DRAW) >= 0 ? G.A_DRAW : G.legal(ses.S)[0]; }
-      const { state, events } = G.step(ses.S, a);
+      const before = ses.S, { state, events } = G.step(before, a);
+      try { ses.log.push(AI.record(before, state, a)); } catch (e) { console.warn(e); }
       ses.S = state; if (ses.rec) ses.rec.acts.push(a);
       ses.actor = p;
       try { await playEvents(ses, events); } finally { ses.actor = null; }
@@ -1512,7 +1514,7 @@
   function askSuit(ses) {
     sfx('pop');
     const s = ses.S, me = s.turn, cnt = AI.suitCounts(s.hands[me]);
-    const co0 = coachOn(ses) && !ses.hide ? AI.coach(G.view(s, me)) : null, hid = !!co0 && mHide(ses);   // 📒 노트 연습 첫 장면: 💡 를 누르면 추천 표시
+    const co0 = coachOn(ses) && !ses.hide ? AI.coach(G.view(s, me), coachOpts(ses)) : null, hid = !!co0 && mHide(ses);   // 📒 노트 연습 첫 장면: 💡 를 누르면 추천 표시
     const co = hid ? null : co0;
     const close = C.modal({
       title: '🎨 다음 무늬를 골라요 (손패를 보고 골라요)', cls: 'suitov',
@@ -1610,16 +1612,17 @@
     }
     try { ses.panel = CoachPanel.create({ game: 'onecard', title: 'AI 선생님', startHidden: true }); } catch (e) { ses.panel = null; }
   }
+  const coachOpts = ses => ({ log: (ses.log || []).slice(), names: ses.seats.map(x => x.name) });   // 선생님이 상대 흐름을 읽는 재료: 지난 수들(공개 기록) + 자리 이름
   function getCoach(ses) {
     const s = ses.S, me = meSeat(ses);
     if (!coachOn(ses) || me < 0 || s.turn !== me || ses.hide || s.phase !== 'play' || !ses.pending || ses.pending.isCall || ses.pending.isResult) return null;
     if (!ses.coachCache || ses.coachCache.seq !== ses.seq) {
       // 바로: 어림 규칙으로 추천 → 일꾼이 숨은 카드를 수백 번 섞어 끝까지 둬 본 뒤 더 나은 수가 분명하면 바꿈
-      const v = G.view(s, me), seq = ses.seq;
-      ses.coachCache = { seq, data: AI.coach(v) };
+      const v = G.view(s, me), seq = ses.seq, opts = coachOpts(ses);
+      ses.coachCache = { seq, data: AI.coach(v, opts) };
       if (!FAST) coachMC(v, seq + 1).then(d => {
         if (!d || SES !== ses || !ses.coachCache || ses.coachCache.seq !== seq) return;
-        const nd = AI.coach(v, { mc: d, minN: 60 });
+        const nd = AI.coach(v, Object.assign({ mc: d, minN: 60 }, opts));
         if (nd && nd.a !== ses.coachCache.data.a) { ses.coachCache.data = nd; if (myTurnNow(ses)) { renderHand(ses); coachRender(ses); } }
       });
     }
@@ -1633,9 +1636,12 @@
     let html;
     if (mHide(ses)) html = MHIDE_HTML;
     else if (co) {
+      // 💡 추천 먼저 → 👉 수의 의미(까닭 + 상대 흐름과 이어지는 말) → 👀 상대 흐름 → 📊 내 흐름 (11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음)
       const sel = ses.sel >= 0 ? co.byCard[ses.sel] : null;
-      if (sel && !sel.best) html = `<span class="small">고른 카드</span> <b>[${esc(G.cardName(ses.sel))}]</b> ${esc(sel.why)}<br>🧑‍🏫 추천은 <b>[${esc(co.name)}]</b> — ${esc(co.why)}`;
-      else html = `👑 <b>[${esc(co.name)}]</b>${co.card >= 0 && co.byCard[co.card] && co.byCard[co.card].suit != null ? ` → ${SYM[co.byCard[co.card].suit]}` : ''} — ${esc(co.why)}`;
+      const sv = co.card >= 0 && co.byCard[co.card] && co.byCard[co.card].suit != null ? ` → ${SYM[co.byCard[co.card].suit]}` : '';
+      const flow = (co.read || []).map(r => `<br>👀 ${r.q >= 0 ? `<b>${esc(r.name)}</b> ${esc(r.rest)}` : esc(r.text)}`).join('') + (co.mine ? `<br>📊 ${esc(co.mine)}` : '');
+      if (sel && !sel.best) html = `👉 <span class="small">고른 카드</span> <b>[${esc(G.cardName(ses.sel))}]</b> ${esc(sel.mean || sel.why)}<br>💡 추천은 <b>[${esc(co.name)}]</b>${sv} — ${esc(co.mean || co.why)}${flow}`;
+      else html = `💡 추천 <b>[${esc(co.name)}]</b>${sv}<br>👉 ${esc(co.mean || co.why)}${flow}`;
     } else html = '<span class="small">내 차례가 되면 낼 카드를 알려 드려요</span>';
     if (ses.coachHtml !== html) { ses.coachHtml = html; ses.panel.set(html); }
     if (!ses.panel.visible) ses.panel.show();
