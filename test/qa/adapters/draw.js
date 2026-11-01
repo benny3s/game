@@ -1,4 +1,4 @@
-// 냥스트레이션 어댑터 — 손잡이 __draw: ses · mode · V(친구랑 화면 상태) · G(한 판) · fast · pause · setMin · startHot({names}) · autoAct · fp · probe · scribble · exportTest · rankLog
+// 베니스트레이션 어댑터 — 손잡이 __draw: ses · mode · V(친구랑 화면 상태) · G(한 판) · fast · pause · setMin · startHot({names}) · autoAct · fp · probe · scribble · exportTest · rankLog
 //  · hot  = '한 기기' 3명: 가림막(HotSeat.cover) → 제시어 고르기 → 그리기 → 맞히기 … → 공개(▶ 끝까지) → 한 사람씩 투표 → 결과(🔁 단추)
 //  · hot4 = 4명 (마지막 단계가 그리기로 끝나는 짝수 인원)
 //  · autoAct() 는 사람이 하듯 진짜 단추·입력칸·포인터 이벤트로 한 가지씩 함 (가림막은 HotSeat.close)

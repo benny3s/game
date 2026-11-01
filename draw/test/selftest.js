@@ -1,4 +1,4 @@
-/* 냥스트레이션 규칙 시험 — node game/draw/test/selftest.js (1초 안팎)
+/* 베니스트레이션 규칙 시험 — node game/draw/test/selftest.js (1초 안팎)
    공책 돌리기(3~8명) · 단계 순서 · 한 판 끝까지(빈 것 자동) · 투표 집계 · 획 줄여 쓰기/되풀기 · 받은 것 다듬기 · 제시어 목록 · 크기 */
 'use strict';
 const D = require('../core.js');

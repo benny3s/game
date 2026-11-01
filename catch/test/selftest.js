@@ -1,4 +1,4 @@
-// 냥캐치 규칙 시험: node catch/test/selftest.js
+// 베니캐치 규칙 시험: node catch/test/selftest.js
 const C = require('../core.js');
 const W = require('../../draw/words.js');
 let pass = 0, fail = 0;
@@ -97,5 +97,5 @@ for (let t = 0; t < 200; t++) {
   ok(g.scores.every(s => s >= 0), '음수 없음 ' + t);
   ok(g.hist.length === g.turns, '기록 수 ' + t);
 }
-console.log(`${fail ? '✘' : '✔'} 냥캐치 selftest: ${pass} 통과 · ${fail} 실패`);
+console.log(`${fail ? '✘' : '✔'} 베니캐치 selftest: ${pass} 통과 · ${fail} 실패`);
 process.exit(fail ? 1 : 0);

@@ -1,4 +1,4 @@
-/* 냥스트레이션 — 메뉴 · 한 기기에서 여럿 · 친구랑 · 화면(제시어·그리기·맞히기·공개·투표·결과) · 시험 손잡이 (규칙은 core.js, 그림판은 pad.js)
+/* 베니스트레이션 — 메뉴 · 한 기기에서 여럿 · 친구랑 · 화면(제시어·그리기·맞히기·공개·투표·결과) · 시험 손잡이 (규칙은 core.js, 그림판은 pad.js)
    흐름: 공책 n권을 단계마다 옆 사람에게 넘김 (core.js 맨 위 설명). 화면은 한 장 — #scr 안에 단계마다 새로 그림
    친구랑: 방장이 판의 주인 (친구는 낸 것만 보내고, 방장이 단계·공개·투표를 정해 모두에게 뿌림). 방장도 자기 메시지를 handle() 로 똑같이 받음
      메시지: go(판 시작·다시 들어온 사람에게 지금 상태) · step · task(그 사람 몫) · prog(낸 사람) · bk(공책 한 권) · rv(공개 위치) · vote · vp · res · rdyl
@@ -11,7 +11,7 @@
   const esc = C.esc;
   const sfx = (n, o) => C.sfx.play(n, o);
   const SITE = 'draw';
-  try { if (window.GRank && GRank.NAMES) GRank.NAMES[SITE] = '냥스트레이션'; } catch (e) {}   // 랭킹 창 이름표 (common/rank.js 목록에 없어도 보이게)
+  try { if (window.GRank && GRank.NAMES) GRank.NAMES[SITE] = '베니스트레이션'; } catch (e) {}   // 랭킹 창 이름표 (common/rank.js 목록에 없어도 보이게)
 
   // ── 설정 (localStorage) ──────────────────────────────────
   const KEY = 'draw.';
@@ -54,7 +54,7 @@
   function showRules() {
     sfx('tap');
     return C.modal({
-      title: '📖 냥스트레이션 하는 법',
+      title: '📖 베니스트레이션 하는 법',
       html: `<div class="howto" style="text-align:left;font-size:14.5px;display:grid;gap:7px;padding:12px 14px">
         <div>🐱 <b>그림 전달 놀이</b>예요. 3~8명이 각자 <b>공책</b> 한 권을 가지고 시작해요.</div>
         <div>1️⃣ 먼저 내 공책에 <b>제시어</b>를 적어요 (골라 주기·직접 쓰기)</div>
@@ -253,7 +253,7 @@
   function updateProg(ses) {
     const V = ses.V; if (!V || V.ph !== 'step') return;
     const d = V.done.size, n = V.n;
-    setBar(KIND_BAR[D.kindOf(V.step)] || '냥스트레이션', `${V.step + 1}/${n}단계 · 제출 ${d}/${n}`);
+    setBar(KIND_BAR[D.kindOf(V.step)] || '베니스트레이션', `${V.step + 1}/${n}단계 · 제출 ${d}/${n}`);
     const wt = $('wtxt'); if (wt) { wt.textContent = `${d} / ${n}명 냈어요`; $('wmeter').style.width = Math.round(d / n * 100) + '%'; $('chips').innerHTML = chipsHtml(V); }
   }
 
@@ -343,7 +343,7 @@
   async function saveBook(books, names, b) {
     try {
       const cv = P.notebookImage(books[b], names, `📒 ${names[b]}의 공책`);
-      const r = await P.saveCanvas(cv, `nyangstration-${b + 1}.png`);
+      const r = await P.saveCanvas(cv, `benistration-${b + 1}.png`);
       if (r) C.toast('📷 ' + r, 2000);
       return cv;
     } catch (e) { console.warn(e); C.toast('이미지를 못 만들었어요'); }
@@ -351,7 +351,7 @@
   async function saveTop(books, names, t) {
     try {
       const pg = books[t.b][t.p], src = t.p ? (books[t.b][t.p - 1] || {}).t : '';
-      const r = await P.saveCanvas(P.singleImage(pg.s, `${names[t.by]}${src ? ' · “' + src + '”' : ''}`), 'nyangstration-best.png');
+      const r = await P.saveCanvas(P.singleImage(pg.s, `${names[t.by]}${src ? ' · “' + src + '”' : ''}`), 'benistration-best.png');
       if (r) C.toast('📷 ' + r, 2000);
     } catch (e) { console.warn(e); C.toast('이미지를 못 만들었어요'); }
   }
@@ -459,7 +459,7 @@
   }
   function friendOpts() {
     return {
-      game: 'draw', title: '냥스트레이션', max: 8,
+      game: 'draw', title: '베니스트레이션', max: 8,
       get min() { return QA_MIN || 3; },
       describe: n => {
         const need = QA_MIN || 3;
@@ -475,7 +475,7 @@
   function startOnline({ net, role, cfg }) {
     if (SES) SES.dispose();
     const ses = SES = newSession({ mode: 'online', net, role, uid: net.uid });
-    show('play'); setBar('냥스트레이션', '연결하는 중'); scrCls();
+    show('play'); setBar('베니스트레이션', '연결하는 중'); scrCls();
     scr().innerHTML = `<div class="waitbox"><div class="paw">🐱</div><h2>${role === 'host' ? '공책을 준비해요' : '방장에게 공책을 받는 중'}</h2></div>`;
     ses.offs.push(net.on('players', () => onPlayers(ses)));
     if (role === 'host') hostStart(ses, cfg);
@@ -670,7 +670,7 @@
         end: Date.now() + (m.rem || 0) * 1000, task: null, sent: !!m.sub, done: new Set(m.done || []), gone: new Set(m.gone || []), books: new Array(n).fill(null), rv: null, vp: new Set(m.vp || []), T: null, votes: null, voteUi: null, myVote: null };
       destroyCur(); stopTimer();
       if (m.ph === 'step') renderStep(ses);
-      else { setBar('냥스트레이션', '공책을 받는 중'); scrCls(); scr().innerHTML = `<div class="waitbox"><div class="paw">🐱</div><h2>공책을 받는 중…</h2></div>`; }
+      else { setBar('베니스트레이션', '공책을 받는 중'); scrCls(); scr().innerHTML = `<div class="waitbox"><div class="paw">🐱</div><h2>공책을 받는 중…</h2></div>`; }
       return;
     }
     if (!V || m.g !== V.g) return;

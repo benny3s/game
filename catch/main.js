@@ -1,5 +1,5 @@
-/* 냥캐치 — 메뉴 · 한 기기에서 여럿 · 친구랑 · 화면(제시어 고르기·그리기·맞히기·정답·결과) · 시험 손잡이
-   규칙은 core.js(CatchCore), 그림판·제시어는 냥스트레이션 것 그대로(draw/pad.js·core.js·words.js)
+/* 베니캐치 — 메뉴 · 한 기기에서 여럿 · 친구랑 · 화면(제시어 고르기·그리기·맞히기·정답·결과) · 시험 손잡이
+   규칙은 core.js(CatchCore), 그림판·제시어는 베니스트레이션 것 그대로(draw/pad.js·core.js·words.js)
    친구랑: 방장이 판의 주인 — 차례·시간·정답 판정·점수를 방장이 정해 모두에게 뿌림. 그리는 사람의 그림은 0.25초마다 방장을 거쳐 모두에게
      방장→: go(판 상태 통째로·다시 들어온 사람에게도) · turn · pick(그리는 사람에게 제시어 3개) · draw · word(그리는 사람·맞힌 사람에게 답) · pic · hint
             say(채팅·정답) · close(아까워요, 그 사람에게만) · hid(답이 든 채팅을 가림, 그 사람에게만) · rev(정답 공개) · end · prog(나간 사람) · rdyl
@@ -12,7 +12,7 @@
   const esc = C.esc;
   const sfx = (n, o) => C.sfx.play(n, o);
   const SITE = 'catch';
-  try { if (window.GRank && GRank.NAMES) GRank.NAMES[SITE] = '냥캐치'; } catch (e) {}
+  try { if (window.GRank && GRank.NAMES) GRank.NAMES[SITE] = '베니캐치'; } catch (e) {}
 
   // ── 설정 (localStorage) ──────────────────────────────────
   const KEY = 'catch.';
@@ -51,7 +51,7 @@
   function showRules() {
     sfx('tap');
     return C.modal({
-      title: '📖 냥캐치 하는 법',
+      title: '📖 베니캐치 하는 법',
       html: `<div class="howto" style="text-align:left;font-size:14.5px;display:grid;gap:7px;padding:12px 14px">
         <div>🖍️ <b>그림 맞히기</b>예요. 2~8명이 차례로 한 번씩 그려요 (바퀴 수만큼).</div>
         <div>1️⃣ 그릴 사람은 <b>제시어 3개</b> 중 하나를 몰래 골라요 (${K.PICK_SEC}초 안에, 안 고르면 첫째)</div>
@@ -282,7 +282,7 @@
     destroyCur(); stopTimer(); scrCls();
     const stn = K.standings(o.scores), top = stn.filter(r => r.rank === 1 && r.s > 0);
     setBar('🏆 결과', top.length ? `${top.map(r => o.names[r.i]).join(', ')} 1등` : '');
-    scr().innerHTML = `${head('🏆 오늘의 냥캐치왕', top.length ? top.map(r => esc(o.names[r.i])).join(', ') + ' 님!' : '아무도 못 맞혔어요 😿', 'sm')}
+    scr().innerHTML = `${head('🏆 오늘의 베니캐치왕', top.length ? top.map(r => esc(o.names[r.i])).join(', ') + ' 님!' : '아무도 못 맞혔어요 😿', 'sm')}
       <div class="scroll"><div class="res">
         <div class="rks">${stn.map(r => `<div class="rkrow${r.rank === 1 && r.s > 0 ? ' win' : ''}${r.i === o.me ? ' me' : ''}"><span>${medal(r.rank)}</span><span class="nm">${esc(o.names[r.i])}</span><i>${r.s}점</i></div>`).join('')}</div>
         <div class="gal">${o.gal.map((h, k) => h ? `<div class="gc"><canvas data-k="${k}"></canvas><div class="cap"><b>${esc(h.w)}</b> · ${esc(o.names[h.d] || '?')} · 맞힘 ${h.got.length}명</div></div>` : '').join('')}</div>
@@ -341,7 +341,7 @@
       const words = Wd.pick3(null, G.used);
       const d = K.startTurn(G, k, words.map(x => x.w));
       ses.hot = { ph: 'cover', k };
-      setBar('🖍️ 냥캐치', turnSub(G, k));
+      setBar('🖍️ 베니캐치', turnSub(G, k));
       await hotCover(ses, { name: names[d], emoji: FACES[d % FACES.length], text: `${names[d]} 님이 그릴 차례`, sub: '다른 사람은 화면을 보지 마세요! 제시어를 몰래 골라요', button: '🤫 제시어 보기' });
       ses.hot = { ph: 'pick', k };
       const i = await ask(ses, res => showPick({ who: names[d], words, hot: true, dur: secs(K.PICK_SEC), onPick: res }));
@@ -401,7 +401,7 @@
   }
   function friendOpts() {
     return {
-      game: 'catch', title: '냥캐치', max: 8,
+      game: 'catch', title: '베니캐치', max: 8,
       get min() { return QA_MIN || 2; },
       describe: n => {
         const need = QA_MIN || 2;
@@ -417,7 +417,7 @@
   function startOnline({ net, role, cfg }) {
     if (SES) SES.dispose();
     const ses = SES = newSession({ mode: 'online', net, role, uid: net.uid });
-    show('play'); setBar('🖍️ 냥캐치', '연결하는 중'); scrCls();
+    show('play'); setBar('🖍️ 베니캐치', '연결하는 중'); scrCls();
     scr().innerHTML = `<div class="waitbox"><div class="paw">🖍️</div><h2>${role === 'host' ? '판을 준비해요' : '방장에게 판을 받는 중'}</h2></div>`;
     ses.offs.push(net.on('players', () => onPlayers(ses)));
     if (role === 'host') hostStart(ses, cfg);
@@ -669,7 +669,7 @@
         startTimer(rem(), null);
       }
     } else if (V.ph === 'draw') {
-      setBar('🖍️ 냥캐치', sub);
+      setBar('🖍️ 베니캐치', sub);
       if (V.me === V.drawer) {
         showDrawer({ small: '🖍️ 내가 그려요 · 말·글자는 쓰면 안 돼요', top: V.word || '…', S, log: V.log, onPic: e => sendHost(ses, { t: 'pic', g: V.g, k: V.k, e }) });
       } else {

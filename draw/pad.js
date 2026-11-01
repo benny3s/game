@@ -1,4 +1,4 @@
-/* 냥스트레이션 — 그림판(손가락·마우스로 그리기) · 그림 그려 보여 주기 · 공책을 이미지로 저장
+/* 베니스트레이션 — 그림판(손가락·마우스로 그리기) · 그림 그려 보여 주기 · 공책을 이미지로 저장
    · 논리 크기 600×450 고정 (화면 크기에 CSS 로 늘이고 줄임). 점은 부드럽게(0.6 보간 + 중점 곡선) 모으고, 보낼 때만 core.js 가 줄여서 정수 배열로
    · DrawPad.render(canvas, enc, opt) = 어느 기기에서나 정수 배열 → 그림 / new DrawPad.Pad(canvas, opt) = 그리는 판 */
 (() => {
@@ -154,7 +154,7 @@
       }
     }
     ctx.fillStyle = '#8e84a6'; ctx.font = `600 20px ${FONT}`; ctx.textAlign = 'center';
-    ctx.fillText('🎨 냥스트레이션 · benny3s.github.io/game/draw', gw / 2, total - 20);
+    ctx.fillText('🎨 베니스트레이션 · benny3s.github.io/game/draw', gw / 2, total - 20);
     return cv;
   }
   // 그림 한 장만 (오늘의 그림)
@@ -166,7 +166,7 @@
     const t = document.createElement('canvas'); render(t, enc, { w: W });
     ctx.fillStyle = '#fff'; ctx.fillRect(pad - 3, 64 - 3, W + 6, H + 6); ctx.drawImage(t, pad, 64);
     ctx.fillStyle = '#e8e1f5'; ctx.font = `700 26px ${FONT}`; ctx.fillText(caption || '', cv.width / 2, H + 64 + 44);
-    ctx.fillStyle = '#8e84a6'; ctx.font = `600 18px ${FONT}`; ctx.fillText('🎨 냥스트레이션', cv.width / 2, cv.height - 14);
+    ctx.fillStyle = '#8e84a6'; ctx.font = `600 18px ${FONT}`; ctx.fillText('🎨 베니스트레이션', cv.width / 2, cv.height - 14);
     return cv;
   }
   // 공유 창(폰) → 안 되면 내려받기. 결과 글을 돌려줌
@@ -175,7 +175,7 @@
     if (!blob) return '이미지를 못 만들었어요';
     const file = new File([blob], name, { type: 'image/png' });
     try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: '냥스트레이션' }); return '공유했어요'; }
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: '베니스트레이션' }); return '공유했어요'; }
     } catch (e) { if (e && e.name === 'AbortError') return ''; }
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);

@@ -102,7 +102,7 @@ def main():
     fix_note = auto_fix(new, t0) if new and "--no-fix" not in sys.argv else ""
     if new:
         names = {"portal": "게임 목록", "gostop": "고스톱", "seotda": "섯다", "poker": "홀덤", "baduk": "바둑", "omok": "오목", "cube": "큐브", "chess": "체스",
-                 "janggi": "장기", "yut": "윷놀이", "billiards": "당구", "volley": "냥냥배구", "land": "땅따먹기", "onecard": "원카드", "nyang": "냥도쿠", "snake": "지렁이", "sc": "스타", "draw": "냥스트레이션", "catch": "냥캐치"}
+                 "janggi": "장기", "yut": "윷놀이", "billiards": "당구", "volley": "냥냥배구", "land": "땅따먹기", "onecard": "원카드", "nyang": "냥도쿠", "snake": "지렁이", "sc": "스타", "draw": "베니스트레이션", "catch": "베니캐치"}
         lines = [f"· {names.get(i['game'], i['game'])}: {str(i.get('title', ''))[:60]}" for i in sorted(new, key=lambda i: i.get("sev") != "high")[:4]]
         more = f"\n…그 밖 {len(new) - 4}개" if len(new) > 4 else ""
         phone(f"🎮 게임 밤 점검: 새 문제 {len(new)}개\n" + "\n".join(lines) + more + (f"\n{fix_note}" if fix_note else "") + "\nClaude 에게 '게임 점검 결과 봐줘' 하시면 확인하고 올립니다.", "game-qa:" + t0.strftime("%m%d"))
