@@ -169,7 +169,7 @@ async function pool(tasks, n) {
   if (!OPT.quick) await selfP;
 
   // 브라우저
-  const engines = { chromium: await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'] }) };
+  const engines = { chromium: await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--mute-audio', '--autoplay-policy=no-user-gesture-required', '--disable-renderer-backgrounding', '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows'] }) };
   if (OPT.webkit) {
     try { engines.webkit = await pw.webkit.launch(); }
     catch (e) { DATA.harness.push('WebKit 을 못 띄움 — Chromium 만 검사: ' + e.message.split('\n')[0]); log('WebKit 없음 — Chromium 만'); }

@@ -6,6 +6,13 @@ const fs = require('fs'), path = require('path');
 const HELPERS = `(() => {
   if (window.__qa) return;
   const qa = window.__qa = { rej: [], muts: 0 };
+  // 🔇 시험은 소리 없이 (베니 님 스피커로 나감 — 11-01 다시 들림): Web Audio 는 0 볼륨 마디로 거쳐 내보내고, <audio> 는 음소거, 읽어 주기는 안 함 (게임 소리 설정은 그대로)
+  try {
+    const P = (window.BaseAudioContext || window.AudioContext || window.webkitAudioContext || function () {}).prototype, d = Object.getOwnPropertyDescriptor(P, 'destination');
+    if (d && d.get) Object.defineProperty(P, 'destination', { configurable: true, get() { if (!this.__qaMute) { const g = this.createGain(); g.gain.value = 0; g.connect(d.get.call(this)); this.__qaMute = g; } return this.__qaMute; } });
+    const mp = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { this.muted = true; this.volume = 0; return mp.apply(this, arguments); };
+    if (window.speechSynthesis) window.speechSynthesis.speak = () => {};
+  } catch (e) {}
   addEventListener('unhandledrejection', e => { const r = e.reason; qa.rej.push(String((r && (r.stack || r.message)) || r)); });
   qa.shown = el => { if (!el || !el.isConnected || el.closest('[hidden]')) return false; const r = el.getBoundingClientRect(); if (r.width < 2 || r.height < 2) return false; const cs = getComputedStyle(el); return cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity > 0.05; };
   qa.vis = el => { if (!qa.shown(el)) return false; const r = el.getBoundingClientRect(); return r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; };
