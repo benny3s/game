@@ -479,3 +479,11 @@ html, body {
 .rp-read{margin:0 0 6px;padding-bottom:5px;border-bottom:1px dashed rgba(255,255,255,.18);font-size:12px;line-height:1.45;color:#e2e8f0}
 .rp-read span{color:#94a3b8;font-size:11px}
 @media (orientation:landscape) and (max-height:560px){.rpbar button{height:34px}.rpgo button{height:30px}}
+
+/* 🧑‍🏫 내 차례 창 (11-01): 추천 → 👀 상대 흐름 → 📊 내 흐름 → 👉 수의 의미 → 행동별 기댓값 */
+.cd-rec{font-size:13px;font-weight:800}
+.cd-rec b{color:#6ee7b7}
+.cd-line{display:flex;gap:6px;font-size:12px;line-height:1.4;margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,255,255,.12)}
+.cd-line .cd-ic{flex:none;line-height:1.35}
+.cd-line .cd-tx{flex:1;min-width:0}
+.cd-line b{color:#fde68a}

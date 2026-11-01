@@ -288,5 +288,108 @@ for (let g = 0; g < 25; g++) {
   ok(P.create({ players: 3, seed: 7, stacks: [1000, 5, 1000] }).curBet === 20, 'SB 가 짧아도 BB 는 20');
 }
 
+
+// 17) 👀📊👉 선생님 읽기 (11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음) — 공개 행동 기록 → 상대 범위 → 내 승률·추천 까닭
+{
+  const C = a => a.map(P.parseCard);
+  // 정해진 카드로 장면 만들기: hands = 자리별 홀카드, board = 나올 순서대로 5장, acts = 이미 한 행동들
+  const scene = (n, hands, board, acts) => {
+    let s = P.create({ players: n, seed: 5 });
+    s.hands = hands.map(C);
+    const used = new Set(s.hands.flat().concat(C(board)));
+    const rest = P.CARDS.map((_, i) => i).filter(i => !used.has(i));
+    s.deck = rest.concat(C(board).slice().reverse());          // pop 은 끝에서부터 → 플랍 3장, 턴, 리버 순
+    const start = P.fastClone(s);
+    for (const a of acts) s = P.step(s, a).state;
+    return { s, start };
+  };
+  const { CALL, POT, HALF, ALLIN, FOLD } = { CALL: P.A_CALL, POT: P.A_POT, HALF: P.A_HALF, ALLIN: P.A_ALLIN, FOLD: P.A_FOLD };
+  ok(typeof AI.logAct === 'function' && typeof AI.logFrom === 'function', '공개 행동 기록 함수 있음 (logAct·logFrom)');
+  if (typeof AI.logAct === 'function' && typeof AI.logFrom === 'function') {
+    const NAMES = ['나', '김씨'];
+    // A) 헤즈업: 내(0번, A♦Q♦ — 보드에 못 맞춘 오버카드) 림프 → 상대 체크 → 플랍 K♥7♠3♦ 체크·체크 → 턴 2♣ 상대가 팟 벳
+    const A = scene(2, [['Ad', 'Qd'], ['Ks', '5s']], ['Kh', '7s', '3d', '2c', 'Qh'], [CALL, CALL, CALL, CALL, POT]);
+    ok(A.s.phase === 'bet' && A.s.turn === 0 && A.s.street === 2, 'A 장면: 턴에서 상대 벳, 내 차례');
+    const logA = AI.logFrom(A.start, [CALL, CALL, CALL, CALL, POT]);
+    ok(logA.map(e => e.k).join() === 'call,check,check,check,bet', `행동 기록 종류 (${logA.map(e => e.k).join()})`);
+    ok(logA.map(e => e.s).join() === '0,0,1,1,2' && logA[4].p === 1 && logA[4].to > 0, '행동 기록: 거리·자리·금액');
+    const vA = P.view(A.s, 0);
+    const cA = AI.coach(vA, 0, { log: logA, names: NAMES });
+    ok(cA.read && cA.read.opps && cA.read.opps.length === 1 && cA.read.opps[0].q === 1, 'A 상대 읽기 1명');
+    const hA = cA.read.opps[0].hist;
+    ok(Math.abs(hA.strong + hA.pair + hA.draw + hA.air - 1) < 0.02, 'A 상대 범위 비율 합 = 100%');
+    ok(cA.lines && /김씨/.test(cA.lines.opp[0]) && /턴/.test(cA.lines.opp[0]) && /벳/.test(cA.lines.opp[0]), `A 👀 줄: 상대 이름·거리·벳 (${cA.lines && cA.lines.opp[0]})`);
+    ok(!/플랍 체크/.test(cA.lines.opp[0]), 'A 👀 줄: 내 마지막 행동 뒤에 한 것만 (플랍 체크는 이미 지남)');
+    ok(/승률/.test(cA.lines.flow) && /팟 오즈/.test(cA.lines.flow), `A 📊 줄: 승률·팟 오즈 (${cA.lines.flow})`);
+    ok(cA.bestAction === FOLD && /^폴드/.test(cA.lines.why) && /팟 오즈/.test(cA.lines.why) && /%/.test(cA.lines.why), `A 👉 줄: 폴드 추천 까닭 (${cA.lines.why})`);
+    ok(typeof cA.flatEquityPct === 'number' && cA.equityPct < cA.flatEquityPct - 5, `A 턴 팟 벳 읽기 반영: 승률 ${cA.equityPct}% < 무작위 상대 ${cA.flatEquityPct}%`);
+    // B) 같은 장면인데 상대가 턴에서 체크 → 범위가 약함 (센 패 비율이 벳일 때보다 낮고 내 승률은 더 높음)
+    const B = scene(2, [['Ad', 'Qd'], ['Ks', '5s']], ['Kh', '7s', '3d', '2c', 'Qh'], [CALL, CALL, CALL, CALL, CALL]);
+    const logB = AI.logFrom(B.start, [CALL, CALL, CALL, CALL, CALL]);
+    const cB = AI.coach(P.view(B.s, 0), 0, { log: logB, names: NAMES });
+    ok(cB.read.opps[0].hist.strong < hA.strong, `B 체크한 상대는 센 패 비율이 벳보다 낮음 (${Math.round(cB.read.opps[0].hist.strong * 100)}% < ${Math.round(hA.strong * 100)}%)`);
+    ok(cB.equityPct > cA.equityPct, `B 상대가 체크면 내 승률이 더 높음 (${cB.equityPct}% > ${cA.equityPct}%)`);
+    ok(/체크/.test(cB.lines.opp[0]), `B 👀 줄: 체크 (${cB.lines.opp[0]})`);
+    // C) 프리플랍 상대 레이즈(시작 패 위주) 읽기
+    const Cs = scene(3, [['Ah', '9d'], ['Ks', 'Kc'], ['7d', '2c']], ['Th', '5s', '2d', '9c', '3h'], [POT]);
+    const logC = AI.logFrom(Cs.start, [POT]);
+    const vC = P.view(Cs.s, Cs.s.turn);
+    const cC = AI.coach(vC, Cs.s.turn, { log: logC, names: ['가', '나', '다'] });
+    ok(cC.lines && cC.lines.opp.length >= 1 && /레이즈|벳/.test(cC.lines.opp[0]), `C 프리플랍 레이즈 줄 (${cC.lines && cC.lines.opp[0]})`);
+    {
+      const ro = cC.read.opps.map(o => ({ q: o.q, pre: o.pre }));
+      const hi = ro.slice().sort((a, b) => b.pre - a.pre)[0], lo = ro.slice().sort((a, b) => a.pre - b.pre)[0];
+      ok(hi.pre > 0.65 && hi.pre > lo.pre + 0.1, `C 레이즈한 상대는 시작 패가 센 쪽 (${ro.map(o => o.q + ':' + o.pre.toFixed(2)).join(' ')})`);
+      ok(lo.pre > 0.4 && lo.pre < 0.6, `C 아직 안 움직인 상대는 아무 패나 (평균 ${lo.pre.toFixed(2)})`);
+    }
+    // C2) 같은 무늬 3장 보드에서 상대가 플랍 벳 → 플러시 드로(세미블러프)가 범위에 섞이고 글에도 나옴
+    const Fd = scene(2, [['Ad', 'Js'], ['Ks', '5s']], ['Qh', '7h', '2h', '9c', '3d'], [CALL, CALL, POT]);
+    const cFd = AI.coach(P.view(Fd.s, 0), 0, { log: AI.logFrom(Fd.start, [CALL, CALL, POT]), names: NAMES });
+    ok(cFd.read.opps[0].hist.fd >= 0.12 && cFd.read.opps[0].hist.fd < 0.6, `C2 플러시 드로 비율 (${Math.round(cFd.read.opps[0].hist.fd * 100)}%)`);
+    ok(/플러시/.test(cFd.lines.opp.join(' ')), `C2 👀 줄에 플러시 말이 있음 (${cFd.lines.opp.join(' / ')})`);
+    // D) 아무도 안 움직임 (내가 먼저) → 그렇다고 말함
+    const D = scene(2, [['Ad', 'Qd'], ['Ks', '5s']], ['Kh', '7s', '3d', '2c', 'Qh'], []);
+    const cD = AI.coach(P.view(D.s, D.s.turn), D.s.turn, { log: [], names: NAMES });
+    ok(cD.lines && /아직|먼저/.test(cD.lines.opp[0]), `D 아직 안 움직였으면 그렇게 말함 (${cD.lines && cD.lines.opp[0]})`);
+    // E) 숨은 카드가 새지 않음: 상대 홀카드만 다른 두 판은 (내 눈에는 같으므로) 글이 똑같고, 글에 상대 카드 이름이 없음
+    const A2 = scene(2, [['Ad', 'Qd'], ['Js', 'Jd']], ['Kh', '7s', '3d', '2c', 'Qh'], [CALL, CALL, CALL, CALL, POT]);
+    const cA2 = AI.coach(P.view(A2.s, 0), 0, { log: AI.logFrom(A2.start, [CALL, CALL, CALL, CALL, POT]), names: NAMES });
+    ok(JSON.stringify(cA.lines) === JSON.stringify(cA2.lines) && cA.equityPct === cA2.equityPct, '상대 홀카드가 달라도 내 눈에 같으면 글·승률 같음 (숨은 카드 안 씀)');
+    const txt = JSON.stringify(cA.lines) + JSON.stringify(cA.read);
+    ok(!/K♠|5♠|Ks|5s|J♠|J♦|Js|Jd/.test(txt), '글에 상대 홀카드 이름이 없음');
+    // E2) 복기·📒 아쉬운 장면 판정도 같은 기록으로 (살아 있는 선생님과 같은 기준): 선생님이 폴드를 권한 장면에서 폴드는 최선, 콜은 손해
+    {
+      const rf = AI.review(vA, FOLD, { log: logA }), rc = AI.review(vA, CALL, { log: logA });
+      ok(rf && rf.tier === 'best' && !rf.miss && rf.loss === 0, '복기: 읽은 범위 기준 추천(폴드)을 따르면 최선');
+      ok(rc && rc.loss > 0, `복기: 읽은 범위 기준 콜은 기댓값 손해 (${rc && Math.round(rc.loss)}칩)`);
+    }
+    // F) 기록 없이 부르면 예전 그대로 (AI 가 두는 길은 안 바뀜)
+    const cA0 = AI.coach(vA, 0, { samples: 120 });
+    ok(cA0.lines === undefined && cA0.read === undefined, '기록 없이 부르면 읽기 없음 (AI 가 두는 법은 그대로)');
+    // E3) 계산이 맞나: 상대가 아직 아무것도 안 했으면 읽은 범위 = 아무 패 → 승률이 무작위 상대 몬테카를로와 거의 같아야 함 (여러 장면 · 거리)
+    {
+      let worst = 0, cnt = 0;
+      for (let g = 0; g < 14; g++) {
+        let s = P.create({ players: 2 + (g % 3), seed: 900 + g });
+        for (let k = 0; k < g % 4; k++) { if (s.phase !== 'bet') break; s = P.step(s, CALL).state; }     // 콜만 해서 거리를 올림 (읽을 행동이 없는 장면은 log: [])
+        if (s.phase !== 'bet') continue;
+        const v = P.view(s, s.turn), c1 = AI.coach(v, s.turn, { log: [], samples: 600 }), c0 = AI.coach(v, s.turn, { samples: 600 });
+        worst = Math.max(worst, Math.abs(c1.equityPct - c0.equityPct)); cnt++;
+      }
+      ok(cnt >= 8 && worst <= 7, `읽을 행동이 없으면 읽은 범위 승률 ≈ 무작위 상대 승률 (${cnt}장면, 최대 차이 ${worst}%p)`);
+    }
+    // G) 8명 + 기록: 계산 시간
+    {
+      let s = P.create({ players: 8, seed: 31 });
+      const st0 = P.fastClone(s), acts = [];
+      for (let k = 0; k < 5 && s.phase === 'bet'; k++) { const a = k === 2 ? POT : CALL; acts.push(a); s = P.step(s, a).state; }
+      const t0 = Date.now();
+      const cG = AI.coach(P.view(s, s.turn), s.turn, { log: AI.logFrom(st0, acts), names: Array.from({ length: 8 }, (_, i) => '자리' + i) });
+      ok(cG.lines && cG.lines.opp.length >= 1 && cG.lines.opp.length <= 3, `8명 👀 줄 3개 이하로 줄임 (${cG.lines && cG.lines.opp.length})`);
+      ok(Date.now() - t0 < 1500, `8명 읽기까지 계산 1.5초 이내 (${Date.now() - t0}ms)`);
+    }
+  }
+}
+
 console.log(`poker selftest: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

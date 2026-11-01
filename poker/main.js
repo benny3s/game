@@ -1,4 +1,4 @@
-/* 텍사스 홀덤 포커 (Texas Hold'em) — 화면 · 둥근 테이블(2~8명) · AI 선생님 · 친구랑(방장이 판을 돌림 · 핸드 사이 준비 · 구경꾼 · 끊김 AI 대신 · 점수판 · 30초 시계) · 한 기기 · AI 구경 (main.js) */
+/* 텍사스 홀덤 포커 (Texas Hold'em) — 화면 · 둥근 테이블(2~8명) · AI 선생님(내 차례마다 👀 상대 흐름 · 📊 내 흐름 · 👉 수의 의미) · 친구랑(방장이 판을 돌림 · 핸드 사이 준비 · 구경꾼 · 끊김 AI 대신 · 점수판 · 30초 시계) · 한 기기 · AI 구경 (main.js) */
 (function () {
   'use strict';
   const P = window.Poker;
@@ -216,6 +216,8 @@
     if (window.CoachPanel && !ses.cp) {
       try {
         const tb = $('tbl').getBoundingClientRect();
+        // 처음 쓰는 좁은 화면(폰): 접힌 동그라미를 판 위쪽 오른쪽 구석에 — 창이 동그라미 자리에서 아래로 펼쳐져도 공용 카드·내 카드·버튼을 안 가림 (11-01 글이 길어져서)
+        try { if (!localStorage.getItem('game.coach.poker') && innerWidth < 700) localStorage.setItem('game.coach.poker', JSON.stringify({ c: [Math.max(4, innerWidth - 56), Math.round(tb.top || 56) + 4], z: 1 })); } catch (e) {}
         ses.cp = CoachPanel.create({ game: 'poker', title: 'AI 선생님', bottom: Math.max(64, Math.round(window.innerHeight - tb.bottom + 6)) });
         try { if (!localStorage.getItem(ses.cp.key)) ses.cp.collapse(true); } catch (e) {}
         ses.cpBtn = CoachPanel.button(btn, ses.cp, { onToggle: () => { ses.cc = null; renderGame(ses); } });
@@ -237,6 +239,25 @@
     const items = Object.values(c.byAction || {}).map(x => `<span class="ev-chip ${x.tier}">${x.action === c.bestAction ? '👑 ' : ''}${ACT_LABELS[x.action]} ${x.evText}</span>`);
     return items.length ? `<div class="ev-row">${items.join('')}</div>` : '';
   }
+  // 🧑‍🏫 내 차례 창: 추천(먼저) → 👀 상대 흐름 → 📊 내 흐름 → 👉 수의 의미 → 행동별 기댓값. 글은 AI.coach 가 만든 plain 글 (**굵게** 만 여기서 처리)
+  const bold = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  const REC_ICON = { [P.A_FOLD]: '🛑', [P.A_CALL]: '✅', [P.A_HALF]: '🟢', [P.A_POT]: '🔥', [P.A_ALLIN]: '🔥' };
+  function recLabel(v, me, c) {
+    const a = c.bestAction, cost = P.actionCost(v, me, a);
+    return a === P.A_FOLD ? '폴드' : a === P.A_CALL ? (cost ? `콜 ${fmtN(cost)}칩` : '체크') : `${ACT_LABELS[a]} ${fmtN(cost)}칩`;
+  }
+  function coachLive(c, v, me) {
+    const L = c.lines;
+    return `<div class="cd-rec">${REC_ICON[c.bestAction] || '👑'} <b>${esc(recLabel(v, me, c))}</b> 추천</div>`
+      + `<div class="cd-line"><span class="cd-ic">👀</span><div class="cd-tx">${L.opp.map(bold).join('<br>')}</div></div>`
+      + `<div class="cd-line"><span class="cd-ic">📊</span><div class="cd-tx">${bold(L.flow)}</div></div>`
+      + `<div class="cd-line"><span class="cd-ic">👉</span><div class="cd-tx">${bold(L.why)}</div></div>${evRow(c)}`;
+  }
+  // 이번 게임 내 칩 손익 (게임 시작 칩 대비, 이번 핸드에 건 칩 포함) — 모르면 null
+  function gameNet(ses, v, me) {
+    const base = ses.mode === 'guest' ? ses.base0 : ses.base ? ses.base[me] : null;
+    return base == null || !v.coins ? null : v.coins[me] + ((v.totalBets && v.totalBets[me]) || 0) - base;
+  }
   function coachHtml(c) {
     const outs = c.draws && c.draws.outsCount > 0 ? `${c.draws.outsCount}장 (${c.draws.hitPct}%)` : '메이드 중심';
     return `<div class="coach-meters">
@@ -250,7 +271,7 @@
   }
   function showCoach(ses, html) {
     if (!ses.coachAvail) return;
-    if (ses.cp) { try { ses.cp.set(html); } catch (e) {} $('coachPanel').hidden = true; }
+    if (ses.cp) { if (ses.coachHtml !== html) { ses.coachHtml = html; try { ses.cp.set(html); } catch (e) {} } $('coachPanel').hidden = true; }   // 같은 글이면 다시 안 씀 (깜빡임·새 글 점·스크롤 처음으로 가는 것 방지)
     else if (ses.coachOn) { const cp = $('coachPanel'); cp.hidden = false; cp.innerHTML = html; }
   }
 
@@ -317,11 +338,20 @@
     let coachData = null;
     const coachOn = isCoachOn(ses);
     if (ses.coachAvail && !watch && !spect && !outMe && v.phase === 'bet' && (coachOn || myTurn)) {
-      const key = `${v.round}|${v.street}|${v.turn}|${v.pot}|${v.raises}|${me}`;
-      if (!ses.cc || ses.cc.key !== key) ses.cc = { key, data: AI.coach(v, me) };
-      coachData = ses.cc.data;
-      if (mHide(ses) && myTurn) { showCoach(ses, `<div class="coach-detail">${MHIDE_HTML}</div>`); coachData = null; }   // 📒 노트 연습 첫 장면: 💡 를 누를 때까지 추천을 감춤
-      else showCoach(ses, coachHtml(coachData));
+      // 공개 행동 기록(ses.alog)이 있으면 상대 범위를 읽는 선생님 (내 차례에만 · 계산이 좀 걸려 같은 장면은 한 번만) — 기록이 없는 옛 방장이면 예전 창
+      const hasLog = Array.isArray(ses.alog), live = hasLog && myTurn;
+      if (hasLog && !myTurn) showCoach(ses, `<div class="coach-detail">⏳ 상대가 두는 중이에요 — 내 차례가 되면 👀 상대 흐름 · 📊 내 흐름 · 👉 수의 의미를 알려 드려요</div>`);
+      else {
+        const key = `${v.round}|${v.street}|${v.turn}|${v.pot}|${v.raises}|${me}|${live ? ses.alog.length : -1}`;
+        if (!ses.cc || ses.cc.key !== key) {
+          const names = ses.seats.map((x, q) => (q === me ? '나' : x.name));
+          ses.cc = { key, data: live ? AI.coach(v, me, { log: ses.alog, names, net: gameNet(ses, v, me) }) : AI.coach(v, me) };
+        }
+        coachData = ses.cc.data;
+        if (mHide(ses) && myTurn) { showCoach(ses, `<div class="coach-detail">${MHIDE_HTML}</div>`); coachData = null; }   // 📒 노트 연습 첫 장면: 💡 를 누를 때까지 추천을 감춤
+        else if (live && coachData.lines) showCoach(ses, coachLive(coachData, v, me));
+        else showCoach(ses, coachHtml(coachData));
+      }
     } else if (ses.coachAvail && (spect || v.phase === 'end')) {
       showCoach(ses, `<div class="coach-detail">${spect ? (ses.spec ? '구경 중이에요. 핸드가 끝나면 방장이 다음 핸드에 넣어 줄 수 있어요' : '다음 사람 차례를 기다려요') : '핸드가 끝났어요. 결과를 확인해 보세요 🙂'}</div>`);
     }
@@ -662,7 +692,7 @@
   // 그 사람 시점 상태 한 묶음 (i = -1 이면 구경꾼: 아무 카드도 안 보임)
   function packSt(ses, i) {
     const left = ses.clock && ses.S.phase === 'bet' ? Math.max(0, Math.ceil((ses.clock.end - Date.now()) / 1000)) : null;
-    return { t: 'st', me: i, v: P.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail, sc: ses.score, left };
+    return { t: 'st', me: i, v: P.view(ses.S, i), ro: rosterOf(ses), coach: ses.coachAvail, sc: ses.score, left, lg: ses.coachAvail ? ses.alog || [] : undefined, b0: ses.base && i >= 0 ? ses.base[i] : undefined };
   }
   function sendTo(ses, uid, i) {
     try { ses.net.send(uid, packSt(ses, i), true); } catch (e) { console.error(e); }
@@ -728,6 +758,7 @@
     p.bets = pick(prev.bets, 0); p.totalBets = pick(prev.totalBets, 0); p.acted = pick(prev.acted, false);
     p.hands = keep.map(i => prev.hands[i]).concat(Array.from({ length: add }, () => []));
     p.sbSeat = keep.indexOf(prev.sbSeat); p.bbSeat = keep.indexOf(prev.bbSeat);
+    if (ses.base) ses.base = keep.map(i => ses.base[i]).concat(Array.from({ length: add }, () => start));     // 이번 게임 칩 손익의 시작 칩도 새 자리 번호에 맞춤
     // 딜러 버튼: 빠진 자리면 그 다음 자리가 다음 딜러가 되게 (nextRound 가 한 칸 더 넘기므로 바로 앞 칸으로)
     let target = keep.findIndex(o => o > prev.dealer); if (target < 0) target = 0;
     p.dealer = keep.indexOf(prev.dealer) >= 0 ? keep.indexOf(prev.dealer) : (target - 1 + p.n) % p.n;
@@ -736,7 +767,7 @@
     if (ses.bank) {
       $('subTitle').textContent = '🏦 장부를 여는 중…';
       const st = await ses.bank.reseat(ses.seats, keep);
-      st.forEach((v, k) => { if (v > 0) p.coins[keep.length + k] = v; });
+      st.forEach((v, k) => { if (v > 0) { p.coins[keep.length + k] = v; if (ses.base) ses.base[keep.length + k] = v; } });
     }
   }
   // 판(핸드)이 끝날 때 한 번: 이긴 자리 승, 같이 친 나머지 패 (탈락해 구경하던 자리는 빼고)
@@ -758,6 +789,7 @@
     if (m.t !== 'st') return;
     const prev = ses.V, wasSpec = ses.spec;
     ses.V = m.v; ses.me = m.me; ses.n = m.v.n; ses.waiting = false; ses.spec = m.me < 0;
+    ses.alog = Array.isArray(m.lg) ? m.lg : null; if (m.b0 != null) ses.base0 = m.b0;     // 방장이 보낸 공개 행동 기록 (옛 방장은 안 보냄 → 예전 창)
     ses.seats = m.ro.map(r => ({ name: r.name, em: r.em, ctrl: r.ctrl === 'a' ? 'ai' : 'remote', uid: r.u || null, sub: !!r.b }));
     if (m.sc) ses.score = m.sc;
     rankNote(ses, m.v, m.me);
@@ -813,6 +845,9 @@
     try {
       while (ses.alive) {
         ses.coachLog = [];
+        // 📜 이 핸드의 공개 행동 기록 (선생님 '👀 상대 흐름' 용 · 모두에게 보이는 것만) · 연습 판은 그 장면 앞까지의 기록으로 시작
+        ses.alog = ses.alogSeed ? ses.alogSeed.slice() : []; ses.alogSeed = null;
+        if (ses.S.round === 1 && ses.S.phase === 'bet') ses.base = ses.S.coins.map((c, i) => c + (ses.S.totalBets[i] || 0));   // 이번 게임 시작 칩 (블라인드 낸 것 포함)
         rankNote(ses, ses.S, ses.me);
         // 🎞️ 복기용 기록: 이 핸드 처음 상태 + 행동 차례 (같은 규칙 엔진으로 그대로 다시 둠)
         //   혼자·한 기기만 (친구랑은 기록 안 함 — 아래 saveReplay 설명), 연습 판·탈락 뒤 구경은 안 남김
@@ -852,6 +887,7 @@
           }
           if (!ses.alive) return;
           if (p !== ses.me) showToast(`${seat.name}: ${ACT_LABELS[a]}`);
+          try { ses.alog.push(AI.logAct(ses.S, a)); } catch (e) { console.warn(e); }
           ses.S = P.step(ses.S, a).state;
           if (ses.rec) ses.rec.acts.push(a);
           publish(ses);
@@ -1170,13 +1206,14 @@
   function scanMistakes(rec) {
     if (!window.Mistakes || !AI.review || !rec || !rec.acts.length || !rec.seats.some((x, i) => isHumanSeat(rec, i))) return;
     let st = P.fastClone(rec.start), k = 0;
-    const found = [];
+    const found = [], log = [];                               // log = 그때까지 모두에게 보인 행동 (살아 있는 선생님과 같은 기준으로 판정)
     const run = () => {
       try {
         const t0 = performance.now();
         while (k < rec.acts.length && st.phase === 'bet' && performance.now() - t0 < 10) {
           const a = rec.acts[k];
-          if (isHumanSeat(rec, st.turn)) { const r = AI.review(P.view(st, st.turn), a); if (r && r.miss) found.push({ k, seat: st.turn, street: st.street, r }); }
+          if (isHumanSeat(rec, st.turn)) { const r = AI.review(P.view(st, st.turn), a, { log: log.slice() }); if (r && r.miss) found.push({ k, seat: st.turn, street: st.street, r }); }
+          log.push(AI.logAct(st, a));
           st = P.step(st, a).state; k++;
         }
       } catch (e) { return; }
@@ -1192,7 +1229,7 @@
     const m = ses.mdrill; if (!m) return;
     m.pending = false; m.hide = false;
     let r = null;
-    try { r = AI.review(P.view(st, p), a, { read: false }); } catch (e) { r = null; }
+    try { r = AI.review(P.view(st, p), a, { read: false, log: ses.alog }); } catch (e) { r = null; }
     if (!r) return;
     if (r.tier === 'best' || r.tier === 'good') { m.solved = true; if (window.Mistakes) Mistakes.solved(m.id); showToast('✅ 이번엔 잘 골랐어요!', 2400); }
     else showToast(`🤔 아쉬워요 — 추천은 ${r.best}`, 2600);
@@ -1237,6 +1274,7 @@
       ? { ctrl: 'me', name: '나', em: meInfo.avatar || '🧑' }
       : { ctrl: 'ai', tier: x.tier || cfg.tier || 'normal', name: x.name === '나' ? '그때의 나' : x.name, em: x.name === '나' ? '🙂' : x.em }));
     const ses = SES = { alive: true, mode: 'solo', practice: { rec, k, seat }, n: st.n, me: seat, S: st, seats, pending: null, coachLog: [], coachAvail: true, coachOn: true, spectating: false, mdrill: mid ? { id: mid, pending: true, hide: true } : null };
+    try { ses.alogSeed = AI.logFrom(rec.start, rec.acts.slice(0, k)); } catch (e) { ses.alogSeed = null; }     // 그 장면 앞까지 상대가 한 일도 읽음
     ensureCoach(ses);
     if (ses.cp) { try { ses.cp.show(); ses.cp.collapse(false); } catch (e) {} }   // 선생님 켠 채 시작 (단추로 끌 수 있음)
     showToast(mid ? '📒 아쉬웠던 장면부터 다시 — 이번엔 추천 수를 찾아보세요' : '🎮 이 장면부터 내가 쳐요 · 🧑‍🏫 선생님 켜 둠', 2600);
@@ -1280,7 +1318,7 @@
       const st = rs.S, a = acts[i];
       let html;
       if (st.phase === 'bet' && i < acts.length) {
-        const p = st.turn, c = AI.coach(P.view(st, p), p), info = c.byAction[a];    // 그 사람 시점(남의 카드는 가림)으로만 계산
+        const p = st.turn, c = AI.coach(P.view(st, p), p, { log: AI.logFrom(rec.start, acts.slice(0, i)) }), info = c.byAction[a];    // 그 사람 시점(남의 카드는 가림) + 그때까지 보인 행동으로만 계산
         if (!noted.has(i) && AI.review && isHumanSeat(rec, p)) {   // 📒 사람 자리의 뚜렷한 손해는 노트에도 (같은 기준)
           noted.add(i);
           try { addMistake(rec, i, p, st.street, AI.review(P.view(st, p), a, { c })); } catch (e) {}
