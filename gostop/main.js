@@ -392,7 +392,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=10');
+    worker = new Worker('ai-worker.js?v=11');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -1459,9 +1459,13 @@
       }
       ses.seq++;
       ses.check();
-      const { state, events } = G.step(ses.S, a);
+      const before = ses.S, { state, events } = G.step(ses.S, a);
       ses.S = state;
       if (ses.rec) ses.rec.acts.push(a);
+      // 👀 선생님 '방금 상대 수': 사람마다 그 차례 처음(패 내기 전)·낸 행동·차례가 넘어간 뒤 (선생님은 내 눈 view 로만 읽음)
+      const mv = ses.mv || (ses.mv = []);
+      if (before.phase === 'play' && before.turn === p) mv[p] = { before, a, after: null };
+      if (mv[p] && !mv[p].after && (state.turn !== p || state.phase === 'end')) mv[p].after = state;
       ses.actor = p;
       try { await playEvents(ses, events); } finally { ses.actor = null; }
       ses.check();
@@ -1966,7 +1970,9 @@
     const s = ses.S, me = meSeat(ses);
     if (!s || me < 0 || s.phase !== 'play' || s.turn !== me || !AI.coachHand) return null;
     if (!ses.coachCache || ses.coachCache.seq !== ses.seq) {
-      ses.coachCache = { seq: ses.seq, data: AI.coachHand(G.view(s, me)) };
+      const data = AI.coachHand(G.view(s, me));
+      if (data && AI.readMove) data.moves = (ses.mv || []).map((m, q) => (q !== me && m && m.after && m.after.round === s.round && m.after.turnNo <= s.turnNo ? AI.readMove(G.view(m.before, me), G.view(m.after, me), q, m.a) : null)).filter(Boolean);
+      ses.coachCache = { seq: ses.seq, data };
     }
     return ses.coachCache.data;
   }
@@ -2034,7 +2040,8 @@
         html = `<span class="cb-tag">👑 추천 · ${esc(coach.bestTag)}</span><br><b>[${esc(coach.bestName)}]</b> — ${esc(coach.bestWhy)}`;
       }
       // 👀 상대 읽기: 모으는 약과 빠진 한 장의 자리 · 짝 없이 버린 달 · 흔들어 보인 패 (모두에게 보인 것만)
-      for (const r of coach.read || []) html += `<br><span class="cb-read">👀 <b>${esc(seatAt(ses, r.q).name)}</b> ${esc(r.text)}</span>`;
+      for (const r of coach.moves || []) html += `<br><span class="cb-read">👀 <b>${esc(seatAt(ses, r.q).name)}</b> 방금: ${esc(r.text)}</span>`;
+      for (const r of coach.read || []) html += `<br><span class="cb-read">🔎 <b>${esc(seatAt(ses, r.q).name)}</b> ${esc(r.text)}</span>`;
     } else if (on) html = '<span class="small">내 차례가 되면 추천 수를 알려 드려요</span>';
     const bar = $('coachBar');
     if (ses.panel) {

@@ -242,6 +242,14 @@ section("친구랑 — 자리 · 구경꾼 · 늦게 온 사람 (room.js)");
   ok(/살리는/.test(W(B, fromPic(["..O..", ".OX..", "..O..", ".....", "....."], B.BLACK), xy(5, 3, 1))), "까닭: 단수 돌 살리기");
   ok(/단수로/.test(W(B, fromPic([".....", ".XO..", "..X..", ".....", "....."], B.BLACK), xy(5, 2, 0))), "까닭: 단수로 몰기");
   ok(/초반/.test(W(B, B.create({ size: 9 }), 40)) && /패스/.test(W(B, B.create({ size: 9 }), 81)), "까닭: 초반 · 패스");
+  // 11-01 흐름: 상대 노림을 막는 자리 · 상대 수를 내 쪽에서 읽기 ('상대 돌' = 내 돌)
+  const q0 = fromPic([".....", ".....", "..X..", ".....", "....."], B.BLACK);
+  ok(/상대 노림\(D4 단수\)을 먼저 막는/.test(W(B, q0, xy(5, 3, 1), { threat: { t: xy(5, 3, 1), lab: "D4 단수", sharp: true } })), "까닭: 노림을 막는 자리");
+  ok(/손 빼도/.test(W(B, q0, xy(5, 0, 0), { threat: { t: xy(5, 3, 1), lab: "D4 단수", sharp: true } })), "까닭: 노림보다 큰 곳이면 손 빼기");
+  ok(/바로 옆을 먼저 지켜요/.test(W(B, q0, xy(5, 3, 3), { threat: { t: xy(5, 3, 1), lab: "D4 단수", sharp: true } })), "까닭: 노림 옆이면 받는 수");
+  const capW = fromPic([".O...", "OX...", ".O...", ".....", "....."], B.WHITE);
+  ok(/내 돌 1점을 따냈어요/.test(RM.aimWhy(B, capW, xy(5, 2, 1), -1, { opp: true }).done), "상대 수 읽기: 내 돌을 따냄");
+  ok(/상대 돌 1점을 따냈어요/.test(RM.aimWhy(B, capW, xy(5, 2, 1), -1).done), "복기는 그대로 (상대 돌)");
 }
 
 section("7줄 빠른 바둑 (덤 9)");

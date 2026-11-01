@@ -293,6 +293,15 @@ section('상대 읽기 · 선생님 해설 · 타짜 성격 (11-01)');
   eq(rd.length, 1, '상대 한 명 읽기');
   ok(/홍단 2\/3 \(남은 3월 홍단: 바닥에 있어요\)/.test(rd[0].text), '모으는 약과 빠진 한 장 자리: ' + rd[0].text);
   ok(/5월 패는 없을 듯/.test(rd[0].text), '짝 없이 버린 달: ' + rd[0].text);
+  // 👀 방금 상대 수: 내 청단(6월)이 있는데 상대가 9월 청단을 가져감 → 막음 · 짝 없이 버림
+  let vb = S({ hands: [[0, 2], [33, 3]], table: [34], deck: [5, 6, 7, 9, 10, 11, 13], cap: [[21], []], turn: 1 });
+  let sb = G.fastClone(vb); act(vb, P(33));
+  let rm = AI.readMove(G.view(sb, 0), G.view(vb, 0), 1, P(33));
+  ok(rm && /9월 청단 \+ 피 1장 가져감/.test(rm.text) && /내 청단을 막음/.test(rm.text), '방금 수: 가져간 패 · 내 약 막음: ' + (rm && rm.text));
+  vb = S({ hands: [[0, 2], [3, 44]], table: [16], deck: [5, 6, 7, 9, 10, 11, 13], turn: 1 });
+  sb = G.fastClone(vb); act(vb, P(3));
+  rm = AI.readMove(G.view(sb, 0), G.view(vb, 0), 1, P(3));
+  ok(rm && /짝 없이 버림/.test(rm.text), '방금 수: 짝 없이 버림: ' + (rm && rm.text));
   // 타짜 성격: 모두 할 수 있는 행동만 · 성격은 그 한 수에만 (끝나면 원래대로)
   const names = Object.keys(AI.STYLES);
   eq(names, ['고광렬', '짝귀', '평경장', '아귀'], '타짜 넷 (약한 → 센 순)');

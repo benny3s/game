@@ -434,7 +434,7 @@
   }
   const coachAvail = () => !!(G && G.mode !== "watch" && (G.mode !== "online" || G.coach));
   const coachOpen = () => !!(coachBox && coachBox.visible && !coachBox.collapsed);
-  function coachClear() { if (G && (G.hintP >= 0 || G.rvMark)) { G.hintP = -1; G.rvMark = null; kick(); } }
+  function coachClear() { if (G && (G.hintP >= 0 || G.rvMark || G.liveMark)) { G.hintP = -1; G.rvMark = null; G.liveMark = null; kick(); } }
   function coachHide() { if (coachBox) coachBox.hide(); coachClear(); }
   // 판을 시작할 때: 쓸 수 있는 판이면 단추를 보이고, 사용자가 꺼 두지 않았으면 창도 켬
   function coachEnter() {
@@ -444,12 +444,13 @@
     if (ok && !CoachPanel.isOff("baduk")) coachBox.show(); else coachBox.hide();
   }
   const ptName = (p, N) => "ABCDEFGHJKLMNOPQRST"[p % N] + (N - Math.floor(p / N));
-  const coachWhy = (st, a) => RM.coachWhy(B, st, a);
+  const coachWhy = (st, a, o) => RM.coachWhy(B, st, a, o);
   function coachShow(res, tapped) {
     if (!G) return;
     const N = G.st.size;
     G.hintP = res.move === N * N ? -1 : res.move;
     if (res.rk != null && G.rv) G.rvMark = { k: res.rk, real: res.real, col: G.st.toPlay, aim: G.rv.aim[res.rk] ? G.rv.aim[res.rk].t : -1 };
+    G.liveMark = res.rk == null && res.aimT >= 0 ? { st: G.st, real: -1, col: G.st.toPlay, aim: res.aimT } : null;   // 대국 중: 상대가 노리는 곳 '!'
     if (coachBox) coachBox.set(res.rk != null ? res.html + rvFoot(res) : res.html);
     else {
       say(res.msg, 3200);
@@ -503,8 +504,57 @@
       return;
     }
     const foot = spec ? "👀 구경 중 · " : G.mode === "duo" ? "" : `${stoneEm(c)} 내 차례 · `;
-    G.coachRes = { key, move: r.move, msg, html: `${msg}${why ? `<br>👉 ${why}` : ""}<br><span style="opacity:.75;font-size:12px">${foot}정답은 아니고 참고만 해요</span>` };
+    const tail = `<br><span style="opacity:.75;font-size:12px">${foot}정답은 아니고 참고만 해요</span>`;
+    G.coachRes = { key, move: r.move, msg, html: `${msg}${why ? `<br>👉 ${why}` : ""}${tail}` };
     if (coachBox ? coachOpen() : tapped) coachShow(G.coachRes, tapped);
+    if (spec || !coachBox) return;
+    // 흐름: 👀 상대가 방금 둔 수(한 일 · 내가 손 빼면 다음 노림, 판에 '!') + 📊 형세 → 그걸 보고 추천 까닭을 다시 씀 (추천은 먼저 보여 주고 뒤에 채움)
+    let rd = null; try { rd = await oppRead(st, game); } catch (e) {}
+    if (G !== game || G.st !== st || !rd || !G.coachRes || G.coachRes.key !== key) return;
+    try { why = coachWhy(st, r.move, { threat: rd.threat, own: rd.own }) || why; } catch (e) {}
+    G.coachRes = { key, move: r.move, msg, aimT: rd.t, html: [rd.html, rd.form, `${msg}${why ? `<br>👉 ${why}` : ""}`].filter(Boolean).join("<br>") + tail };
+    if (coachOpen()) coachShow(G.coachRes);
+  }
+  // 👀 상대가 방금 둔 수 읽기 (복기 '🤔 노린 것'과 같은 계산을 상대 쪽에서) + 📊 형세 (신경망일 때만 — 몬테카를로는 흔들려서)
+  //   → { html, form, t(노림 자리, 없으면 -1), threat: { t, lab, sharp }, own(지금 판 소유 지도) }
+  async function oppRead(st, game) {
+    const N = st.size, PASS = N * N, c = st.toPlay, o = 3 - c, n = st.moves.length, last = n ? st.moves[n - 1] : -1;
+    const nn = nnState === "nn", out = { html: "", form: "", t: -1, threat: null, own: null };
+    let a0 = null;
+    if (nn) { a0 = await ask("analyze", st, {}); if (G !== game) return null; }
+    if (a0 && a0.source === "nn") {
+      out.own = Float32Array.from(a0.own);
+      const lead = (c === BLACK ? 1 : -1) * a0.leadB, win = c === BLACK ? a0.winB : 1 - a0.winB;
+      const pf = G.flow && G.flow.c === c && G.flow.n < n ? G.flow : null, d = pf ? lead - pf.lead : null;
+      const me = G.mode === "duo" ? colorName(c) : "내가";
+      out.form = `📊 형세: ${Math.abs(lead) < 0.5 ? "팽팽해요" : `${me} 약 ${Math.abs(lead).toFixed(1)}집 ${lead > 0 ? "앞서요" : "뒤져요"}`} · 이길 확률 ${Math.round(win * 100)}%`
+        + (d != null && Math.abs(d) >= 1 ? ` <span style="opacity:.8">(지난 차례보다 ${d > 0 ? "+" : ""}${d.toFixed(1)}집)</span>` : "");
+      G.flow = { c, n, lead };
+    }
+    if (last < 0 || last === PASS || st.over) return out;
+    const prev = B.undo(st, 1);
+    if (prev.toPlay !== o) return out;
+    const sn = B.play(st, PASS).state;                                 // 내가 손 뺐다고 보고 상대 차례
+    let t = -1, own = null, gain = null;
+    if (!sn.over) {
+      if (nn) {
+        const a = await ask("analyze", sn, {}); if (G !== game) return null;
+        own = a && a.own ? Float32Array.from(a.own) : null;
+        const top = (a && a.top || []).find(([p]) => p !== PASS && !sn.board[p] && B.isLegal(sn, p));
+        t = top ? top[0] : -1;
+        if (a && a0 && a.source === "nn" && a0.source === "nn") gain = (o === BLACK ? 1 : -1) * (a.leadB - a0.leadB);
+      } else {
+        const h = await ask("hint", sn, { seed: 7 }); if (G !== game) return null;
+        t = h && Number.isInteger(h.move) && h.move !== PASS ? h.move : -1;
+      }
+    }
+    const w = RM.aimWhy(B, prev, last, t, { own, gain, name: () => "@T@", opp: true });
+    const tn = t >= 0 ? ptName(t, N) : "";
+    const who = G.mode === "duo" ? `${stoneEm(o)} ${colorName(o)}` : "상대";
+    out.html = `👀 ${who} <b>${ptName(last, N)}</b>: ${[w.done, w.next].filter(Boolean).map(x => esc(x).replace("@T@", `<b>${tn}</b>`)).join(" · ") || "뚜렷한 노림은 안 보여요"}${t >= 0 ? ' <b style="color:#d9466f">!</b>' : ""}`;
+    out.t = t;
+    out.threat = t >= 0 ? { t, lab: tn + " " + w.lab, sharp: w.sharp } : null;
+    return out;
   }
   // 🎞️ 복기 창 아랫줄: 실제로 둔 곳(판에 흐린 돌) · 🤔 노린 것(판에 ! 표시)
   function rvFoot(res) {
@@ -1486,7 +1536,7 @@
       live = true;
     }
     // 복기: 실제로 둔 곳 = 흐린 돌 · 🤔 노린 곳 = 빨간 점선 고리 + '!' (추천의 금빛 반짝임과 다르게, 움직이지 않음)
-    const mk = G.mode === "review" && G.rv && G.rvMark && G.rvMark.k === G.rv.k ? G.rvMark : null;
+    const mk = G.mode === "review" && G.rv && G.rvMark && G.rvMark.k === G.rv.k ? G.rvMark : G.liveMark && G.liveMark.st === st && coachOpen() ? G.liveMark : null;
     if (mk && G.phase === "play") {
       if (mk.real >= 0 && mk.real < NN && !st.board[mk.real]) { const [x, y] = ptXY(mk.real); stone(g, mk.col, x, y, 1, 0.45); }
       if (mk.aim >= 0 && mk.aim < NN) {

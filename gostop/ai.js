@@ -549,6 +549,39 @@
     return out;
   }
 
+  // 👀 방금 상대 수 (선생님): q 의 차례 처음 vb · 끝 va (둘 다 내 눈 view) · a = 처음 낸 행동 → 한 줄 (모두에게 보인 것만)
+  //   무엇을 가져갔나(값진 패 + 피 몇 장 · 내 피 뺏음) → 그걸로 무엇에 다가갔나 / 내 약을 막았나 / 고
+  function readMove(vb, va, q, a) {
+    const me = va.me, ib = analyze(vb), ia = analyze(va), tb = ib.P[q].t, ta = ia.P[q].t;
+    const got = va.cap[q].filter(c => vb.cap[q].indexOf(c) < 0);
+    const lost = me >= 0 && me !== q ? vb.cap[me].filter(c => va.cap[me].indexOf(c) < 0).length : 0;
+    let what = '';
+    if (isBomb(a)) what = `💣 ${a - A.BOMB + 1}월 폭탄 (세 장을 쥐고 있었어요)`;
+    else if (a === A.PASS) what = '손패 없이 뒤집기만';
+    else {
+      const c = cardOf(a);
+      if (c >= 0 && !G.isBonus(c) && !vb.table.some(x => monthOf(x) === monthOf(c))) what = `${G.cardName(c)}을(를) 짝 없이 버림`;
+      if (isShake(a)) what = `흔들기 (${monthOf(c) + 1}월 세 장, 이기면 두 배)` + (what ? ' · ' + what : '');
+    }
+    const big = got.filter(c => c === KOOK || KIND[c] !== PI || PIV[c] >= 2), pis = got.length - big.length;
+    if (got.length) what += (what ? ' · ' : '') + [...big.map(G.cardName), pis ? `피 ${pis}장` : ''].filter(Boolean).join(' + ') + ' 가져감';
+    const aims = [];
+    for (const k in SETS) {
+      const n0 = SETS[k].filter(c => vb.cap[q].indexOf(c) >= 0).length, n1 = SETS[k].filter(c => va.cap[q].indexOf(c) >= 0).length;
+      if (n1 <= n0) continue;
+      if (n1 === 3) aims.push(`${SETNAME[k]} 완성!`);
+      else if (!ia.P[q].dead[k]) aims.push(`${SETNAME[k]} ${n1}/3 노림`);
+      if (me >= 0 && me !== q && !ib.P[me].dead[k] && SETS[k].some(c => vb.cap[me].indexOf(c) >= 0)) aims.push(`내 ${SETNAME[k]}을 막음`);
+    }
+    if (ta.g > tb.g) aims.push(ta.g >= 3 ? `광 ${ta.g}장 — 광 점수` : `광 ${ta.g}장`);
+    if (lost) aims.push(`내 피 ${lost}장 뺏음`);
+    if (ta.pi >= 10 && tb.pi < 10) aims.push(`피 ${ta.pi}장 — 피 점수`);
+    else if (!aims.length && ta.pi > tb.pi) aims.push(`피 모으기 (${ta.pi}장)`);
+    if (va.go[q] > vb.go[q]) aims.push(`${va.go[q]}고! (${G.tally(va, q).base}점에서 더 감)`);
+    if (!what && !aims.length) return null;
+    return { q, text: what + (aims.length ? ' → ' + aims.join(' · ') : '') };
+  }
+
   function coachHand(v, opts) { return withK({ read: 1 }, () => coachHand0(v, opts)); }
   function coachHand0(v, opts) {
     opts = opts || {};
@@ -682,6 +715,6 @@
     return null;
   }
 
-  const API = { choose, hint, coachHand, coachGoStop, readOpp, review, REVIEW, STYLES, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
+  const API = { choose, hint, coachHand, coachGoStop, readOpp, readMove, review, REVIEW, STYLES, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.GostopAI = API;
 })(this);

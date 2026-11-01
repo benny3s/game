@@ -65,16 +65,23 @@
   function names(players, seats) { return { 1: ((players || {})[seats[1]] || {}).name || "흑", 2: ((players || {})[seats[2]] || {}).name || "백" }; }
 
   // 추천 수의 까닭 한 줄 (그 수를 두면 생기는 일로) — AI 선생님 창
-  function coachWhy(B, st, a) {
-    const N = st.size;
+  //   opt.threat = { t, lab, sharp } 상대가 방금 수로 노리는 곳 (내가 손 빼면 둘 곳) · opt.own = 지금 판 소유 지도 (흑 +1 ~ 백 −1)
+  const FX_TIP = { cap: n => `상대 돌 ${n}개를 따낼 수 있어요`, save: () => "단수에 걸린 내 돌을 살리는 자리예요", atari: () => "상대 돌을 단수로 몰아요 (숨구멍 하나)",
+    cut: () => "상대 돌 사이를 끊어 약한 쪽을 노려요", connect: () => "떨어진 내 돌을 이어 튼튼하게 해요", eyeTake: () => "상대 눈 자리를 빼앗아 사활을 노려요",
+    eyeMake: () => "눈을 만들어 내 돌을 살려요", press: () => "상대 돌 숨구멍을 줄여 몰아붙여요" };
+  function coachWhy(B, st, a, opt = {}) {
+    const N = st.size, th = opt.threat;
     if (a === N * N) return "더 둘 곳이 마땅치 않아요. 상대도 패스하면 집을 세요";
-    const r = B.play(st, a), ev = r.events || [];
-    const cap = ev.find(e => e.type === "capture"), at = ev.find(e => e.type === "atari");
-    if (cap) return `상대 돌 ${cap.points.length}개를 따낼 수 있어요`;
-    const me = st.toPlay, inAt = B.ataris(st)[me];
-    if (inAt.length && r.state !== st) { const after = B.ataris(r.state)[me]; if (inAt.some(p => r.state.board[p] === me && !after.includes(p))) return "단수에 걸린 내 돌을 살리는 자리예요"; }
-    if (at) return "상대 돌을 단수로 몰아요 (숨구멍 하나)";
+    if (th && th.t === a) return th.sharp ? `상대 노림(${th.lab})을 먼저 막는 자리예요` : "상대도 다음에 노리는 곳이에요 — 먼저 차지해요";
+    const near = th && Math.abs(a % N - th.t % N) + Math.abs(((a / N) | 0) - ((th.t / N) | 0)) <= 2;   // 노림 바로 옆 = 받는 수
+    const fx = moveFx(B, st, a, opt.own || null).filter(f => f.k !== "self");
+    if (fx.length) return FX_TIP[fx[0].k](fx[0].n) + (th && th.sharp && !near ? ` — 상대 노림(${th.lab})보다 급해요` : "");
+    if (th && th.sharp) return near ? `상대 노림(${th.lab}) 바로 옆을 먼저 지켜요` : `상대 노림(${th.lab})보다 이곳이 더 커요 — 받지 않고 손 빼도 돼요`;
     if (st.moves.length < N) return "판 초반엔 귀·변의 넓은 곳부터 차지해요";
+    if (opt.own) {
+      const oc = opt.own[a] * (st.toPlay === B.BLACK ? 1 : -1);
+      return oc >= 0.45 ? "내 집 경계를 단단히 지키는 자리예요" : oc <= -0.45 ? "상대 집을 줄이는 자리예요" : "아직 주인 없는 큰 곳이에요 (자리 잡기)";
+    }
     return "내 돌을 튼튼하게 잇고 집을 넓히는 자리예요";
   }
 
@@ -122,33 +129,39 @@
     eyeTake: () => "상대 눈 자리를 빼앗았어요 (사활)", eyeMake: () => "눈을 만들었어요 (사활)", press: () => "상대 돌 숨구멍을 둘로 줄였어요" };
   const FX_NEXT = { cap: n => `${n}점 따내기`, save: () => "내 돌 살리기", atari: () => "단수", cut: () => "끊기", connect: () => "잇기",
     eyeTake: () => "눈 빼앗기 (사활)", eyeMake: () => "눈 만들기 (사활)", press: () => "숨구멍 줄이기" };
-  // 한 줄로: st(실제 수 전) · a 실제 수 · t 노림(같은 쪽이 한 번 더 둔다면, 없으면 -1) · opt { own: 노림 판의 소유 지도, gain: 안 받으면 몇 집, name: 점 → 이름 }
-  // → { done, next, text }  (text 는 HTML 아님 · 이름은 name 이 준 그대로)
+  // 상대가 둔 수를 내 쪽에서 읽을 때 (opt.opp): '상대 돌' = 내 돌
+  const FX_DONE_OPP = { cap: n => `내 돌 ${n}점을 따냈어요`, save: () => "단수 걸린 자기 돌을 살렸어요", atari: n => `내 돌 ${n}점을 단수로 몰았어요`,
+    self: () => "자기 돌이 단수에 걸렸어요 (따낼 기회!)", cut: () => "내 돌 사이를 끊었어요", connect: () => "떨어진 자기 돌을 이었어요",
+    eyeTake: () => "내 눈 자리를 빼앗았어요 (사활)", eyeMake: () => "자기 눈을 만들었어요 (사활)", press: () => "내 돌 숨구멍을 둘로 줄였어요" };
+  const FX_NEXT_OPP = { cap: n => `내 돌 ${n}점 따내기`, save: () => "자기 돌 살리기", atari: () => "단수", cut: () => "끊기", connect: () => "잇기",
+    eyeTake: () => "내 눈 빼앗기 (사활)", eyeMake: () => "자기 눈 만들기 (사활)", press: () => "내 숨구멍 줄이기" };
+  // 한 줄로: st(실제 수 전) · a 실제 수 · t 노림(같은 쪽이 한 번 더 둔다면, 없으면 -1) · opt { own: 노림 판의 소유 지도, gain: 안 받으면 몇 집, name: 점 → 이름, opp: 상대 수를 내 쪽에서 읽음 }
+  // → { done, next, text, lab, sharp }  (text 는 HTML 아님 · 이름은 name 이 준 그대로 · lab = 노림 이름, sharp = 판 위 사실로 알아본 노림)
   function aimWhy(B, st, a, t, opt = {}) {
     const N = st.size, c = st.toPlay, name = opt.name || (p => String(p));
-    if (a === N * N) return { done: "패스했어요", next: "", text: "패스했어요" };
+    const DONE = opt.opp ? FX_DONE_OPP : FX_DONE, NEXT = opt.opp ? FX_NEXT_OPP : FX_NEXT;
+    if (a === N * N) return { done: "패스했어요", next: "", text: "패스했어요", lab: "", sharp: false };
     const top = moveFx(B, st, a, null)[0];
     const ax = a % N, ay = (a / N) | 0, edge = Math.min(ax, ay, N - 1 - ax, N - 1 - ay);   // 판 끝에서 몇 줄 안쪽 (0 = 1선)
-    let done = top ? FX_DONE[top.k](top.n) : st.moves.length >= N || edge <= 1 ? ""
+    let done = top ? DONE[top.k](top.n) : st.moves.length >= N || edge <= 1 ? ""
       : edge >= 4 || (N <= 7 && edge >= 3) ? "가운데 큰 곳을 차지했어요" : Math.max(ax, N - 1 - ax) >= N - 4 && Math.max(ay, N - 1 - ay) >= N - 4 ? "귀를 차지했어요" : "변의 넓은 곳을 차지했어요";
-    let next = "";
+    let next = "", lab = "", sharp = false;                             // sharp = 판 위 사실로 알아본 노림 (따냄·단수·끊기·사활 …)
     const r = B.play(st, a), s1 = r.state;
     if (t >= 0 && t < N * N && !s1.over) {
       const sn = B.play(s1, N * N).state;                                // 상대가 손 뺐다고 보고 (패스) 같은 쪽 차례
       const ft = sn.over ? [] : moveFx(B, sn, t, opt.own).filter(f => f.k !== "self");
-      let lab, sharp = false;                                           // sharp = 판 위 사실로 알아본 노림 (따냄·단수·끊기·사활 …)
-      if (ft.length) { lab = FX_NEXT[ft[0].k](ft[0].n); sharp = true; }
+      if (ft.length) { lab = NEXT[ft[0].k](ft[0].n); sharp = true; }
       else {
         const oc = opt.own ? opt.own[t] * (c === B.BLACK ? 1 : -1) : 0;
         const x = t % N, y = (t / N) | 0;
         let nearMine = false;
         for (let dy = -2; dy <= 2 && !nearMine; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < N && Y < N && s1.board[Y * N + X] === c && Math.abs(dx) + Math.abs(dy) <= 2) { nearMine = true; break; } }
-        lab = !opt.own ? (nearMine ? "모양 넓히기" : "큰 곳 (자리 잡기)") : oc >= 0.45 ? "집 지키기" : oc <= -0.45 ? "상대 집 줄이기" : nearMine ? "집 넓히기" : "큰 곳 (자리 잡기)";
+        lab = !opt.own ? (nearMine ? "모양 넓히기" : "큰 곳 (자리 잡기)") : oc >= 0.45 ? (opt.opp ? "자기 집 지키기" : "집 지키기") : oc <= -0.45 ? (opt.opp ? "내 집 줄이기" : "상대 집 줄이기") : nearMine ? "집 넓히기" : "큰 곳 (자리 잡기)";
       }
       next = `다음 ${name(t)} ${lab}`;
       if (sharp && opt.gain >= 3) next += ` (안 받으면 ${Math.round(opt.gain)}집쯤)`;   // 그냥 큰 곳은 한 수 값이 늘 커서 말하지 않음
     } else if (!s1.over) next = "다음에 급한 노림은 없어 보여요";
-    return { done, next, text: [done, next].filter(Boolean).join(" · ") };
+    return { done, next, text: [done, next].filter(Boolean).join(" · "), lab, sharp };
   }
 
   const API = { coachWhy, moveFx, aimWhy, order, seatsFrom, nextSeats, nextSeatsPick, freeSeats, seatOf, full, spectators, canMove, validMove, snap, restore, names };
