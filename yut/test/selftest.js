@@ -255,6 +255,134 @@ sec('AI 끼리 끝까지');
   ok(AI.suggest(Y.create({ teams: 2, seed: 1 })).throw, 'AI 선생님: 던질 때는 던지라고');
 }
 
+sec('AI 선생님: 흐름 읽기 (👀 상대 흐름 · 📊 내 흐름 · 👉 수의 의미) — 11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음');
+{
+  const NM = ['토끼팀', '곰돌이팀'];
+  const P = Y.probs(0.6, true), pct = x => Math.round(x * 100);
+  const noop = { opp: [], danger: [], threat: '', chance: '', race: '' };
+  ok(typeof AI.coachRead === 'function' && typeof AI.newFlow === 'function' && typeof AI.flowPush === 'function', 'AI.newFlow · flowPush · coachRead 가 있음');
+  const CR = AI.coachRead || (() => noop), NF = AI.newFlow || (() => ({})), FP = AI.flowPush || (() => {});
+  // 던지고(forceThrow) 말 하나를 옮기면서 흐름 기록 (친구에게 보내는 사건 묶음과 같은 모양)
+  const play = (s, flow, kind, piece) => {
+    FP(flow, s, Y.forceThrow(s, kind));
+    if (s.phase === 'move') FP(flow, s, Y.apply(s, act(kind, piece)));
+  };
+  const line = r => r.opp.map(o => o.name + ' ' + o.text).join(' | ');
+
+  { // 상대가 방금 내 말을 잡음
+    const s = Y.create({ teams: 2, pieces: 2, seed: 7, first: 1 }), flow = NF();
+    s.pos[0][0] = 3; s.trail[0][0] = [1, 2, 3]; s.pos[1][0] = 1; s.trail[1][0] = [1];
+    play(s, flow, GAE, 0);                                  // 곰돌이팀 1 → 3 : 잡기
+    play(s, flow, DO, 1);                                   // 한 번 더: 새 말 내보내기
+    const r = CR(s, flow, NM);
+    ok(s.turn === 0 && r.opp.length === 1 && r.opp[0].name === '곰돌이팀', '내 차례, 상대 한 팀의 방금 수가 읽힘');
+    ok(/개로/.test(line(r)) && /내 말 1개를 잡/.test(line(r)), '👀 내 말을 잡은 것을 말함 — ' + line(r));
+    FP(flow, s, Y.forceThrow(s, GAE));                      // 내가 던진 뒤(옮길 때)에도 상대가 방금 한 일이 그대로 읽힘
+    ok(s.phase === 'move' && /내 말 1개를 잡/.test(line(CR(s, flow, NM))), '👀 내가 던진 뒤 옮길 때도 상대가 방금 한 일을 말함 — ' + line(CR(s, flow, NM)));
+  }
+  { // 상대가 말 둘을 업음 → 잡을 수 있는지 확률과 함께
+    const s = Y.create({ teams: 2, pieces: 2, seed: 8, first: 1 }), flow = NF();
+    s.pos[1][0] = 2; s.trail[1][0] = [1, 2]; s.pos[1][1] = 1; s.trail[1][1] = [1];
+    play(s, flow, DO, 1);                                   // 1 → 2 : 업기
+    const r = CR(s, flow, NM);
+    ok(/업/.test(line(r)) && /잡으면 크게 이득/.test(line(r)), '👀 업은 것과 잡으면 이득이라는 것 — ' + line(r));
+    ok(line(r).includes(`${pct(P[GAE])}%`), `👀 내 대기 말이 개로 닿을 확률(${pct(P[GAE])}%) 을 말함 — ` + line(r));
+  }
+  { // 모서리에서 지름길로
+    const s = Y.create({ teams: 2, pieces: 2, seed: 9, first: 1 }), flow = NF();
+    s.pos[1][0] = 5; s.trail[1][0] = [4, 5];
+    play(s, flow, DO, 0);                                   // 모 자리에서 도 → 대각선
+    ok(/모서리에서 지름길/.test(line(CR(s, flow, NM))), '👀 모서리에서 지름길로 들어간 것 — ' + line(CR(s, flow, NM)));
+  }
+  { // 첫 차례: 아직 상대가 둔 게 없음
+    const s = Y.create({ teams: 2, pieces: 2, seed: 10, first: 0 });
+    const r = CR(s, NF(), NM);
+    ok(r.opp.length === 0 && typeof r.note === 'string' && /아직/.test(r.note), '첫 차례엔 아직 둔 수가 없다고 알려 줌 — ' + r.note);
+  }
+  { // 내 말 2칸 뒤에 상대 말 — 개가 나오면 잡힘
+    const s = Y.create({ teams: 2, pieces: 1, seed: 11, first: 0 });
+    s.pos[0][0] = 5; s.trail[0][0] = [4, 5]; s.pos[1][0] = 3; s.trail[1][0] = [2, 3];
+    const r = CR(s, NF(), NM);
+    ok(/곰돌이팀 말이 내 말 2칸 뒤/.test(r.threat) && /개가 나오면 잡혀요/.test(r.threat), '👀 2칸 뒤 상대 말이 개로 잡는다고 말함 — ' + r.threat);
+    ok(r.threat.includes(`약 ${pct(P[GAE])}%`), `👀 확률은 코어 확률표(개 ${pct(P[GAE])}%) 그대로 — ` + r.threat);
+    ok(r.danger.length === 1 && r.danger[0].node === 5 && r.danger[0].pieces.join() === '0', '판에 ! 표시할 내 말이 알려짐');
+  }
+  { // 내 말이 상대 말 뒤에서 쫓는 중 (던지기 전 기회)
+    const s = Y.create({ teams: 2, pieces: 1, seed: 12, first: 0 });
+    s.pos[0][0] = 1; s.trail[0][0] = [1]; s.pos[1][0] = 3; s.trail[1][0] = [2, 3];
+    const r = CR(s, NF(), NM);
+    ok(/개가 나오면 곰돌이팀 말을 잡/.test(r.chance) && r.chance.includes(`약 ${pct(P[GAE])}%`), '🎯 던지기 전 잡을 기회 — ' + r.chance);
+  }
+  { // 📊 형세: 남은 칸 · 났음 · 앞섬/뒤짐/비슷
+    const s = Y.create({ teams: 2, pieces: 2, seed: 13, first: 0 });
+    s.pos[0] = [HOME, 10]; s.trail[0] = [[], [10]]; s.pos[1] = [5, 3]; s.trail[1] = [[5], [3]];
+    const mine = Y.DIST[10], theirs = Y.DIST[5] + Y.DIST[3];
+    const r = CR(s, NF(), NM);
+    ok(r.race.includes('나 1개 났음') && r.race.includes(`남은 칸 ${mine}`) && r.race.includes(`곰돌이팀 ${theirs}`) && /앞서/.test(r.race), `📊 나 ${mine} vs 곰돌이팀 ${theirs} 앞섬 — ` + r.race);
+    const s2 = Y.create({ teams: 2, pieces: 2, seed: 13, first: 0 });
+    s2.pos[1] = [HOME, 10]; s2.pos[0] = [5, 3];
+    ok(/뒤져/.test(CR(s2, NF(), NM).race) && /곰돌이팀 \d+ \(1개 났음\)/.test(CR(s2, NF(), NM).race), '📊 뒤질 때 — ' + CR(s2, NF(), NM).race);
+    ok(/비슷/.test(CR(Y.create({ teams: 2, pieces: 2, seed: 14 }), NF(), NM).race), '📊 처음엔 비슷');
+  }
+  { // 📊 내 지난 차례 뒤로 달라진 것: 상대가 달려와 따라잡음
+    const s = Y.create({ teams: 2, pieces: 2, seed: 15, first: 0 }), flow = NF();
+    play(s, flow, DO, 0);                                   // 나: 도
+    for (const k of [MO, YUT, GEOL]) FP(flow, s, Y.forceThrow(s, k));   // 상대: 모 · 윷 · 걸 (한 번 더 두 번)
+    for (const k of [MO, YUT, GEOL]) FP(flow, s, Y.apply(s, act(k, 0)));  // 한 말로 달려감
+    const r = CR(s, flow, NM);
+    ok(s.turn === 0 && /뒤져요 · 지난 차례보다 [0-9]+칸 더 뒤져요/.test(r.race), '📊 뒤지는데 더 뒤졌다고 말함 — ' + r.race);
+    // 앞서고 있었는데 상대가 달려와 좁혀짐
+    const s2 = Y.create({ teams: 2, pieces: 2, seed: 15, first: 0 }), f2 = NF();
+    s2.pos[0][0] = HOME;
+    play(s2, f2, DO, 1);
+    for (const k of [MO, YUT, GEOL]) FP(f2, s2, Y.forceThrow(s2, k));
+    for (const k of [MO, YUT, GEOL]) FP(f2, s2, Y.apply(s2, act(k, 0)));
+    const r2 = CR(s2, f2, NM);
+    ok(s2.turn === 0 && /앞서요/.test(r2.race) && /[0-9]+칸 따라잡혔어요/.test(r2.race), '📊 앞서다 좁혀지면 따라잡혔다고 말함 — ' + r2.race);
+  }
+  { // 👉 수의 의미: 위협을 피하는 수 vs 위협을 두고 가는 수
+    const s = Y.create({ teams: 2, pieces: 2, seed: 16, first: 0 });
+    s.pos[0] = [3, 12]; s.trail[0] = [[1, 2, 3], [10, 11, 12]]; s.pos[1] = [1, WAIT]; s.trail[1] = [[1], []];
+    Y.forceThrow(s, GEOL);
+    const esc = AI.describe(s, act(GEOL, 0), NM), stay = AI.describe(s, act(GEOL, 1), NM);
+    ok(/피해/.test(esc.reason) && /\d+%/.test(esc.reason), '👉 위협받는 앞 말을 빼는 수는 피한다고 말함 — ' + esc.reason);
+    ok(/위험/.test(stay.reason) && /\d+%/.test(stay.reason), '👉 위협을 남겨 두는 수는 남는 위험을 말함 — ' + stay.reason);
+    // 거의 다 온 말(17)이 2칸 뒤 상대(15)에게 쫓길 때: 선생님은 그 말을 참먹이로 빼라고 하고 까닭도 말함
+    const s3 = Y.create({ teams: 2, pieces: 2, seed: 18, first: 0 });
+    s3.pos[0] = [17, WAIT]; s3.trail[0] = [[16, 17], []]; s3.pos[1] = [15, WAIT]; s3.trail[1] = [[14, 15], []];
+    Y.forceThrow(s3, GEOL);
+    const sg = AI.suggest(s3, NM);
+    ok(sg && sg.dest === 20 && /2칸 뒤 곰돌이팀을 피해 쫓기는 말을 걸로 빼요/.test(sg.reason) && /35% → 3%/.test(sg.reason), '👉 선생님 추천이 쫓기는 말을 빼는 수 — ' + (sg && sg.reason));
+  }
+  { // 👉 잡을 수 있는 자리
+    const s = Y.create({ teams: 2, pieces: 2, seed: 17, first: 0 });
+    s.pos[1][0] = 3; s.trail[1][0] = [1, 2, 3];
+    Y.forceThrow(s, GEOL);
+    const sg = AI.suggest(s, NM);
+    ok(sg && /잡을 수 있는 자리/.test(sg.reason) && /한 번 더/.test(sg.reason), '👉 잡을 수 있는 자리 · 잡으면 한 번 더 — ' + (sg && sg.reason));
+  }
+  { // 어느 판에서나 오류 없이, 글에 undefined·NaN 이 안 섞임
+    let bad = 0, reads = 0, withOpp = 0;
+    for (let g = 0; g < 18; g++) {
+      const teams = 2 + g % 3, pieces = 2 + g % 3;
+      let s = Y.create({ teams, pieces, seed: 3100 + g, backdo: g % 2 === 0 }), flow = NF(), n = 0;
+      while (s.phase !== 'end' && n < 1500) {
+        const a = AI.choose(s, ['easy', 'normal', 'hard'][s.turn % 3], { seed: 40 + n });
+        const wasMove = s.phase === 'move';
+        if (wasMove || s.phase === 'throw') {
+          const r = CR(s, flow, NM.concat(['여우팀', '개구리팀']));
+          const txt = [r.threat, r.chance, r.race, r.note || '', line(r)].join('|');
+          reads++; if (r.opp.length) withOpp++;
+          if (/undefined|NaN|null|\[object/.test(txt) || !r.race) { bad++; if (bad < 3) console.log('  ✗ 이상한 글: ' + txt); }
+          if (s.phase === 'move') { const sg = AI.suggest(s, NM); if (!sg || /undefined|NaN/.test(sg.reason)) { bad++; if (bad < 3) console.log('  ✗ 이상한 까닭: ' + (sg && sg.reason)); } }
+        }
+        const { state, events } = Y.step(s, a); s = state; FP(flow, s, events); n++;
+      }
+    }
+    ok(bad === 0 && reads > 500 && withOpp > 100, `여러 판(${reads}번 읽음, 상대 수 ${withOpp}번)에서 흐름 글이 깨끗함 (이상 ${bad})`);
+  }
+}
+
 sec('AI 단계 순서 (🐣 < 🐱 < 🐯)');
 function duel(a, b, N) {
   let wa = 0;

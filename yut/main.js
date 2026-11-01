@@ -221,6 +221,7 @@
         ses.S = Y.create({ teams: ses.teams.length, pieces: cfg.pieces, backdo: cfg.backdo, seed, first: ses.games % ses.teams.length, members: ses.teams.map(t => t.members.length) });
         ses.games++;
         ses.seq++;
+        ses.flow = AI.newFlow(); ses._cx = null;       // 선생님 '상대 흐름' 기록은 판마다 새로
         buildBoard(ses);
         renderAll(ses);
         broadcast(ses, [], true);
@@ -273,6 +274,7 @@
     if (a === A_THROW && ses.cfg.mode === 'online') prev.rng = (prev.rng ^ rand32()) | 0;   // 친구랑: 던질 때마다 난수 상태에 새 값을 섞음 (씨앗을 알아내도 다음 윷은 못 맞힘 — 방장 기기에서만 던지니 판 동기화엔 영향 없음)
     const { state, events } = Y.step(prev, a);
     ses.S = state; ses.seq++;
+    AI.flowPush(ses.flow, state, events);
     if (state.phase === 'end' && prev.phase !== 'end') ses.wins[state.winner] = (ses.wins[state.winner] || 0) + 1;   // 판 이긴 횟수 (점수판)
     resetUi(ses);
     broadcast(ses, events, false);
@@ -633,7 +635,8 @@
     if (CP || !window.CoachPanel || typeof CoachPanel.create !== 'function') return CP;
     // 처음 자리: 멍석 오른쪽 위 (윷가락은 가운데라 덜 가리고, 던지기·선생님 단추는 안 가림). 끌어 옮기면 그 자리를 기억
     const r = $('mat').getBoundingClientRect();
-    const bottom = r.height ? Math.max(8, Math.round(innerHeight - r.top - 8 - Math.min(130, Math.max(90, r.height - 16)))) : 88;
+    const port = $('stage').classList.contains('port');       // 세로: 창 밑을 멍석 밑에 맞춤 (줄이 많아져도 팀 카드·판은 안 가림, 던진 결과는 아래 말 칩에 보임)
+    const bottom = r.height ? (port ? Math.max(8, Math.round(innerHeight - r.bottom + 6)) : Math.max(8, Math.round(innerHeight - r.top - 8 - Math.min(130, Math.max(90, r.height - 16))))) : 88;
     const right = r.width ? Math.max(8, Math.round(innerWidth - r.right + 8)) : 10;
     try {
       CP = CoachPanel.create({ game: 'yut', title: 'AI 선생님', bottom, right, startHidden: true });
@@ -643,7 +646,26 @@
   }
   const coachOn = () => (CP ? CP.visible : !!opt.coachOn);
   function coachOut(html) { if (CP) { if (html == null) CP.hide(); else CP.set(html); } }
-  function clearTips() { $('tips').innerHTML = ''; document.querySelectorAll('.tok.tip, .w.tip').forEach(e => e.classList.remove('tip')); }
+  function clearTips() { $('tips').innerHTML = ''; document.querySelectorAll('.tok.tip, .tok.warn, .w.tip').forEach(e => e.classList.remove('tip', 'warn')); }
+  // 선생님 창 글: 내 차례마다 셋을 같이 (11-01 베니 님: 어디 두라고만 하니 뭔 말인지 모르겠음) — 추천이 먼저, 읽기는 뒤
+  //   💡 추천 + 👉 수의 의미(까닭) · 👀 상대 흐름(방금 한 일 + 내 말이 잡힐 위험 ⚠️) · 📊 내 흐름(났음·남은 칸·앞섬) · 🎯 던지기 전 잡을 기회
+  const cbRow = (ic, html, cls) => `<div class="cb-l${cls ? ' ' + cls : ''}">${ic} ${html}</div>`;
+  function coachBuild(ses) {
+    const S = ses.S, names = ses.teams.map(t => t.name);
+    const rd = AI.coachRead(S, ses.flow, names, { me: ses.cfg.mode === 'local' ? names[S.turn] : '나' });
+    const look = (rd.opp.length ? rd.opp.map(o => cbRow('👀', `<b>${esc(o.name)}</b> 방금: ${esc(o.text)}`)).join('') : cbRow('👀', esc(rd.note))) + (rd.threat ? cbRow('⚠️', esc(rd.threat), 'cb-s') : '');
+    const race = cbRow('📊', esc(rd.race));
+    if (S.phase !== 'move') return { rd, sug: null, html: look + (rd.chance ? cbRow('🎯', esc(rd.chance)) : '') + race + cbRow('🎲', '던지면 나온 수에 맞춰 추천해 드려요', 'cb-hint') };
+    const sug = AI.suggest(S, names);
+    const tm = ses.teams[S.turn];
+    const label = `${NAMES[sug.kind]}${ro(NAMES[sug.kind]).slice(NAMES[sug.kind].length)} ${sug.from === WAIT ? '새 말' : tm.em + ' 말'}${sug.dest === HOME ? ' 내보내기' : destName(sug.dest) ? ' → ' + destName(sug.dest) : ` ${sug.path.length}칸 앞으로`}`;
+    const hint = CP && !ses._tipHint ? (ses._tipHint = 1, cbRow('🟢', '판의 초록 표시를 누르면 미리 보여요', 'cb-hint')) : '';     // 처음 한 번만
+    return { rd, sug, html: cbRow('💡', `<b>${esc(label)}</b>`) + cbRow('👉', esc(sug.reason)) + look + race + hint };
+  }
+  // 판 위 '!' : 다음에 잡힐 위험이 큰 내 말 (25% 넘게)
+  function markWarn(ses, rd) {
+    for (const d of rd.danger) for (const j of d.pieces) { const el = ses.tokEl[ses.S.turn][j]; if (el) el.classList.add('warn'); }
+  }
   function renderCoach(ses) {
     const box = $('coach'), btn = $('coachBtn'), txt = $('coachTxt');
     const allowed = !!ses.cfg.coach && ses.S.phase !== 'end' && (ses.cfg.mode !== 'online' || ses.teams.some(t => t.members.some(m => m.uid === ses.cfg.net.uid)));
@@ -655,20 +677,19 @@
     const on = coachOn();
     const say = html => { if (CP) { CP.set(html); txt.hidden = true; } else { txt.hidden = !on; txt.innerHTML = html; } };
     if (!on) { txt.hidden = true; clearTips(); return; }
-    if (!(canAct(ses) && ses.S.phase === 'move')) {
+    if (!canAct(ses) || (ses.S.phase !== 'move' && ses.S.phase !== 'throw')) {
       clearTips();
-      say(canAct(ses) && ses.S.phase === 'throw' ? '던지고 나면 좋은 수를 알려 드릴게요' : ses.busy ? '…' : '내 차례가 오면 좋은 수를 알려 드릴게요');
+      say(ses.busy ? '…' : '내 차례가 오면 상대 흐름과 좋은 수를 알려 드릴게요');
       return;
     }
-    const key = ses.seq + ':' + ses.S.pool.join(',');
-    if (ses._coachKey !== key) { ses._coachKey = key; ses._sug = AI.suggest(ses.S, ses.teams.map(t => t.name)); }
-    const sug = ses._sug;
-    if (!sug || sug.throw) { clearTips(); return; }
-    const tm = ses.teams[ses.S.turn];
-    const label = `${NAMES[sug.kind]}${ro(NAMES[sug.kind]).slice(NAMES[sug.kind].length)} ${sug.from === WAIT ? '새 말' : tm.em + ' 말'}${sug.dest === HOME ? ' 내보내기' : destName(sug.dest) ? ' → ' + destName(sug.dest) : ` ${sug.path.length}칸 앞으로`}`;
-    say(`<b>${esc(label)}</b><br>${esc(sug.reason)}${CP ? '<br><span style="opacity:.7;font-size:12px">판의 초록 표시를 누르면 미리 보여요</span>' : ''}`);
-    // 판 위 표시: 추천 말 초록 테두리 + 갈 곳 초록 고리 (누르면 미리 보기, 한 번 더 누르면 옮기기)
+    const key = ses.seq + ':' + ses.S.phase + ':' + ses.S.pool.join(',');
+    if (!ses._cx || ses._coachKey !== key) { ses._coachKey = key; ses._cx = coachBuild(ses); }
+    const sug = ses._cx.sug;
     clearTips();
+    markWarn(ses, ses._cx.rd);
+    say(ses._cx.html);
+    if (!sug || sug.throw) return;           // 던지기 전엔 읽기만 (추천은 던진 뒤)
+    // 판 위 표시: 추천 말 초록 테두리 + 갈 곳 초록 고리 (누르면 미리 보기, 한 번 더 누르면 옮기기)
     if (sug.from !== WAIT) for (const j of Y.groupOf(ses.S, ses.S.turn, sug.piece)) ses.tokEl[ses.S.turn][j].classList.add('tip');
     else { const w = $('teams').querySelector(`.w[data-t="${ses.S.turn}"][data-i="${sug.piece}"]`); if (w) w.classList.add('tip'); }
     if (ses.ui.act === sug.a) return;      // 이미 그 수를 미리 보는 중이면 겹치지 않게
@@ -1136,6 +1157,7 @@
     const newGame = !prev || m.g !== ses.games;
     ses.teams = m.teams; ses.games = m.g; if (m.w) ses.wins = m.w;
     ses.S = m.S; ses.sent = false;
+    if (newGame || !ses.flow) { ses.flow = AI.newFlow(); ses._cx = null; } else if (m.ev && m.ev.length) AI.flowPush(ses.flow, m.S, m.ev);   // 선생님 '상대 흐름' 기록 (손님도 사건을 쌓음)
     resetUi(ses);
     if (newGame) { closeResult(); ses.rdy = new Set(); ses.joinPick = {}; ses.drawReady = null; buildBoard(ses); ses.seq = m.seq; renderAll(ses); await announceTurn(ses).catch(() => {}); renderAll(ses); if (ses.S.phase === 'end' && !document.querySelector('.overlay.yres')) guestResult(ses); return; }
     const jump = m.seq !== ses.seq + 1 || m.fresh || ses.qn > 2;   // 밀려 있으면 움직임 건너뛰고 따라잡기
