@@ -26,6 +26,11 @@ U.main(async T => {
     }).filter(v => v != null));
     T.ok(r.length > 0, '① 낼 수 있는 패에 선생님 표시가 있음 (' + r.length + '장)');
     T.ok(r.every(v => !v), '① 선생님 표시가 노란 막대를 가리지 않음 (' + r.map(v => (v ? '가림' : 'ok')).join(',') + ')');
+    // ⑤ 선생님 창: 👀 상대 흐름 · 📊 내 흐름 · 추천 순서 (11-01 베니 님 '상대 흐름 · 내 흐름 · 수의 의미')
+    const L = await p.evaluate(() => { const ses = __gostop.ses; return (ses.coachHtml || '').split('<br>').map(x => x.replace(/<[^>]+>/g, '').trim()).filter(Boolean); });
+    const iSelf = L.findIndex(x => /^📊/.test(x)), iRec = L.findIndex(x => /추천/.test(x));
+    T.ok(iSelf >= 0 && /\d+점/.test(L[iSelf]), '⑤ 📊 내 흐름 줄 (내 점수) — ' + (L[iSelf] || L.join(' / ')));
+    T.ok(iSelf >= 0 && iRec > iSelf, '⑤ 순서: 📊 내 흐름 → 추천 (' + L.map(x => x.slice(0, 2)).join(' ') + ')');
     await p.close();
   }
 

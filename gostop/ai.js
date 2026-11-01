@@ -582,6 +582,25 @@
     return { q, text: what + (aims.length ? ' → ' + aims.join(' · ') : '') };
   }
 
+  // 📊 내 흐름 (선생님, 11-02 베니 님 '상대 흐름 · 내 흐름 · 수의 의미'): 내 점수와 날 선까지 · 가장 앞선 상대와 차이 · 다가간 약 · 피박 위험
+  //   prevBase = 지난 내 차례 점수 (같은 판, 없으면 null) → { base, text }
+  function readSelf(v, prevBase) {
+    const p = v.turn, info = analyze(v), D = info.P[p].dead, T = G.tally(v, p), thr = info.thr;
+    let ob = 0, opi = 0;
+    for (let q = 0; q < v.n; q++) if (q !== p) { const t = G.tally(v, q); ob = Math.max(ob, t.base); opi = Math.max(opi, t.pi); }
+    const bits = [], d = T.base - ob;
+    bits.push(T.base >= thr ? `${T.base}점 — 날 수 있어요 (고·스톱)` : `${T.base}점 · ${thr}점부터 날 수 있어요 (${thr - T.base}점 남음)`);
+    if (d || T.base || ob) bits.push(d > 0 ? `상대보다 ${d}점 앞서요` : d < 0 ? `상대보다 ${-d}점 뒤져요` : '상대와 같아요');
+    const near = [];
+    for (const k in SETS) if (!D[k] && SETS[k].filter(c => v.cap[p].indexOf(c) >= 0).length === 2) near.push(`${SETNAME[k]} 2/3`);
+    if (!D.gwang && T.g === 2) near.push('광 2장');
+    if (T.pi >= 7 && T.pi < 10) near.push(`피 ${T.pi}장 (10장부터 점수)`);
+    if (near.length) bits.push(near.join(' · '));
+    if (T.pi > 0 && T.pi <= G.pibakMax(v.n) && opi >= 8) bits.push(`피박 조심 (내 피 ${T.pi}장)`);
+    const ch = prevBase != null && T.base !== prevBase ? ` (지난 차례보다 ${T.base > prevBase ? '+' : ''}${T.base - prevBase}점)` : '';
+    return { base: T.base, text: bits.join(' · ') + ch };
+  }
+
   function coachHand(v, opts) { return withK({ read: 1 }, () => coachHand0(v, opts)); }
   function coachHand0(v, opts) {
     opts = opts || {};
@@ -715,6 +734,6 @@
     return null;
   }
 
-  const API = { choose, hint, coachHand, coachGoStop, readOpp, readMove, review, REVIEW, STYLES, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
+  const API = { choose, hint, coachHand, coachGoStop, readOpp, readMove, readSelf, review, REVIEW, STYLES, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.GostopAI = API;
 })(this);

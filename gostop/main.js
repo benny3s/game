@@ -392,7 +392,7 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=11');
+    worker = new Worker('ai-worker.js?v=12');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
@@ -2009,6 +2009,11 @@
     if (!ses.coachCache || ses.coachCache.seq !== ses.seq) {
       const data = AI.coachHand(G.view(s, me));
       if (data && AI.readMove) data.moves = (ses.mv || []).map((m, q) => (q !== me && m && m.after && m.after.round === s.round && m.after.turnNo <= s.turnNo ? AI.readMove(G.view(m.before, me), G.view(m.after, me), q, m.a) : null)).filter(Boolean);
+      if (data && AI.readSelf) {                         // 📊 내 흐름 — 지난 내 차례(같은 판) 점수와 견줌
+        const pm = ses.selfMark && ses.selfMark.round === s.round && ses.selfMark.seq < ses.seq ? ses.selfMark.base : null;
+        data.self = AI.readSelf(G.view(s, me), pm);
+        ses.selfMark = { round: s.round, seq: ses.seq, base: data.self.base };
+      }
       ses.coachCache = { seq: ses.seq, data };
     }
     return ses.coachCache.data;
@@ -2067,17 +2072,18 @@
     if (on && mHide(ses)) html = MHIDE_HTML;
     else if (on && mine && coach && coach.bestCard >= 0 && GEO) {
       advice = true;
+      // 흐름 순서 (11-02 베니 님 '상대 흐름 · 내 흐름 · 수의 의미'): 👀 상대가 방금 한 것 · 🔎 상대 읽기(모두에게 보인 것만) → 📊 내 흐름 → 추천과 👉 그 까닭
+      for (const r of coach.moves || []) html += `<span class="cb-read">👀 <b>${esc(seatAt(ses, r.q).name)}</b> 방금: ${esc(r.text)}</span><br>`;
+      for (const r of coach.read || []) html += `<span class="cb-read">🔎 <b>${esc(seatAt(ses, r.q).name)}</b> ${esc(r.text)}</span><br>`;
+      if (coach.self) html += `<span class="cb-read">📊 <b>내 흐름</b> ${esc(coach.self.text)}</span><br>`;
       const selInfo = ses.sel >= 0 ? coach.byCard[ses.sel] : null;
       if (selInfo) {
         const ic = selInfo.tier === 'best' ? '👑 최선 추천' : selInfo.tier === 'good' ? '🟢 좋은 수' : selInfo.tier === 'ok' ? '🟡 무난한 수' : '🔴 아쉬운 수';
         const cmp = selInfo.tier !== 'best' ? ` (추천: <b>${esc(coach.bestName)}</b>)` : '';
-        html = `<span class="cb-tag">${ic} · ${esc(selInfo.tag)}</span><br><b>[${esc(selInfo.name)}]</b> ${esc(selInfo.why)}${cmp}`;
+        html += `<span class="cb-tag">${ic} · ${esc(selInfo.tag)}</span><br><b>[${esc(selInfo.name)}]</b> 👉 ${esc(selInfo.why)}${cmp}`;
       } else {
-        html = `<span class="cb-tag">👑 추천 · ${esc(coach.bestTag)}</span><br><b>[${esc(coach.bestName)}]</b> — ${esc(coach.bestWhy)}`;
+        html += `<span class="cb-tag">👑 추천 · ${esc(coach.bestTag)}</span><br><b>[${esc(coach.bestName)}]</b> 👉 ${esc(coach.bestWhy)}`;
       }
-      // 👀 상대 읽기: 모으는 약과 빠진 한 장의 자리 · 짝 없이 버린 달 · 흔들어 보인 패 (모두에게 보인 것만)
-      for (const r of coach.moves || []) html += `<br><span class="cb-read">👀 <b>${esc(seatAt(ses, r.q).name)}</b> 방금: ${esc(r.text)}</span>`;
-      for (const r of coach.read || []) html += `<br><span class="cb-read">🔎 <b>${esc(seatAt(ses, r.q).name)}</b> ${esc(r.text)}</span>`;
     } else if (on) html = '<span class="small">내 차례가 되면 추천 수를 알려 드려요</span>';
     const bar = $('coachBar');
     if (ses.panel) {
