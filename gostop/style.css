@@ -511,6 +511,18 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .sayb{position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%);background:#fffbeb;color:#1c1917;border-radius:12px;padding:6px 10px;font:700 13px/1.35 var(--text,system-ui,sans-serif);width:max-content;max-width:min(220px,60vw);white-space:normal;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.4);z-index:40;pointer-events:none;animation:sayin .22s ease-out;transition:opacity .4s}
 .sayb::before{content:"";position:absolute;left:50%;top:-6px;margin-left:-6px;border:6px solid transparent;border-top:0;border-bottom-color:#fffbeb}
 .sayb.out{opacity:0}
+/* 고/스톱 창 안 상대 현황 (광·열·띠·피 장수 + 약 하나 남은 것) */
+.brk.opp td{padding:4px 4px;font-size:13px;vertical-align:top}
+.brk.opp td b{color:#fde68a}
+.brk.opp .oc{text-align:right;color:var(--soft);font-variant-numeric:tabular-nums}
+.brk.opp .near{color:#fca5a5;font-weight:700;font-size:12px}
+.brk.opp .ogo{background:#dc2626;color:#fff;border-radius:99px;padding:1px 6px;font-size:11px}
+/* 👊 AI 얼굴 누르기 */
+.seat.poke{cursor:pointer}
+.seat.hit .av{animation:hitshake .38s}
+@keyframes hitshake{0%,100%{transform:none}20%{transform:translateX(-6px) rotate(-10deg)}40%{transform:translateX(5px) rotate(7deg)}60%{transform:translateX(-3px) rotate(-4deg)}80%{transform:translateX(2px)}}
+.fist{position:absolute;left:-6px;top:50%;font-size:30px;line-height:1;pointer-events:none;z-index:41;animation:fist .45s ease-out forwards}
+@keyframes fist{0%{opacity:0;transform:translate(-34px,10px) scale(.6)}45%{opacity:1;transform:translate(0,-50%) scale(1.3)}100%{opacity:0;transform:translate(4px,-60%) scale(1)}}
 @keyframes sayin{from{opacity:0;transform:translate(-50%,-4px) scale(.92)}to{opacity:1;transform:translateX(-50%) scale(1)}}
 /* 👑 선 뽑기: 엎어 둔 패에서 한 장 */
 .seonpick{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}

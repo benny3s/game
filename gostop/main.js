@@ -782,12 +782,12 @@
 
   // 🎭 AI 대사 (11-01 베니 님: 타짜 분위기로 한 번씩) — 영화 대사를 옮기지 않고 새로 지은 말. 혼자·한 기기만 (친구 방은 사람 채팅이 있어서)
   const SAY = {
-    평경장: { start: ['자, 손 풀고 시작해 볼까', '오늘도 배우는 마음으로 한 판'], brag: ['봤지? 나온 패를 세면 길이 보여', '서두르지 않으니 패가 알아서 오는구먼', '이 정도는 기본이야'], ouch: ['허허, 오늘은 패가 장난을 치네', '이런 날도 있어야 겸손해지지'], go: ['아직 배가 덜 찼어. 한 번 더', '판이 내 편일 때 밀어야지'], taunt: ['급하면 손이 먼저 나가는 법이야', '패를 보지 말고 판을 봐'] },
-    고광렬: { start: ['자자 판 깔아 봅시다~', '오늘은 내가 쏜다! 돈은 니들이 내고'], brag: ['아이고 이거 미안해서 어쩌나~', '내가 또 해냈네? 박수 좀 쳐 줘', '오늘 손이 아주 그냥 불이야'], ouch: ['어어? 이건 반칙이지 이거', '패가 나를 싫어하네 오늘'], go: ['여기서 멈추면 사나이가 아니지! 고!', '간다간다 쭉쭉 간다~'], taunt: ['어이쿠, 그거 아프겠다~', '괜찮아 괜찮아, 다음 판도 있잖아'] },
-    아귀: { start: ['조용히 치자', '판 돌려'], brag: ['...가져간다', '눈 깜빡하면 끝이야', '계산 끝났어'], ouch: ['...운이 좋았다고 생각해', '이번만이야'], go: ['고. 멈출 이유가 없지', '더 간다. 겁나면 지금 말해'], taunt: ['손이 떨리는군', '그렇게 쳐서 남는 게 있겠어?'] },
-    짝귀: { start: ['시작하지', '잘 부탁해'], brag: ['됐다', '이 정도면 충분하지', '깔끔하게'], ouch: ['흠', '그럴 수도 있지'], go: ['한 번 더', '고'], taunt: ['천천히 해', '패는 도망 안 가'] },
-    _easy: { start: ['잘 부탁드려요!', '살살 해 주세요~'], brag: ['우와 먹었다!', '이게 되네?', '오 나 잘하는데?'], ouch: ['어? 이거 왜 안 붙어요?', '아 뻑이다 ㅠㅠ'], go: ['고...해도 되는 거 맞죠?', '에라 모르겠다 고!'], taunt: ['어? 그쪽도 뻑이네요 ㅎㅎ'] },
-    _normal: { start: ['자, 한 판 하세', '오랜만에 손맛 좀 보세'], brag: ['허허, 이걸 가져가는구먼', '어디 한번 보세나', '이 맛에 치는 거지'], ouch: ['에잉, 패가 고약하네', '허참, 이런 일이'], go: ['한 번 더 가 보세', '여기서 그만두면 섭하지'], taunt: ['젊은이, 서두르지 말게', '허허, 그럴 때도 있지'] },
+    평경장: { start: ['자, 손 풀고 시작해 볼까', '오늘도 배우는 마음으로 한 판'], brag: ['봤지? 나온 패를 세면 길이 보여', '서두르지 않으니 패가 알아서 오는구먼', '이 정도는 기본이야'], ouch: ['허허, 오늘은 패가 장난을 치네', '이런 날도 있어야 겸손해지지'], go: ['아직 배가 덜 찼어. 한 번 더', '판이 내 편일 때 밀어야지'], taunt: ['급하면 손이 먼저 나가는 법이야', '패를 보지 말고 판을 봐'], hit: ['허허, 손버릇이 고약하구먼', '패로 이겨야지 주먹으로 이기나', '늙은이 때리면 패가 붙던가?'] },
+    고광렬: { start: ['자자 판 깔아 봅시다~', '오늘은 내가 쏜다! 돈은 니들이 내고'], brag: ['아이고 이거 미안해서 어쩌나~', '내가 또 해냈네? 박수 좀 쳐 줘', '오늘 손이 아주 그냥 불이야'], ouch: ['어어? 이건 반칙이지 이거', '패가 나를 싫어하네 오늘'], go: ['여기서 멈추면 사나이가 아니지! 고!', '간다간다 쭉쭉 간다~'], taunt: ['어이쿠, 그거 아프겠다~', '괜찮아 괜찮아, 다음 판도 있잖아'], hit: ['아야! 이거 폭행이야 폭행!', '어어 왜 때려~ 패나 봐', '내 얼굴 비싸다고!'] },
+    아귀: { start: ['조용히 치자', '판 돌려'], brag: ['...가져간다', '눈 깜빡하면 끝이야', '계산 끝났어'], ouch: ['...운이 좋았다고 생각해', '이번만이야'], go: ['고. 멈출 이유가 없지', '더 간다. 겁나면 지금 말해'], taunt: ['손이 떨리는군', '그렇게 쳐서 남는 게 있겠어?'], hit: ['...한 번만 더 해 봐', '손 치워', '기억해 두지'] },
+    짝귀: { start: ['시작하지', '잘 부탁해'], brag: ['됐다', '이 정도면 충분하지', '깔끔하게'], ouch: ['흠', '그럴 수도 있지'], go: ['한 번 더', '고'], taunt: ['천천히 해', '패는 도망 안 가'], hit: ['...아프군', '그 손으로 패나 쳐', '화가 많이 났나 보군'] },
+    _easy: { start: ['잘 부탁드려요!', '살살 해 주세요~'], brag: ['우와 먹었다!', '이게 되네?', '오 나 잘하는데?'], ouch: ['어? 이거 왜 안 붙어요?', '아 뻑이다 ㅠㅠ'], go: ['고...해도 되는 거 맞죠?', '에라 모르겠다 고!'], taunt: ['어? 그쪽도 뻑이네요 ㅎㅎ'], hit: ['아얏! 왜요 ㅠㅠ', '저 아무것도 안 했어요!'] },
+    _normal: { start: ['자, 한 판 하세', '오랜만에 손맛 좀 보세'], brag: ['허허, 이걸 가져가는구먼', '어디 한번 보세나', '이 맛에 치는 거지'], ouch: ['에잉, 패가 고약하네', '허참, 이런 일이'], go: ['한 번 더 가 보세', '여기서 그만두면 섭하지'], taunt: ['젊은이, 서두르지 말게', '허허, 그럴 때도 있지'], hit: ['어허, 어른한테 무슨 짓인가', '이 사람 손이 맵구먼'] },
   };
   function aiSay(ses, p, kind, always) {
     if (FAST || ses.cfg.online || ses.replaying || p == null || p < 0) return;
@@ -802,6 +802,18 @@
     const b = document.createElement('div'); b.className = 'sayb'; b.textContent = lines[Math.floor(Math.random() * lines.length)];
     h.seat.appendChild(b);
     setTimeout(() => b.classList.add('out'), D(2600)); setTimeout(() => b.remove(), D(3100));
+  }
+  // 👊 AI 얼굴 누르기 (11-01 멋쟁이규호 님 신고 '평경장 죽빵') — 주먹이 날아가고 한마디 받아침. 혼자·한 기기만, 판에는 아무 영향 없음
+  function punch(ses, p) {
+    const h = ses.hud && ses.hud[p], now = Date.now();
+    if (!h || !h.seat || now - (ses.punchAt || 0) < 600) return;
+    ses.punchAt = now;
+    const f = document.createElement('div'); f.className = 'fist'; f.textContent = '👊';
+    h.seat.appendChild(f); setTimeout(() => f.remove(), 500);
+    h.seat.classList.remove('hit'); void h.seat.offsetWidth; h.seat.classList.add('hit');
+    sfx('slap');
+    h.seat.querySelectorAll('.sayb').forEach(b => b.remove());
+    aiSay(ses, p, 'hit', true);
   }
   const firstAi = ses => { for (let p = 0; p < ses.S.n; p++) if (seatAt(ses, p).ctrl === 'ai') return p; return -1; };
   function sayFor(ses, e) {
@@ -942,6 +954,7 @@
       st.appendChild(seat);
       const labels = GROUP_NAME.map(() => { const l = document.createElement('span'); l.className = 'glbl hud'; st.appendChild(l); return l; });
       const hc = document.createElement('span'); hc.className = 'hcount hud'; hc.hidden = true; st.appendChild(hc);
+      if (s.ctrl === 'ai' && !ses.cfg.online && !ses.cfg.watch) { seat.classList.add('poke'); seat.addEventListener('pointerdown', e => { e.stopPropagation(); punch(ses, p); }); }
       ses.hud.push({ seat, labels, hc });
     }
     const mode = G.modeOf(ses.cfg.N).name;
@@ -2126,7 +2139,14 @@
     const s = ses.S, p = s.turn, pre = G.stopPreview(s, p), t = G.tally(s, p);
     $('goBox').classList.remove('peeking'); peekBtn($('goBox')); { const pb = $('goBox').querySelector('.peekbtn'); if (pb) pb.textContent = '👀 판 보기'; }
     sfx('good');
-    const opp = Array.from({ length: s.n }, (_, q) => q).filter(q => q !== p).map(q => `${esc(seatAt(ses, q).name)} ${G.tally(s, q).base}점`).join(' · ');
+    // 상대가 먹은 패 현황 (11-01 멋쟁이규호 님 신고: 창이 위쪽 상대 패를 가려 고·스톱 판단이 힘듦) — 장수 + 약 하나 남은 것
+    const opp = Array.from({ length: s.n }, (_, q) => q).filter(q => q !== p).map(q => {
+      const o = G.tally(s, q), near = [];
+      if (o.birds === 2) near.push('🐦 고도리 2/3');
+      for (const [k, v] of [['홍단', o.hong], ['청단', o.cheong], ['초단', o.cho]]) if (v === 2) near.push(`${k} 2/3`);
+      if (o.g === 2) near.push('광 2');
+      return `<tr><td>${esc(seatAt(ses, q).name)} <b>${o.base}점</b>${s.go[q] ? ` <span class="ogo">${s.go[q]}고</span>` : ''}</td><td class="oc">광 ${o.g} · 열 ${o.y} · 띠 ${o.t} · 피 ${o.pi}${near.length ? `<br><span class="near">${near.join(' · ')}</span>` : ''}</td></tr>`;
+    }).join('');
     let rows = '';
     for (const it of pre.items) if (!/고$/.test(it.k)) rows += `<tr><td>${esc(it.k)}</td><td class="n">${it.pts}점</td></tr>`;
     if (s.go[p]) rows += `<tr class="sub"><td>지금까지 ${s.go[p]}고</td><td class="n">${pre.total}점</td></tr>`;
@@ -2151,7 +2171,8 @@
     const coachHtml = hideGc ? `<div class="go-coach" id="goCoach"><div style="font-size:12.5px">${MHIDE_HTML}</div></div>` : coachFull;
     $('goTitle').textContent = `${t.base}점! 고? 스톱?`;
     $('goBody').innerHTML = `<table class="brk">${rows}<tr class="sum"><td>지금 스톱하면</td><td class="n">+${pre.points}점</td></tr></table>
-      <p class="gonote">${per ? '진 사람: ' + per + '<br>' : ''}상대: ${opp} · 남은 손패 ${s.hands[p].length}장</p>
+      <table class="brk opp">${opp}</table>
+      <p class="gonote">${per ? '진 사람: ' + per + '<br>' : ''}남은 손패 ${s.hands[p].length}장</p>
       <p class="gonote">고 하면 ${nextGo}고(${goTxt}) — ${s.rules.gobak ? '대신 상대가 먼저 나면 <b>고박</b>이에요' : '고박은 없는 집이에요'}</p>
       ${coachHtml}`;
     $('goBtns').innerHTML = '';
