@@ -563,7 +563,7 @@
           continue;
         }
         const rSeed = ses.cfg.online ? ((baseSeed + (ses.S.round + 1) * 0x9e3779b9) >>> 0) : rand32();
-        s = ses.cfg.online ? hostNextRound(ses, rSeed) : G.nextRound(ses.S, { seed: rSeed });
+        s = ses.cfg.online ? await hostNextRound(ses, rSeed) : G.nextRound(ses.S, { seed: rSeed });
       }
     } catch (e) {
       if (e instanceof Cancel) return;
@@ -587,7 +587,8 @@
     return d.S;
   }
   // 방장: 다음 판 열기. 구경하던 사람(새로 온 사람)은 8명까지 자리에 넣고(AI 자리부터 비켜 줌), 빠지기로 한 자리는 뺌
-  function hostNextRound(ses, rSeed) {
+  //  은행 방은 새로 앉은 사람도 장부 잔액으로 앉힘 (연습 칩으로 앉으면 장부엔 안 잡혀 장부 손익에 섞임)
+  async function hostNextRound(ses, rSeed) {
     const pl = (ses.net && ses.net.players) || {}, have = new Set(ses.seats.map(x => x.uid));
     const prev = ses.S, r = prev.result, old = ses.seats;
     const prevUid = old[r && r.winner >= 0 ? r.winner : prev.first].uid;
@@ -598,9 +599,15 @@
     let s;
     if (add.length || keep.length !== old.length) {
       const gone = old.filter((x, i) => keep.indexOf(i) < 0).map(x => x.name);
-      ses.seats = keep.map(i => old[i]); ses.chips = keep.map(i => ses.chips[i]);
+      const seats = keep.map(i => old[i]), chips = keep.map(i => ses.chips[i]);
+      for (const u of add) { const i = seats.length; seats.push({ ctrl: 'remote', tier: null, name: (pl[u] && pl[u].name) || `친구${i + 1}`, em: AVS[i % AVS.length], uid: u }); chips.push(CHIPS.start('host', 1)[0]); delete ses.joinPick[u]; }
+      if (ses.bank) {
+        $('sub').textContent = '🏦 장부를 여는 중…';
+        const st = await ses.bank.reseat(seats, keep); ses.check();
+        st.forEach((v, k) => { if (v > 0) chips[keep.length + k] = v; });
+      }
+      ses.seats = seats; ses.chips = chips;
       if (ses.score) { ses.score.w = keep.map(i => ses.score.w[i]); ses.score.l = keep.map(i => ses.score.l[i]); }
-      for (const u of add) { const i = ses.seats.length; ses.seats.push({ ctrl: 'remote', tier: null, name: (pl[u] && pl[u].name) || `친구${i + 1}`, em: AVS[i % AVS.length], uid: u }); ses.chips.push(CHIPS.start('host', 1)[0]); delete ses.joinPick[u]; }
       const N = ses.seats.length;
       const fi = Math.max(0, ses.seats.findIndex(x => x.uid === prevUid));
       s = G.create({ players: N, rules: prev.rules, seed: rSeed, first: fi, round: prev.round + 1 });

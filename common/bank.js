@@ -20,6 +20,7 @@
      label(cfg)                              방 목록·손님 대기실용 짧은 글 ("🏦 금요 모임")
      attach({ game, net, cfg, seats, min, onEvent })  친구랑 판: 방장이면 장부 연결, 손님이면 빌리기 요청만
        방장: s.ready → 자리별 시작 칩 [잔액|null(AI)] · 'chips:report' 를 들어 판마다 장부에 씀 · s.beforeNext({coins,min}) → 빌린 칩 더한 coins
+             판 사이 자리가 바뀌면 s.reseat(newSeats, keep) → 새로 앉은 자리 시작 칩 (장부 연결을 새 자리 번호로 옮김)
        손님: s.requestLoan() (방장이 다음 판에 넣어 줌) · 둘 다 s.detach()
      askLoan(gid) → Promise<boolean>        "1,000칩 빌릴까요?" 확인 창
      stackFor(pid, gid) → Promise<number>   모임 잔액
@@ -789,22 +790,21 @@ if (typeof window !== "undefined") (() => {
         Promise.all(pks.map(k => S.get(G(gid) + "/pairs/" + k).catch(() => null)))]);
       ses.pairs = {}; pks.forEach((k, i) => { ses.pairs[k] = pairVals[i] || null; });
       ses.tots = tots || {};
-      const seen = new Set();
-      const startChips = start ? Math.max(1, Math.round(start / (ses.meta.chipWon || 1))) : 0;
-      const stacks = [];
-      for (let i = 0; i < (seats || []).length; i++) {
-        const pid = pids[i];
-        if (!pid || seen.has(pid)) { ses.track[i] = null; stacks.push(null); continue; }
-        seen.add(pid);
-        const name = clean(seats[i].name, 12);
-        let bal = members[pid] ? int(members[pid].balance) : 0, lent = 0;
-        if (ses.negative) { if (startChips && (!members[pid] || (!int(members[pid].borrowed) && !bal))) lent = startChips; }   // 이번 회차 처음이면 시작 돈 한 번
-        else while (bal + lent < ses.minStack && lent < ses.meta.loanUnit * 20) lent += ses.meta.loanUnit;
-        if (lent) { const m = await borrow(gid, pid, name, lent, info({ note: ses.negative ? "시작 돈" : "시작 칩" })); bal = int(m.balance); emit({ op: "loan", seat: i, name, n: lent, auto: true, start: !!ses.negative }); }
-        ses.track[i] = { pid, name, last: bal, s0: bal, base: members[pid] ? int(members[pid].borrowed) + lent : lent, w: int(recs[pid] && recs[pid].w), l: int(recs[pid] && recs[pid].l) };
-        stacks.push(bal);
-      }
+      const seen = new Set(), stacks = [];
+      for (let i = 0; i < (seats || []).length; i++) stacks.push(await seatIn(i, pids[i], seen, members, recs));
       return stacks;
+    }
+    // 자리 하나를 장부에 묶음 → 그 자리 시작 칩 (장부 안 쓰는 자리 · 같은 사람 두 자리면 null)
+    async function seatIn(i, pid, seen, members, recs) {
+      if (!pid || seen.has(pid)) { ses.track[i] = null; return null; }
+      seen.add(pid);
+      const name = clean(seats[i].name, 12), startChips = start ? Math.max(1, Math.round(start / (ses.meta.chipWon || 1))) : 0;
+      let bal = members[pid] ? int(members[pid].balance) : 0, lent = 0;
+      if (ses.negative) { if (startChips && (!members[pid] || (!int(members[pid].borrowed) && !bal))) lent = startChips; }   // 이번 회차 처음이면 시작 돈 한 번
+      else while (bal + lent < ses.minStack && lent < ses.meta.loanUnit * 20) lent += ses.meta.loanUnit;
+      if (lent) { const m = await borrow(gid, pid, name, lent, info({ note: ses.negative ? "시작 돈" : "시작 칩" })); bal = int(m.balance); emit({ op: "loan", seat: i, name, n: lent, auto: true, start: !!ses.negative }); }
+      ses.track[i] = { pid, name, last: bal, s0: bal, base: members[pid] ? int(members[pid].borrowed) + lent : lent, w: int(recs[pid] && recs[pid].w), l: int(recs[pid] && recs[pid].l) };
+      return bal;
     }
     ses.ready = load().catch(e => { console.warn("[bank]", e); emit({ op: "error", msg: errText(e) }); ses.track = []; return (seats || []).map(() => null); });
     chain = ses.ready.then(() => {});
@@ -911,6 +911,23 @@ if (typeof window !== "undefined") (() => {
       },
       // 새 게임(홀덤 '새 게임' 등): 지금 잔액으로 다시 시작 칩
       restart() { return run(() => { ses.reload = false; return load(); }).then(v => v || (seats || []).map(() => null)); },   // 새 잔액으로 다시 읽으니 '새 회차' 표시는 풂 (안 풀면 첫 판 결과를 버림)
+      // 판 사이 자리 바꾸기 (원카드·섯다: 구경꾼이 다음 판부터 앉음): newSeats = 새 자리 배열, keep[k] = 새 k 번 자리가 옛 몇 번이었는지 (뒤에 붙은 자리가 새로 앉은 사람)
+      //  → 남는 자리는 장부 연결·걸어 둔 빌리기를 새 번호로 옮기고, 새 자리는 장부 잔액으로 (모자라면 시작 칩을 빌림) → 새 자리 시작 칩 [잔액|null]
+      //  (안 하면 새로 앉은 사람은 연습 칩으로 앉고 장부엔 안 잡혀 장부 손익에 섞임)
+      reseat(newSeats, keep) {
+        const T = ses.track, Q = ses.queue, add = newSeats.slice(keep.length);
+        ses.track = keep.map(i => T[i] || null); ses.queue = {};
+        keep.forEach((o, k) => { if (Q[o]) ses.queue[k] = Q[o]; });
+        seats = newSeats;
+        return run(async () => {
+          await assertOpen(gid, ses.meta);
+          const pids = await Promise.all(add.map(s => (s && s.ctrl !== "ai" && s.name ? pidFor(s.name) : null)));
+          const [members, recs] = await Promise.all([getMembers(gid), getRecords(gid).catch(() => ({}))]);
+          const seen = new Set(ses.track.filter(Boolean).map(t => t.pid)), out = [];
+          for (let k = 0; k < add.length; k++) out.push(await seatIn(keep.length + k, pids[k], seen, members, recs));
+          return out;
+        }).then(v => v || add.map(() => null));
+      },
       flush: () => chain,
       detach() { ses.alive = false; offs.splice(0).forEach(f => f()); },
     });

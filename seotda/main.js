@@ -690,7 +690,8 @@
   }
 
   // 방장: 다음 판 자리 정하기 — 다음 판부터 빠질 자리를 빼고, 방장이 체크한 구경꾼을 최대 인원까지 앉힘 (칩·전적은 자리 따라감)
-  function reseatForNext(ses) {
+  //  은행 방은 새로 앉은 사람도 장부 잔액으로 앉힘 (연습 칩으로 앉으면 장부엔 안 잡혀 장부 손익에 섞임)
+  async function reseatForNext(ses) {
     const old = ses.seats, prev = ses.S, pl = ses.net.players || {};
     let keep = old.map((x, i) => i).filter(i => !old[i].drop);
     const have = new Set(old.map(x => x.uid).filter(Boolean));
@@ -715,6 +716,11 @@
     }
     old.splice(0, old.length, ...seats);                    // 은행 장부가 같은 배열을 보고 있어서 통째로 바꾸지 않고 자리만 갈아 끼움
     ses.n = p.n; ses.me = Math.max(0, old.findIndex(x => x.ctrl === 'me')); ses.S = p;
+    if (ses.bank) {
+      $('sub').textContent = '🏦 장부를 여는 중…';
+      const st = await ses.bank.reseat(old, keep);
+      st.forEach((v, k) => { if (v > 0) p.coins[keep.length + k] = v; });
+    }
     const msg = [add.length ? `${add.map(u => (pl[u] && pl[u].name) || '친구').join(', ')} 님 합류` : '', gone.length ? `${gone.join(', ')} 님 빠짐` : ''].filter(Boolean).join(' · ');
     C.toast(`${msg} → ${p.n}명`, 2600);
     try { ses.net.chat(`📣 ${msg} → 이번 판부터 ${p.n}명`); } catch (e) {}
@@ -854,7 +860,7 @@
           if (!ses.alive) return;
           ses.S.coins = r.coins;
         }
-        if (ses.mode === 'host') reseatForNext(ses);          // 친구랑: 빠질 사람은 빼고, 방장이 체크한 구경꾼은 앉힘
+        if (ses.mode === 'host') { await reseatForNext(ses); if (!ses.alive) return; }   // 친구랑: 빠질 사람은 빼고, 방장이 체크한 구경꾼은 앉힘
         if (ses.bank) refill = ses.seats.map((x, i) => !ses.bank.tracks(i));
         ses.S = S.nextRound(ses.S, { seed: rand32(), refill });
       }

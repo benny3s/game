@@ -75,6 +75,27 @@ async function bankTests() {
   ok(totWon(rel, r41.coins, 0) === 0, `#41 고스톱이 들고 있던 판의 '통산 원'이 빌린 만큼 안 부풂 (0원) — ${totWon(rel, r41.coins, 0)}원`);
   ok(totWon(rel, r41.coins, 1) === 0 && rel.base[1] === 100, `#41 안 빌린 사람은 그대로 — ${rel.base[1]}`);
   s41.detach();
+
+  // 원카드·섯다 은행 방: 판 사이에 구경꾼이 앉으면 연습 칩으로 앉고 장부엔 안 잡혀 장부 손익에 섞이던 것 → reseat 로 새 자리도 장부에 묶음
+  await block('reseat', async () => {
+    await B.createGroup({ gid: 'gtestRs', name: '시험rs', chipWon: 10, loanUnit: 100 });
+    const sd = [{ ctrl: 'me', name: '철수' }, { ctrl: 'ai', name: '봇' }, { ctrl: 'remote', name: '영희' }];
+    const sr = B.attach({ game: 'onecard', cfg: { bank: 'gtestRs' }, seats: sd, min: 30 });
+    await sr.ready;
+    report('onecard', [120, 100, 80], 1); await sr.flush();
+    await sr.requestLoan(2);                                     // 영희가 빌리기를 걸어 둔 채 자리 번호가 바뀜
+    const ns = [sd[0], sd[2], { ctrl: 'remote', uid: 'u3', name: '민수' }];   // 봇 자리를 비키고 민수가 앉음
+    const st = await sr.reseat(ns, [0, 2]);
+    ok(st.length === 1 && st[0] === 100, `새로 앉은 민수 시작 칩 = 장부 잔액 (없으면 자동 빌림 100) — ${st}`);
+    ok(sr.tracks(0) && sr.tracks(1) && sr.tracks(2), `남은 자리·새 자리 모두 장부에 잡힘 — ${[0, 1, 2].map(i => sr.tracks(i))}`);
+    ok(sr.pidOf(1) === 'm_영희', `영희 장부가 새 자리 번호(1)로 옮겨감 — ${sr.pidOf(1)}`);
+    const rn = await sr.beforeNext({ coins: [120, 80, st[0]] });
+    ok(rn.coins[1] === 180 && rn.coins[2] === 100, `걸어 둔 빌리기도 새 자리 번호로 (영희 +100) — ${rn.coins}`);
+    report('onecard', [110, 170, 120], 2); await sr.flush();
+    const mr = await B.getMembers('gtestRs');
+    ok(mr.m_민수 && mr.m_민수.balance === 120 && mr.m_영희.balance === 170 && mr.m_철수.balance === 110, `다음 판 결과가 새 자리 번호대로 장부에 (철수 110·영희 170·민수 120) — ${['철수', '영희', '민수'].map(n => mr['m_' + n] && mr['m_' + n].balance)}`);
+    sr.detach();
+  });
 }
 
 // ── 2) 이름 로그인 (me.js) — 진짜 규칙(gp/*) 흉내
