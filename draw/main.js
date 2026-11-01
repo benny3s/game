@@ -3,7 +3,7 @@
    친구랑: 방장이 판의 주인 (친구는 낸 것만 보내고, 방장이 단계·공개·투표를 정해 모두에게 뿌림). 방장도 자기 메시지를 handle() 로 똑같이 받음
      메시지: go(판 시작·다시 들어온 사람에게 지금 상태) · step · task(그 사람 몫) · prog(낸 사람) · bk(공책 한 권) · rv(공개 위치) · vote · vp · res · rdyl
              손님→방장: hi · sub · v · rdy
-   한 기기: 같은 코어로 한 사람씩 가림막(HotSeat.cover) → 일 → 다음 사람 */
+   한 기기에서 여럿은 11-01 뺌 (베니 님: TV 하나로 돌려 하는 건 불편 — 각자 폰으로 친구랑만) */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -22,7 +22,6 @@
   if (!DRAWS.some(x => x[0] === opt.draw)) opt.draw = 60;
   if (!GUESSES.some(x => x[0] === opt.guess)) opt.guess = 25;
   if (opt.pick !== 'write') opt.pick = 'pick';
-  const saveOpt = k => C.save(KEY + k, opt[k]);
   const pickLabel = v => (v === 'write' ? '직접 쓰기' : '골라 주기');
 
   // 시험용 손잡이 값
@@ -36,18 +35,7 @@
     el.innerHTML = items.map(([v, label]) => `<button class="btn" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}" ${canEdit ? '' : 'disabled'}>${label}</button>`).join('');
     el.onclick = e => { const b = e.target.closest('button'); if (!b || !canEdit) return; sfx('tap'); onPick(b.dataset.v); };
   }
-  let lPick = null;
-  function drawMenu() {
-    $('tabLocal').setAttribute('aria-pressed', 'true');
-    $('tabFriend').setAttribute('aria-pressed', 'false');
-    if (!lPick && window.HotSeat) lPick = HotSeat.setup($('lSeats'), { game: 'draw', min: 3, max: 8, allowAI: false });
-    segBtns($('drawSeg'), DRAWS, opt.draw, v => { opt.draw = +v; saveOpt('draw'); drawMenu(); });
-    segBtns($('guessSeg'), GUESSES, opt.guess, v => { opt.guess = +v; saveOpt('guess'); drawMenu(); });
-    segBtns($('pickSeg'), PICKS, opt.pick, v => { opt.pick = v; saveOpt('pick'); drawMenu(); });
-  }
-  $('tabLocal').onclick = () => { sfx('tap'); drawMenu(); };
-  $('tabFriend').onclick = () => { sfx('tap'); openFriend(); };
-  $('startBtn').onclick = () => { sfx('pop'); startHot(); };
+  $('startBtn').onclick = () => { sfx('pop'); openFriend(); };
   $('rulesBtn').onclick = () => showRules();
   $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open(SITE); } catch (e) {} };
 
@@ -60,7 +48,7 @@
         <div>1️⃣ 먼저 내 공책에 <b>제시어</b>를 적어요 (골라 주기·직접 쓰기)</div>
         <div>2️⃣ 공책을 옆 사람에게 넘겨요. 받은 공책이 <b>글</b>이면 <b>그림</b>으로 그리고, <b>그림</b>이면 무슨 그림인지 <b>글</b>로 적어요. 앞 쪽은 바로 앞 한 쪽만 볼 수 있어요</div>
         <div>3️⃣ 사람 수만큼 돌면 끝! 모두가 모든 공책을 한 번씩 만져요</div>
-        <div>4️⃣ 방장(한 기기는 모두 같이)이 <b>공책을 한 쪽씩 공개</b>해요. 제시어가 어디서 엉뚱해졌는지 구경해요</div>
+        <div>4️⃣ 방장이 <b>공책을 한 쪽씩 공개</b>해요. 제시어가 어디서 엉뚱해졌는지 구경해요</div>
         <div>5️⃣ 마음에 드는 그림에 투표 (내 그림은 못 골라요). 가장 많이 받은 사람이 🏆 <b>오늘의 그림</b>!</div>
         <div class="small">시간이 끝나면 그리던 그대로 자동으로 내요. 못 낸 그림은 '(빈 종이 🐾)', 못 쓴 글은 '???' 로 넘어가요.</div></div>`,
       buttons: [{ label: '닫기', primary: true }], dismiss: true,
@@ -77,26 +65,22 @@
   function goHome() {
     if (SES) SES.dispose();
     SES = null;
-    show('home'); drawMenu();
+    show('home');
   }
 
   // ── 세션 ─────────────────────────────────────────────────
-  class Cancel extends Error {}
   let SES = null;
   function newSession(cfg) {
-    const ses = { cfg, mode: cfg.mode, alive: true, offs: [], G: null, H: null, V: null, net: cfg.net || null, role: cfg.role || null, uid: cfg.uid || '', rdy: new Set(), pick: {}, rankG: 0, hot: null };
+    const ses = { cfg, mode: cfg.mode, alive: true, offs: [], G: null, H: null, V: null, net: cfg.net || null, role: cfg.role || null, uid: cfg.uid || '', rdy: new Set(), pick: {}, rankG: 0 };
     ses.dispose = () => {
       ses.alive = false;
       clearInterval(ses.hiT);
       if (ses.H) { clearTimeout(ses.H.tmo); clearTimeout(ses.H.vTmo); }
       for (const f of ses.offs.splice(0)) { try { f(); } catch (e) {} }
       stopTimer(); destroyCur();
-      if (window.HotSeat) { try { HotSeat.close(); } catch (e) {} }
-      if (ses.wake) ses.wake();
     };
     return ses;
   }
-  const chk = ses => { if (!ses.alive || SES !== ses) throw new Cancel(); };
 
   // ── 카운트다운 (막대 오른쪽 알약) ─────────────────────────
   let TM = null;
@@ -356,86 +340,9 @@
     } catch (e) { console.warn(e); C.toast('이미지를 못 만들었어요'); }
   }
 
-  // ═════════════════════════════════════════════════════════
-  // 한 기기에서 여럿
-  // ═════════════════════════════════════════════════════════
   function uniqNames(arr) {
     const seen = {};
     return arr.map(nm => { nm = (nm || '').trim() || '이름없음'; const c = seen[nm] = (seen[nm] || 0) + 1; return c > 1 ? nm + ' ' + '②③④⑤⑥⑦⑧'[c - 2] : nm; });
-  }
-  function startHot(o) {
-    o = o || {};
-    if (!lPick) return C.toast('한 기기 모듈을 불러오지 못했어요');
-    if (o.names) lPick.set(o.names.map(name => ({ kind: 'human', name })));
-    if (!lPick.valid) return C.toast('3~8명의 이름을 적어 주세요');
-    const names = uniqNames(lPick.seats.map(s => s.name));
-    const cfg = { draw: opt.draw, guess: opt.guess, pick: opt.pick };
-    if (SES) SES.dispose();
-    const ses = SES = newSession({ mode: 'hot' });
-    ses.names = names; ses.hotCfg = cfg;
-    show('play');
-    runHot(ses).catch(e => { if (!(e instanceof Cancel)) { console.error(e); C.toast('앗, 문제가 생겼어요. 메뉴로 돌아갈게요'); goHome(); } });
-  }
-  // 가림막: 뒤로가기가 숨겨 버려도 다시 띄움 (앞사람 화면이 비치지 않게)
-  async function hotCover(ses, o) {
-    let settled = false;
-    const p = HotSeat.cover(o).then(() => { settled = true; });
-    const iv = setInterval(() => { const el = document.querySelector('.hs-cover'); if (!settled && el && el.hidden && ses.alive) el.hidden = false; }, 200);
-    try { await p; } finally { clearInterval(iv); }
-    chk(ses);
-  }
-  const ask = (ses, fn) => new Promise((res, rej) => { ses.wake = () => rej(new Cancel()); fn(res); });
-  const FACES = ['😺', '😸', '😻', '🐱', '😼', '🙀', '😽', '😹'];
-  async function runHot(ses) {
-    const names = ses.names, n = names.length, cfg = ses.hotCfg;
-    const G = ses.G = D.create(n, cfg);
-    ses.hot = { ph: 'step', step: 0, p: 0 };
-    for (let step = 0; step < n; step++) {
-      for (let p = 0; p < n; p++) {
-        ses.hot = { ph: 'step', step, p };
-        const task = D.taskFor(G, p), k = task.kind;
-        setBar(KIND_BAR[k], `${step + 1}/${n}단계 · ${names[p]}`);
-        if (!(step === 0 && p === 0)) await hotCover(ses, { name: names[p], emoji: FACES[p % FACES.length], text: `${names[p]} 님 차례예요`, sub: k === 'p' ? '공책에 제시어를 적어요' : k === 'd' ? '받은 공책에 쓰인 말을 그려요' : '받은 공책의 그림을 보고 글을 적어요', button: '✏️ 시작하기' });
-        const dur = secs(k === 'd' ? cfg.draw : cfg.guess);
-        const payload = await ask(ses, res => showWork(ses, { kind: k, step, who: names[p], cfg, dur, text: task.src && task.src.t, enc: task.src && task.src.s, onSubmit: res }));
-        chk(ses);
-        D.submit(G, p, payload, Wd.one());
-      }
-      D.advance(G, () => Wd.one());
-    }
-    // 공개
-    let at = { b: 0, p: 1 };
-    ses.hot = { ph: 'reveal', step: n, p: 0 };
-    await hotCover(ses, { name: '모두', emoji: '📒', text: '공책을 공개해요!', sub: '모두 화면을 볼 수 있게 모여 주세요', button: '📒 공개 시작' });
-    await ask(ses, res => {
-      const draw = () => showReveal(ses, { books: G.books, names, b: at.b, p: at.p, ctl: true, onNav: dir => {
-        const len = G.books[at.b].length;
-        if (dir > 0) { const nx = D.revealNext(n, len, at.b, at.p); if (!nx) return res(); at = nx; } else at = D.revealPrev(n, G.books[at.b].length, at.b, at.p);
-        draw();
-      } });
-      draw();
-    });
-    chk(ses);
-    // 투표 (한 사람씩 몰래)
-    ses.hot = { ph: 'vote', step: n, p: 0 };
-    if (D.drawings(G.books).some(d => !d.blank)) {
-      for (let p = 0; p < n; p++) {
-        ses.hot = { ph: 'vote', step: n, p };
-        if (!D.votable(G.books, p).length) continue;
-        await hotCover(ses, { name: names[p], emoji: FACES[p % FACES.length], text: `${names[p]} 님, 투표해요`, sub: '마음에 드는 그림을 몰래 골라요', button: '🗳️ 투표하러 가기' });
-        const pick = await ask(ses, res => showVote(ses, { books: G.books, names, voter: p, who: names[p], vote: (b, pg) => res([b, pg]) }));
-        chk(ses);
-        D.vote(G, p, pick[0], pick[1]);
-      }
-    }
-    // 결과
-    ses.hot = { ph: 'result', step: n, p: 0 };
-    const T = D.tally(G.books, G.votes, n);
-    ses.T = T;
-    showResult(ses, { books: G.books, names, T, me: -1 });
-    $('resActs').innerHTML = `<button class="btn primary big" id="again">🔁 같은 사람들로 한 판 더</button><button class="btn" id="toMenu">메뉴로</button>`;
-    $('again').onclick = () => { sfx('pop'); startHot(); };
-    $('toMenu').onclick = () => goHome();
   }
 
   // ═════════════════════════════════════════════════════════
@@ -468,7 +375,7 @@
       },
       settings: { defaults: { ...DEF, draw: opt.draw, guess: opt.guess, pick: opt.pick }, label: c => `그리기 ${(c && c.draw) || 60}초 · ${pickLabel(c && c.pick)}`, render: lobbyRender },
       onStart: ctx => startOnline(ctx),
-      onLobby: () => { if (SES) SES.dispose(); SES = null; show('home'); drawMenu(); },
+      onLobby: () => { if (SES) SES.dispose(); SES = null; show('home'); },
       onLeave: why => { goHome(); if (why) C.toast(why, 2600); },
     };
   }
@@ -826,11 +733,7 @@
 
   // ── 시험용 손잡이 ──────────────────────────────────────────
   const QA = { rankLog: [] };
-  const humanPhase = () => {
-    const ses = SES; if (!ses) return 'none';
-    if (ses.mode === 'hot') return ses.hot ? ses.hot.ph : 'none';
-    return ses.V ? ses.V.ph : 'none';
-  };
+  const humanPhase = () => (SES && SES.V ? SES.V.ph : 'none');
   window.__draw = {
     get ses() { return SES; },
     get mode() { return SES ? SES.mode : null; },
@@ -843,12 +746,10 @@
     pause(v = true) { PAUSED = !!v; },
     get paused() { return PAUSED; },
     setMin(n) { QA_MIN = n | 0; },                                  // 시험: 친구랑 최소 인원 (손님 하나로 시험)
-    startHot(o) { o = o || {}; if (o.draw) opt.draw = o.draw; startHot(o); },
     scribble: n => { const cv = $('pad'); if (cv) scribble(cv, n || 3); return !!cv; },
     // 지금 화면에서 사람이 할 만한 걸 한 번 한다 (진짜 단추·입력을 누름). 했으면 true
     autoAct() {
       const ses = SES; if (!ses || PAUSED) return false;
-      if (window.HotSeat && HotSeat.isOpen) { HotSeat.close(); return true; }
       if (CUR && !CUR.done) return CUR.qa();
       const nx = $('rvNext'); if (nx && !nx.disabled) { nx.click(); return true; }
       const vc = [...document.querySelectorAll('#vgrid .vc:not(:disabled)')];
@@ -858,17 +759,12 @@
     // 손님·방장 화면이 같은지 비교하는 무늬 (보이는 공통 정보만)
     fp() {
       const ses = SES; if (!ses) return null;
-      if (ses.mode === 'hot') return JSON.stringify({ hot: ses.hot });
       const V = ses.V; if (!V) return null;
       const stp = V.ph === 'step';
       return JSON.stringify({ g: V.g, n: V.n, ph: V.ph, st: stp ? V.step : -1, done: stp ? [...V.done].sort() : [], rv: V.ph === 'reveal' ? V.rv : null, bk: V.books.map(b => (b ? b.length : -1)), vp: [...V.vp].sort(), res: V.T ? V.T.byPlayer : null });
     },
     probe() {
       const ses = SES; if (!ses) return { fp: 'none', over: false, waiting: false, info: '세션 없음' };
-      if (ses.mode === 'hot') {
-        const h = ses.hot || {};
-        return { fp: [h.ph, h.step, h.p, window.HotSeat && HotSeat.isOpen ? 'cover' : '', CUR ? CUR.kind : ''].join('|'), over: h.ph === 'result' && !!$('again'), waiting: true, info: `${h.ph} · 단계 ${h.step} · ${h.p}번` };
-      }
       const V = ses.V; if (!V) return { fp: 'none', over: false, waiting: false, info: '연결 중' };
       return { fp: window.__draw.fp(), over: V.ph === 'result', waiting: !!(CUR && !CUR.done), info: `${V.g}번째 판 · ${V.ph} · 단계 ${V.step}` };
     },
@@ -880,6 +776,5 @@
   };
 
   // ── 시작 ─────────────────────────────────────────────────
-  drawMenu();
   if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
 })();

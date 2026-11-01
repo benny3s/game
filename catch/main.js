@@ -4,7 +4,7 @@
      방장→: go(판 상태 통째로·다시 들어온 사람에게도) · turn · pick(그리는 사람에게 제시어 3개) · draw · word(그리는 사람·맞힌 사람에게 답) · pic · hint
             say(채팅·정답) · close(아까워요, 그 사람에게만) · hid(답이 든 채팅을 가림, 그 사람에게만) · rev(정답 공개) · end · prog(나간 사람) · rdyl
      손님→방장: hi · ch(제시어 고름) · pic · say · rdy
-   한 기기: 그리는 사람만 가림막 뒤에서 제시어를 고르고, 다 같이 화면을 보며 말로 맞힘 → 맞힌 사람 이름을 눌러 점수 */
+   한 기기에서 여럿은 11-01 뺌 (베니 님: TV 하나로 돌려 하는 건 불편 — 각자 폰으로 친구랑만) */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -22,7 +22,6 @@
   const opt = { sec: st('sec', 80), rounds: st('rounds', 1) };
   if (!K.SECS.includes(opt.sec)) opt.sec = 80;
   if (!K.ROUNDS.includes(opt.rounds)) opt.rounds = 1;
-  const saveOpt = k => C.save(KEY + k, opt[k]);
 
   // 시험용 손잡이 값
   let FAST = 0, PAUSED = false, QA_MIN = 0;
@@ -34,17 +33,7 @@
     el.innerHTML = items.map(([v, label]) => `<button class="btn" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}" ${canEdit ? '' : 'disabled'}>${label}</button>`).join('');
     el.onclick = e => { const b = e.target.closest('button'); if (!b || !canEdit) return; sfx('tap'); onPick(b.dataset.v); };
   }
-  let lPick = null;
-  function drawMenu() {
-    $('tabLocal').setAttribute('aria-pressed', 'true');
-    $('tabFriend').setAttribute('aria-pressed', 'false');
-    if (!lPick && window.HotSeat) lPick = HotSeat.setup($('lSeats'), { game: 'catch', min: 2, max: 8, allowAI: false });
-    segBtns($('secSeg'), SECS, opt.sec, v => { opt.sec = +v; saveOpt('sec'); drawMenu(); });
-    segBtns($('rndSeg'), RNDS, opt.rounds, v => { opt.rounds = +v; saveOpt('rounds'); drawMenu(); });
-  }
-  $('tabLocal').onclick = () => { sfx('tap'); drawMenu(); };
-  $('tabFriend').onclick = () => { sfx('tap'); openFriend(); };
-  $('startBtn').onclick = () => { sfx('pop'); startHot(); };
+  $('startBtn').onclick = () => { sfx('pop'); openFriend(); };
   $('rulesBtn').onclick = () => showRules();
   $('rankBtn').onclick = () => { sfx('tap'); try { if (window.GRank) GRank.open(SITE); } catch (e) {} };
 
@@ -53,13 +42,12 @@
     return C.modal({
       title: '📖 베니캐치 하는 법',
       html: `<div class="howto" style="text-align:left;font-size:14.5px;display:grid;gap:7px;padding:12px 14px">
-        <div>🖍️ <b>그림 맞히기</b>예요. 2~8명이 차례로 한 번씩 그려요 (바퀴 수만큼).</div>
+        <div>🖍️ <b>그림 맞히기</b>예요. 각자 폰으로 2~8명이 차례로 한 번씩 그려요 (바퀴 수만큼).</div>
         <div>1️⃣ 그릴 사람은 <b>제시어 3개</b> 중 하나를 몰래 골라요 (${K.PICK_SEC}초 안에, 안 고르면 첫째)</div>
         <div>2️⃣ 그림이 그려지는 대로 모두의 화면에 바로 보여요. 나머지는 <b>채팅으로 맞혀요</b></div>
         <div>3️⃣ 시간이 지나면 위에 <b>힌트</b>가 나와요: 글자 수 → 초성(35%) → 첫 글자(70%)</div>
         <div>4️⃣ 먼저·빨리 맞힐수록 점수가 커요 (60·50·40… + 남은 시간). 그린 사람은 맞힌 사람마다 +20</div>
-        <div>5️⃣ 한 글자만 틀리면 나에게만 '😮 아까워요!' 가 떠요. 이미 맞힌 사람이 답을 채팅에 쓰면 가려져요</div>
-        <div>📺 <b>한 기기</b>: 화면 하나를 같이 봐요. 그리는 사람만 가림막 뒤에서 제시어를 보고, 나머지는 말로 외쳐요. 맞힌 사람 이름을 누르면 점수!</div></div>`,
+        <div>5️⃣ 한 글자만 틀리면 나에게만 '😮 아까워요!' 가 떠요. 이미 맞힌 사람이 답을 채팅에 쓰면 가려져요</div></div>`,
       buttons: [{ label: '닫기', primary: true }], dismiss: true,
     });
   }
@@ -74,14 +62,13 @@
   function goHome() {
     if (SES) SES.dispose();
     SES = null;
-    show('home'); drawMenu();
+    show('home');
   }
 
   // ── 세션 ─────────────────────────────────────────────────
-  class Cancel extends Error {}
   let SES = null;
   function newSession(cfg) {
-    const ses = { cfg, mode: cfg.mode, alive: true, offs: [], ivs: [], G: null, H: null, V: null, net: cfg.net || null, role: cfg.role || null, uid: cfg.uid || '', rdy: new Set(), pick: {}, rankG: 0, hot: null };
+    const ses = { cfg, mode: cfg.mode, alive: true, offs: [], ivs: [], G: null, H: null, V: null, net: cfg.net || null, role: cfg.role || null, uid: cfg.uid || '', rdy: new Set(), pick: {}, rankG: 0 };
     ses.every = (ms, fn) => { const id = setInterval(() => { if (ses.alive) fn(); }, ms); ses.ivs.push(id); return id; };
     ses.dispose = () => {
       ses.alive = false;
@@ -90,12 +77,9 @@
       if (ses.H) { clearTimeout(ses.H.tmo); clearInterval(ses.H.tick); }
       for (const f of ses.offs.splice(0)) { try { f(); } catch (e) {} }
       stopTimer(); destroyCur();
-      if (window.HotSeat) { try { HotSeat.close(); } catch (e) {} }
-      if (ses.wake) ses.wake();
     };
     return ses;
   }
-  const chk = ses => { if (!ses.alive || SES !== ses) throw new Cancel(); };
 
   // ── 카운트다운 (막대 오른쪽 알약) ─────────────────────────
   let TM = null;
@@ -120,23 +104,20 @@
     pill.hidden = false;
     TM.iv = setInterval(tick, 200); tick();
   }
-  const timeLeft = () => (TM ? Math.max(0, (TM.end - Date.now()) / 1000) : 0);
   function setBar(lbl, sub) { $('lbl').textContent = lbl; $('sub').textContent = sub || ''; }
   const scr = () => $('scr');
   const scrCls = c => { scr().className = 'scr' + (c ? ' ' + c : ''); };
-  const turnSub = (G, k) => `${K.roundOf(G, k)}/${G.cfg.rounds}바퀴 · ${k + 1}/${G.turns}번째`;
   const FACES = ['😺', '😸', '😻', '🐱', '😼', '🙀', '😽', '😹'];
 
   // ── 화면 조각 ─────────────────────────────────────────────
   let CUR = null;                                // 지금 떠 있는 화면 { kind, pad, qa() }
   function destroyCur() { if (CUR) { clearInterval(CUR.iv); if (CUR.pad) CUR.pad.lock(); } CUR = null; }
   const head = (small, big, cls) => `<div class="task"><small id="tSmall">${small}</small><b id="tBig" class="${cls || ''}">${big}</b></div>`;
-  // 점수 줄. S = { names, scores, drawer, got:Set, gone:Set, me, tap(한 기기: 누를 수 있게) }
+  // 점수 줄. S = { names, scores, drawer, got:Set, gone:Set, me }
   function scoresHtml(S) {
     return S.names.map((nm, i) => {
       const dr = i === S.drawer, got = S.got.has(i), gone = S.gone && S.gone.has(i);
-      const tag = S.tap && !dr && !got ? 'button' : 'span';
-      return `<${tag} class="sc${dr ? ' dr' : ''}${got ? ' got' : ''}${gone ? ' gone' : ''}${i === S.me ? ' me' : ''}" data-p="${i}">${dr ? '🖍️' : got ? '✅' : gone ? '🔌' : FACES[i % FACES.length]} ${esc(nm)} <i>${S.scores[i]}</i></${tag}>`;
+      return `<span class="sc${dr ? ' dr' : ''}${got ? ' got' : ''}${gone ? ' gone' : ''}${i === S.me ? ' me' : ''}" data-p="${i}">${dr ? '🖍️' : got ? '✅' : gone ? '🔌' : FACES[i % FACES.length]} ${esc(nm)} <i>${S.scores[i]}</i></span>`;
     }).join('');
   }
   // 채팅 줄 (맨 아래가 최신)
@@ -158,20 +139,20 @@
   function showPick(o) {
     destroyCur(); scrCls();
     const cur = CUR = { kind: 'pick', done: false };
-    scr().innerHTML = `${head(esc(o.who ? o.who + ' 님 · ' : '') + '🖍️ 그릴 차례예요', '무엇을 그릴까요?', 'sm')}
+    scr().innerHTML = `${head('🖍️ 그릴 차례예요', '무엇을 그릴까요?', 'sm')}
       <div class="picks" id="picks">${o.words.map((w, i) => `<button class="pick" data-i="${i}"><span class="em">${w.em}</span>${esc(w.w)}<small>${esc(w.cat)}</small></button>`).join('')}</div>
-      <p class="note" style="text-align:center;margin:0">누르면 바로 그리기 시작! ${o.hot ? '다른 사람은 화면을 보지 마세요 🙈' : ''}</p>`;
+      <p class="note" style="text-align:center;margin:0">누르면 바로 그리기 시작!</p>`;
     const go = i => { if (cur.done || CUR !== cur) return; cur.done = true; stopTimer(); sfx('pop'); o.onPick(i); };
     $('picks').onclick = e => { const b = e.target.closest('.pick'); if (b) go(+b.dataset.i); };
     cur.qa = () => { $('picks').querySelector('.pick').click(); return true; };
     if (o.dur) startTimer(o.dur * 1000, () => go(0));
   }
 
-  // 그리는 화면. o = { top, small, words, log, S, hot, onPic(enc), onAward(p), onSkip(), peekWord }
+  // 그리는 화면. o = { top, small, log, S, onPic(enc) }
   function showDrawer(o) {
     destroyCur(); scrCls('s-draw drawer');
-    const cur = CUR = { kind: o.hot ? 'hotdraw' : 'draw', pad: null };
-    scr().innerHTML = `${head(o.small, esc(o.top), o.hot ? 'hint' : (Array.from(o.top).length > 9 ? 'sm' : ''))}
+    const cur = CUR = { kind: 'draw', pad: null };
+    scr().innerHTML = `${head(o.small, esc(o.top), Array.from(o.top).length > 9 ? 'sm' : '')}
       <div class="padwrap"><canvas class="pad" id="pad" aria-label="그림판"></canvas></div>
       <div class="pal" id="pal">${D.COLORS.map((c, i) => `<button type="button" data-c="${i}" style="--c:${c.hex}" aria-label="${c.name}" aria-pressed="${i === 0}"></button>`).join('')}</div>
       <div class="tl" id="tl">
@@ -180,7 +161,7 @@
         <button type="button" id="unBtn" aria-label="되돌리기" disabled>↩️</button>
         <button type="button" id="clBtn" aria-label="모두 지우기" disabled>🗑️</button>
       </div>
-      ${o.hot ? `<div class="hotrow"><button class="btn peek" id="peekBtn">👀 꾹 눌러 제시어</button><button class="btn" id="skipBtn">⏭ 그만 그리기</button></div><p class="note tapnote">맞힌 사람 이름을 눌러요</p>` : `<div class="clog" id="clog"></div>`}
+      <div class="clog" id="clog"></div>
       <div class="scs" id="scs"></div>`;
     const cv = $('pad');
     const sync = () => { $('unBtn').disabled = !pad.strokes.length; $('clBtn').disabled = !pad.strokes.length; $('clBtn').classList.remove('armed'); };
@@ -211,22 +192,12 @@
         if (now !== sig) { sig = now; o.onPic(pad.toEnc()); }
       }, 250);
     }
-    if (o.hot) {
-      const pk = $('peekBtn'), big = $('tBig'), hint = o.top;
-      const on = e => { e.preventDefault(); big.textContent = o.peekWord; big.classList.remove('hint'); };
-      const off = () => { big.textContent = cur.top || hint; big.classList.add('hint'); };
-      pk.addEventListener('pointerdown', on); pk.addEventListener('pointerup', off); pk.addEventListener('pointerleave', off); pk.addEventListener('pointercancel', off);
-      pk.addEventListener('contextmenu', e => e.preventDefault());
-      $('skipBtn').onclick = () => { sfx('tap'); o.onSkip(); };
-      $('scs').onclick = e => { const b = e.target.closest('button.sc'); if (!b) return; o.onAward(+b.dataset.p); };
-    }
     cur.qa = () => {
       if (pad.strokes.length < 2) { scribble(cv, 2); return true; }
-      if (o.hot) { const b = $('scs').querySelector('button.sc'); if (b) { b.click(); return true; } $('skipBtn').click(); return true; }
       return false;
     };
     drawScores(o.S);
-    if (!o.hot) drawLog(o.log || [], o.S.names);
+    drawLog(o.log || [], o.S.names);
     return cur;
   }
 
@@ -261,19 +232,17 @@
     if (log && S) drawLog(log, S.names);
   }
 
-  // 정답 공개. o = { w, drawerName, names, got, gain, e, next(단추 글), onNext }
+  // 정답 공개. o = { w, drawer, drawerName, names, gain, e, skip }
   function showReveal(o) {
     destroyCur(); scrCls();
     const gains = o.names.map((nm, i) => ({ nm, i, g: o.gain[i] || 0 })).filter(r => r.g > 0).sort((a, b) => b.g - a.g);
     scr().innerHTML = `${head(`🖍️ ${esc(o.drawerName)} 님의 그림${o.skip ? ' · 넘어감' : ''}`, `정답은 「${esc(o.w)}」`, Array.from(o.w).length > 8 ? 'sm' : '')}
       <div class="padwrap"><canvas id="view"></canvas></div>
       <div class="gains">${gains.length ? gains.map(r => `<span class="sc${r.i === o.drawer ? ' dr' : ' got'}">${r.i === o.drawer ? '🖍️' : '🎉'} ${esc(r.nm)} <i>+${r.g}</i></span>`).join('') : '<span class="sc">😿 아무도 못 맞혔어요</span>'}</div>
-      ${o.next ? `<div class="act"><button class="btn primary big" id="nextBtn2">${esc(o.next)}</button></div>` : '<p class="note" style="text-align:center;margin:0">곧 다음 차례예요</p>'}`;
+      <p class="note" style="text-align:center;margin:0">곧 다음 차례예요</p>`;
     P.render($('view'), o.e || [], { w: 600 });
     sfx(gains.length ? 'good' : 'lose');
-    const cur = CUR = { kind: 'reveal' };
-    if (o.next) { const b = $('nextBtn2'); b.onclick = () => { sfx('tap'); o.onNext(); }; cur.qa = () => { b.click(); return true; }; }
-    else cur.qa = () => false;
+    CUR = { kind: 'reveal', qa: () => false };
   }
 
   // 결과. o = { names, scores, me, gal: [{w, e, d, got}] }
@@ -289,7 +258,7 @@
       </div></div>
       <div class="acts" id="resActs"></div>`;
     scr().querySelectorAll('canvas[data-k]').forEach(cv => P.render(cv, o.gal[+cv.dataset.k].e || [], { w: 360 }));
-    if (top.some(r => r.i === o.me) || (o.me < 0 && top.length && o.hot)) { sfx('win'); C.confetti(); } else if (o.me >= 0) sfx('lose'); else sfx('good');
+    if (top.some(r => r.i === o.me)) { sfx('win'); C.confetti(); } else if (o.me >= 0) sfx('lose'); else sfx('good');
     CUR = { kind: 'result', qa: () => false };
   }
 
@@ -305,81 +274,9 @@
     }
   }
 
-  // ═════════════════════════════════════════════════════════
-  // 한 기기에서 여럿
-  // ═════════════════════════════════════════════════════════
   function uniqNames(arr) {
     const seen = {};
     return arr.map(nm => { nm = (nm || '').trim() || '이름없음'; const c = seen[nm] = (seen[nm] || 0) + 1; return c > 1 ? nm + ' ' + '②③④⑤⑥⑦⑧'[c - 2] : nm; });
-  }
-  function startHot(o) {
-    o = o || {};
-    if (!lPick) return C.toast('한 기기 모듈을 불러오지 못했어요');
-    if (o.names) lPick.set(o.names.map(name => ({ kind: 'human', name })));
-    if (!lPick.valid) return C.toast('2~8명의 이름을 적어 주세요');
-    const names = uniqNames(lPick.seats.map(s => s.name));
-    if (SES) SES.dispose();
-    const ses = SES = newSession({ mode: 'hot' });
-    ses.names = names; ses.hotCfg = { sec: opt.sec, rounds: o.rounds || opt.rounds };
-    show('play');
-    runHot(ses).catch(e => { if (!(e instanceof Cancel)) { console.error(e); C.toast('앗, 문제가 생겼어요. 메뉴로 돌아갈게요'); goHome(); } });
-  }
-  // 가림막: 뒤로가기가 숨겨 버려도 다시 띄움 (제시어가 비치지 않게)
-  async function hotCover(ses, o) {
-    let settled = false;
-    const p = HotSeat.cover(o).then(() => { settled = true; });
-    const iv = setInterval(() => { const el = document.querySelector('.hs-cover'); if (!settled && el && el.hidden && ses.alive) el.hidden = false; }, 200);
-    try { await p; } finally { clearInterval(iv); }
-    chk(ses);
-  }
-  const ask = (ses, fn) => new Promise((res, rej) => { ses.wake = () => rej(new Cancel()); fn(res); });
-  async function runHot(ses) {
-    const names = ses.names, n = names.length;
-    const G = ses.G = K.create(n, ses.hotCfg);
-    const gal = ses.gal = [];
-    for (let k = 0; k < G.turns; k++) {
-      const words = Wd.pick3(null, G.used);
-      const d = K.startTurn(G, k, words.map(x => x.w));
-      ses.hot = { ph: 'cover', k };
-      setBar('🖍️ 베니캐치', turnSub(G, k));
-      await hotCover(ses, { name: names[d], emoji: FACES[d % FACES.length], text: `${names[d]} 님이 그릴 차례`, sub: '다른 사람은 화면을 보지 마세요! 제시어를 몰래 골라요', button: '🤫 제시어 보기' });
-      ses.hot = { ph: 'pick', k };
-      const i = await ask(ses, res => showPick({ who: names[d], words, hot: true, dur: secs(K.PICK_SEC), onPick: res }));
-      chk(ses);
-      K.choose(G, i);
-      ses.hot = { ph: 'draw', k };
-      const dur = secs(G.cfg.sec);
-      const e = await ask(ses, res => {
-        let lvl = 0, ended = false;
-        const S = () => ({ names, scores: G.scores, drawer: d, got: new Set(G.got), me: -1, tap: true });
-        const end = () => { if (ended) return; ended = true; stopTimer(); res(cur.pad.toEnc()); };
-        const cur = showDrawer({ hot: true, small: `🖍️ ${esc(names[d])} 님이 그려요 · 말로 맞혀요!`, top: K.hintOf(G.word, 0), peekWord: G.word, S: S(),
-          onSkip: end,
-          onAward: p => {
-            const pts = K.award(G, p, timeLeft());
-            if (!pts) return;
-            sfx('good'); const tn = document.querySelector('.tapnote'); if (tn) tn.textContent = `🎉 ${names[p]} 님 정답! +${pts} · 또 맞힌 사람을 눌러요`;
-            drawScores(S());
-            if (K.allGot(G)) setTimeout(end, 500);
-          } });
-        startTimer(dur * 1000, end, left => {
-          const l = K.hintLevel(left, dur);
-          if (l > lvl) { lvl = l; const b = $('tBig'); if (b && b.classList.contains('hint')) b.textContent = K.hintOf(G.word, l); cur.top = K.hintOf(G.word, l); sfx('pop'); }
-        });
-      });
-      chk(ses);
-      const h = K.endTurn(G); h.e = e; gal[k] = h;
-      ses.hot = { ph: 'reveal', k };
-      const last = K.isLast(G);
-      await ask(ses, res => showReveal({ w: h.w, drawer: d, drawerName: names[d], names, gain: h.gain, e, next: last ? '🏆 결과 보기' : '다음 차례 ▶', onNext: res }));
-      chk(ses);
-    }
-    K.finish(G);
-    ses.hot = { ph: 'result', k: G.turns };
-    showResult({ names, scores: G.scores, me: -1, gal, hot: true });
-    $('resActs').innerHTML = `<button class="btn primary big" id="again">🔁 같은 사람들로 한 판 더</button><button class="btn" id="toMenu">메뉴로</button>`;
-    $('again').onclick = () => { sfx('pop'); startHot(); };
-    $('toMenu').onclick = () => goHome();
   }
 
   // ═════════════════════════════════════════════════════════
@@ -410,7 +307,7 @@
       },
       settings: { defaults: { ...DEF, sec: opt.sec, rounds: opt.rounds }, label: c => `그리기 ${(c && c.sec) || 80}초 · ${(c && c.rounds) || 1}바퀴`, render: lobbyRender },
       onStart: ctx => startOnline(ctx),
-      onLobby: () => { if (SES) SES.dispose(); SES = null; show('home'); drawMenu(); },
+      onLobby: () => { if (SES) SES.dispose(); SES = null; show('home'); },
       onLeave: why => { goHome(); if (why) C.toast(why, 2600); },
     };
   }
@@ -762,33 +659,25 @@
     pause(v = true) { PAUSED = !!v; },
     get paused() { return PAUSED; },
     setMin(n) { QA_MIN = n | 0; },
-    startHot(o) { startHot(o); },
     scribble: n => { const cv = $('pad'); if (cv) scribble(cv, n || 3); return !!cv; },
     // 지금 화면에서 사람이 할 만한 걸 한 번 한다 (진짜 단추·입력을 누름). 했으면 true
     autoAct() {
       const ses = SES; if (!ses || PAUSED) return false;
-      if (window.HotSeat && HotSeat.isOpen) { HotSeat.close(); return true; }
       if (CUR && CUR.qa) return CUR.qa();
       return false;
     },
     fp() {
       const ses = SES; if (!ses) return null;
-      if (ses.mode === 'hot') return JSON.stringify({ hot: ses.hot });
       const V = ses.V; if (!V) return null;
       return JSON.stringify({ g: V.g, n: V.n, k: V.k, ph: V.ph, d: V.drawer, sc: V.scores, got: [...V.got].sort(), gone: [...V.gone].sort() });
     },
     probe() {
       const ses = SES; if (!ses) return { fp: 'none', over: false, waiting: false, info: '세션 없음' };
-      if (ses.mode === 'hot') {
-        const h = ses.hot || {}, G = ses.G;
-        return { fp: [h.ph, h.k, window.HotSeat && HotSeat.isOpen ? 'cover' : '', CUR ? CUR.kind : '', G ? G.got.length : 0].join('|'), over: h.ph === 'result' && !!$('again'), waiting: true, info: `${h.ph} · ${h.k}번째` };
-      }
       const V = ses.V; if (!V) return { fp: 'none', over: false, waiting: false, info: '연결 중' };
       return { fp: window.__catch.fp(), over: V.ph === 'end', waiting: !!(CUR && CUR.kind !== 'result'), info: `${V.g}번째 판 · ${V.ph} · ${V.k}번째` };
     },
   };
 
   // ── 시작 ─────────────────────────────────────────────────
-  drawMenu();
   if (window.ArenaUI) ArenaUI.checkUrl(friendOpts());
 })();

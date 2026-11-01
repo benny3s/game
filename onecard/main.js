@@ -66,7 +66,7 @@
   try { addEventListener('grank', e => { if (e.detail && e.detail.game === 'onecard') rankPull(); }); } catch (e) {}
   function drawMenu() {
     rankPull();
-    const tab = ['solo', 'watch', 'local'].includes(opt.tab) ? opt.tab : 'solo';
+    const tab = ['solo', 'watch'].includes(opt.tab) ? opt.tab : 'solo';   // 한 기기(local)는 11-01 뺌
     for (const [id, t] of [['tabSolo', 'solo'], ['tabWatch', 'watch'], ['tabLocal', 'local']]) $(id).setAttribute('aria-pressed', String(tab === t));
     $('soloBox').hidden = tab !== 'solo'; $('watchBox').hidden = tab !== 'watch'; $('localBox').hidden = tab !== 'local';
     $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 ${fmtN(coins)}냥</b><span class="small">${rk && rk.all && rk.all.n ? `통산 ${fmtN(rk.all.n)}판 중 ${fmtN(rk.all.w)}승${rk.all.b != null ? ` · 한 판 최고 ${fmtN(rk.all.b)}장 받기` : ''}` : '이기면 다른 사람이 남긴 카드 한 장마다 10냥'}</span></span>`;

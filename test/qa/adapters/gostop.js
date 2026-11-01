@@ -12,7 +12,6 @@ module.exports = {
   modes: {
     solo: { start: seed => __gostop.start({ seed, mode: 2, tier: 'easy' }), timeout: 60000 },
     watch: { start: seed => __gostop.start({ seed, watch: true, wMode: 2, wTiers: ['easy', 'easy'] }), timeout: 60000 },
-    hot: { start: seed => __gostop.startHot({ seed, mode: 2, seats: ['human', 'human'] }), timeout: 60000 },
   },
   quickModes: ['solo'],
   // 지금 상태: fp(바뀌면 진행 중) · over(한 판 끝) · waiting(사람 입력 기다림)

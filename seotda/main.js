@@ -74,6 +74,7 @@
     rankPull();
     ensureHotPick();
     $('hotFallback').hidden = !!hotPick;
+    if (opt.tab === 'hot') opt.tab = 'solo';                            // 한 기기는 11-01 뺌
     const solo = opt.tab === 'solo';
     $('tabSolo').setAttribute('aria-pressed', String(solo));
     $('tabWatch').setAttribute('aria-pressed', String(opt.tab === 'watch'));

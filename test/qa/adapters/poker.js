@@ -37,14 +37,6 @@ module.exports = {
       },
       timeout: 90000,
     },
-    hot: {
-      start: () => {
-        const q = s => document.querySelector(s);
-        q('.seg[data-seg="mode"] [data-val="hot"]').click();         // 자리 고르기 기본값: 사람 2명
-        q('#goStart').click();
-      },
-      timeout: 90000,
-    },
     // AI 구경에서 결과 창을 일찍 눌러 넘기기 — 눌러서 넘긴 판의 4.2초 자동 넘김 타이머가 남아 있다가 다음 판 결과 창(또는 우승 창)을
     // 닫아 버리면 구경이 영영 멈춤(단추 없음) → 멈춤 감지(stuck)가 잡음 (poker/main.js showEnd 의 setTimeout). 결과 창 8번 넘기면 끝
     watchskip: {

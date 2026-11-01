@@ -22,13 +22,6 @@ module.exports = {
       },
       timeout: 120000,
     },
-    hot: {
-      start: seed => {
-        document.getElementById('tabLocal').click();      // 자리 고르기 기본값: 사람 2명
-        __cube.startGame('local', seed);
-      },
-      timeout: 120000,
-    },
     watch: {
       start: seed => {
         const q = s => document.querySelector(s);

@@ -35,14 +35,6 @@ module.exports = {
       },
       timeout: 90000,
     },
-    hot: {
-      start: () => {
-        const q = s => document.querySelector(s);
-        q('#tabHot').click();                        // 자리 고르기 기본값: 사람 2명
-        q('#hotBtn').click();
-      },
-      timeout: 90000,
-    },
   },
   quickModes: ['solo'],
   probe: () => {

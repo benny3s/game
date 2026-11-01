@@ -81,7 +81,7 @@
   try { addEventListener('grank', e => { if (e.detail && e.detail.game === 'gostop') rankPull(); }); } catch (e) {}
   function drawMenu() {
     rankPull();
-    const tab = ['solo', 'watch', 'local'].includes(opt.tab) ? opt.tab : 'solo';
+    const tab = ['solo', 'watch'].includes(opt.tab) ? opt.tab : 'solo';   // 한 기기(local)는 11-01 뺌
     $('tabSolo').setAttribute('aria-pressed', String(tab === 'solo')); $('tabWatch').setAttribute('aria-pressed', String(tab === 'watch')); $('tabLocal').setAttribute('aria-pressed', String(tab === 'local'));
     $('soloBox').hidden = tab !== 'solo'; $('watchBox').hidden = tab !== 'watch'; $('localBox').hidden = tab !== 'local';
     $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 자금 ${fmtN(coins)}냥</b><span class="small">${rk && rk.all && rk.all.n ? `통산 ${fmtN(rk.all.n)}판 중 ${fmtN(rk.all.w)}승` : '승리 시 점수만큼 판돈이 쌓입니다 (1점 = 10냥)'}</span></span>`;

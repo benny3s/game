@@ -14,7 +14,6 @@ module.exports = {
   modes: {
     solo: { start: seed => __onecard.start({ seed, n: 2, tier: 'easy' }), timeout: 60000 },
     watch: { start: seed => __onecard.start({ seed, watch: true, wN: 3, wTiers: ['easy', 'normal', 'easy'] }), timeout: 60000 },
-    hot: { start: seed => __onecard.startHot({ seed, seats: [{ kind: 'human', name: '사람1' }, { kind: 'human', name: '사람2' }] }), timeout: 60000 },
   },
   quickModes: ['solo'],
   probe: () => {

@@ -25,14 +25,6 @@
 .sc.got{background:rgba(63,174,122,.25);border-color:rgba(63,174,122,.75)}
 .sc.gone{opacity:.45}
 .sc.me{box-shadow:0 0 0 2px rgba(255,200,97,.5)}
-button.sc{cursor:pointer;font-size:15px;padding:8px 13px;border-color:rgba(255,200,120,.5);background:rgba(240,138,60,.18)}
-button.sc:active{transform:scale(.96)}
-
-/* 한 기기: 제시어 몰래 보기 · 그만 그리기 */
-.hotrow{display:grid;grid-template-columns:1fr auto;gap:8px;flex:none}
-.hotrow .btn{padding:10px 12px;font-size:15px}
-.hotrow .peek{touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
-.tapnote{text-align:center;margin:0;font-size:13.5px;color:#ffe3a3}
 
 /* 정답 공개 */
 .gains{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;flex:none}
