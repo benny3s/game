@@ -64,8 +64,19 @@
   const TIER = {
     easy:   { em: '🌱', name: '초짜', cls: 't-easy',   desc: '패를 솔직하게 내는 입문자', names: ['김씨', '박씨', '정씨', '한씨'] },
     normal: { em: '🎴', name: '꾼', cls: 't-normal', desc: '피 계산과 견제가 탄탄한 실력자', names: ['이생원', '최주사', '강서방', '윤참봉'] },
-    hard:   { em: '👑', name: '타짜', cls: 't-hard',   desc: '나온 패를 하나도 안 놓치고 세는 일류 — 🧑‍🏫 선생님이랑 치면 해 볼 만해요', names: ['평경장', '고광렬', '아귀', '짝귀'] },
+    hard:   { em: '👑', name: '타짜', cls: 't-hard',   desc: '나온 패를 하나도 안 놓치고 세는 일류 — 🧑‍🏫 선생님이랑 치면 해 볼 만해요', names: ['고광렬', '짝귀', '평경장', '아귀'] },
   };
+  // 타짜 넷은 약한 → 센 순, 손버릇은 ai.js STYLES (영화 '타짜' 인물 느낌, 벤치로 순서 확인)
+  const FOE_NOTE = {
+    고광렬: '★☆☆☆ 고니 짝꿍 · 입담과 허세 — 고를 못 참고 가끔 손이 먼저 나가요',
+    짝귀: '★★☆☆ 전라도 3대 타짜 · 과묵·신중 — 상대 약부터 막고 일찍 챙겨요',
+    평경장: '★★★☆ 고니의 스승 — 나온 패를 세고, 상대가 버린 패로 손패까지 읽어요',
+    아귀: '★★★★ 경상도 3대 타짜 · 최종 보스 — 상대를 읽고 고를 세게 불러 판을 키워요',
+  };
+  if (C.store(KEY + 'foeV', 1) < 2) {                               // 11-01 타짜 순서 바꿈 (평경장·고광렬·아귀·짝귀 → 약한 순): 고른 사람 그대로
+    if (opt.foe && opt.foe.hard != null) { opt.foe = Object.assign({}, opt.foe, { hard: [2, 0, 3, 1][opt.foe.hard | 0] | 0 }); saveOpt('foe'); }
+    C.save(KEY + 'foeV', 2);
+  }
   const SPEEDS = { slow: { label: '느긋하게', em: '🐢', mul: 1.45, think: 950 }, normal: { label: '보통', em: '⚡', mul: 1, think: 560 }, fast: { label: '빠르게', em: '🚀', mul: 0.55, think: 230 } };
   const SPEED_ORDER = ['slow', 'normal', 'fast'];
 
@@ -92,6 +103,7 @@
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })),
       id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
     if ($('foeSeg')) segBtns($('foeSeg'), TIER[opt.tier].names.map((nm, i) => [i, nm]), foeIdx(opt.tier), v => { opt.foe = Object.assign({}, opt.foe, { [opt.tier]: +v }); saveOpt('foe'); drawMenu(); });
+    if ($('foeNote')) { const fn = FOE_NOTE[TIER[opt.tier].names[foeIdx(opt.tier)]]; $('foeNote').textContent = fn || ''; $('foeNote').hidden = !fn; }
     segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], houseRules.bonus, v => { setRules(Object.assign({}, houseRules, { bonus: +v })); drawMenu(); });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     if ($('coachSeg')) segBtns($('coachSeg'), [[1, '🧑‍🏫 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
@@ -380,20 +392,20 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=9');
+    worker = new Worker('ai-worker.js?v=10');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
   const rand32 = () => { try { return crypto.getRandomValues(new Uint32Array(1))[0]; } catch (e) { return (Math.random() * 4294967296) >>> 0; } };
-  function aiChoose(v, tier) {
-    const seed = rand32();
-    const local = () => AI.choose(v, tier, { seed, samples: tier === 'hard' ? 80 : 0 });
+  function aiChoose(v, tier, name) {
+    const seed = rand32(), style = tier === 'hard' && AI.STYLES && AI.STYLES[name] ? name : undefined;   // 타짜는 사람마다 손버릇
+    const local = () => AI.choose(v, tier, { seed, samples: tier === 'hard' ? 80 : 0, style });
     if (tier !== 'hard' || !worker) return Promise.resolve(local());
     return new Promise(res => {
       const id = ++wid;
       const to = setTimeout(() => { if (wjobs.delete(id)) res(local()); }, 4000);
       wjobs.set(id, a => { clearTimeout(to); res(a >= 0 ? a : local()); });
-      worker.postMessage({ id, view: v, tier, seed, ms: 320 });
+      worker.postMessage({ id, view: v, tier, seed, ms: 320, style });
     }).then(a => (G.isLegal(v, a) ? a : AI.choose(v, 'normal', { seed })));
   }
 
@@ -2021,6 +2033,8 @@
       } else {
         html = `<span class="cb-tag">👑 추천 · ${esc(coach.bestTag)}</span><br><b>[${esc(coach.bestName)}]</b> — ${esc(coach.bestWhy)}`;
       }
+      // 👀 상대 읽기: 모으는 약과 빠진 한 장의 자리 · 짝 없이 버린 달 · 흔들어 보인 패 (모두에게 보인 것만)
+      for (const r of coach.read || []) html += `<br><span class="cb-read">👀 <b>${esc(seatAt(ses, r.q).name)}</b> ${esc(r.text)}</span>`;
     } else if (on) html = '<span class="small">내 차례가 되면 추천 수를 알려 드려요</span>';
     const bar = $('coachBar');
     if (ses.panel) {
@@ -2240,7 +2254,7 @@
     setThinking(ses, p, true);
     const t0 = performance.now();
     const v = G.view(ses.S, p);
-    const a = await aiChoose(v, seat.tier);
+    const a = await aiChoose(v, seat.tier, seat.name);
     ses.check();
     const want = FAST ? 0 : SP().think * (ses.S.phase === 'goStop' ? 1.5 : ses.S.phase === 'play' ? 1 : 0.6);
     const left = want - (performance.now() - t0);

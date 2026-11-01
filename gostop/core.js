@@ -168,7 +168,7 @@
       deck: s.deck.slice(), hands: sl2(s.hands), table: s.table.slice(), cap: sl2(s.cap),
       kook: s.kook, go: s.go.slice(), lastGo: s.lastGo.slice(), goSeq: s.goSeq.slice(),
       ptag: s.ptag.slice(), streak: s.streak.slice(), side: s.side.slice(),
-      shake: s.shake.slice(), shook: sl2(s.shook), known: sl2(s.known),
+      shake: s.shake.slice(), shook: sl2(s.shook), known: sl2(s.known), decl: s.decl ? s.decl.slice() : null,
       pass: s.pass.slice(), ppeok: s.ppeok.slice(), owner: s.owner.slice(),
       dealt: s.dealt, cur: null, result: s.result,
     };
@@ -212,7 +212,7 @@
       deck: [], hands: arr(n, () => []), table: [], cap: arr(n, () => []),
       kook: rules.kook === 'yeol' ? 'Y' : rules.kook === 'ssang' ? 'P' : '', go: arr(n, 0), lastGo: arr(n, 0), goSeq: [],
       ptag: arr(12, ''), streak: arr(n, 0), side: [],
-      shake: arr(n, 0), shook: arr(n, () => []), known: arr(n, () => []),
+      shake: arr(n, 0), shook: arr(n, () => []), known: arr(n, () => []), decl: arr(n, 0),
       pass: arr(n, 0), ppeok: arr(n, 0), owner: arr(12, -1),
       dealt: { bonus: [], redeal: 0 }, cur: null, result: null,
     };
@@ -574,7 +574,7 @@
     if (isBonus(c)) {
       removeFrom(h, c); s.cap[p].push(c);
       if (ev) ev.push({ t: 'bonus', p, card: c, from: 'hand' });
-      if (s.deck.length) { const d = s.deck.pop(); h.push(d); sortIds(h); if (ev) ev.push({ t: 'draw', p, card: d }); }
+      if (s.deck.length) { const d = s.deck.pop(); h.push(d); sortIds(h); if (s.decl) s.decl[p] = 0; if (ev) ev.push({ t: 'draw', p, card: d }); }   // 새 패가 들어와 '없을 달' 짐작은 지움
       if (!hasTurns(s, p)) { s.cur = newCur(p, 'bonus'); return scoreCheck(s, ev); }
       return;
     }
@@ -590,6 +590,8 @@
     cur.c = c; cur.m = m;
     const T = tableOf(s, m);
     cur.ht = T.length;
+    // 상대 읽기 (모두에게 보인 사실): 바닥에 먹을 달이 있는데 짝 없이 버렸다면 그 달 패는 손에 없을 가능성이 큼 (decl = 달 비트)
+    if (!T.length && s.decl) for (const x of s.table) { const xm = monthOf(x); if (xm >= 0) s.decl[p] |= 1 << xm; }
     if (ev) ev.push({ t: 'play', p, card: c, n: T.length, shake });
     if (T.length === 3) {
       // 뻑 더미(또는 처음부터 깔린 세 장)를 먹음

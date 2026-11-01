@@ -544,3 +544,5 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .hr-quick h4{margin:8px 0 2px;font:700 15px var(--round,inherit);color:#fde68a}
 .hr-all>summary{color:#cbd5e1}
 .hr-all .hr-g{margin:6px 0}
+/* 👀 상대 읽기 (선생님 창·띠 공용) */
+.cb-read{display:inline-block;margin-top:4px;font-size:.86em;line-height:1.4;color:#cfe9dc;opacity:.92}

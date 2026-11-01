@@ -16,6 +16,20 @@
   const isPlay = a => a < A.SHAKE, isShake = a => a >= A.SHAKE && a < A.BOMB, isBomb = a => a >= A.BOMB && a < A.PASS;
   const cardOf = a => (isPlay(a) ? a - A.PLAY : isShake(a) ? a - A.SHAKE : -1);
 
+  // ── 성격 (타짜마다 다른 손버릇) — choose(…, { style }) 로 그 한 수에만 씀 ──
+  //   read 상대 읽기 · block 상대 값어치를 얼마나 무겁게 · shakeB 흔들기 욕심 · slip 비슷한 두 수 중 둘째를 낼 확률 · noise 판단 흔들림
+  //   gm·ga 고/스톱 문턱 (고 평균 > 스톱 점수×gm + ga 이면 고) · t 끝까지 둬 보는 양 (배수)
+  // 영화 '타짜' 인물 느낌, 약한 → 센 순 (벤치는 RL.md)
+  const STYLES = {
+    고광렬: { slip: 0.3, noise: 0.6, shakeB: 1.8, ga: -2.5, t: 0.4 },   // 고니 짝꿍 · 입담과 허세 — '고!' 를 못 참고 가끔 손이 먼저 나감
+    짝귀:   { read: 1, block: 1.2, gm: 1.1, ga: 0.5 },                    // 전라도 3대 타짜 · 과묵·신중 — 상대 약을 먼저 막고 일찍 챙김
+    평경장: { read: 1, gm: 0.9, block: 0.9 },                             // 고니의 스승 '패를 세라' — 정석·균형
+    아귀:   { read: 1, gm: 0.7, block: 0.7, t: 1.6 },                     // 경상도 3대 타짜 · 최종 보스 — 상대를 읽고 판을 크게 (고를 세게 부르고 내 약에 몰빵)
+  };
+  const BASE_K = { read: 0, block: 1, shakeB: 0.9, slip: 0, noise: 0 };
+  let K = BASE_K;
+  function withK(k, f) { const old = K; K = Object.assign({}, BASE_K, k); try { return f(); } finally { K = old; } }
+
   // ── 판 읽기: 사람마다 먹은 패 요약 + 이미 막힌 약 ─────────────────
   function quick(cap, kook) {
     const t = { g: 0, rain: 0, y: 0, birds: 0, t: 0, hong: 0, cheong: 0, cho: 0, pi: 0 };
@@ -72,7 +86,7 @@
   function evalState(s, p) {
     const info = analyze(s);
     let v = 0;
-    const w = s.n === 2 ? 1 : 0.6;
+    const w = (s.n === 2 ? 1 : 0.6) * K.block;
     for (let q = 0; q < s.n; q++) {
       const x = posValue(info.P[q].t, info.P[q].dead, s.n);
       v += q === p ? x : -w * x;
@@ -113,7 +127,8 @@
     for (let m = 0; m < 12; m++) {
       const cards = byM[m]; if (!cards) continue;
       let k = 0; for (let i = 0; i < 4; i++) if (U.m[m * 4 + i]) k++;
-      const pHold = k ? 1 - Math.pow(1 - Math.min(1, h / cnt), k) : 0;
+      let pHold = k ? 1 - Math.pow(1 - Math.min(1, h / cnt), k) : 0;
+      if (K.read && s.decl && (s.decl[nxt] >> m) & 1) pHold *= 0.3;     // 상대 읽기: 먹을 수 있었는데 짝 없이 버린 달
       const take = cards.length === 2 ? [bestOf(cards)] : cards;
       let g = gain(info, nxt, take);
       if (cards.length === 3 && s.owner[m] >= 0) g += 0.5 * (s.owner[m] === nxt ? 2 : 1);   // 뻑 먹으면 피도 받음
@@ -235,7 +250,7 @@
     if (v.phase === 'kook') return kookChoice(v, p);
     if (v.phase === 'pickHand' || v.phase === 'pickFlip') return pickNormal(v, p);
     for (const a of L) if (isPlay(a) && G.isBonus(cardOf(a))) return a;      // 보너스는 공짜
-    return rankPlays(v, L, p, rng)[0].a;
+    return pickRanked(rankPlays(v, L, p, rng), rng);
   }
   function oppGain(info, p, c) { let g = 0; for (let q = 0; q < info.n; q++) if (q !== p) g += gain(info, q, [c]); return g; }
   // 내는 수마다 점수 (높은 순)
@@ -245,12 +260,34 @@
     const out = [];
     for (const a of L) {
       let x = evalAction(world, classes, a, p, rng);
-      if (isShake(a)) x += 0.9;                                          // 흔들기: 이기면 두 배
+      if (isShake(a)) x += K.shakeB;                                     // 흔들기: 이기면 두 배
+      if (K.noise) x += (rng() - 0.5) * 2 * K.noise;                     // 성격: 판단 흔들림
       if (a === A.PASS) x += 0.6;                                        // 손패를 아낌
       out.push({ a, x });
     }
     out.sort((a, b) => b.x - a.x);
     return out;
+  }
+  // 성격: 비슷한 두 수 중 가끔 둘째 것 (손이 먼저 나감)
+  function pickRanked(ranked, rng) {
+    if (K.slip && ranked.length > 1 && ranked[0].x - ranked[1].x < 1.5 && rng() < K.slip) return ranked[1].a;
+    return ranked[0].a;
+  }
+  // 상대 읽기: 먹을 수 있었는데 짝 없이 버린 사람에게는 그 달 패를 덜 쥐여 다시 나눔 (decl — 모두에게 보인 사실만, 80%만 믿음)
+  function readWorld(w, v, p, rng) {
+    if (!K.read || !v.decl) return w;
+    for (let q = 0; q < w.n; q++) {
+      const D = v.decl[q]; if (q === p || !D) continue;
+      const shown = v.hands[q].filter(c => c >= 0), h = w.hands[q];
+      for (let i = 0; i < h.length; i++) {
+        const x = h[i], mx = monthOf(x);
+        if (mx < 0 || !((D >> mx) & 1) || shown.indexOf(x) >= 0 || rng() < 0.2) continue;
+        const L = w.deck.length, s0 = Math.floor(rng() * L);
+        for (let k = 0; k < L; k++) { const j = (s0 + k) % L, y = w.deck[j], my = monthOf(y); if (my >= 0 && (D >> my) & 1) continue; w.deck[j] = x; h[i] = y; break; }
+      }
+      h.sort((a, b) => a - b);
+    }
+    return w;
   }
 
   // 빠른 수용 값어치: 기본 값 + 내가 모으는 약을 채우는 패 + 상대 약을 막는 패
@@ -332,14 +369,14 @@
       // 지금 스톱한 점수 vs 고 하고 끝까지 둬 본 평균 (기댓값이 큰 쪽, 벤치에서 가장 셌음)
       const stopPts = G.stopPreview(v, p).points;
       let sum = 0, k = 0;
-      for (; more(k); k++) { const w = G.sampleWorld(v, rng); G.apply(w, A.GO, null); rollout(w, rng); sum += G.reward(w, p); }
-      const gm = opts.gm != null ? opts.gm : 1, ga = opts.ga != null ? opts.ga : 0;
+      for (; more(k); k++) { const w = readWorld(G.sampleWorld(v, rng), v, p, rng); G.apply(w, A.GO, null); rollout(w, rng); sum += G.reward(w, p); }
+      const gm = opts.gm != null ? opts.gm : K.gm != null ? K.gm : 1, ga = opts.ga != null ? opts.ga : K.ga != null ? K.ga : 0;
       return sum / Math.max(1, k) > stopPts * gm + ga ? A.GO : A.STOP;
     }
     const ranked = rankPlays(v, L, p, rng);
     // 패 내기: 빠른 끝까지-두기로 순위를 고치면(beta>0) 오히려 약해져서(RL.md 벤치) 기본은 🐱 의 한 수 앞 판단 그대로
     const beta0 = opts.beta != null ? opts.beta : 0;
-    if (!beta0 || ranked.length === 1 || ranked[0].x - ranked[1].x > 2.5) return ranked[0].a;
+    if (!beta0 || ranked.length === 1 || ranked[0].x - ranked[1].x > 2.5) return pickRanked(ranked, rng);
     const cand = ranked.filter((r, i) => i < 4 || isBomb(r.a));
     const sum = new Map(cand.map(r => [r.a, 0]));
     let k = 0;
@@ -370,7 +407,11 @@
     const rng = opts.rng || G.makeRng((opts.seed >>> 0) || 12345);
     if (v.phase === 'buy') return buyChoice(v, tier, rng);
     const f = TIERS[tier] || normal;
-    return f(v, rng, opts);
+    const st = opts.style && STYLES[opts.style];
+    if (!st) return f(v, rng, opts);
+    const o = Object.assign({}, opts);
+    if (st.t) { if (o.samples) o.samples = Math.max(8, Math.round(o.samples * st.t)); else o.ms = Math.round((o.ms || 350) * st.t); }
+    return withK(st, () => f(v, rng, o));
   }
 
   // 힌트: 보통 AI 가 고른 수 + 짧은 까닭
@@ -401,18 +442,18 @@
 
   // ── 🧑‍🏫 일타 강사 코치: 손패 모든 카드의 기댓값(EV) 신호등 + 한국어 해설 ──
   function explainCardPlay(v, info, U, c, a) {
-    const p = v.turn, me = info.P[p].t, n = v.n;
+    const p = v.turn, me = info.P[p].t, dead = info.P[p].dead, n = v.n;
     if (G.isBonus(c)) return { tag: '보너스', why: '보너스 피는 내자마자 내 피가 되고 더미에서 한 장을 새로 뽑아요 (공짜 이득!)' };
     const m = monthOf(c), mLabel = (m + 1) + '월';
     const T = v.table.filter(x => monthOf(x) === m);
     let oppBirds = 0, oppG = 0, oppHong = 0, oppCheong = 0, oppCho = 0;
     for (let q = 0; q < n; q++) if (q !== p) {
-      const ot = info.P[q].t;
-      oppBirds = Math.max(oppBirds, ot.birds);
-      oppG = Math.max(oppG, ot.g);
-      oppHong = Math.max(oppHong, ot.hong);
-      oppCheong = Math.max(oppCheong, ot.cheong);
-      oppCho = Math.max(oppCho, ot.cho);
+      const ot = info.P[q].t, od = info.P[q].dead;                     // 그 상대에게도 이미 막힌 약은 안 셈 (내가 한 장 쥔 약)
+      if (!od.godori) oppBirds = Math.max(oppBirds, ot.birds);
+      if (!od.gwang) oppG = Math.max(oppG, ot.g);
+      if (!od.hong) oppHong = Math.max(oppHong, ot.hong);
+      if (!od.cheong) oppCheong = Math.max(oppCheong, ot.cheong);
+      if (!od.cho) oppCho = Math.max(oppCho, ot.cho);
     }
     let unseenSame = 0;
     for (let i = 0; i < 4; i++) {
@@ -432,22 +473,25 @@
         reasons.push(`${mLabel} 뻑 세 장을 통째로 가져오고 상대에게 피도 뺏어와요`);
       }
       if (capCards.some(x => KIND[x] === GW)) {
-        tag = me.g >= 2 ? '🌟 3광 완성!' : '🌟 광 확보';
-        reasons.push(me.g >= 2 ? '이번에 광을 먹으면 광 점수가 나요!' : oppG >= 2 ? '내 광을 모으면서 상대 광도 견제해요' : '귀한 광을 먼저 챙겨요');
+        const g3 = me.g >= 2 && !dead.gwang;
+        tag = g3 ? '🌟 3광 완성!' : '🌟 광 확보';
+        reasons.push(g3 ? '이번에 광을 먹으면 광 점수가 나요!' : oppG >= 2 ? '상대가 광 2장 — 이 광을 먼저 가져와 막아요' : dead.gwang ? '광 점수는 이미 어렵지만 상대에게 안 주는 게 이득이에요' : '귀한 광을 먼저 챙겨요');
       }
       if (capCards.some(x => BIRD[x])) {
-        if (me.birds >= 2) { tag = '🐦 고도리 완성!'; reasons.push('새 세 마리(고도리 5점)가 완성돼요!'); }
+        if (me.birds >= 2 && !dead.godori) { tag = '🐦 고도리 완성!'; reasons.push('새 세 마리(고도리 5점)가 완성돼요!'); }
         else if (oppBirds >= 2) { tag = '🛡 고도리 방어'; reasons.push('상대가 새 2장을 모아서 이 새를 꼭 먼저 끊어야 해요!'); }
+        else if (dead.godori) reasons.push('고도리는 상대가 새를 가져가 이미 막혔어요 — 열끗 한 장 몫');
         else reasons.push('고도리(새) 발판을 챙겨요');
       }
-      for (const [rType, rName, myCnt, opCnt] of [
-        [R_HONG, '홍단', me.hong, oppHong],
-        [R_CHEONG, '청단', me.cheong, oppCheong],
-        [R_CHO, '초단', me.cho, oppCho],
+      for (const [rType, rName, myCnt, opCnt, isDead] of [
+        [R_HONG, '홍단', me.hong, oppHong, dead.hong],
+        [R_CHEONG, '청단', me.cheong, oppCheong, dead.cheong],
+        [R_CHO, '초단', me.cho, oppCho, dead.cho],
       ]) {
         if (capCards.some(x => RIB[x] === rType)) {
-          if (myCnt >= 2) { tag = `🎗 ${rName} 3점!`; reasons.push(`${rName} 세 장(3점)을 완성해요!`); }
+          if (myCnt >= 2 && !isDead) { tag = `🎗 ${rName} 3점!`; reasons.push(`${rName} 세 장(3점)을 완성해요!`); }
           else if (opCnt >= 2) { tag = `🛡 ${rName} 차단`; reasons.push(`상대의 ${rName} 3점 완성을 막아요!`); }
+          else if (isDead) reasons.push(`${rName}은 상대가 한 장 가져가 이미 막혔어요 — 띠 한 장 몫 (띠는 5장부터 점수)`);
           else reasons.push(`${rName} 띠를 모아요`);
         }
       }
@@ -480,7 +524,33 @@
     }
   }
 
-  function coachHand(v, opts) {
+  // 👀 상대 읽기 (선생님): 모두에게 보인 것만 — 상대가 모으는 약과 빠진 한 장이 어디 있는지 · 먹을 수 있었는데 짝 없이 버린 달 · 흔들어 보인 패
+  const SETNAME = { godori: '🐦 고도리', hong: '홍단', cheong: '청단', cho: '초단' };
+  function readOpp(v) {
+    const p = v.turn, info = analyze(v), U = unseenOf(v), out = [];
+    const where = c => (v.table.indexOf(c) >= 0 ? '바닥에 있어요' : v.hands[p].indexOf(c) >= 0 ? '내 손에 — 버리지 마세요' : '아직 안 나왔어요');
+    for (let q = 0; q < v.n; q++) {
+      if (q === p) continue;
+      const P = info.P[q], bits = [];
+      for (const k in SETS) {
+        if (P.dead[k]) continue;
+        const miss = SETS[k].filter(c => v.cap[q].indexOf(c) < 0);
+        if (miss.length === 1) bits.push(`${SETNAME[k]} 2/3 (남은 ${G.cardName(miss[0])}: ${where(miss[0])})`);
+      }
+      if (!P.dead.gwang && P.t.g === 2) bits.push('광 2장');
+      if (P.t.pi >= 7 && P.t.pi < 10) bits.push(`피 ${P.t.pi}장`);
+      const D = v.decl ? v.decl[q] : 0, ms = [];
+      for (let m = 0; m < 12; m++) if ((D >> m) & 1 && U.some(c => monthOf(c) === m)) ms.push(m + 1);
+      if (ms.length) bits.push(`${ms.join('·')}월 패는 없을 듯 (먹을 수 있었는데 짝 없이 버림)`);
+      const shown = [...new Set(v.hands[q].filter(c => c >= 0).map(c => monthOf(c) + 1))];
+      if (shown.length) bits.push(`흔들어 보인 ${shown.join('·')}월을 쥐고 있어요`);
+      if (bits.length) out.push({ q, text: bits.join(' · ') });
+    }
+    return out;
+  }
+
+  function coachHand(v, opts) { return withK({ read: 1 }, () => coachHand0(v, opts)); }
+  function coachHand0(v, opts) {
     opts = opts || {};
     const rng = opts.rng || G.makeRng(909);
     const L = G.legal(v), p = v.turn;
@@ -549,10 +619,12 @@
       bestName: top ? top.name : '',
       bestWhy: top ? top.why : '',
       bestTag: top ? top.tag : '',
+      read: readOpp(v),
     };
   }
 
-  function coachGoStop(v, opts) {
+  function coachGoStop(v, opts) { return withK({ read: 1 }, () => coachGoStop0(v, opts)); }
+  function coachGoStop0(v, opts) {
     opts = opts || {};
     const rng = opts.rng || G.makeRng(2026);
     const p = v.turn;
@@ -560,7 +632,7 @@
     const samples = opts.samples || 56;
     let sum = 0, wins = 0, gobak = 0;
     for (let k = 0; k < samples; k++) {
-      const w = G.sampleWorld(v, rng);
+      const w = readWorld(G.sampleWorld(v, rng), v, p, rng);
       G.apply(w, A.GO, null);
       rollout(w, rng);
       const r = G.reward(w, p);
@@ -610,6 +682,6 @@
     return null;
   }
 
-  const API = { choose, hint, coachHand, coachGoStop, review, REVIEW, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
+  const API = { choose, hint, coachHand, coachGoStop, readOpp, review, REVIEW, STYLES, easy, normal, hard, fastPolicy, rollout, evalState, posValue, analyze, rankPlays, TIER_IDS: ['easy', 'normal', 'hard'] };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.GostopAI = API;
 })(this);

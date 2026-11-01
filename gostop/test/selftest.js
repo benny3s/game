@@ -267,6 +267,46 @@ section('짝 맞추기 · 쪽 · 뻑 · 따닥 · 싹쓸이 · 고르기');
   eq(s.cap[1].length, 2, '처음 깔린 세 장 먹기: 0장 규칙이면 안 뺏음');
 }
 
+section('상대 읽기 · 선생님 해설 · 타짜 성격 (11-01)');
+{
+  // 바닥에 5·10월이 있는데 짝 없이 1월을 버림 → 5·10월 패는 없을 듯 (모두에게 보인 사실)
+  let s = S({ hands: [[0, 1], [2, 3]], table: [16, 37], deck: [5, 6, 7, 9, 10, 11] });
+  act(s, P(0));
+  eq(G.view(s, 1).decl[0], (1 << 4) | (1 << 9), '짝 없이 버리면 바닥에 있던 달을 적어 둠 (상대 화면에도 보임)');
+  s = S({ hands: [[0, 1], [2, 3]], table: [16, 2], deck: [5, 6, 7, 9, 10, 11] });
+  act(s, P(0));
+  eq(s.decl[0], 0, '먹었으면 적지 않음');
+  eq(G.fastClone(Object.assign(S({}), { decl: [3, 0] })).decl, [3, 0], '빠른 복사도 같이');
+  eq(G.fastClone(Object.assign(S({}), { decl: undefined })).decl, null, '옛 저장 판(decl 없음)도 복사됨');
+  // 화면 그대로: 상대가 6월 청단을 먹어 둠 → 내 9월 청단은 '모아요' 가 아니라 '막혔어요'
+  s = S({ hands: [[33, 0, 12, 20, 40], [4, 8, 24, 28, 44]], table: [34, 16], deck: [5, 6, 7, 9, 10, 11, 13], cap: [[], [21]] });
+  let ch = AI.coachHand(G.view(s, 0));
+  ok(/청단은 상대가 한 장 가져가 이미 막혔어요/.test(ch.byCard[33].why) && !/청단 띠를 모아요/.test(ch.byCard[33].why), '막힌 청단은 모으라고 안 함: ' + ch.byCard[33].why);
+  s = S({ hands: [[33, 0, 12, 20, 40], [4, 8, 24, 28, 44]], table: [34, 16], deck: [5, 6, 7, 9, 10, 11, 13], cap: [[], []] });
+  ok(/청단 띠를 모아요/.test(AI.coachHand(G.view(s, 0)).byCard[33].why), '안 막힌 청단은 모아요');
+  s = S({ hands: [[33, 0, 12, 20, 40], [4, 8, 24, 28, 44]], table: [34, 16], deck: [5, 6, 7, 9, 10, 11, 13], cap: [[], [21, 37]] });
+  ok(/청단 3점 완성을 막아요/.test(AI.coachHand(G.view(s, 0)).byCard[33].why), '상대 청단 2장이면 차단');
+  // 👀 상대 읽기 줄
+  s = S({ hands: [[33, 0, 12, 20, 40], [4, 8, 24, 28, 44]], table: [9, 34], deck: [5, 6, 7, 10, 11, 13, 17, 18, 19], cap: [[], [1, 5]] });
+  s.decl[1] = 1 << 4;
+  const rd = AI.coachHand(G.view(s, 0)).read;
+  eq(rd.length, 1, '상대 한 명 읽기');
+  ok(/홍단 2\/3 \(남은 3월 홍단: 바닥에 있어요\)/.test(rd[0].text), '모으는 약과 빠진 한 장 자리: ' + rd[0].text);
+  ok(/5월 패는 없을 듯/.test(rd[0].text), '짝 없이 버린 달: ' + rd[0].text);
+  // 타짜 성격: 모두 할 수 있는 행동만 · 성격은 그 한 수에만 (끝나면 원래대로)
+  const names = Object.keys(AI.STYLES);
+  eq(names, ['고광렬', '짝귀', '평경장', '아귀'], '타짜 넷 (약한 → 센 순)');
+  let bad = 0;
+  for (let i = 0; i < 12; i++) {
+    const t = G.create({ players: 2 + (i % 2), seed: 300 + i }), rng = G.makeRng(i + 1);
+    for (let g = 0; t.phase !== 'end' && g < 400; g++) { const st = t.turn === 0 ? names[i % 4] : names[(i + 1) % 4]; const a = AI.choose(G.view(t, t.turn), 'hard', { rng, samples: 6, style: st }); if (!G.isLegal(t, a)) bad++; G.apply(t, a, null); }
+  }
+  eq(bad, 0, '타짜 성격: 할 수 없는 행동 없음');
+  const s0 = G.create({ players: 2, seed: 77 }), e0 = AI.evalState(s0, 0).v;
+  AI.choose(G.view(s0, s0.turn), 'hard', { samples: 6, style: '아귀' });
+  eq(AI.evalState(s0, 0).v, e0, '성격은 그 한 수에만 (막기 무게가 원래대로)');
+}
+
 section('피 가져오기 · 마지막 차례');
 {
   let s = S({ hands: [[0, 44], [36, 38]], table: [20], deck: [2, 24], cap: [[], [41]] });
