@@ -219,13 +219,14 @@
       this.tick(); if (this.stop) return 0;
       pvL[ply] = ply;
       const side = pos.side, inChk = qd < 4 && pos.inCheck(side);
+      const forced = inChk || (qd < 4 && pos.bik && pos.rules.bik !== 'off');   // 장군 받는 중 · 빅장을 받은 중: 가만있을 수 없음 (그대로 두면 판이 끝남) → 가만있는 값(stand-pat) 없이 모든 수를 봄
       if (ply >= MAXPLY - 2) return pos.evaluate();
-      if (!inChk) { const sp = pos.evaluate(); if (sp >= beta) return sp; if (sp > alpha) alpha = sp; }
+      if (!forced) { const sp = pos.evaluate(); if (sp >= beta) return sp; if (sp > alpha) alpha = sp; }
       const buf = this.bufs[ply], ms = buf.m; ms.length = 0;
-      genPseudo(pos.b, side, ms, !inChk);
+      genPseudo(pos.b, side, ms, !forced);
       const n = ms.length, sc = buf.s; sc.length = n;
       this.order(ms, sc, n, 0, ply);
-      let best = inChk ? -INF : alpha, legal = 0;
+      let best = forced ? -INF : alpha, legal = 0;
       for (let i = 0; i < n; i++) {
         const m = this.pick(ms, sc, i, n);
         pos.make(m);
@@ -237,7 +238,7 @@
         if (this.stop) return 0;
         if (v > best) { best = v; if (v > alpha) { alpha = v; if (v >= beta) break; } }
       }
-      if (inChk && !legal) return -MATE + ply;
+      if (forced && !legal) return inChk ? -MATE + ply : pos.evaluate();   // (빅장 중인데 둘 수 없으면 가만있는 값)
       return best;
     }
   }
@@ -388,5 +389,5 @@
     return go(depth);
   }
 
-  return { think, explain, perft, hanging, TIERS, MATE, PW, PASS, _Pos: Pos };
+  return { think, explain, perft, hanging, TIERS, MATE, PW, PASS, _Pos: Pos, _Search: Search };
 });

@@ -691,11 +691,12 @@
   }
 
   // 방장: 자리 바꾸기 — 다음 판부터 빠질 자리를 빼고, 방장이 체크한 구경꾼을 최대 인원까지 앉힘. 자리 번호가 달라지면 {keep, add} 를 돌려줌 (전적·자리 목록은 여기서 바꿈)
-  function reseatSeats(ses) {
+  //  noAdd: 구경꾼은 안 앉힘 — 은행 방은 핸드 사이에 앉히면 기본 연습 칩으로 앉고 장부(자리 번호별)에 안 잡혀 장부 손익에 섞임 → 장부를 다시 읽는 새 게임에서만 앉힘
+  function reseatSeats(ses, noAdd) {
     const old = ses.seats, pl = ses.net.players || {};
     let keep = old.map((x, i) => i).filter(i => !old[i].drop);
     const have = new Set(old.map(x => x.uid).filter(Boolean));
-    const fresh = Object.keys(pl).filter(u => !have.has(u) && !(pl[u] && pl[u].watch) && ses.joinPick[u]).sort((a, b) => ((pl[a] && pl[a].t) || 0) - ((pl[b] && pl[b].t) || 0));
+    const fresh = noAdd ? [] : Object.keys(pl).filter(u => !have.has(u) && !(pl[u] && pl[u].watch) && ses.joinPick[u]).sort((a, b) => ((pl[a] && pl[a].t) || 0) - ((pl[b] && pl[b].t) || 0));
     if (keep.length + Math.min(fresh.length, Math.max(0, MAXP - keep.length)) < 2) keep = old.map((x, i) => i);     // 2명 밑으로는 못 빼요
     const add = fresh.slice(0, Math.max(0, MAXP - keep.length));
     if (!add.length && keep.length === old.length) { old.forEach(x => { x.drop = false; }); return null; }
@@ -717,7 +718,7 @@
   }
   // 다음 핸드: 자리가 바뀌면 상태 배열도 새 자리 번호에 맞춰 옮김 (칩은 자리 따라감, 새로 앉은 사람은 기본 칩)
   function reseatForNext(ses) {
-    const prev = ses.S, plan = reseatSeats(ses);
+    const prev = ses.S, plan = reseatSeats(ses, !!ses.bank);
     if (!plan) return;
     const { keep, add } = plan, p = P.fastClone(prev), start = CHIPS.start('online', 1)[0];
     const pick = (arr, def) => keep.map(i => arr[i]).concat(Array.from({ length: add }, () => def));
@@ -947,8 +948,9 @@
       const seatUids = new Set(ses.seats.map(x => x.uid).filter(Boolean));
       const watchers = Object.keys(pl).filter(u => !seatUids.has(u));
       const nameOf2 = u => esc((pl[u] && pl[u].name) || '친구');
-      const wl = watchers.map(u => host ? `<label><input type="checkbox" data-join="${esc(u)}" ${ses.joinPick[u] ? 'checked' : ''}> ${nameOf2(u)}${R.has(u) ? ' ✋' : ''}</label>` : `<span>${nameOf2(u)}${R.has(u) ? ' ✋' : ''}</span>`).join('');
-      rb.innerHTML = `<div class="rdy-row">${seated.join('')}</div>${watchers.length ? `<div class="rdy-w">👀 구경 ${watchers.length}명${host ? ` · 체크하면 다음 판부터 같이 (최대 ${MAXP}명)` : ''}: ${wl}</div>` : ''}`;
+      const canJoin = !ses.bank || over;                               // 은행 방은 새 게임(우승 창)에서만 구경꾼을 앉힘
+      const wl = watchers.map(u => host && canJoin ? `<label><input type="checkbox" data-join="${esc(u)}" ${ses.joinPick[u] ? 'checked' : ''}> ${nameOf2(u)}${R.has(u) ? ' ✋' : ''}</label>` : `<span>${nameOf2(u)}${R.has(u) ? ' ✋' : ''}</span>`).join('');
+      rb.innerHTML = `<div class="rdy-row">${seated.join('')}</div>${watchers.length ? `<div class="rdy-w">👀 구경 ${watchers.length}명${host ? (canJoin ? ` · 체크하면 다음 판부터 같이 (최대 ${MAXP}명)` : ' · 은행 방은 새 게임부터 같이 쳐요') : ''}: ${wl}</div>` : ''}`;
       if (!host) return;
       const need = ses.seats.filter((x, i) => x.ctrl === 'remote' && !isOut(i)), k = need.filter(x => R.has(x.uid)).length, all = k === need.length;
       nb.disabled = !all; nb.textContent = all ? label : `${label} (준비 ${k}/${need.length})`;
@@ -971,7 +973,7 @@
   guestReadyBtn.paint = (ses, key) => {
     const b = ses.readyBtn; if (!b) return;
     const on = readyOf(ses, key).has(ses.net.uid);
-    b.textContent = on ? (ses.spec ? '✅ 신청했어요 · 방장을 기다려요' : '✅ 준비 완료 · 방장을 기다려요') : ses.spec ? '✋ 다음 핸드에 낄래요' : '✋ 준비';
+    b.textContent = on ? (ses.spec ? '✅ 신청했어요 · 방장을 기다려요' : '✅ 준비 완료 · 방장을 기다려요') : ses.spec ? (ses.bank && !/o$/.test(String(key)) ? '✋ 새 게임에 낄래요' : '✋ 다음 핸드에 낄래요') : '✋ 준비';
     b.disabled = on;
   };
   const nameOf = (ses, q) => (ses.seats[q] ? ses.seats[q].name : `자리${q + 1}`);

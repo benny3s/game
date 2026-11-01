@@ -239,6 +239,36 @@ for (let g = 0; g < 25; g++) {
   ok(s.result.payouts[1] > 0, '사이드 팟은 남은 사람 중 최고(9땡)에게');
 }
 
+// 12) 전체 판정이 재경기(구사·동점)여도 사이드 팟은 층마다 따로 판정 — 소액 올인자와 무관한 층은 승자에게 지급
+{
+  const c6Y = findCard(6, 'Y');
+  const run = (hands) => {
+    let s = S.create({ players: 3, seed: 31, stacks: [40, 500, 500] });
+    s.hands = hands.map(h => h.slice());
+    s.turn = 1;
+    s = S.step(s, S.A_HALF).state;
+    s = S.step(s, S.A_CALL).state;
+    s = S.step(s, S.A_CALL).state;
+    let guard = 0;
+    while (s.phase === 'bet' && guard++ < 30) {
+      const L = S.legal(s);
+      s = S.step(s, L.includes(S.A_QUARTER) && s.turn !== 0 ? S.A_QUARTER : S.A_CALL).state;
+    }
+    return s;
+  };
+  // 0번(40냥 올인) 구사 → 메인 팟은 파토, 1번 갑오 vs 2번 8끗 사이드 팟은 1번이 가져가야 함
+  let s = run([[c4T, c9T], [c1P, c8Y], [c2T, c6Y]]);
+  ok(s.phase === 'end', '구사 + 사이드 팟 판 종료');
+  ok(s.coins.reduce((a, b) => a + b, 0) + s.carryPot === 1040, `구사 + 사이드 팟 코인 보존 (${s.coins} + 이월 ${s.carryPot})`);
+  ok(s.result.payouts[1] > 0 && s.result.payouts[0] === 0 && s.result.payouts[2] === 0, `사이드 팟 승자(1번)는 받음 (${s.result.payouts})`);
+  ok(s.carryPot === 3 * s.bets[0] && s.result.carry === s.carryPot, `메인 팟만 이월 (${s.carryPot} / 3×${s.bets[0]})`);
+  ok(s.result.kind === 'showdown' && s.result.winners.join() === '1', '사이드 팟 승자가 있으면 showdown 결과');
+  // 1·2번이 같은 끗(갑오) 동점 → 사이드 팟도 동점이라 전부 이월, 결과는 rematch
+  s = run([[c2T, c4T], [c1P, c8Y], [c3P, c6Y]]);
+  ok(s.phase === 'end' && s.result.kind === 'rematch', '사이드 팟 승자 없음: 재경기 결과');
+  ok(s.coins.reduce((a, b) => a + b, 0) + s.carryPot === 1040 && s.carryPot > 0, `전부 이월 코인 보존 (${s.coins} + 이월 ${s.carryPot})`);
+}
+
 // 11) 6인 AI 대국 60판 — 합법 행동, 정상 종료, 코인 보존, 시간
 {
   let tTotal = 0, rematches = 0;

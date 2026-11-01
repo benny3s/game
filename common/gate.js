@@ -44,13 +44,9 @@ const Gate = (() => {
   const qs = new URLSearchParams(location.search);
   const FORCE_GATE = qs.get("gate") === "1";
   const IS_MOCK = qs.has("mock");
-  const IS_LOCAL = !FORCE_GATE && (
-    location.hostname === "127.0.0.1" ||
-    location.hostname === "localhost" ||
-    location.protocol === "file:" ||
-    qs.has("guest") ||
-    IS_MOCK
-  );
+  const LOCAL_HOST = location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.protocol === "file:";
+  // 11-01: 실서버에서 ?guest·?mock 은 QA 도구(test/qa, 페이지보다 먼저 window.__qa 를 심음)가 연 탭에서만 시험 모드 — 주소만 붙여서는 잠금·방 만들기를 못 끔
+  const IS_LOCAL = !FORCE_GATE && (LOCAL_HOST || ((qs.has("guest") || IS_MOCK) && !!window.__qa));
   // ?room=ABCD (4자리 방 코드)로 초대받아 들어온 손님은 해당 방 세션 동안 임시 허용
   const roomParam = (qs.get("room") || "").trim().toUpperCase();
   const IS_ROOM_GUEST = !FORCE_GATE && /^[A-Z0-9]{4}$/.test(roomParam) && roomParam !== "HOST";
@@ -203,7 +199,7 @@ const Gate = (() => {
   // ── 허용됨 / 허용 안 됨 상태 반영
   // 👥 방문자: 게임·아케이드를 연 모든 기기(둘러보기 손님 포함)를 game_presence/{uid} 에 — 떠날 때 지우지 않고 마지막 시각만 남김
   //   (관리자만 읽음: 아케이드 첫 화면 '👥 방문자' · logs.html) · mode = admin | allowed | bridge | guest
-  let presenceOn = false, presencePut = null, presenceSig = "";
+  let presenceOn = false, presencePut = null, presenceSig = "", presenceRef = null, presenceT = null;
   const presMode = () => (state.isAdmin ? "admin" : state.allowed ? "allowed" : state.isMember || state.role === "bridge_free" ? "bridge" : "guest");
   const profName = () => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } };
   // 🔥 게임별 '열어 본 수' (아케이드 추천 순서용, 누구나 읽음) — 게임 페이지를 연 탭마다 한 번
@@ -217,7 +213,7 @@ const Gate = (() => {
     if (presenceOn || IS_LOCAL || !user) return;
     presenceOn = true;
     try {
-      const ref = db().ref("game_presence/" + user.uid);
+      const ref = presenceRef = db().ref("game_presence/" + user.uid);
       const put = soft => {
         const name = String(state.name || profName() || "손님").slice(0, 16), mode = presMode(), sig = name + "|" + mode;
         if (soft && sig === presenceSig) return;
@@ -226,8 +222,14 @@ const Gate = (() => {
       };
       presencePut = put;
       ref.onDisconnect().update({ t: TS() }).then(() => put(), () => put());
-      setInterval(() => { if (!document.hidden) put(); }, 5 * 60 * 1000);   // 5분마다 '아직 있어요'
+      presenceT = setInterval(() => { if (!document.hidden) put(); }, 5 * 60 * 1000);   // 5분마다 '아직 있어요'
     } catch (e) { presenceOn = false; }
+  }
+  // 계정이 바뀌면(switchUser) 예전 uid 자리 기록을 멈춤 → 다음 startPresence 가 새 uid 로 (예전 자리는 권한이 없어 오류만 남)
+  function stopPresence() {
+    if (presenceRef) { try { presenceRef.onDisconnect().cancel().catch(() => {}); } catch (e) {} }
+    clearInterval(presenceT); presenceT = null;
+    presenceOn = false; presencePut = null; presenceSig = ""; presenceRef = null;
   }
   function applyAllowed(role, exp, name) {
     state.allowed = true;
@@ -286,6 +288,7 @@ const Gate = (() => {
     state.isAdmin = false; state.isMember = false; state.canApprove = false; legacyHost = false;
     if (devWatch) { try { devWatch.off(); } catch (e) {} devWatch = null; }
     watching = false;
+    stopPresence();                                          // 방문자 기록도 새 uid 로 (checkPerm1 → startPresence)
     try { if (checkP) await checkP.catch(() => {}); await checkPermissionsAndWatch(); } catch (e) { console.warn("Gate switch error:", e); }
   }
 
@@ -301,10 +304,11 @@ const Gate = (() => {
       state.isMember = !!(tr && tr.claims && tr.claims.m === 1);   // 💞 베니브릿지 승인 회원 (uid = 회원 id)
     } catch (e) { state.isAdmin = false; state.isMember = false; }
     lsSet(MEMBER_KEY, state.isMember ? user.uid : null);
-    try {
-      const cached = readCachedPass();
-      if (lsGet("game.gate.admin") === "1" || (cached && cached.role === "admin")) state.isAdmin = true;
-    } catch (e) {}
+    // 관리자 = 로그인 토큰(admin:1)만 믿음. 아니면 이 기기의 예전 관리자 표시·캐시를 지움 (관리자 기기에서 다른 계정으로 바뀌어도 관리자로 남던 것)
+    if (!state.isAdmin) {
+      lsSet("game.gate.admin", null);
+      const cached = readCachedPass(); if (cached && cached.role === "admin") writeCachedPass(null);
+    }
 
     if (state.isAdmin) {
       state.canApprove = true;
@@ -408,7 +412,7 @@ const Gate = (() => {
   // 가입 신청: 닉네임 + PIN → 게임 공통 프로필(me.js GME) 만들기·이어 받기. 아케이드 첫 화면처럼 me.js 가 없는 곳은 불러옴
   async function registerProfile(name, pin) {
     await ensureFirebase();
-    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=12"); } catch (e) {} }
+    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=13"); } catch (e) {} }
     if (!window.GME || !GME.register) return { name };
     return GME.register(db(), name, pin);
   }
@@ -1091,7 +1095,7 @@ const Gate = (() => {
     adminEl.querySelector("#bgProfile").onclick = async () => {
       try {
         await ensureFirebase();
-        if (!window.GME && GATE_BASE) await loadScript(GATE_BASE + "me.js?v=12");
+        if (!window.GME && GATE_BASE) await loadScript(GATE_BASE + "me.js?v=13");
         if (!window.GME) throw new Error("프로필을 불러오지 못했어요");
         const m = GME.me ? await GME.manage(db()) : await GME.pick(db(), { canClose: true });
         if (m && m.name) { state.name = m.name; lsSet(NAME_KEY, m.name); notify(); }

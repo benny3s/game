@@ -270,6 +270,7 @@
   // 행동 하나 적용 (혼자·방장)
   async function doAction(ses, a) {
     const prev = ses.S;
+    if (a === A_THROW && ses.cfg.mode === 'online') prev.rng = (prev.rng ^ rand32()) | 0;   // 친구랑: 던질 때마다 난수 상태에 새 값을 섞음 (씨앗을 알아내도 다음 윷은 못 맞힘 — 방장 기기에서만 던지니 판 동기화엔 영향 없음)
     const { state, events } = Y.step(prev, a);
     ses.S = state; ses.seq++;
     if (state.phase === 'end' && prev.phase !== 'end') ses.wins[state.winner] = (ses.wins[state.winner] || 0) + 1;   // 판 이긴 횟수 (점수판)

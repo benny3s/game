@@ -277,7 +277,7 @@
       const nxt = eval7(known.concat([cid]));
       if (nxt.cat > cur.cat) {
         improveOuts++;
-        if (nxt.cat >= 5 && cur.cat < 5) flushOuts++;
+        if ((nxt.cat === 5 || nxt.cat >= 8) && cur.cat < 5) flushOuts++;   // 플러시(또는 스트레이트 플러시)만 — 풀하우스·포카드 아웃은 제외
         else if (nxt.cat === 4 && cur.cat < 4) straightOuts++;
       }
     }
@@ -514,7 +514,8 @@
     s.bbSeat = bbSeat;
     postChips(s, sbSeat, s.sb);
     postChips(s, bbSeat, s.bb);
-    s.curBet = s.bb;
+    // 맞출 금액 = 실제 낸 블라인드 중 큰 쪽 (BB 가 짧은 칩으로 올인이면 BB 보다 작을 수 있음 → 이미 덮은 SB 에게 콜을 강요하지 않음)
+    s.curBet = Math.max(s.bets[sbSeat], s.bets[bbSeat]);
     s.lastRaise = s.bb;
     // 프리플랍 첫 액션은 BB 다음 사람 (헤즈업이면 딜러/SB)
     s.turn = nextActive(s, bbSeat);

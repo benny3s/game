@@ -58,7 +58,8 @@
     }
     for (let k = 0; k < N; k++) {
       const mid = st.ang + (k + 0.5) / N * TAU, dx = Math.cos(mid), dy = Math.sin(mid);
-      const b = hx * dx + hy * dy, c = hx * hx + hy * hy - R * R;
+      const px = hx - R, py = hy - R;                                     // slither 세계는 (grd,grd) 가 중심인 원 (helper.js 는 원점이 중심이라 그대로 쓰면 안 맞음)
+      const b = px * dx + py * dy, c = px * px + py * py - R * R;
       const wall = -b + Math.sqrt(Math.max(b * b - c, 0));
       o[k * 4] = 1 - minF[k] / V; o[k * 4 + 1] = Math.min(cnt[k] / 8, 1);
       o[k * 4 + 2] = 1 - minB[k] / V; o[k * 4 + 3] = 1 - Math.min(wall, V) / V;

@@ -196,6 +196,19 @@ function playGame(opt, tiers, aiSeed) {
   const { state } = Y.step(s0, A_THROW);
   ok(s0.pool.length === 0 && state.throwNo === 1, 'step 은 원래 상태를 안 바꿈');
   ok(Y.view(state).rng === 0 && state.rng !== 0, 'view 는 난수 상태를 가림');
+  { // 남에게 보내는 view 로 앞으로 나올 윷을 미리 계산할 수 없어야 함 (mulberry32 는 상태 = 씨앗 + 부른 횟수×상수 → 씨앗 + 던진 횟수를 알면 다음 윷이 나옴)
+    const C0 = 0x6D2B79F5, kinds = [];
+    let bonus = null;                                                 // 윷·모가 나와 한 번 더 던지는 상태 (던진 횟수 > 0 인 던지기 차례)
+    for (let sd = 1; sd < 400 && !bonus; sd++) { const r = Y.step(Y.create({ teams: 2, seed: 20241100 + sd }), A_THROW); if (r.state.phase === 'throw' && r.state.throwNo === 1) bonus = r.state; }
+    for (const g of [Y.create({ teams: 2, seed: 20241101 }), bonus]) {
+      if (!g) { ok(false, '(시험 조건) 한 번 더 던지는 상태를 못 찾음'); continue; }
+      const v = Y.view(g);
+      const attack = Object.assign(JSON.parse(JSON.stringify(v)), { rng: (v.seed + 4 * v.throwNo * C0) | 0 });   // 구경하는 쪽이 아는 것만으로 난수 상태를 복원
+      ok(v.seed !== g.seed && JSON.stringify(v).indexOf(String(g.seed)) < 0, 'view 에는 씨앗이 없음 (던진 횟수 ' + g.throwNo + ', 실제 씨앗 ' + g.seed + ')');
+      const real = Y.step(g, A_THROW).events.find(e => e.type === 'throw'), guess = Y.step(attack, A_THROW).events.find(e => e.type === 'throw');
+      ok(JSON.stringify(real.sticks) !== JSON.stringify(guess.sticks), 'view 만으로는 다음 윷(막대 4개)을 맞힐 수 없음 (던진 횟수 ' + g.throwNo + ': 실제 ' + real.sticks + ' · 짐작 ' + guess.sticks + ')');
+    }
+  }
   ok(JSON.parse(JSON.stringify(state)).pos[0].length === 4, '상태는 JSON 그대로');
   const o = Y.obs(state, 1);
   ok(o.length === Y.OBS_LEN && o instanceof Float32Array, '관찰 길이 ' + Y.OBS_LEN);

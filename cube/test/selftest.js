@@ -293,5 +293,32 @@ const AI = require(path.join(__dirname, "..", "ai.js"));
   ok(w && w.kind === "win" && w.id === T2(3, 1) && /베니/.test(w.text), "끝낼 수 있으면 '베니' 추천: " + (w && w.text));
 }
 
+{
+  // 남이 가져간 버림 타일 기억 — act 만으로는 내 차례 사이의 남의 take 가 안 보임 → 한 수마다 AI.observe 로 모든 자리 기억에 알림
+  ok(typeof AI.observe === "function", "AI.observe(state, mem) 있음 (한 수마다 부르면 남의 take 도 기억)");
+  const obs = typeof AI.observe === "function" ? AI.observe : () => {};
+  const lv = ["hard", "normal", "hard", "normal"], sum = m => m.took.reduce((a, b) => a + b, 0);
+  let real = 0, seenAct = 0, seenObs = [0, 0, 0, 0], games = 6;
+  for (let g = 0; g < games; g++) {
+    let s = Cube.create({ players: 4, rule: g % 2 ? "classic" : "easy", seed: 3100 + g });
+    const memsA = [0, 1, 2, 3].map(i => AI.newMemory(g * 10 + i));      // act 만 (예전 방식: 자기 차례에만 봄)
+    const memsB = [0, 1, 2, 3].map(i => AI.newMemory(g * 10 + i));      // act + 한 수마다 observe (main.js 방식)
+    let guard = 0;
+    while (s.phase !== "over" && guard++ < 3000) {
+      const p = s.turn;
+      AI.act(s, p, lv[p], memsA[p]);
+      const a = AI.act(s, p, lv[p], memsB[p]);
+      const r = Cube.step(s, a);
+      for (const e of r.events) if (e.type === "draw" && e.from === "take" && AI.faceOf(s, e.id) >= 0) real++;
+      s = r.state;
+      for (const m of memsB) obs(s, m);
+    }
+    for (let q = 0; q < 4; q++) { seenAct += sum(memsA[q]) / 4; seenObs[q] += sum(memsB[q]); }
+  }
+  ok(real > 20, "시험 판에서 가져간 타일이 충분함 (" + real + ")");
+  ok(seenObs.every(x => x === real), "observe: 모든 자리가 실제 가져간 " + real + "번을 다 기억 (" + seenObs.join("/") + ")");
+  ok(seenAct < real, "act 만 쓰면 남의 take 를 놓침 (" + Math.round(seenAct) + "/" + real + ")");
+}
+
 console.log(`${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

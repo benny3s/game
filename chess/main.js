@@ -132,7 +132,7 @@
   let mainAI = null;
   function loadMainAI() {
     if (mainAI) return mainAI;
-    mainAI = new Promise((ok, bad) => { if (window.ChessAI) return ok(window.ChessAI); const sc = document.createElement('script'); sc.src = 'ai.js?v=3'; sc.onload = () => ok(window.ChessAI); sc.onerror = bad; document.head.appendChild(sc); });
+    mainAI = new Promise((ok, bad) => { if (window.ChessAI) return ok(window.ChessAI); const sc = document.createElement('script'); sc.src = 'ai.js?v=4'; sc.onload = () => ok(window.ChessAI); sc.onerror = bad; document.head.appendChild(sc); });
     return mainAI;
   }
   function makeWorker() {
@@ -142,7 +142,7 @@
     const get = () => {
       if (w || !okW) return w;
       try {
-        w = new Worker('ai-worker.js?v=3');
+        w = new Worker('ai-worker.js?v=4');
         w.onmessage = e => { const x = waits.get(e.data.id); if (x) { waits.delete(e.data.id); x.ok(e.data.res); } };
         w.onerror = () => kill();
       } catch (e) { w = null; okW = false; }
@@ -256,6 +256,7 @@
   const humanTurn = () => {
     if (!G || G.over || G.thinking) return false;
     const c = C.turn(G.s), pl = G.players[c];
+    if (G.clock && G.clock[c] <= 0) return false;                    // 시계가 0 이면 못 둠 (손님은 방장의 시간 초과 소식을 기다림)
     if (G.mode === 'online') return G.me === c;
     return pl.kind === 'human';
   };
@@ -1138,7 +1139,7 @@
   }
   function applyEnd(e) {
     if (!G || G.over) return;
-    if (e.reason === 'time') act({ timeout: C.turn(G.s) }, { from: 'remote' });
+    if (e.reason === 'time') act({ timeout: e.winner ? other(e.winner) : C.turn(G.s) }, { from: 'remote' });   // 진 쪽은 방장이 알린 승자로 (차례는 화면마다 다를 수 있음)
     else if (e.reason === 'resign') act({ resign: e.winner ? other(e.winner) : C.turn(G.s) }, { from: 'remote' });
   }
   function applySync(m) {

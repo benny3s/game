@@ -396,21 +396,23 @@
       el.innerHTML = "";
       opt.settings.render(el, c, net.isHost, patch => { if (!net.isHost) return; cfg = { ...c, ...patch }; net.setPhase("lobby", cfg); drawSettings(); });
     } else if (opt.buildConfig && opt.buildConfig.length >= 1 && net.isHost) {
-      if (el._built) return;                                  // 한 번만 그림 (다시 그리면 고른 값이 처음으로 돌아가고 듣기가 겹침)
-      el._built = true; el.innerHTML = "";
-      const fn = opt.buildConfig(el);
-      if (typeof fn === "function") {
-        opt._getBuiltCfg = fn;
-        const upd = () => setTimeout(() => { if (!net || !net.isHost || playing) return; cfg = keepCommon(fn()); net.setPhase("lobby", cfg); }, 0);
-        el.addEventListener("click", upd); el.addEventListener("change", upd);
-        upd();                                                // 보이는 값 = 쓰는 값 (대기실로 돌아왔을 때도)
+      if (!el._built) {                                       // 한 번만 그림 (다시 그리면 고른 값이 처음으로 돌아가고 듣기가 겹침) — 아래 요약은 매번
+        el._built = true; el.innerHTML = "";
+        const fn = opt.buildConfig(el);
+        if (typeof fn === "function") {
+          opt._getBuiltCfg = fn;
+          const upd = () => setTimeout(() => { if (!net || !net.isHost || playing) return; cfg = keepCommon(fn()); net.setPhase("lobby", cfg); }, 0);
+          el.addEventListener("click", upd); el.addEventListener("change", upd);
+          upd();                                              // 보이는 값 = 쓰는 값 (대기실로 돌아왔을 때도)
+        }
       }
     } else if (opt.extraOptionsHtml && net.isHost) {
-      if (el._built) return;
-      el._built = true; el.innerHTML = opt.extraOptionsHtml;
-      el.addEventListener("change", () => {
-        if (opt.buildConfig) { cfg = keepCommon(opt.buildConfig()); net.setPhase("lobby", cfg); }
-      });
+      if (!el._built) {
+        el._built = true; el.innerHTML = opt.extraOptionsHtml;
+        el.addEventListener("change", () => {
+          if (opt.buildConfig) { cfg = keepCommon(opt.buildConfig()); net.setPhase("lobby", cfg); }
+        });
+      }
     } else if (opt.renderConfig) {
       el.innerHTML = `<p class="arn-soft" style="text-align:center">${esc(opt.renderConfig(c))}</p>`;
     } else el.innerHTML = "";

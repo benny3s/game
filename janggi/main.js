@@ -192,7 +192,7 @@
   let mainAI = null;
   function loadMainAI() {
     if (mainAI) return mainAI;
-    mainAI = new Promise((ok, bad) => { if (window.JanggiAI) return ok(window.JanggiAI); const sc = document.createElement('script'); sc.src = 'ai.js?v=1'; sc.onload = () => ok(window.JanggiAI); sc.onerror = bad; document.head.appendChild(sc); });
+    mainAI = new Promise((ok, bad) => { if (window.JanggiAI) return ok(window.JanggiAI); const sc = document.createElement('script'); sc.src = 'ai.js?v=2'; sc.onload = () => ok(window.JanggiAI); sc.onerror = bad; document.head.appendChild(sc); });
     return mainAI;
   }
   function makeWorker() {
@@ -202,7 +202,7 @@
     const get = () => {
       if (w || !okW) return w;
       try {
-        w = new Worker('ai-worker.js?v=1');
+        w = new Worker('ai-worker.js?v=2');
         w.onmessage = e => { const x = waits.get(e.data.id); if (x) { waits.delete(e.data.id); x.ok(e.data.res); } };
         w.onerror = () => kill();
       } catch (e) { w = null; okW = false; }
@@ -1042,7 +1042,7 @@
     const rec = g.rec, full = C.fromJSON({ rules: rec.rules, moves: rec.moves }), n = full.plies, base = full.moves.length - n;
     const plays = full.hist.filter(h => h.type === 'move'), need = new Set();
     plays.forEach((h, k) => { if (h.side === g.me && !h.pass) { need.add(k); need.add(k + 1); } });
-    let w; try { w = new Worker('ai-worker.js?v=1'); } catch (e) { return; }
+    let w; try { w = new Worker('ai-worker.js?v=2'); } catch (e) { return; }
     let seq = 0; const waits = new Map();
     w.onmessage = e => { const f = waits.get(e.data && e.data.id); if (f) { waits.delete(e.data.id); f(e.data.res); } };
     w.onerror = () => { for (const [, f] of waits) f(null); waits.clear(); };

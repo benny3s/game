@@ -365,7 +365,8 @@
   function applyShot(state, action, opt) {
     const s = clone(state);
     if (s.phase !== 'play') return { state: s, sim: null, result: { ok: false, msg: '판이 끝났어요' } };
-    const act = { angle: +action.angle || 0, power: Math.max(0.01, Math.min(1, +action.power || 0)), spinX: +action.spinX || 0, spinY: +action.spinY || 0 };
+    const fin = v => (Number.isFinite(+v) ? +v : 0);   // 손님이 보낸 값: 유한한 수만 (문자열 '1e999' 가 Infinity 가 돼 공이 NaN 이 되는 것을 막음)
+    const act = { angle: fin(action.angle), power: Math.max(0.01, Math.min(1, fin(action.power))), spinX: fin(action.spinX), spinY: fin(action.spinY) };
     const cueId = cueOf(s, s.turn);
     if (s.ballInHand) {
       const pl = action.place || [s.balls[cueId].x, s.balls[cueId].y];

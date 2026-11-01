@@ -98,17 +98,17 @@
         const n = inp.value.trim().slice(0, 6); if (!n) return;
         busy = true; msg.textContent = "";
         try {
-          const pid = db.ref(P + "gp/players").push().key;
-          const r = await db.ref(P + "gp/names/" + nameKey(n)).transaction(cur => cur == null ? pid : undefined);
-          if (!r.committed) {
-            const other = r.snapshot.val(), p = (await db.ref(P + "gp/players/" + other).get()).val();
-            if (await claim(db, other, (p && p.n) || n)) save({ pid: other, name: (p && p.n) || n }); else { busy = false; return; }
-          } else {
+          // 11-01: 새 이름은 PIN 을 먼저 받고 이름·프로필을 한 번에 씀 (예전엔 이름부터 잡아서, PIN 치다 새로 고침하면 '유령 이름'이 남음 — 규칙상 PIN 없는 이름은 못 지움)
+          let other = (await db.ref(P + "gp/names/" + nameKey(n)).get()).val();
+          if (!other) {
             const pin = await askPin({ title: `🔒 '${n}' PIN 4자리 정하기`, sub: "다른 기기에서 이 이름으로 이어 할 때만 물어요. 이 기기에서는 다시 안 물어요." });
-            if (!pin) { await db.ref(P + "gp/names/" + nameKey(n)).remove().catch(() => {}); busy = false; return; }
-            await createProfile(db, pid, n, pin);
-            save({ pid, name: n });
+            if (!pin) { busy = false; return; }
+            const r = await createNamed(db, n, pin);
+            if (r.pid) { save({ pid: r.pid, name: n }); done(me); return; }
+            other = r.other;                                    // 그 사이 누가 먼저 만듦 → 있는 이름 고르기
           }
+          const p = (await db.ref(P + "gp/players/" + other).get()).val();
+          if (await claim(db, other, (p && p.n) || n)) save({ pid: other, name: (p && p.n) || n }); else { busy = false; return; }
           done(me);
         } catch (err) { msg.textContent = "저장하지 못했어요: " + err.message; busy = false; }
       });
@@ -153,15 +153,25 @@
     catch (e) { if (isDenied(e)) return false; throw e; }
   }
   // PIN 이 없던 프로필에 처음 정함 (지문 · 이 기기 확인 · '있음' 표시를 한 번에)
-  async function setFirstPin(db, pid, pin) {
+  //   n: 프로필에 이름(n)이 없으면(예전 판이 남긴 '유령 이름' — names 만 있음) 같이 채움 (규칙이 n 없는 프로필을 안 받음)
+  async function setFirstPin(db, pid, pin, n) {
     const h = await pinHash(pid, pin), uid = uidOf(db);
     if (!uid) throw new Error("로그인 확인 중이에요. 잠시 뒤에 다시 해 주세요.");
-    await db.ref(P + "gp").update({ ["pins/" + pid]: h, ["pinchk/" + pid + "/" + uid]: h, ["players/" + pid + "/hp"]: true });
+    const up = { ["pins/" + pid]: h, ["pinchk/" + pid + "/" + uid]: h, ["players/" + pid + "/hp"]: true };
+    if (n) up["players/" + pid + "/n"] = String(n).slice(0, 6);
+    await db.ref(P + "gp").update(up);
   }
-  async function createProfile(db, pid, n, pin) {
+  // 새 닉네임: 이름 자리(names)·프로필·PIN 을 한 번에 씀 → 끊겨도 반쯤 남지 않음 → { pid } · 이미 있는 이름이면(규칙이 거절) { other: 그 pid }
+  async function createNamed(db, n, pin) {
+    const pid = db.ref(P + "gp/players").push().key, key = nameKey(n);
     const TS = firebase.database.ServerValue.TIMESTAMP, h = await pinHash(pid, pin), uid = uidOf(db);
     if (!uid) throw new Error("로그인 확인 중이에요. 잠시 뒤에 다시 해 주세요.");
-    await db.ref(P + "gp").update({ ["players/" + pid]: { n, c: TS, l: TS, hp: true }, ["pins/" + pid]: h, ["pinchk/" + pid + "/" + uid]: h });
+    try { await db.ref(P + "gp").update({ ["names/" + key]: pid, ["players/" + pid]: { n, c: TS, l: TS, hp: true }, ["pins/" + pid]: h, ["pinchk/" + pid + "/" + uid]: h }); return { pid }; }
+    catch (e) {
+      const other = isDenied(e) ? (await db.ref(P + "gp/names/" + key).get().catch(() => null)) : null;
+      if (other && other.val()) return { other: other.val() };
+      throw e;
+    }
   }
   // 예전 PIN(gp/players/{pid}/h — 누구나 읽던 지문) → 새 자리(gp/pins)로 옮김. 이 기기가 그 이름을 쓰고 있거나 방금 PIN 을 맞췄을 때만
   const isLegacy = rec => !!(rec && rec.h && !rec.hp);
@@ -179,7 +189,7 @@
     if (!hasPin(rec)) {
       const pin = await askPin({ title: `🔒 '${name}' PIN 정하기`, sub: "이 이름에 아직 PIN 이 없어요. 4자리를 정하면 다른 기기에서 이어 할 때 물어요." });
       if (!pin) return false;
-      await setFirstPin(db, pid, pin);
+      await setFirstPin(db, pid, pin, rec.n ? "" : name);
       return true;
     }
     for (;;) {
@@ -201,16 +211,10 @@
     if (me && me.pid && nameKey(me.name) === nameKey(n)) { touch(db); return { pid: me.pid, name: me.name, isNew: false }; }
     if (!/^\d{4}$/.test(String(pin || ""))) throw new Error("PIN 숫자 4자리를 적어 주세요.");
     if (Date.now() < missUntil) throw new Error(missMsg());
-    const pid = db.ref(P + "gp/players").push().key;
-    const r = await db.ref(P + "gp/names/" + nameKey(n)).transaction(cur => cur == null ? pid : undefined);
-    if (r.committed) {
-      try { await createProfile(db, pid, n, pin); }
-      catch (e) { await db.ref(P + "gp/names/" + nameKey(n)).remove().catch(() => {}); throw e; }
-      save({ pid, name: n });
-      return { pid, name: n, isNew: true };
-    }
-    const other = r.snapshot.val(), rec = (await db.ref(P + "gp/players/" + other).get()).val() || {};
-    if (!hasPin(rec)) await setFirstPin(db, other, pin);
+    const r = await createNamed(db, n, pin);                  // 이름·프로필·PIN 한 번에 (실패해도 이름만 남지 않음)
+    if (r.pid) { save({ pid: r.pid, name: n }); return { pid: r.pid, name: n, isNew: true }; }
+    const other = r.other, rec = (await db.ref(P + "gp/players/" + other).get()).val() || {};
+    if (!hasPin(rec)) await setFirstPin(db, other, pin, rec.n ? "" : n);
     else if (isLegacy(rec) && (await pinHash(other, pin)) === rec.h) await migrateLegacy(db, other, rec.h).catch(() => {});
     else if (isLegacy(rec) || !(await prove(db, other, pin))) {
       miss();
@@ -225,8 +229,9 @@
   // ✏️ 닉네임 바꾸기 · 🔒 PIN 바꾸기 — 둘 다 '지금 PIN' 으로 본인 확인 (서버 규칙이 pinchk 로 확인)
   async function proveOrThrow(db, pid, pin) {
     if (Date.now() < missUntil) throw new Error(missMsg());
-    if (!/^\d{4}$/.test(String(pin || ""))) throw new Error("지금 PIN 숫자 4자리를 적어 주세요.");
     const rec = (await db.ref(P + "gp/players/" + pid).get()).val() || {};
+    if (!hasPin(rec)) throw new Error("이 닉네임은 아직 PIN 이 없어요. 먼저 '🔒 PIN 바꾸기'에서 새 PIN 만 적어 정해 주세요.");   // PIN 이 지워진 이름 — 틀린 횟수로 안 셈
+    if (!/^\d{4}$/.test(String(pin || ""))) throw new Error("지금 PIN 숫자 4자리를 적어 주세요.");
     if (isLegacy(rec)) {
       if ((await pinHash(pid, pin)) !== rec.h) { miss(); throw new Error("지금 PIN 이 달라요."); }
       await migrateLegacy(db, pid, rec.h);
@@ -316,7 +321,7 @@
   window.GME = { get me() { return me; }, P, ensure, pick, register, manage, rename, changePin, loadAll, onChange: f => listeners.push(f), nameKey };
   if (typeof document !== "undefined" && !window.Gate) {
     const cur = document.currentScript && document.currentScript.src;
-    const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=13") : "../common/gate.js?v=13";
+    const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=16") : "../common/gate.js?v=16";
     const gs = document.createElement("script");
     gs.src = base;
     document.head.appendChild(gs);

@@ -435,6 +435,20 @@ section('AI · 선생님');
   ok(!th.over && !th.bik, '중급: 점수에서 뒤지면 빅장을 풀음', `${rh.move}`);
 }
 
+{ // 정지 탐색(qs)은 빅장 상태를 알아야 함: 빅장 중인 쪽은 가만있을 수 없음 (그대로 두면 판이 끝나는 규칙) → 가만있는 값(stand-pat)으로 치면 안 됨
+  //   한 궁이 두 차(d·f줄)에 막혀 움직일 곳이 e2 뿐 — 거기로 가도 계속 마주 봐서 무승부 규칙이면 끝(0). 가만있는 값으로 치면 한이 기물 하나 없이 몰려 큰 마이너스가 됨
+  const g = { fen: '4k4/9/9/9/3R1R3/9/9/9/9/4K4 h', rules: { bik: 'draw' } };
+  const st = C.fromJSON(g);
+  const mvs = C.legal(st).map(x => x.uci).filter(u => u !== 'pass');   // 한수 쉼은 빅장을 못 풂
+  ok(mvs.length === 1 && mvs[0] === '1525', '(시험 조건) 한 궁이 갈 수 있는 곳은 한 곳뿐', mvs.join(' '));
+  const pos = new AI._Pos(st); pos.bik = true;
+  const S = new AI._Search(pos, {});
+  const v = S.qs(-32000, 32000, 1, 0);
+  ok(v === 0, `정지 탐색: 빅장 중이고 풀 수 없으면 가만있는 값이 아니라 규칙 결과(무승부 0)로 침 (값 ${v})`);
+  const pos2 = new AI._Pos(st);                                  // 빅장 상태가 아니면 그대로 가만있는 값 (바뀌면 안 됨)
+  ok(new AI._Search(pos2, {}).qs(-32000, 32000, 1, 0) === pos2.evaluate(), '정지 탐색: 빅장이 아닐 때는 예전처럼 가만있는 값');
+}
+
 // ════════ 9) AI 선생님 흐름: 👀 상대 수 읽기 ════════
 section('AI 선생님 흐름 (상대 수 읽기 · 노림 · 추천이 맞서는 법)');
 {

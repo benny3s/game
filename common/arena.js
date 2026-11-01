@@ -54,8 +54,10 @@ const Arena = (() => {
 
   const GUEST = new URLSearchParams(location.search).has("guest");
   const LOCAL = location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.protocol === "file:";
+  // 11-01: ?guest 는 시험 공간(test/arena)만 바꿈 — 방 만들기 권한까지 주는 건 로컬이나 QA 도구가 연 탭(페이지보다 먼저 window.__qa)만 (gate.js 와 같음)
+  const TEST_HOST = GUEST && (LOCAL || !!window.__qa);
   const ROOT = GUEST ? "test/arena/" : "arena/";
-  let app = null, loading = null, user = null, offset = 0, adminFlag = false, hostFlag = GUEST || LOCAL;
+  let app = null, loading = null, user = null, offset = 0, adminFlag = false, hostFlag = TEST_HOST || LOCAL;
   const load = src => {
     const map = (window.__fbScriptLoads = window.__fbScriptLoads || {});
     if (map[src]) return map[src];
@@ -73,10 +75,9 @@ const Arena = (() => {
       const tr = await Promise.race([user.getIdTokenResult(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000))]);
       adminFlag = !!(tr && tr.claims && tr.claims.admin === 1);
     } catch (e) { adminFlag = false; }
-    try {
-      if (localStorage.getItem("game.gate.admin") === "1") adminFlag = true;
-    } catch (e) {}
-    if (adminFlag || GUEST || LOCAL) { hostFlag = true; return; }
+    // 관리자 = 토큰(admin:1) 또는 Gate 가 토큰으로 확인한 것만 (이 기기의 예전 표시 game.gate.admin 은 안 믿음 — 계정이 바뀌어도 남아서)
+    if (!adminFlag && window.Gate && Gate.state && Gate.state.isAdmin === true) adminFlag = true;
+    if (adminFlag || TEST_HOST || LOCAL) { hostFlag = true; return; }
     // 방 만들기 = 관리자 · 허용된 기기(game_devices 활성·안 끝남) · 옛 가족 방장(arena_hosts — 계속 허용으로 침)
     const get = path => Promise.race([app.database().ref(path).get(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000))]);
     let ok = false;
@@ -178,12 +179,21 @@ const Arena = (() => {
     };
   }
 
+  // ICE 후보: 상대 설명(offer·answer)을 넣기 전에 온 것은 모았다가 넣은 뒤 한꺼번에 (먼저 넣으면 오류로 버려져 직접 연결이 안 되고 서버 경유로 감)
+  function iceQ(pc) {
+    const wait = [];
+    const put = c => { pc.addIceCandidate(c).catch(() => {}); };
+    return {
+      add(v) { let c; try { c = JSON.parse(v); } catch (_) { return; } if (pc.remoteDescription) put(c); else wait.push(c); },
+      flush() { for (const c of wait.splice(0)) put(c); },
+    };
+  }
   // ── WebRTC: 방장 쪽 연결 하나 (친구 한 명). g = 늦은 건 버림, r = 꼭 도착
   function hostPeer(room, uid, onMsg, onOpen) {
     const pc = new RTCPeerConnection(ICE);
     const dc = pc.createDataChannel("g", { ordered: false, maxRetransmits: 0 });
     const rc = pc.createDataChannel("r", { ordered: true });
-    const ref = room.child(`rtc/${uid}`), S = subs(), born = performance.now();
+    const ref = room.child(`rtc/${uid}`), S = subs(), born = performance.now(), ice = iceQ(pc);
     pc.onicecandidate = e => { if (e.candidate) ref.child("ice_h").push(JSON.stringify(e.candidate)); };
     const recv = e => { try { onMsg(JSON.parse(e.data)); } catch (_) {} };
     dc.onmessage = recv; rc.onmessage = recv;
@@ -192,8 +202,8 @@ const Arena = (() => {
       await ref.remove();
       const offer = await pc.createOffer(); await pc.setLocalDescription(offer);
       await ref.child("offer").set(JSON.stringify(pc.localDescription));
-      S.on(ref.child("answer"), "value", async s => { if (s.exists() && !pc.currentRemoteDescription) { try { await pc.setRemoteDescription(JSON.parse(s.val())); } catch (_) {} } });
-      S.on(ref.child("ice_c"), "child_added", s => { pc.addIceCandidate(JSON.parse(s.val())).catch(() => {}); });
+      S.on(ref.child("answer"), "value", async s => { if (s.exists() && !pc.currentRemoteDescription) { try { await pc.setRemoteDescription(JSON.parse(s.val())); ice.flush(); } catch (_) {} } });
+      S.on(ref.child("ice_c"), "child_added", s => ice.add(s.val()));
     })().catch(() => {});
     const age = () => performance.now() - born;
     const ch = rel => rel ? (rc.readyState === "open" ? rc : null) : (dc.readyState === "open" ? dc : null);
@@ -209,7 +219,7 @@ const Arena = (() => {
   function clientPeer(room, uid, onMsg, onOpen, onRenew) {
     const pc = new RTCPeerConnection(ICE);
     let dc = null, rc = null, applied = null;
-    const ref = room.child(`rtc/${uid}`), S = subs();
+    const ref = room.child(`rtc/${uid}`), S = subs(), ice = iceQ(pc);
     pc.onicecandidate = e => { if (e.candidate) ref.child("ice_c").push(JSON.stringify(e.candidate)); };
     pc.ondatachannel = e => {
       const c = e.channel;
@@ -223,12 +233,12 @@ const Arena = (() => {
       if (applied) { if (s.val() !== applied && onRenew) onRenew(); return; }
       applied = s.val();
       try {
-        await pc.setRemoteDescription(JSON.parse(applied));
+        await pc.setRemoteDescription(JSON.parse(applied)); ice.flush();
         const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
         await ref.child("answer").set(JSON.stringify(pc.localDescription));
       } catch (_) {}
     });
-    S.on(ref.child("ice_h"), "child_added", s => { pc.addIceCandidate(JSON.parse(s.val())).catch(() => {}); });
+    S.on(ref.child("ice_h"), "child_added", s => ice.add(s.val()));
     const open = () => !!dc && !!rc && dc.readyState === "open" && rc.readyState === "open";
     return {
       open,

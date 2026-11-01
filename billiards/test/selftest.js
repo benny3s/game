@@ -297,5 +297,28 @@ section('복기 재현');
   }
 }
 
+// 10) 잘못된 값 막기: 손님이 보낸 샷에 유한하지 않은 수가 와도 공이 NaN 이 되면 안 됨 (JSON 으로는 '1e999' 같은 문자열이 Infinity 가 됨)
+section('샷 값 검사');
+{
+  const finite = st => st.balls.every(b => Number.isFinite(b.x) && Number.isFinite(b.y));
+  const bad = ['1e999', '-1e999', Infinity, NaN, 'abc', null, {}, [1]];
+  for (const mode of ['3c', '8ball']) {
+    for (const key of ['angle', 'power', 'spinX', 'spinY']) {
+      let allOk = true;
+      for (const v of bad) {
+        const s = B.create({ mode, seed: 11 });
+        const act = { angle: 0.5, power: 0.5, spinX: 0, spinY: 0, place: [0.5, s.balls[0].y] }; act[key] = v;
+        let r; try { r = B.applyShot(s, act); } catch (e) { allOk = false; continue; }
+        if (!finite(r.state)) allOk = false;
+      }
+      ok(allOk, `${mode}: ${key} 가 이상한 값이어도 공 자리는 유한한 수`);
+    }
+  }
+  const s8 = B.create({ mode: '8ball', seed: 12 });
+  ok(finite(B.applyShot(s8, { angle: 0.2, power: 0.5, place: ['1e999', 'x'] }).state), '프리볼 자리가 이상한 값이어도 공 자리는 유한한 수');
+  const n1 = B.applyShot(B.create({ mode: '3c', seed: 11 }), { angle: 'abc', power: 0.5 }).state, n2 = B.applyShot(B.create({ mode: '3c', seed: 11 }), { angle: 0, power: 0.5 }).state;
+  ok(JSON.stringify(n1) === JSON.stringify(n2), '고칠 수 없는 각도는 0 으로 침 (정상 값은 그대로)');
+}
+
 console.log(`\n${fail ? '❌' : '✅'} ${pass} 통과, ${fail} 실패`);
 process.exit(fail ? 1 : 0);

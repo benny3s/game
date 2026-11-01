@@ -32,6 +32,7 @@ for (let g = 0; g < GAMES; g++) {
       const a = AI.act(st, p, seats[p], mems[p]);
       if (!a) throw new Error("행동이 없음 (turn " + p + ")");
       st = Cube.step(st, a).state;
+      for (const m of mems) AI.observe(st, m);       // 화면(main.js)처럼 한 수마다 모든 기억에 알림
       steps++;
     }
   } catch (e) {

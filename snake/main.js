@@ -106,7 +106,7 @@
     msg("방 만드는 중…");
     try {
       await NET.init();
-      mode = "host"; meId = NET.uid; sim = null; hostPlayers.clear(); lobbyPlayers = {};
+      clearInterval(tickTimer); mode = "host"; meId = NET.uid; sim = null; hostPlayers.clear(); lobbyPlayers = {};
       const sid = LOG.start({ room: "?", hostName: settings.name, kind: "친구랑" }, NET.uid);
       reconnects = 0;
       hostCtl = await NET.host({ name: settings.name, hue: settings.hue, helper: settings.helper !== "none", ai: settings.ai, cfg: cfg(), log: sid }, null, {
@@ -300,7 +300,7 @@
   // ── 한 틱 (혼자·방장)
   let lastTickAt = 0, lastStateAt = 0;
   function stepSim() {
-    if (paused) return;
+    if (paused || !sim) return;                                    // 11-01 혼자 판 시계가 도는 중 '방 만들기'(sim=null) → 오류로 멈추던 것
     const now = performance.now();
     lastTickAt = now;
     sim.step(now, {

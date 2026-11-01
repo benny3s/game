@@ -1329,7 +1329,7 @@
 
   // ── 아래 단추 ──
   function undo() {
-    if (!G || G.over || G.review || G.mode === 'watch') return;
+    if (!G || G.over || G.review || G.mode === 'watch' || G.mode === 'online') return;   // 친구랑은 무르기 없음 (단추는 숨김 — 키·손잡이로도 내 판만 갈라지지 않게)
     const s = G.s;
     if (G.mode === 'two') {
       if (!s.moves.length) return;

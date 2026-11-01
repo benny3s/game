@@ -34,7 +34,8 @@ window.ArenaMock = util => {
       if (d.k === "list?") { post({ k: "list!", game, to: d.from, row: { code, h: players[uid].name, n: Object.keys(players).length, max: meta.max, ph: meta.phase, m: String(label(meta.cfg) || ""), t: meta.created, empty: false } }); return; }
       if (d.code !== code) return;
       if (d.k === "join?") {
-        if (Object.keys(players).length >= meta.max && !d.watch) { post({ k: "join!", game, code, to: d.from, err: `방이 꽉 찼어요 (최대 ${meta.max}명)` }); return; }
+        // 이미 앉은 사람(새로 고침·다시 들어오기)은 꽉 차도 다시 앉음 (진짜 arena 처럼)
+        if (!players[d.from] && Object.keys(players).length >= meta.max && !d.watch) { post({ k: "join!", game, code, to: d.from, err: `방이 꽉 찼어요 (최대 ${meta.max}명)` }); return; }
         players[d.from] = { ...d.me, t: Date.now(), p2p: 1 };
         post({ k: "join!", game, code, to: d.from, meta, players, shared }, true);
         E.emit("join", d.from, players[d.from]); E.emit("p2p", d.from, true); sync(); E.emit("players", players);

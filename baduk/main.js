@@ -259,7 +259,10 @@
     else if (m.t === "resign") done = (!isHost || seat === m.who) && resign(m.who, true);
     else if (m.t === "dead") done = toggleDead(m.p, true, m.v);
     else if (m.t === "deadset") { if (!isHost) setDeadAll(m.dead); }
-    else if (m.t === "confirm") done = finish(true);
+    else if (m.t === "confirm") {
+      if (G.phase === "score" && Array.isArray(m.dead) && m.dead.length === G.st.size * G.st.size) { G.dead = Uint8Array.from(m.dead, v => (v ? 1 : 0)); rescore(); }   // 확정한 쪽의 표시로 맞춘 뒤 끝냄
+      done = finish(true);
+    }
     else if (m.t === "resume") done = G.phase === "score" && m.n === G.st.moves.length && resumePlay(true);
     if (isHost && done) G.net.broadcast(m, true);
   }
@@ -861,7 +864,7 @@
     for (const e of evs) {
       if (e.type === "place") { anims.push({ k: "drop", p: e.p, t0: now }, { k: "ripple", p: e.p, t0: now + 60 }); sfx("stone", { pitch: 0.94 + Math.random() * 0.12 }); buzz(8); }
       else if (e.type === "capture") flyCaptures(e.points, e.by);
-      else if (e.type === "pass") { sfx("passS"); say(`${stoneEm(e.color)} ${sideName(e.color)} 패스!${G.st.over ? "" : passTip(e.color)}`, 2200); }
+      else if (e.type === "pass") { sfx("passS"); say(`${stoneEm(e.color)} ${esc(sideName(e.color))} 패스!${G.st.over ? "" : passTip(e.color)}`, 2200); }
       else if (e.type === "atari" && cfg.atari && G.mode !== "watch" && G.players[e.color] === "human") {
         const t = Date.now();
         if (t - G.warned > 9000) { G.warned = t; say(G.mode === "duo" ? `🔔 ${colorName(e.color)} 돌이 단수예요!` : "🔔 단수! 빨간 돌이 위험해요", 2200); }
@@ -954,13 +957,13 @@
       // 구경할 때만: 직전 수 기준 형세 한 줄 (흑 몇 집 앞섬)
       const lead = G.mode === "watch" && G.info && typeof G.info.leadB === "number" ? G.info.leadB : null;
       const head = lead == null ? "" : Math.abs(lead) < 1.5 ? "팽팽 · " : `${colorName(lead > 0 ? BLACK : WHITE)} ${Math.round(Math.abs(lead))}집 앞섬 · `;
-      return `${head}${sideName(st.toPlay)} 생각 중`;
+      return `${head}${esc(sideName(st.toPlay))} 생각 중`;
     }
     if ((G.mode === "solo" || G.mode === "online") && st.toPlay === G.human) {
       if (G.pending >= 0) return "같은 곳을 한 번 더 누르면 놓아요";
       return (st.passes ? "상대가 패스했어요 · 내 차례" : `내 차례예요 (${stoneEm(G.human)})`) + (G.mode === "online" && TT.left != null ? ` · ⏱${TT.left}` : "");
     }
-    return `${stoneEm(st.toPlay)} ${sideName(st.toPlay)} 차례${G.mode === "online" && ON && ON.sub[G.seats[st.toPlay]] ? " 🤖" : ""}${G.pending >= 0 ? " · 한 번 더 누르면 놓아요" : ""}`;
+    return `${stoneEm(st.toPlay)} ${esc(sideName(st.toPlay))} 차례${G.mode === "online" && ON && ON.sub[G.seats[st.toPlay]] ? " 🤖" : ""}${G.pending >= 0 ? " · 한 번 더 누르면 놓아요" : ""}`;
   }
   function updateAll() {
     if (!G) return;
@@ -1000,7 +1003,7 @@
     play(N * N, "human");
   };
   $("undoBtn").onclick = () => {
-    if (!G || G.phase !== "play") return;
+    if (!G || G.phase !== "play" || G.mode === "online") return;   // 친구랑은 무르기 없음 (단추는 숨김 — u·Backspace·Ctrl+Z 로도 내 판만 갈라지지 않게)
     let s = G.st;
     if (G.mode === "duo") s = B.undo(s, 1);
     else {
@@ -1137,7 +1140,7 @@
   function finish(remote, restored) {
     if (!G || G.phase === "done") return false;
     if (G.mode === "online" && !remote && amSpectator() && !(G.st.end && G.st.end.reason === "resign")) return false;
-    if (G.mode === "online" && G.net && !remote && !(G.st.end && G.st.end.reason === "resign")) netSend({ t: "confirm", g: G.g });
+    if (G.mode === "online" && G.net && !remote && !(G.st.end && G.st.end.reason === "resign")) netSend({ t: "confirm", g: G.g, dead: G.dead ? Array.from(G.dead) : null });   // 확정한 사람이 본 죽은 돌 표시를 같이 (상대도 같은 점수로 끝나게)
     const st = G.st, game = G;
     let winner = 0, big, detail = "", sc = null;
     if (st.end && st.end.reason === "resign") { winner = st.end.winner; big = `${colorName(winner)} 불계승`; detail = `${colorName(st.end.loser)}(${sideName(st.end.loser)}) 기권`; }

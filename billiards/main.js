@@ -259,7 +259,9 @@
     return a;
   }
   function shoot(act) {
-    if (!SES || SES.anim) return;
+    if (!SES) return;
+    if (SES.anim && SES.anim.replay) { SES.anim = null; SES.sinking = []; }   // 다시 보기 중에 샷이 오면 다시 보기를 접고 침 (샷이 사라지지 않게)
+    if (SES.anim) return;
     const s = SES.s;
     if (SES.kind === 'online') stopShotTimer();
     if (SES.kind === 'online' && SES.role === 'guest') {
@@ -330,7 +332,7 @@
     if (SES.coachOn && SES.coachAllowed) coach().show(); else if (coachP) coachP.hide();
   }
   $('replayBtn').onclick = () => {
-    if (!SES || !SES.last || SES.anim) return;
+    if (!SES || !SES.last || SES.anim || SES.aiBusy) return;   // AI 가 겨누는 중엔 안 됨 (끝난 뒤 샷이 막혀 판이 멈췄음)
     sfx('tap');
     const L = SES.last;
     SES.anim = { before: L.before, frames: L.traj.frames, fps: L.traj.fps, events: L.traj.events, cue: L.traj.cue, act: L.act, start: performance.now() + 250, ei: 0, speed: 0.55, replay: true, stroke: true, done: () => { SES.anim = null; updateHud(); } };
@@ -525,7 +527,7 @@
     $('sub').classList.toggle('myturn', SES.kind === 'online' && on);     // 내 차례: 금색으로 깜빡
     $('ctl').classList.toggle('off', !on);
     $('shootBtn').disabled = !on;
-    $('replayBtn').disabled = !SES.last || !!SES.anim;
+    $('replayBtn').disabled = !SES.last || !!SES.anim || !!SES.aiBusy;
     $('undoBtn').disabled = !SES.undo.length || !!SES.anim;
   }
   const sname = x => x.name + (x.sub ? ' 🤖' : '');                  // AI 가 대신 치는 자리는 🤖
@@ -1156,7 +1158,7 @@
     const s = SES.s, seat = SES.seats[s.turn];
     if (SES.rp && (m.t === 'shot' || m.t === 'aim')) return;
     if (m.t === 'shot') {
-      if (seat && seat.uid === uid && !seat.sub && !SES.anim && s.phase === 'play' && m.no === SES.no && (m.gid | 0) === SES.gid && m.a) shoot(m.a);
+      if (seat && seat.uid === uid && !seat.sub && (!SES.anim || SES.anim.replay) && s.phase === 'play' && m.no === SES.no && (m.gid | 0) === SES.gid && m.a) shoot(m.a);
     } else if (m.t === 'aim') {
       if (seat && seat.uid === uid && !SES.anim) { SES.remoteAim = m; SES.guideKey = ''; SES.net.broadcast(m); }
     } else if (m.t === 'rdy') {                                  // 판이 끝난 뒤 '준비' (구경꾼이 누르면 '다음 판에 낄래요')
@@ -1215,7 +1217,10 @@
       if (m.no > ses.no + 1 || ses.anim) { applySnap({ s: m.s, no: m.no, gid: ses.gid, wins: m.wins, seats: ses.seats.map(x => ({ uid: x.uid, name: x.name, sub: x.sub })) }); return; }
       const traj = B.unpackTraj(m.traj);
       if (ses.rec) ses.rec.shots.push({ p: ses.s.turn, a: m.a, s: encState(m.s) });
-      playShot(ses.s, traj, m.a, an => { ses.no = m.no; afterShot({ state: m.s, result: m.result }, an); });
+      playShot(ses.s, traj, m.a, an => {
+        if (m.no <= ses.no) { updateHud(); return; }   // 구르는 사이 더 새 상태(applySnap)를 이미 받았으면 되돌리지 않음
+        ses.no = m.no; afterShot({ state: m.s, result: m.result }, an);
+      });
     }
   }
   let aimT = 0;
@@ -1257,7 +1262,7 @@
     C.toast('⏱ 30초가 지나서 AI 가 대신 쳐요', 2200);
     try { ses.net.chat(`⏱ ${seat.name} 님은 30초가 지나서 AI 가 대신 쳤어요`); } catch (e) {}
     const act = await AI.chooseAsync(ses.s, 'normal', { seed: rand32() });
-    if (SES !== ses || ses.no !== no0 || ses.gid !== gid0 || ses.anim || ses.s.phase !== 'play') return;   // 그 사이 직접 쳤으면 그만
+    if (SES !== ses || ses.no !== no0 || ses.gid !== gid0 || (ses.anim && !ses.anim.replay) || ses.s.phase !== 'play') return;   // 그 사이 직접 쳤으면 그만
     shoot(act);
   }
 

@@ -110,6 +110,9 @@
     mem.piles = st.discards.map(function (x) { return x.slice(); });
   }
 
+  // 한 수 둘 때마다 모든 자리의 기억에 알려 주는 곳 — act 는 자기 차례에만 불려서 그 사이 남이 가져간 타일을 놓침
+  function observe(st, mem) { if (st && mem) remember(st, mem); }
+
   // 이 타일을 버리면 남이 좋아할까 (고급)
   function danger(st, p, id, mem) {
     if (Cube.isWild(st, id)) return 500;
@@ -254,5 +257,5 @@
     return { kind: "discard", id: h.id, text: tileName(st, h.id) + " 버리기", why: why };
   }
 
-  return { LEVEL: LEVEL, newMemory: newMemory, act: act, hint: hint, advise: advise, tileName: tileName, faceOf: faceOf, valueOf: valueOf };
+  return { LEVEL: LEVEL, newMemory: newMemory, observe: observe, act: act, hint: hint, advise: advise, tileName: tileName, faceOf: faceOf, valueOf: valueOf };
 });

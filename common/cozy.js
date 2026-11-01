@@ -49,7 +49,15 @@
       el.textContent = b.label; el.onclick = () => { if (b.onClick && b.onClick(el) === false) return; close(); };
       row.appendChild(el);
     });
-    const onKey = e => { if (e.key === "Escape" && dismiss) close(); if (e.key === "Enter") { const p = row.querySelector(".primary"); if (p) { e.preventDefault(); p.click(); } } };
+    // Enter = primary 단추. 단 한글 조합 중(229)·여러 줄 칸(줄 바꿈)·이 창의 다른 단추·링크에 포커스(그 단추가 받음)면 건너뜀
+    const onKey = e => {
+      if (e.key === "Escape" && dismiss) close();
+      if (e.key !== "Enter" || e.isComposing || e.keyCode === 229) return;
+      const t = e.target, tag = (t && t.tagName) || "";
+      if (tag === "TEXTAREA" || (t && t.isContentEditable)) return;
+      if ((tag === "BUTTON" || tag === "A" || tag === "SELECT") && ov.contains(t)) return;
+      const p = row.querySelector(".primary"); if (p) { e.preventDefault(); p.click(); }
+    };
     document.addEventListener("keydown", onKey);
     if (dismiss) ov.addEventListener("click", e => { if (e.target === ov) close(); });
     document.body.appendChild(ov);

@@ -429,6 +429,7 @@
       if (!st) return;
       const t0 = performance.now();
       rt += dt;
+      for (let gi = groups.length - 1; gi >= 0; gi--) if (rt - groups[gi].t0 > groups[gi].end) { commit(groups[gi]); groups.splice(gi, 1); }   // 끝난 움직임은 캐시에 넣고 나서 캐시를 그림 (뒤에 하면 그 한 프레임 동안 칸이 옛 색으로 깜빡임)
       flushDirty();
       // 카메라: 따라가는 머리 + 가는 쪽으로 조금 앞을 봄
       const f = !pair && follow >= 0 && P[follow] && P[follow].alive ? P[follow] : null;

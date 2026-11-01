@@ -470,7 +470,8 @@
       ON('join', uid => {
         const i = ses.seats.findIndex(x => x.uid === uid); if (i < 0 || SES !== ses) return;
         const st = ses.seats[i];
-        if (ses.goneAsk && ses.goneAsk.uid === uid) { try { ses.goneAsk.close(); } catch (e) {} ses.goneAsk = null; }
+        if (ses.goneQ) ses.goneQ = ses.goneQ.filter(u => u !== uid);
+        if (ses.goneAsk && ses.goneAsk.uid === uid) { const g = ses.goneAsk; ses.goneAsk = null; try { g.close(); } catch (e) {} }   // 닫히면 줄 선 다음 사람을 물음
         if (st.sub) { st.sub = false; st.drop = false; st.ctrl = 'remote'; st.tier = null; C.toast(`${st.name} 님이 돌아왔어요. 다시 직접 해요`, 2400); try { net.chat(`🙌 ${st.name} 님이 돌아와서 직접 해요`); } catch (e) {} }
       });
     } else ON('msg', m => pushAct(m));
@@ -612,19 +613,32 @@
     ses.net.broadcast({ t: '_round', j: JSON.stringify(roundPack(ses, s)) }, true);
     return s;
   }
-  // 방장: 나간 사람 자리를 어떻게 할지
+  // 빼기로 정한 자리는 안 세고도 2명 이상 남을 때만 뺄 수 있음 (3명 방에서 둘을 다 빼면 다음 판이 1명)
+  const keepCount = ses => ses.seats.filter(x => !x.drop).length;
+  const canDropSeat = ses => keepCount(ses) > 2 && !ses.bank;
+  // 방장: 나간 사람 자리를 어떻게 할지 (다른 창이 열려 있으면 줄 세웠다가 창이 닫힐 때 이어서 물음)
   function askGone(ses, i) {
-    const st = ses.seats[i]; if (!st || st.sub || ses.goneAsk) return;
-    const canDrop = ses.seats.length > 2 && !ses.bank;
+    const st = ses.seats[i]; if (!st || st.sub) return;
+    if (ses.goneAsk) { ses.goneQ = ses.goneQ || []; if (ses.goneAsk.uid !== st.uid && ses.goneQ.indexOf(st.uid) < 0) ses.goneQ.push(st.uid); return; }   // 다른 창이 열려 있으면 줄 세움 (창이 닫히면 이어서 물음)
+    const canDrop = canDropSeat(ses);
     const close = C.modal({
       title: `🔌 ${st.name} 님이 나갔어요`,
       html: `<p style="margin:0">어떻게 할까요? AI 는 🐱 중급이 대신 해요. 같은 링크로 다시 들어오면 그 자리로 돌아와요.${ses.bank ? '<br><span class="small">은행 방은 자리를 빼지 않고 AI 가 대신 해요</span>' : ''}</p>`,
       buttons: [{ label: '🤖 중급 AI가 대신', primary: true, onClick: () => subAI(ses, i, false) }]
-        .concat(canDrop ? [{ label: `👋 이번 판만 AI · 다음 판부터 빼기 (${ses.seats.length - 1}명)`, onClick: () => subAI(ses, i, true) }] : [])
+        .concat(canDrop ? [{ label: `👋 이번 판만 AI · 다음 판부터 빼기 (${keepCount(ses) - 1}명)`, onClick: () => subAI(ses, i, true) }] : [])
         .concat([{ label: '🔄 처음부터 다시 (대기실로)', onClick: () => { if (window.ArenaUI && ArenaUI.net === ses.net) { try { ses.net.chat('🔄 방장이 처음부터 다시 하기로 했어요'); } catch (e) {} ArenaUI.toLobby(); } } }, { label: '⏳ 기다리기' }]),
-      dismiss: false, onClose: () => { if (ses.goneAsk && ses.goneAsk.close === close) ses.goneAsk = null; ses.modals = ses.modals.filter(x => x !== close); },
+      dismiss: false, onClose: () => { if (ses.goneAsk && ses.goneAsk.close === close) ses.goneAsk = null; ses.modals = ses.modals.filter(x => x !== close); askNextGone(ses); },
     });
     ses.goneAsk = { uid: st.uid, close }; ses.modals.push(close);
+  }
+  // 줄 선 나간 사람 중 아직 안 돌아왔고 AI 도 안 맡은 첫 사람을 물음
+  function askNextGone(ses) {
+    if (ses.goneAsk || !ses.goneQ) return;
+    while (ses.goneQ.length) {
+      const u = ses.goneQ.shift(), i = ses.seats.findIndex(x => x.uid === u);
+      if (!ses.alive || SES !== ses || i < 0 || ses.seats[i].sub || (ses.net.players || {})[u]) continue;
+      askGone(ses, i); return;
+    }
   }
   function subAI(ses, i, drop) {
     const st = ses.seats[i]; if (!st) return;
@@ -1711,7 +1725,7 @@
             if (i === ses.cfg.me && host) return `<span class="ok">👑 ${esc(x.name)}</span>`;
             if (x.bot) return `<span class="ok">${esc(x.em)} ${esc(x.name)} (AI)</span>`;
             const gone = !pl[x.uid], ok = R.has(x.uid) || x.sub;
-            return `<span class="${ok ? 'ok' : gone ? 'gone' : ''}">${ok ? '✅' : gone ? '🔌' : '⏳'} ${esc(x.name)}${x.sub ? ' (AI)' : ''}${host && gone && !x.sub ? ` <button type="button" data-ai="${i}">🤖 AI</button>${ses.seats.length > 2 && !ses.bank ? ` <button type="button" data-drop="${i}">👋 빼기</button>` : ''}` : ''}</span>`;
+            return `<span class="${ok ? 'ok' : gone ? 'gone' : ''}">${ok ? '✅' : gone ? '🔌' : '⏳'} ${esc(x.name)}${x.sub ? ' (AI)' : ''}${host && gone && !x.sub ? ` <button type="button" data-ai="${i}">🤖 AI</button>${canDropSeat(ses) ? ` <button type="button" data-drop="${i}">👋 빼기</button>` : ''}` : ''}</span>`;
           });
           const watchers = Object.keys(pl).filter(u => !ses.seats.some(x => x.uid === u));
           const wl = watchers.map(u => host

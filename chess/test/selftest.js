@@ -241,6 +241,18 @@ for (const [name, fen] of MATE2) {
   for (let i = 0; i < 16; i++) { C.step(s1, AI.think(C.toJSON(s1), { tier: 'normal', seed: 100 + i }).move); C.step(s2, AI.think(C.toJSON(s2), { tier: 'normal', seed: 100 + i }).move); }
   eq(C.fen(s1), C.fen(s2), '중급 16수 대국 두 번 → 같은 판');
 }
+{ // 중급이 노드 한도에 걸려도 뒤쪽 수(공짜 기물 잡기 등)를 통째로 놓치지 않음 (한도 3000 은 일부러 작게 — 실제 400k 는 잘 안 닿음)
+  const cfg = { noise: 0, blunder: 0, book: 0 };
+  const cases = [
+    'b2b3 g7g5 e2e3 h7h5 g2g3 h8h6 c2c4 e7e5 f1e2 h6g6 b1c3 g6f6 e3e4 f8g7 h2h4 a7a5 g3g4 d7d6 a2a4 f6g6 h1h3 g6h6 h3d3 d8d7 g4h5 g8f6 c4c5 d7d8 e2f1 c7c6 d3e3 d6c5 d2d4 h6g6 d4d5 f6d7 c3b1 d8b6 d1f3 g5h4 f3h3 e8e7',
+    'g1f3 g8h6 d2d3 h6f5 c2c3 c7c6 h2h3 c6c5 a2a4 b7b6 d1c2 g7g5 c3c4 f5d6 f3h4 b6b5 b1d2 e7e6 a1a2 b5a4 a2a3 d6b7 d3d4 d8e7 c2h7 e7f6 h7d3 f6f5 d2f3 f7f6 e1d1 f5f4 d4c5 d7d5 c1d2 h8h4 e2e3 f8e7',
+  ];
+  for (const mv of cases) {
+    const g = { moves: mv.split(' ') };
+    const full = AI.think(g, { tier: 'normal', seed: 1, cfg }), lim = AI.think(g, { tier: 'normal', seed: 1, cfg, nodes: 3000 });
+    ok(lim.move === full.move, `중급: 노드 한도에 닿아도 최선 수를 놓치지 않음 (한도 없이 ${full.move} · 한도 3000 ${lim.move})`);
+  }
+}
 { // 시간 지키기
   const t = Date.now(); const r = AI.think({ start: 'r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10', moves: [] }, { tier: 'hard', seed: 1 });
   const ms = Date.now() - t;

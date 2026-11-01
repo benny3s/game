@@ -869,6 +869,7 @@ if (typeof window !== "undefined") (() => {
             r.pw[i][j] = int(isA ? pv.wa : pv.wb); r.pm[i][j] = isA ? int(pv.ma) : -int(pv.ma);
           }
         }
+        ses.relBase = r.base;                                 // 판 사이 빌리기 때 이 판의 base 도 올림 (자리를 다시 짜면 게임이 새 배열을 써서 안 닿음)
         return r;
       },
       tracks: i => !!ses.track[i],
@@ -901,14 +902,15 @@ if (typeof window !== "undefined") (() => {
             if (!ses.negative) while (int(out[i]) + n < lim && guard++ < 20) n += ses.meta.loanUnit;   // 마이너스 되는 게임은 자동으로 안 빌림
             if (!n) continue;
             await borrow(gid, t.pid, t.name, n, info({ note: n > 0 && int(out[i]) < lim ? "칩이 모자라 자동" : "빌리기" }));
-            out[i] = int(out[i]) + n; t.last += n;
+            out[i] = int(out[i]) + n; t.last += n; t.base += n;   // 빌린 만큼 정산 전 기준도 (안 올리면 '통산 원'이 빌린 만큼 부풂)
+            if (ses.relBase && ses.relBase[i] != null) ses.relBase[i] += n;   // 이미 넘겨준 rel0 판(고스톱이 들고 씀)도 같이
             loans.push({ seat: i, name: t.name, n });
             emit({ op: "loan", seat: i, name: t.name, n });
           }
         }).then(() => ({ coins: out, loans, reloaded }));
       },
       // 새 게임(홀덤 '새 게임' 등): 지금 잔액으로 다시 시작 칩
-      restart() { return run(load).then(v => v || (seats || []).map(() => null)); },
+      restart() { return run(() => { ses.reload = false; return load(); }).then(v => v || (seats || []).map(() => null)); },   // 새 잔액으로 다시 읽으니 '새 회차' 표시는 풂 (안 풀면 첫 판 결과를 버림)
       flush: () => chain,
       detach() { ses.alive = false; offs.splice(0).forEach(f => f()); },
     });

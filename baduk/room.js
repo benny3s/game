@@ -58,8 +58,9 @@
   function snap(B, g) {
     return { t: "snap", g: g.g, st: B.toJSON(g.st), phase: g.phase, dead: g.dead ? Array.from(g.dead) : null, seats: { 1: g.seats[1] || null, 2: g.seats[2] || null }, names: { 1: (g.names || {})[1] || "", 2: (g.names || {})[2] || "" } };
   }
+  const nameOf = (n, c) => (n && typeof n[c] === "string" ? n[c] : "").slice(0, 12);   // 방장이 보낸 이름은 12자까지만 (참가 이름과 같은 한도)
   function restore(B, s) {
-    return { g: s.g, st: B.fromJSON(s.st), phase: s.phase || "play", dead: s.dead ? Uint8Array.from(s.dead) : null, seats: s.seats || { 1: null, 2: null }, names: s.names || {} };
+    return { g: s.g, st: B.fromJSON(s.st), phase: s.phase || "play", dead: s.dead ? Uint8Array.from(s.dead) : null, seats: s.seats || { 1: null, 2: null }, names: { 1: nameOf(s.names, 1), 2: nameOf(s.names, 2) } };
   }
   // 두는 두 사람 이름
   function names(players, seats) { return { 1: ((players || {})[seats[1]] || {}).name || "흑", 2: ((players || {})[seats[2]] || {}).name || "백" }; }

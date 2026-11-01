@@ -582,8 +582,18 @@
         pos.make(m);
         const sc = -S.search(depth - 1, -INF, INF, 1, true);
         pos.unmake(m);
-        if (S.stop) break;                                       // 다 못 본 수는 넣지 않음
+        if (S.stop) break;                                       // 다 못 본 수는 깊게는 안 봄
         list.push({ m, sc });
+      }
+      if (S.stop && list.length < legal.length) {              // 한도(노드·시간)에 걸려도 남은 수를 통째로 버리지 않고 정지 탐색으로 얕게라도 봄 (뒤쪽 수의 공짜 기물 잡기 등)
+        const got = new Set(list.map(x => x.m)), S2 = new Search(pos, {});
+        for (const m of legal) {
+          if (got.has(m)) continue;
+          pos.make(m);
+          const sc = -S2.search(0, -INF, INF, 1, true);
+          pos.unmake(m);
+          list.push({ m, sc });
+        }
       }
       if (!list.length) list.push({ m: legal[0], sc: 0 });
       for (const x of list) x.v = x.sc + (cfg.noise ? (R() + R() + R() - 1.5) * cfg.noise : 0);

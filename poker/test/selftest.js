@@ -269,5 +269,24 @@ for (let g = 0; g < 25; g++) {
   ok(Date.now() - t0 < 500, `8인 코치 계산 500ms 이내 (${Date.now() - t0}ms)`);
 }
 
+// 15) 드로 분석: 턴에 트리플(풀하우스·포카드 아웃)은 플러시 드로가 아님 (플러시만 셈)
+{
+  const d = P.analyzeDraws(c(['Ah', 'Ad']), c(['Ac', '7s', '2d', '9h']));
+  ok(!d.tags.some(t => t.includes('플러시')), `트리플은 플러시 드로 아님 (${d.tags.join(' / ')})`);
+  const d2 = P.analyzeDraws(c(['As', 'Ks']), c(['7s', '2s', '9d', 'Qh']));
+  ok(d2.tags.some(t => t.includes('플러시 드로 (9')), `진짜 플러시 드로는 9 아웃츠 (${d2.tags.join(' / ')})`);
+}
+
+// 16) 짧은 스택 BB 올인 블라인드: 이미 덮은 SB 에게 콜·폴드를 강요하지 않음 (curBet = 실제 낸 블라인드 최대)
+{
+  const hu = P.create({ players: 2, seed: 7, stacks: [1000, 5] });
+  ok(hu.phase === 'end', `헤즈업 BB 5칩 올인 → SB 는 이미 덮음, 바로 쇼다운 (${hu.phase})`);
+  ok(hu.coins[0] + hu.coins[1] === 1005, `짧은 BB 올인: 칩 보존 (${hu.coins})`);
+  const hu2 = P.create({ players: 2, seed: 7, stacks: [1000, 15] });
+  ok(hu2.curBet === 15 && hu2.phase === 'bet' && hu2.turn === 0, `BB 15칩 올인: 맞출 금액은 15 (curBet ${hu2.curBet})`);
+  ok(P.create({ players: 3, seed: 7 }).curBet === 20, '평소 블라인드는 그대로 BB(20)');
+  ok(P.create({ players: 3, seed: 7, stacks: [1000, 5, 1000] }).curBet === 20, 'SB 가 짧아도 BB 는 20');
+}
+
 console.log(`poker selftest: ${pass} passed, ${fail} failed`);
 if (fail > 0) process.exit(1);

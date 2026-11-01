@@ -198,9 +198,9 @@
       S.err = String(e && e.message ? e.message : e).slice(0, 80);
       S.on = false;
     }
-    requestAnimationFrame(frame);
+    S._raf = requestAnimationFrame(frame);
   }
-  requestAnimationFrame(frame);
+  cancelAnimationFrame(S._raf); S._raf = requestAnimationFrame(frame);   // 다시 붙여넣어도 그리기 반복은 하나만 (S._raf 에 ID 를 두고, 새로 붙이면 예전 반복을 멈추고 새 코드로)
 
   if (!S._key) {
     S._key = true;

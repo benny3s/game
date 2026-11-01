@@ -813,6 +813,7 @@
       if (G.role === "host") G.net.broadcast(m, true); else if (!remote && !instant) G.net.send(m, true);
     }
     G.st = res.state;
+    G.mems.forEach(m => AI.observe(G.st, m));   // 남이 가져간 타일 기억 (자기 차례 사이의 take 도)
     G.sel = null; G.winMode = false; G.hintId = null; G.hintedPile = null; G.thinking = -1;
     if (G.mode !== "watch") syncRack();
 

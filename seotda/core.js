@@ -433,26 +433,23 @@
     for (const L of layers) if (L.refund) { s.coins[L.elig[0]] += L.amount; payouts[L.elig[0]] += L.amount; L.done = true; }
     const real = layers.filter(L => !L.done);
     if (real.length) real[0].amount += carryIn; else carry += carryIn;
-    if (judge.kind === 'rematch') {
-      carry += real.reduce((a, L) => a + L.amount, 0);
-    } else {
-      for (const L of real) {
-        let w = null;
-        if (L.elig.length === 1) w = L.elig[0];
-        else {
-          const jr = L.elig.length === alive.length ? judge : judgeShowdown(L.elig.map(q => ({ p: q, c1: s.hands[q][0], c2: s.hands[q][1] })));
-          if (jr.kind === 'win') w = jr.winner;
-        }
-        if (w == null) { carry += L.amount; continue; }
-        s.coins[w] += L.amount; payouts[w] += L.amount;
-        L.winner = w;
-        if (winnersAll.indexOf(w) < 0) winnersAll.push(w);
+    // 층마다 따로 판정 — 전체가 재경기(구사·동점)여도 소액 올인자와 무관한 사이드 팟은 그 층 승자에게
+    for (const L of real) {
+      let w = null;
+      if (L.elig.length === 1) w = L.elig[0];
+      else {
+        const jr = L.elig.length === alive.length ? judge : judgeShowdown(L.elig.map(q => ({ p: q, c1: s.hands[q][0], c2: s.hands[q][1] })));
+        if (jr.kind === 'win') w = jr.winner;
       }
+      if (w == null) { carry += L.amount; continue; }
+      s.coins[w] += L.amount; payouts[w] += L.amount;
+      L.winner = w;
+      if (winnersAll.indexOf(w) < 0) winnersAll.push(w);
     }
     s.carryPot = carry;
     s.phase = 'end';
     const got = payouts.reduce((a, b) => a + b, 0);
-    if (judge.kind === 'rematch') {
+    if (judge.kind === 'rematch' && !winnersAll.length) {      // 아무 층도 승자가 없으면 통째로 재경기
       s.result = { kind: 'rematch', winner: null, winners: [], pot: s.pot, payouts, carry, reason: judge.reason, evals: allEvals };
     } else {
       const main = real.length ? real[0].winner : null;
@@ -466,7 +463,7 @@
         payouts,
         carry,
         winnerHand: wEval.effName || wEval.name,
-        reason: `${wEval.effName || wEval.name}(으)로 승리!` + (winnersAll.length > 1 ? ' (사이드 팟은 다른 사람이 가져가요)' : '') + (carry ? ` 일부 ${carry}냥은 다음 판으로 이월` : ''),
+        reason: (judge.kind === 'rematch' ? '메인 팟은 파토·동점으로 재경기! 사이드 팟은 ' : '') + `${wEval.effName || wEval.name}(으)로 승리!` + (winnersAll.length > 1 && judge.kind !== 'rematch' ? ' (사이드 팟은 다른 사람이 가져가요)' : '') + (carry ? ` 일부 ${carry}냥은 다음 판으로 이월` : ''),
         evals: allEvals,
       };
     }
