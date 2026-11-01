@@ -87,6 +87,23 @@
       if (ok && wanted) location.href = "http://127.0.0.1:8810/";
     });
     probe(); setInterval(probe, 2000);
+    // 봇 세상: benny-sc://bots/<모드>/<봇1|내 봇>/<상대>/<맵> → 이 PC 의 play/bots.bat (wsl/bots_run.sh)
+    const BOTS = [["stardust", "Stardust (프로토스 · 가장 셈)"], ["steamhammer", "Steamhammer (저그)"], ["iron", "Iron (테란)"], ["locutus", "Locutus (프로토스)"]];
+    const fill = (id, def) => { $(id).innerHTML = BOTS.map(([v, t]) => `<option value="${v}"${v === def ? " selected" : ""}>${t}</option>`).join(""); };
+    fill("botA", "stardust"); fill("botB", "iron");
+    const botUi = () => {
+      const m = $("botMode").value;
+      $("botARow").style.display = m === "vs" ? "none" : "";
+      $("raceRow").style.display = m === "vs" ? "" : "none";
+      $("botALab").textContent = m === "assist" ? "내 봇" : "봇 1";
+    };
+    $("botMode").onchange = botUi; botUi();
+    $("botGo").onclick = () => {
+      const m = $("botMode").value, map = $("botMap").value;
+      const args = m === "vs" ? [$("botB").value, $("botRace").value, map] : [$("botA").value, $("botB").value, map];
+      location.href = "benny-sc://bots/" + [m, ...args].join("/");
+      $("botSt").textContent = "PC 에 창이 떠요 (10초쯤, 검은 창은 그대로 두세요)";
+    };
     $("engineOn").onclick = () => { wanted = true; if (up) { location.href = "http://127.0.0.1:8810/"; return; } location.href = "benny-sc://start"; $("engineSt").textContent = "엔진 켜는 중… (검은 창이 뜨면 그대로 두세요)"; };
   }
 

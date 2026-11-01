@@ -95,6 +95,14 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
     <p class="small">엔진은 회원님 PC(WSL)에서만 돌아요. ① 엔진을 켜면 ② 방장 화면이 저절로 열려요.</p>
     <div class="row"><button class="btn go" id="engineOn">① PC 엔진 켜기</button><a class="btn" id="hostOpen" href="http://127.0.0.1:8810/">② 방장 화면 열기</a></div>
     <p class="small" id="engineSt">엔진 확인 중…</p>
+    <h2 style="margin-top:14px">🤖 봇 세상 (진짜 엔진 창 · 이 PC)</h2>
+    <p class="small">공개 대회 봇과 근접전 한 판. 창은 이 PC에 떠요 (관전: C = 자동 카메라 · 봇 돕기: F9 = 켬/끔).</p>
+    <div class="row"><span style="width:60px">모드</span><select id="botMode" style="flex:1"><option value="watch">👀 봇끼리 관전</option><option value="vs">⚔️ 나 vs 봇</option><option value="assist">🤝 나 + 내 봇 vs 봇 (봇 돕기)</option></select></div>
+    <div class="row" id="botARow"><span style="width:60px" id="botALab">봇 1</span><select id="botA" style="flex:1"></select></div>
+    <div class="row" id="botBRow"><span style="width:60px">상대 봇</span><select id="botB" style="flex:1"></select></div>
+    <div class="row" id="raceRow" style="display:none"><span style="width:60px">내 종족</span><select id="botRace" style="flex:1"><option>Zerg</option><option>Terran</option><option>Protoss</option></select></div>
+    <div class="row"><span style="width:60px">맵</span><select id="botMap" style="flex:1"><option>FightingSpirit</option><option>CircuitBreaker</option><option>Python</option><option>Destination</option><option>HeartbreakRidge</option><option>Benzene</option><option>Andromeda</option><option>TauCross</option><option>Jade</option><option>LaMancha</option></select></div>
+    <div class="row"><button class="btn go" id="botGo">▶ 봇 판 시작</button><span class="small" id="botSt"></span></div>
   </div>
 </div></section>
 
@@ -147,6 +155,6 @@ h2{margin:0;font-size:15px;color:var(--gold);letter-spacing:.04em}
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="../common/glog.js?v=1"></script>
 <script src="net.js?v=5"></script>
-<script src="sc.js?v=16"></script>
+<script src="sc.js?v=17"></script>
 </body>
 </html>
