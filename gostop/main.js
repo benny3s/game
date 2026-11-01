@@ -429,7 +429,7 @@
     ses.wake = () => { const w = ses.waiters.splice(0); w.forEach(f => f()); };
     ses.dispose = () => {
       ses.alive = false;
-      clearInterval(ses.turnT); turnClock(null);
+      clearInterval(ses.turnT); clearInterval(ses.oppT); turnClock(null);
       if (ses.panel) { try { ses.panel.destroy(); } catch (e) {} ses.panel = null; }
       hotClose();
       if (ses.bank) { try { ses.bank.detach(); } catch (e) {} ses.bank = null; }
@@ -868,11 +868,23 @@
       const owner = new Array(k).fill(-1), humans = [], ais = [];
       ses.seats.forEach((st, p) => (st.ctrl === 'ai' ? ais : humans).push(p));
       let hi = 0, first = -1, done = false, t = 0;
+      // ⏱ 5초 안에 안 고르면 자동으로 뽑음 (11-01 베니 님: 누가 늦게 누를 수도 있으니 빨리 넘어가게) — 사람마다 5초, 남은 초를 보여 줌
+      const LIMIT = 5;
+      let left = LIMIT;
+      const tick = setInterval(() => {
+        if (done) { clearInterval(tick); return; }
+        if (--left > 0) { draw(); return; }
+        const free = owner.map((o, i) => (o < 0 ? i : -1)).filter(i => i >= 0);
+        owner[free[Math.floor(rnd() * free.length)]] = humans[hi++]; sfx('flip');
+        C.toast('⏱ 시간이 지나 대신 한 장 뽑았어요', 1500);
+        left = LIMIT;
+        if (hi >= humans.length) finish(); else draw();
+      }, 1000);
       const nm = p => ses.seats[p].name;
       const close = C.modal({
         title: '👑 선 뽑기', cls: 'seonbox', buttons: [],
         html: '<p class="small seonmsg" style="margin:0 0 8px"></p><div class="seonpick"></div>',
-        onClose: () => { clearTimeout(t); ses.modals = ses.modals.filter(x => x !== close); res(first >= 0 ? first : 0); },
+        onClose: () => { clearTimeout(t); clearInterval(tick); ses.modals = ses.modals.filter(x => x !== close); res(first >= 0 ? first : 0); },
       });
       ses.modals.push(close);
       const box = document.querySelector('.seonbox .seonpick'), msg = document.querySelector('.seonbox .seonmsg');
@@ -880,7 +892,7 @@
         box.innerHTML = cards.map((c, i) => { const o = owner[i]; return `<button type="button" class="sp${o >= 0 ? ' own' : ''}${done && o === first ? ' win' : ''}" data-k="${i}"${o >= 0 || done ? ' disabled' : ''}>${done && o >= 0 ? ART.use(c) : ART.use(-1, 'b')}<b>${o >= 0 ? esc(nm(o)) : '&nbsp;'}</b><span>${done && o >= 0 ? (G.monthOf(c) + 1) + '월' : '&nbsp;'}</span></button>`; }).join('')
           + (done ? `<div class="spgo"><button type="button" class="btn primary" data-go>${nm(first) === '나' ? '내가 선! 시작' : esc(nm(first)) + ' 선으로 시작'}</button></div>` : '');
         msg.textContent = done ? `👑 ${nm(first) === '나' ? '내가' : nm(first)} 선! 월이 가장 ${mode === 'low' ? '낮아요' : '높아요'}`
-          : humans.length > 1 ? `${nm(humans[hi])} 님, 엎어 둔 패에서 한 장 골라 주세요` : '엎어 둔 패에서 한 장 골라 주세요';
+          : `${humans.length > 1 ? `${nm(humans[hi])} 님, ` : ''}엎어 둔 패에서 한 장 골라 주세요 · ⏱ ${left}초 (안 고르면 대신 뽑아요)`;
       };
       const finish = () => {
         for (const p of ais) { const free = owner.map((o, i) => (o < 0 ? i : -1)).filter(i => i >= 0); owner[free[Math.floor(rnd() * free.length)]] = p; }
@@ -893,7 +905,7 @@
         if (e.target.closest('[data-go]')) { close(); return; }
         const b = e.target.closest('[data-k]'); if (!b || done) return;
         const i = +b.dataset.k; if (owner[i] >= 0) return;
-        owner[i] = humans[hi++]; sfx('flip');
+        owner[i] = humans[hi++]; sfx('flip'); left = LIMIT;
         if (hi >= humans.length) finish(); else draw();
       });
       draw();
@@ -1024,7 +1036,8 @@
     else if (s.turn === me) sub = s.phase === 'goStop' ? '고? 스톱?' : s.phase === 'kook' ? '국진을 어디에?' : s.phase.startsWith('pick') ? '가져올 패를 골라요' : '내 차례 · 패를 골라요';
     else sub = s.phase === 'goStop' ? `🤔 ${seatAt(ses, s.turn).name} 님이 고? 스톱? 고르는 중` : s.phase === 'kook' ? `🍶 ${seatAt(ses, s.turn).name} 님이 국진 고르는 중` : s.phase.startsWith('pick') ? `${seatAt(ses, s.turn).name} 님이 가져올 패 고르는 중` : s.phase === 'buy' ? `💰 ${seatAt(ses, s.turn).name} 님이 광 살지 고르는 중` : `${seatAt(ses, s.turn).name} 차례`;
     if (s.carry && G.carryMult(s) > 1) sub += ` · 나가리 ×${G.carryMult(s)}`;
-    $('sub').textContent = `${s.round}판 · ${sub}${ses.turnLeft != null && s.turn === me ? ` · ⏱${ses.turnLeft}` : ''}`;
+    const oc = ses.oppClock, oppLeft = oc && oc.p === s.turn && s.turn !== me ? Math.max(0, Math.ceil((oc.end - Date.now()) / 1000)) : null;
+    $('sub').textContent = `${s.round}판 · ${sub}${ses.turnLeft != null && s.turn === me ? ` · ⏱${ses.turnLeft}` : oppLeft != null ? ` · ⏱${oppLeft}` : ''}`;
     $('passBtn').hidden = true;                                // 💣 폭탄패는 손패 줄에 카드로 (단추는 키보드 P 용으로만 남김)
     const myTurn = me >= 0 && s.phase !== 'end' && s.turn === me && !!ses.pending && !ses.pending.isResult && !ses.hide && !ses.replaying;
     $('sub').classList.toggle('myturn', myTurn);
@@ -1716,11 +1729,16 @@
     if (!ses.acts.has(ses.seq)) { if (ph === 'goStop') popup('🤔 고? 스톱?', 'gold', `${who} 님이 고르는 중이에요`); else if (ph === 'kook') C.toast(`🍶 ${who} 님이 국진(열끗/쌍피) 고르는 중`, 1800); }
     if (ses.acts.has(ses.seq)) return Promise.resolve(ses.acts.get(ses.seq));
     setThinking(ses, p, true);
+    // ⏱ 상대 차례 남은 초 (11-01 베니 님): 그 사람 기기의 30초 시계와 같은 때 시작 — 내 화면에서 센 어림값
+    ses.oppClock = { p, end: Date.now() + TURN_SEC * 1000 };
+    clearInterval(ses.oppT); ses.oppT = setInterval(() => { if (ses.alive) drawHud(ses); }, 1000);
+    drawHud(ses);
+    const off = () => { clearInterval(ses.oppT); ses.oppClock = null; setThinking(ses, p, false); };
     return new Promise((resolve, reject) => {
       ses.actWaiters.push({
         seq: ses.seq,
-        resolve: a => { setThinking(ses, p, false); resolve(a); },
-        reject: e => { setThinking(ses, p, false); reject(e); },
+        resolve: a => { off(); resolve(a); },
+        reject: e => { off(); reject(e); },
       });
     });
   }
@@ -1914,7 +1932,7 @@
     clearInterval(ses.turnT); ses.turnLeft = null; turnClock(null);
     if (!ses.cfg.online || ses.replaying) return;
     let end = Date.now() + TURN_SEC * 1000, extended = false;
-    ses.turnLeft = TURN_SEC; turnClock(TURN_SEC);
+    ses.turnLeft = TURN_SEC; turnClock(TURN_SEC); drawHud(ses);
     ses.turnT = setInterval(() => {
       if (!ses.alive || !ses.pending || ses.pending.isResult) { clearInterval(ses.turnT); ses.turnLeft = null; turnClock(null); return; }
       let left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
@@ -2000,8 +2018,7 @@
         if (ci) {
           badge.hidden = false;
           badge.className = 'ev-badge ' + ci.tier;
-          const ic = ci.tier === 'best' ? '👑' : ci.tier === 'good' ? '🟢' : ci.tier === 'ok' ? '🟡' : '🔴';
-          badge.textContent = `${ic} ${ci.tier === 'best' ? '최선' : ci.deltaText}`;
+          badge.textContent = ci.tier === 'best' ? '👑' : ci.deltaText;   // 좋음·보통·나쁨은 색으로 (패 왼쪽 아래 안에 작게 — 위쪽 노란 '낼 수 있는 패' 막대를 안 가리게)
         } else {
           badge.hidden = true;
         }

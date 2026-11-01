@@ -322,11 +322,12 @@ body.playing .dock button .ic{
 .seat.busy .nm{color:#fbbf24}
 
 /* ── 🧑‍🏫 AI 일타 강사 (실시간 기댓값 신호등 & 코칭 배너 & 복기 노트) ── */
+/* 11-01: 패 위쪽은 노란 '낼 수 있는 패' 막대 자리 → 기댓값 표시는 패 왼쪽 아래 안에 작게 (오른쪽은 다음 패에 가림 · 좋음·보통·나쁨은 색) */
 .hw .ev-badge{
-  position:absolute;left:50%;top:-24px;transform:translateX(-50%);
+  position:absolute;left:2px;bottom:3px;
   z-index:9;white-space:nowrap;pointer-events:none;
-  font:700 13px/1.15 var(--round);
-  padding:3px 8px;border-radius:99px;
+  font:800 11px/1.1 var(--round);
+  padding:2px 5px;border-radius:99px;
   box-shadow:0 3px 8px rgba(0,0,0,.55);
   border:1.5px solid #fff;
 }
