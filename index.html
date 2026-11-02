@@ -799,10 +799,6 @@ button { font: inherit; cursor: pointer; }
         관리자와 허용된 기기만 방을 만들 수 있어요. 친구는 권한 없이도 방 코드·링크로 바로 들어와요.
       </p>
     </div>
-    <label id="familyCodeBox">
-      <span>예전 가족 방장 코드 (있으면 1회 입력)</span>
-      <input type="password" id="familyCodeInput" placeholder="가족 코드 입력 (예: benny-family)">
-    </label>
     <div class="modal-row">
       <button class="nav-pill" id="hostCloseBtn" type="button">닫기</button>
       <button class="btn-play" id="hostSaveBtn" type="button" style="flex:0 0 auto;padding:8px 18px">저장</button>
@@ -813,13 +809,13 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=16"></script>
+<script src="common/gate.js?v=17"></script>
 <script src="common/mistakes.js?v=2"></script>
-<script src="common/me.js?v=13"></script>
+<script src="common/me.js?v=14"></script>
 <script src="common/rank.js?v=10"></script>
-<script src="common/arena-mock.js?v=8"></script>
-<script src="common/arena.js?v=12"></script>
-<script src="common/bank.js?v=12"></script>
+<script src="common/arena-mock.js?v=9"></script>
+<script src="common/arena.js?v=13"></script>
+<script src="common/bank.js?v=13"></script>
 <script>
 (() => {
   const $ = id => document.getElementById(id);
@@ -1614,7 +1610,6 @@ button { font: inherit; cursor: pointer; }
       return;
     }
     $("nickInput").value = getSavedName();
-    $("familyCodeInput").value = "";
     await checkPermissions();
     $("hostStatusTxt").textContent = isAdmin
       ? "👑 관리자 (모든 권한)"
@@ -1642,10 +1637,6 @@ button { font: inherit; cursor: pointer; }
     const nick = $("nickInput").value.trim();
     if (nick) {
       try { localStorage.setItem("game.arena.name", nick); } catch (e) {}
-    }
-    const code = $("familyCodeInput").value.trim();
-    if (code && window.Arena && Arena.claimHostInvite) {
-      try { await Arena.claimHostInvite(code, nick || getSavedName()); } catch (e) { alert(e.message); return; }
     }
     await checkPermissions();
     $("hostModal").hidden = true;

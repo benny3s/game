@@ -117,6 +117,5 @@ window.ArenaMock = util => {
     now: () => Date.now(), GUEST: false, ROOT: "mock/", mock: true, db: () => null, uid, ready: true,
     get canHost() { return canHost; }, get isAdmin() { return canHost; },
     refreshPerms: async () => { if (window.Gate && Gate.state && Gate.state.canHost) canHost = true; },
-    createHostInvite: async () => ({ code: "MOCK77", url: location.href }), claimHostInvite: async () => true,
   };
 };

@@ -1,21 +1,20 @@
 /* 베니 프라이빗 게임 포털 — 출입 게이트 & 기기 허용 관리 (common/gate.js)
-   · 10-31: 아케이드(포털)는 누구나 둘러봄. 허용 안 된 기기가 게임을 열면 '로그인' 창 (허용 요청 · 💞 베니브릿지 · 허용 코드)
+   · 10-31: 아케이드(포털)는 누구나 둘러봄. 허용 안 된 기기가 게임을 열면 '로그인' 창 (허용 요청 · 💞 베니브릿지)
      관리자 로그인은 창에 없음 — 아케이드 'BENNY ARCADE' 3번 누르기(adminLoginPrompt) 또는 Benny 포털에서 로그인(같은 주소라 이어짐)
    · 💞 베니브릿지 회원(같은 주소라 로그인이 이어짐, 토큰 m:1)은 허용 전에도 하루 FREE_MIN 분 무료 (화면을 보는 시간만, 이 기기에 저장)
    · OPEN_SOLO(아래): true = 혼자 하기는 누구나 바로 · false = 허용된 기기(+브릿지 무료 시간)만 게임 페이지가 열림
    · 방 초대 링크(?room=ABCD): 등록 없이 그 방에만 들어감 (그대로)
    · 기기 허용 = 혼자 하기 + 친구 방 만들기. 기간은 두 가지: '오늘만'(24시간) · '계속'
      1) 허용 요청: game_requests/{uid} → 베니비서 앱 알림 / 포털 관리 창에서 [계속]·[오늘만]·[거절]
-     2) 6자리 허용 코드·링크(?pass=XXXXXX): 코드를 만들 때 '오늘만'·'계속'을 고름
-     3) 관리자(베니) 비밀번호 로그인
-   · 예전 '가족 방장'(arena_hosts, role host)은 '계속 허용된 기기'로 침 (관리 창도 그대로 씀)
+     2) 관리자(베니) 비밀번호 로그인
+   · 11-02 베니 님: 허용 코드·가족 방장 코드는 없앰 — 허용은 요청을 관리자가 받아 주는 길 하나
    · 허용된 기기(game_devices/{uid})는 베니 님이 언제든 [일시정지] · [오늘만으로] · [차단] 가능
    API: Gate.state { unlocked(혼자 하기), allowed(허용 기기), canHost(방 만들기), canApprove(다른 기기 허용), isAdmin, role, expiresAt, name, status, reason }
         Gate.canManage() → boolean  관리자 또는 허용된 기기(활성·안 끝남) — 방 만들기·(다음) 은행 초기화 같은 '관리' 권한의 한 곳
         Gate.requestHost({ title }) → Promise<boolean>  방 만들기 권한이 없으면 허용 창을 띄우고, 허용되면 true · 닫으면 false
-        규칙(RTDB)에서 같은 판단: auth.token.admin === 1 || arena_hosts/{uid}/ok === true ||
+        규칙(RTDB)에서 같은 판단: auth.token.admin === 1 ||
           (game_devices/{uid}/status === 'active' && (expiresAt 없음 || 0 || > now))  — arena/$game/rooms/$code/meta 만들기에 씀
-        Gate.onChange(fn) · openAdminModal() · createPass({ role: "friend"|"temp24h" }) · redeemPassCode · requestDeviceApproval … */
+        Gate.onChange(fn) · openAdminModal() · requestDeviceApproval … */
 const Gate = (() => {
   // ── 설정: true = 혼자 하기는 누구나 (잠금은 방 만들기 때만) · false = 허용된 기기만 게임 페이지가 열림
   const OPEN_SOLO = false;   // 10-30 베니 님: 혼자 하기도 허용된 기기만 (방 링크로 초대받은 손님은 그 방에서만)
@@ -54,7 +53,7 @@ const Gate = (() => {
   const IS_PORTAL = /(?:^|\/game)\/(?:index\.html)?$/.test(location.pathname);   // 아케이드 첫 화면 = 잠그지 않음 (둘러보기)
   const PORTAL_URL = /\/game\//.test(location.pathname) ? location.pathname.replace(/(\/game\/).*$/, "$1") : "../";
 
-  let app = null, loading = null, user = null, offset = 0, watching = false, legacyHost = false, devWatch = null;
+  let app = null, loading = null, user = null, offset = 0, watching = false, devWatch = null;
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
   let state = {
@@ -186,10 +185,6 @@ const Gate = (() => {
   const db = () => app.database();
   const TS = () => firebase.database.ServerValue.TIMESTAMP;
   const now = () => Date.now() + offset;
-  const genCode6 = () => {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  };
   // 예전 role(host·friend) → 기간은 expiresAt 으로만 판단: 0 = 계속, 숫자 = 오늘만
   const roleOf = hours => (hours > 0 ? "temp24h" : "friend");
   const durLabel = exp => (exp > 0 ? "⏳ 기간 허용" : "♾️ 계속");
@@ -247,7 +242,7 @@ const Gate = (() => {
   }
   function applyNotAllowed(status, reason) {
     state.allowed = false;
-    state.canHost = state.isAdmin || legacyHost;
+    state.canHost = state.isAdmin;
     state.freeLeft = state.isMember ? freeLeft(state.uid) : 0;
     const free = !state.canHost && state.freeLeft > 0;      // 💞 브릿지 회원 무료 시간
     state.unlocked = SOLO_OPEN || state.canHost || free;
@@ -285,7 +280,7 @@ const Gate = (() => {
   async function switchUser(u) {
     user = u;
     state.uid = u.uid;
-    state.isAdmin = false; state.isMember = false; state.canApprove = false; legacyHost = false;
+    state.isAdmin = false; state.isMember = false; state.canApprove = false;
     if (devWatch) { try { devWatch.off(); } catch (e) {} devWatch = null; }
     watching = false;
     stopPresence();                                          // 방문자 기록도 새 uid 로 (checkPerm1 → startPresence)
@@ -318,40 +313,13 @@ const Gate = (() => {
       return;
     }
 
-    // 예전 가족 방장(arena_hosts) → 계속 허용된 기기 + 관리 창
-    try {
-      const hSnap = await db().ref("arena_hosts/" + user.uid + "/ok").get();
-      if (hSnap.val() === true) {
-        legacyHost = true;
-        state.canApprove = true;
-        applyAllowed("host", 0, state.name);
-      }
-    } catch (e) {}
-
-    // URL에 ?pass=XXXXXX 또는 ?host_invite=XXXXXX 가 있으면 자동 등록 시도
-    const urlPass = (qs.get("pass") || qs.get("host_invite") || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
-    if (urlPass.length === 6 && !state.allowed) {
-      try {
-        await redeemPassCode(urlPass, state.name || "초대손님");
-      } catch (e) {
-        console.warn("허용 코드 자동 등록 실패:", e);
-      }
-    }
-    if (urlPass.length === 6) {
-      try {
-        const cleanUrl = new URL(location.href);
-        cleanUrl.searchParams.delete("pass"); cleanUrl.searchParams.delete("host_invite");
-        history.replaceState(null, "", cleanUrl.toString());
-      } catch (e) {}
-    }
-
     if (watching) return;
     watching = true;
     // 내 기기 상태 실시간 감시 (베니 님이 허용하거나 일시정지/차단하면 바로 반영)
     devWatch = db().ref("game_devices/" + user.uid);
     devWatch.on("value", snap => {
       const d = snap.val();
-      if (state.isAdmin || legacyHost) return;
+      if (state.isAdmin) return;
       if (d && typeof d === "object") {
         const exp = Number(d.expiresAt || 0);
         const expired = exp > 0 && now() > exp;
@@ -372,47 +340,10 @@ const Gate = (() => {
     });
   }
 
-  // ── 1) 6자리 허용 코드로 기기 등록 ──────────────────────────────
-  async function redeemPassCode(rawCode, rawName) {
-    await ensureFirebase();
-    const code = String(rawCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-    if (code.length !== 6) throw new Error("6자리 허용 코드를 정확히 입력해 주세요.");
-    const name = String(rawName || state.name || "친구").trim().slice(0, 12) || "친구";
-    lsSet(NAME_KEY, name);
-    state.name = name;
-
-    // game_passes/{code} 먼저, 없으면 예전 가족 방장 코드 arena_invites/{code} (→ 계속 허용)
-    const pSnap = await db().ref("game_passes/" + code).get();
-    let hours = 0;
-    if (pSnap.exists()) {
-      const p = pSnap.val() || {};
-      if (p.revoked) throw new Error("이미 취소된 코드예요.");
-      hours = Number(p.hours || (p.role === "temp24h" ? 24 : 0));
-    } else {
-      const hSnap = await db().ref("arena_invites/" + code).get();
-      if (!hSnap.exists()) throw new Error("맞지 않거나 끝난 코드예요.");
-    }
-
-    const role = roleOf(hours);
-    const expiresAt = hours > 0 ? now() + hours * 3600 * 1000 : 0;
-    await db().ref("game_devices/" + user.uid).set({
-      name,
-      role,
-      status: "active",
-      passCode: code,
-      expiresAt,
-      ua: detectDeviceName(),
-      t: TS(),
-      lastSeen: TS(),
-    });
-    applyAllowed(role, expiresAt, name);
-    return { role, expiresAt, name };
-  }
-
   // 가입 신청: 닉네임 + PIN → 게임 공통 프로필(me.js GME) 만들기·이어 받기. 아케이드 첫 화면처럼 me.js 가 없는 곳은 불러옴
   async function registerProfile(name, pin) {
     await ensureFirebase();
-    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=13"); } catch (e) {} }
+    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=14"); } catch (e) {} }
     if (!window.GME || !GME.register) return { name };
     return GME.register(db(), name, pin);
   }
@@ -472,27 +403,7 @@ const Gate = (() => {
     return true;
   }
 
-  // ── 4) 관리자용 허용 코드 발급 & 기기 제어 API ────────────────────
-  // role: "friend"(계속) | "temp24h"(오늘만) — 예전 "host" 는 계속으로
-  async function createPass({ role = "friend", label = "" } = {}) {
-    await ensureFirebase();
-    const code = genCode6();
-    if (role !== "temp24h") role = "friend";
-    const hours = role === "temp24h" ? 24 : 0;
-    const item = {
-      code,
-      role,
-      hours,
-      label: String(label || (hours ? "오늘만" : "계속")).slice(0, 20),
-      by: user.uid,
-      t: TS(),
-    };
-    await db().ref("game_passes/" + code).set(item);
-    const u = new URL(location.origin + "/game/");
-    u.searchParams.set("pass", code);
-    return { code, role, hours, url: u.toString() };
-  }
-
+  // ── 4) 관리자용 기기 제어 API ────────────────────
   // days: 1·7·30 = 그만큼, 0 = 계속 (예전 role "temp24h" = 1일)
   async function approveRequest(targetUid, { role = "friend", name = "친구", ua = "", days } = {}) {
     await ensureFirebase();
@@ -679,7 +590,7 @@ const Gate = (() => {
   }
 
   // ── 로그인 창 (mode "lock" = 게임 화면 잠금 · "login" = 아케이드에서 연 창(닫기 됨, next = 허용되면 갈 곳) · "host" = 방 만들기 권한 받기(닫기 됨))
-  //    탭: 📲 허용 요청 · 💞 베니브릿지(회원이면 하루 FREE_MIN 분 무료) · 🔑 허용 코드. 관리자 로그인은 여기 없음 (adminLoginPrompt)
+  //    탭: 📲 허용 요청 · 💞 베니브릿지(회원이면 하루 FREE_MIN 분 무료). 관리자 로그인은 여기 없음 (adminLoginPrompt)
   let lockEl = null, lockMode = "lock", lockNext = "", lockRender = null, lockSig = "", hostWaiters = [];
   const settleHost = ok => { const w = hostWaiters.splice(0); for (const f of w) { try { f(ok); } catch (e) {} } };
   function showLockOverlay({ mode = "lock", title = "", next = "" } = {}) {
@@ -694,9 +605,9 @@ const Gate = (() => {
       document.body.appendChild(lockEl);
     }
     const isHostMode = mode === "host", canClose = mode !== "lock";
-    // 10-31 베니 님: 탭 대신 '가입 신청' 한 장 — 닉네임(게임 프로필) · PIN · 한마디 · 기간. 💞 베니브릿지 회원은 기본 권한 안내(체크), 허용 코드는 아래 작은 링크
-    let want = "week", bmOpen = false, codeOpen = false;
-    const form = { name: (() => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } })() || state.name || "", pin: "", note: "", code: "" };
+    // 10-31 베니 님: 탭 대신 '가입 신청' 한 장 — 닉네임(게임 프로필) · PIN · 한마디 · 기간. 💞 베니브릿지 회원은 기본 권한 안내(체크)
+    let want = "week", bmOpen = false;
+    const form = { name: (() => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } })() || state.name || "", pin: "", note: "" };
     const myProfName = () => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } };
     const render = () => {
       lockSig = sigOf();
@@ -750,11 +661,6 @@ const Gate = (() => {
         <div class="bgate-err" id="bgReqMsg"></div>
         <button class="bgate-btn green" id="bgReqBtn">📮 가입 신청 보내기</button>
         <div id="bgReqWait" hidden class="bgate-wait"></div>
-        <div class="bgate-more"><button type="button" id="bgCodeTgl">🔑 베니에게 코드를 받았어요</button></div>
-        <div id="bgCodeBox"${codeOpen ? "" : " hidden"}><div style="display:flex;gap:8px;margin-top:4px">
-          <input class="bgate-inp code" id="bgCodeVal" maxlength="6" placeholder="6자리 코드" autocomplete="off" autocapitalize="characters" spellcheck="false" style="flex:1" value="${esc(form.code)}">
-          <button class="bgate-btn primary sm" id="bgCodeBtn" style="padding:11px 14px">🔓 시작</button>
-        </div><p class="bgate-hint">코드를 넣으면 기다리지 않고 바로 허용돼요 (닉네임도 위에 적어 주세요).</p></div>
       `;
       const nameInp = body.querySelector("#bgReqName"), pinInp = body.querySelector("#bgReqPin"), noteInp = body.querySelector("#bgReqNote");
       const msgEl = body.querySelector("#bgReqMsg"), reqBtn = body.querySelector("#bgReqBtn"), waitBox = body.querySelector("#bgReqWait");
@@ -794,21 +700,6 @@ const Gate = (() => {
           msgEl.textContent = e.message || "신청을 보내지 못했어요.";
           reqBtn.disabled = false;
           reqBtn.textContent = "📮 가입 신청 보내기";
-        }
-      };
-      body.querySelector("#bgCodeTgl").onclick = () => { codeOpen = !codeOpen; body.querySelector("#bgCodeBox").hidden = !codeOpen; if (codeOpen) body.querySelector("#bgCodeVal").focus(); };
-      const codeInp = body.querySelector("#bgCodeVal"), codeBtn = body.querySelector("#bgCodeBtn");
-      codeInp.oninput = () => { form.code = codeInp.value; };
-      codeBtn.onclick = async () => {
-        const nm = nameInp.value.trim().slice(0, 6);
-        if (!nm) { msgEl.textContent = "닉네임을 먼저 적어 주세요."; nameInp.focus(); return; }
-        codeBtn.disabled = true;
-        try {
-          if (pinInp.value.length === 4 || sameDev()) await registerProfile(nm, pinInp.value).catch(() => {});
-          await redeemPassCode(codeInp.value, nm);
-        } catch (e) {
-          msgEl.textContent = e.message || "코드를 확인하지 못했어요.";
-          codeBtn.disabled = false;
         }
       };
       lockEl.querySelectorAll("[data-close]").forEach(b => { b.onclick = () => hideLockOverlay(false); });
@@ -1060,28 +951,12 @@ const Gate = (() => {
           </div>
 
           <div class="bgate-sec">
-            <h4><span>🔑 허용 코드 · 링크 만들기</span></h4>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px">
-              <button class="bgate-btn green sm" data-mkpass="friend" style="padding:10px">♾️ 계속 허용 코드</button>
-              <button class="bgate-btn primary sm" data-mkpass="temp24h" style="padding:10px">⏳ 오늘만 코드 (24시간)</button>
-            </div>
-            <div id="bgPassResult" hidden style="margin-top:10px;padding:12px;border-radius:10px;background:#090e15;border:1px solid #334155"></div>
-          </div>
-
-          <div class="bgate-sec">
             <h4><span>📱 허용된 기기</span> <span class="bgate-meta" id="bgDevCount">0대</span></h4>
             <div id="bgDevList"><div class="bgate-meta">기기를 불러오는 중...</div></div>
           </div>
         ` : state.allowed ? "" : `
           <div class="bgate-sec">
-            <h4><span>🔑 허용 코드가 있나요?</span></h4>
-            <div style="display:flex;gap:8px">
-              <input class="bgate-inp code" id="bgModalCode" maxlength="6" placeholder="6자리 코드" style="flex:1">
-              <button class="bgate-btn primary sm" id="bgModalRedeem" style="padding:11px 16px">등록</button>
-            </div>
-          </div>
-          <div class="bgate-sec">
-            <h4><span>📲 코드가 없으면</span></h4>
+            <h4><span>📲 아직 허용 전이에요</span></h4>
             <button class="bgate-btn green" id="bgModalReq">베니에게 허용 요청하기</button>
           </div>
         `}
@@ -1095,7 +970,7 @@ const Gate = (() => {
     adminEl.querySelector("#bgProfile").onclick = async () => {
       try {
         await ensureFirebase();
-        if (!window.GME && GATE_BASE) await loadScript(GATE_BASE + "me.js?v=13");
+        if (!window.GME && GATE_BASE) await loadScript(GATE_BASE + "me.js?v=14");
         if (!window.GME) throw new Error("프로필을 불러오지 못했어요");
         const m = GME.me ? await GME.manage(db()) : await GME.pick(db(), { canClose: true });
         if (m && m.name) { state.name = m.name; lsSet(NAME_KEY, m.name); notify(); }
@@ -1104,49 +979,10 @@ const Gate = (() => {
     };
 
     if (!canApprove) {
-      const rBtn = adminEl.querySelector("#bgModalRedeem");
-      if (rBtn) rBtn.onclick = async () => {
-        try {
-          await redeemPassCode(adminEl.querySelector("#bgModalCode").value, profName() || state.name);
-          renderAdminModal();
-        } catch (e) { alert(e.message); }
-      };
       const qBtn = adminEl.querySelector("#bgModalReq");
       if (qBtn) qBtn.onclick = () => { closeAdminModal(); requestHost({}).then(ok => { if (ok) openAdminModal(); }); };
       return;
     }
-
-    // 허용 코드 발급 버튼
-    adminEl.querySelectorAll("[data-mkpass]").forEach(btn => {
-      btn.onclick = async () => {
-        const role = btn.dataset.mkpass;
-        try {
-          const res = await createPass({ role });
-          const box = adminEl.querySelector("#bgPassResult");
-          box.hidden = false;
-          const roleLabel = role === "temp24h" ? "⏳ 오늘만 코드 (24시간)" : "♾️ 계속 허용 코드";
-          box.innerHTML = `
-            <div style="font-size:12.5px;color:#66c0f4;font-weight:700;margin-bottom:4px">${roleLabel} 만들었어요!</div>
-            <div style="font-size:22px;font-weight:800;letter-spacing:5px;color:#fbbf24;margin:4px 0">${esc(res.code)}</div>
-            <div style="font-size:11.5px;color:#94a3b8;word-break:break-all;margin-bottom:8px">${esc(res.url)}</div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="bgate-btn primary sm" id="bgCopyLink">📋 링크 복사 (누르면 바로 허용)</button>
-              <button class="bgate-btn ghost sm" id="bgCopyCode">📋 코드만 복사</button>
-            </div>
-          `;
-          box.querySelector("#bgCopyLink").onclick = () => {
-            navigator.clipboard.writeText(res.url).catch(() => {});
-            box.querySelector("#bgCopyLink").textContent = "✅ 링크 복사됨!";
-          };
-          box.querySelector("#bgCopyCode").onclick = () => {
-            navigator.clipboard.writeText(res.code).catch(() => {});
-            box.querySelector("#bgCopyCode").textContent = "✅ 코드 복사됨!";
-          };
-        } catch (e) {
-          alert("코드를 만들지 못했어요 (관리자 권한 필요): " + (e.message || e));
-        }
-      };
-    });
 
     // 허용 요청 목록 구독 (아케이드 첫 화면 목록과 같은 줄)
     const reqRef = db().ref("game_requests");
@@ -1247,9 +1083,8 @@ const Gate = (() => {
     } else {
       state.status = "open";
     }
-    // OPEN_SOLO 면 꼭 필요할 때만 서버 확인 (허용 코드 링크 · 허용됐던 기기 · 포털 · 관리자)
-    const urlPass = qs.get("pass") || qs.get("host_invite");
-    if (!OPEN_SOLO || cached || urlPass || IS_PORTAL || lsGet("game.gate.admin") === "1") {
+    // OPEN_SOLO 면 꼭 필요할 때만 서버 확인 (허용됐던 기기 · 포털 · 관리자)
+    if (!OPEN_SOLO || cached || IS_PORTAL || lsGet("game.gate.admin") === "1") {
       checkPermissionsAndWatch().catch(e => console.warn("Gate init error:", e));
     }
   }
@@ -1276,8 +1111,6 @@ const Gate = (() => {
     closeAdminModal,
     mountRequests,
     mountVisitors,
-    createPass,
-    redeemPassCode,
     requestDeviceApproval,
     loginAdminWithPassword,
     approveRequest,

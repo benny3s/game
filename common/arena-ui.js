@@ -627,7 +627,7 @@
     hasInvite: () => !!Arena.roomFromUrl(),
     checkUrl(fn) {
       const sp = new URLSearchParams(location.search);
-      if (Arena.roomFromUrl() || sp.get("room") === "host" || sp.has("host_invite")) {
+      if (Arena.roomFromUrl() || sp.get("room") === "host") {
         setTimeout(() => {
           if (typeof fn === "function") fn();
           else if (fn && typeof fn === "object") open(fn);

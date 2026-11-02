@@ -265,10 +265,12 @@ if (typeof window !== "undefined") (() => {
   async function getMeta(gid) { const m = await S.get(G(gid) + "/meta"); if (!m) throw new Error("모임을 찾지 못했어요"); return m; }
   async function getMembers(gid) { return (await S.get(G(gid) + "/members")) || {}; }
   async function stackFor(pid, gid) { const m = await S.get(G(gid) + "/members/" + pid); return m ? int(m.balance) : 0; }
+  // 장부 줄마다 쓴 기기(규칙이 로그인한 uid 와 같은지 확인) — by(이름)는 누구나 적을 수 있어서
+  const myUid = () => { try { return Arena.db().app.auth().currentUser.uid; } catch (e) { return null; } };
   function ledgerLine(type, pid, amount, info) {
     info = info || {};
     return strip({
-      t: S.now(), type, pid: String(pid || "").slice(0, 40), amount: int(amount), by: byName(),
+      t: S.now(), type, pid: String(pid || "").slice(0, 40), amount: int(amount), by: byName(), u: MOCK ? null : myUid(),
       game: info.game ? clean(info.game, 16) : null, round: Number.isFinite(info.round) ? Math.max(0, Math.min(1e6, Math.round(info.round))) : null,
       room: info.room ? clean(info.room, 8) : null, name: info.name ? clean(info.name, 12) : null, note: info.note ? clean(info.note, 60) : null,
     });

@@ -8,7 +8,7 @@
         "$code": {
           ".validate": "$code.length === 4",
           "meta": {
-            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1)) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "state": {
@@ -66,7 +66,7 @@
           ".validate": "$code.length === 4",
           ".write": "auth != null && !newData.exists() && (root.child('sc/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
           "meta": {
-            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1)) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "state": {
@@ -109,7 +109,7 @@
           ".validate": "$code.length === 4",
           ".write": "auth != null && !newData.exists() && (root.child('nyang/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
           "meta": {
-            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)) || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1)) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "players": {
@@ -146,42 +146,19 @@
         }
       }
     },
-    "arena_invites": {
-      ".read": "auth != null && auth.token.admin === 1",
-      "$token": {
-        ".read": "auth != null",
-        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-        ".validate": "$token.length === 6"
-      }
-    },
-    "arena_hosts": {
-      ".read": "auth != null && auth.token.admin === 1",
+    "game_devices": {
+      ".read": "auth != null && (auth.token.admin === 1)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1)",
-        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && newData.child('ok').val() === true && newData.child('token').isString() && newData.child('token').val().matches(/^[A-Za-z0-9]{6}$/) && (root.child('arena_invites/' + newData.child('token').val()).exists() || root.child('game_passes/' + newData.child('token').val() + '/role').val() === 'host')))"
-      }
-    },
-    "game_passes": {
-      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-      "$code": {
-        ".read": "auth != null",
-        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-        ".validate": "!newData.exists() || ($code.length === 6 && newData.child('role').isString())"
-      }
-    },
-    "game_devices": {
-      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-      "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (auth.uid === $uid && ((newData.child('passCode').isString() && newData.child('passCode').val().matches(/^[A-Za-z0-9]{6}$/) && newData.child('status').val() === 'active' && ((root.child('game_passes/' + newData.child('passCode').val()).exists() && root.child('game_passes/' + newData.child('passCode').val() + '/revoked').val() !== true && (!((root.child('game_passes/' + newData.child('passCode').val() + '/hours').isNumber() && root.child('game_passes/' + newData.child('passCode').val() + '/hours').val() > 0) || root.child('game_passes/' + newData.child('passCode').val() + '/role').val() === 'temp24h') || (newData.child('expiresAt').isNumber() && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 90000000))) || root.child('arena_invites/' + newData.child('passCode').val()).exists())) || (data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('role').val() === data.child('role').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))))",
+        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('role').val() === data.child('role').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))",
         ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString())"
       }
     },
     "game_requests": {
-      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+      ".read": "auth != null && (auth.token.admin === 1)",
       "$uid": {
-        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
-        ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (auth.uid === $uid && (!newData.exists() || (newData.child('t').val() === now && (!data.exists() || data.child('status').val() !== 'pending' || data.child('t').val() < now - 600000)))))",
+        ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1)",
+        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && (!newData.exists() || (newData.child('t').val() === now && (!data.exists() || data.child('status').val() !== 'pending' || data.child('t').val() < now - 600000)))))",
         ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString() && newData.child('status').val().length <= 16 && (!newData.child('note').exists() || (newData.child('note').isString() && newData.child('note').val().length <= 60)) && (!newData.child('want').exists() || newData.child('want').val().matches(/^(today|day|week|month|always)$/)) && (!newData.child('ua').exists() || (newData.child('ua').isString() && newData.child('ua').val().length <= 60)) && (!newData.child('game').exists() || (newData.child('game').isString() && newData.child('game').val().length <= 20)))"
       }
     },
@@ -194,7 +171,7 @@
             ".validate": "$code.length === 4",
             ".write": "auth != null && !newData.exists() && (root.child('arena/' + $game + '/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
             "meta": {
-              ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))) || data.child('host').val() === auth.uid)",
+              ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))) || data.child('host').val() === auth.uid)",
               ".validate": "!newData.exists() || (newData.child('host').val() === auth.uid && newData.child('max').isNumber() && newData.child('max').val() >= 1 && newData.child('max').val() <= 16 && (!newData.child('title').exists() || (newData.child('title').isString() && newData.child('title').val().length <= 20)) && (!newData.child('lock').exists() || newData.child('lock').val() === true))"
             },
             "players": {
@@ -294,9 +271,9 @@
     },
     "bank": {
       "_list": {
-        ".read": "auth != null",
+        ".read": "auth != null && (auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
         "$gid": {
-          ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          ".write": "auth != null && (auth.token.admin === 1 || ((root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)) && !data.exists() && newData.exists()))",
           ".validate": "!newData.exists() || ($gid.matches(/^g[A-Za-z0-9_-]{3,31}$/) && newData.hasChildren(['name', 't']))",
           "name": {
             ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
@@ -311,10 +288,10 @@
       },
       "$gid": {
         ".validate": "$gid.matches(/^g[A-Za-z0-9_-]{3,31}$/)",
-        ".write": "auth != null && !newData.exists() && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+        ".write": "auth != null && !newData.exists() && auth.token.admin === 1",
         "meta": {
           ".read": "auth != null",
-          ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          ".write": "auth != null && (auth.token.admin === 1 || ((root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)) && !data.exists() && newData.exists()))",
           ".validate": "!newData.exists() || newData.hasChildren(['name', 'chipWon', 'loanUnit'])",
           "name": {
             ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
@@ -331,8 +308,12 @@
           "by": {
             ".validate": "newData.isString() && newData.val().length <= 20"
           },
-          "kind": { ".validate": "newData.isString() && newData.val().length <= 8" },
-          "expires": { ".validate": "newData.isNumber()" },
+          "kind": {
+            ".validate": "newData.isString() && newData.val().length <= 8"
+          },
+          "expires": {
+            ".validate": "newData.isNumber()"
+          },
           "$other": {
             ".validate": false
           }
@@ -340,7 +321,7 @@
         "members": {
           ".read": "auth != null",
           "$pid": {
-            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".write": "auth != null && (auth.token.admin === 1 || ((root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)) && (newData.exists() || $gid.beginsWith('gbet-'))))",
             ".validate": "!newData.exists() || ($pid.length <= 40 && newData.hasChildren(['name', 'borrowed', 'balance']))",
             "name": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12"
@@ -360,9 +341,9 @@
           }
         },
         "ledger": {
-          ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          ".read": "auth != null && (auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
           "$id": {
-            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".write": "auth != null && (auth.token.admin === 1 || ((root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)) && !data.exists() && newData.exists()))",
             ".validate": "!newData.exists() || ($id.length <= 40 && newData.hasChildren(['t', 'type', 'amount']))",
             "t": {
               ".validate": "newData.isNumber()"
@@ -399,13 +380,16 @@
             },
             "$other": {
               ".validate": false
+            },
+            "u": {
+              ".validate": "newData.isString() && newData.val() === auth.uid"
             }
           }
         },
         "settlements": {
-          ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+          ".read": "auth != null && (auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
           "$id": {
-            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".write": "auth != null && (auth.token.admin === 1 || ((root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)) && !data.exists() && newData.exists()))",
             ".validate": "!newData.exists() || ($id.length <= 40 && newData.hasChildren(['t', 'by']))",
             "t": {
               ".validate": "newData.isNumber()"
@@ -475,7 +459,7 @@
         "pairs": {
           ".read": "auth != null",
           "$pk": {
-            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".write": "auth != null && (auth.token.admin === 1 || ((root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)) && newData.exists()))",
             ".validate": "!newData.exists() || ($pk.length >= 3 && $pk.length <= 120 && newData.hasChildren(['a', 'b', 'wa', 'wb', 'ma']))",
             "a": {
               ".validate": "newData.isString() && newData.val().length <= 40"
@@ -506,7 +490,7 @@
         "records": {
           ".read": "auth != null",
           "$pid": {
-            ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))",
+            ".write": "auth != null && (auth.token.admin === 1 || ((root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)) && newData.exists()))",
             ".validate": "!newData.exists() || ($pid.length <= 40 && newData.hasChildren(['name', 'w', 'l']))",
             "name": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 12"
@@ -524,7 +508,7 @@
               ".validate": false
             }
           },
-          ".write": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))"
+          ".write": "auth != null && auth.token.admin === 1"
         }
       }
     },
@@ -536,12 +520,53 @@
           ".validate": "$game.matches(/^[a-z0-9]{2,20}$/)",
           "$pid": {
             ".write": "auth != null && newData.exists()",
-            "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
-            "t": { ".validate": "newData.isNumber()" },
-            "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-            "base": { "$dev": { "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-            "vs": { "$opp": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-            "$other": { ".validate": false }
+            "name": {
+              ".validate": "newData.isString() && newData.val().length <= 12"
+            },
+            "t": {
+              ".validate": "newData.isNumber()"
+            },
+            "m": {
+              "$mode": {
+                ".validate": "$mode.matches(/^[fah]$/)",
+                "t": {
+                  "$tier": {
+                    ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)",
+                    "$k": {
+                      ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+                    }
+                  }
+                },
+                "$k": {
+                  ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+                }
+              }
+            },
+            "base": {
+              "$dev": {
+                "t": {
+                  "$tier": {
+                    ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)",
+                    "$k": {
+                      ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+                    }
+                  }
+                },
+                "$k": {
+                  ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+                }
+              }
+            },
+            "vs": {
+              "$opp": {
+                "$k": {
+                  ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+                }
+              }
+            },
+            "$other": {
+              ".validate": false
+            }
           }
         }
       },
@@ -549,10 +574,15 @@
         ".read": "auth != null",
         "$day": {
           ".validate": "$day.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
-          "$game": { "$pid": { ".write": "auth != null && newData.exists()", ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" } }
+          "$game": {
+            "$pid": {
+              ".write": "auth != null && newData.exists()",
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000"
+            }
+          }
         }
       },
-            "gp": {
+      "gp": {
         "players": {
           ".read": "auth != null",
           "$pid": {
@@ -608,13 +638,54 @@
       "$game": {
         ".validate": "$game.matches(/^[a-z0-9]{2,20}$/)",
         "$pid": {
-          ".write": "auth != null && newData.exists()",
-          "name": { ".validate": "newData.isString() && newData.val().length <= 12" },
-          "t": { ".validate": "newData.isNumber()" },
-          "m": { "$mode": { ".validate": "$mode.matches(/^[fah]$/)", "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-          "base": { "$dev": { "t": { "$tier": { ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)", "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } }, "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-          "vs": { "$opp": { "$k": { ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000" } } },
-          "$other": { ".validate": false }
+          ".write": "auth != null && newData.exists() && ((auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now))) || auth.token.m === 1)",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 12"
+          },
+          "t": {
+            ".validate": "newData.isNumber()"
+          },
+          "m": {
+            "$mode": {
+              ".validate": "$mode.matches(/^[fah]$/)",
+              "t": {
+                "$tier": {
+                  ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)",
+                  "$k": {
+                    ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+                  }
+                }
+              },
+              "$k": {
+                ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+              }
+            }
+          },
+          "base": {
+            "$dev": {
+              "t": {
+                "$tier": {
+                  ".validate": "$tier.matches(/^[A-Za-z0-9_-]{1,20}$/)",
+                  "$k": {
+                    ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+                  }
+                }
+              },
+              "$k": {
+                ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+              }
+            }
+          },
+          "vs": {
+            "$opp": {
+              "$k": {
+                ".validate": "newData.isNumber() && newData.val() > -1000000000 && newData.val() < 1000000000"
+              }
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
         }
       }
     },
@@ -622,7 +693,12 @@
       ".read": "auth != null",
       "$day": {
         ".validate": "$day.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
-        "$game": { "$pid": { ".write": "auth != null && newData.exists()", ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000" } }
+        "$game": {
+          "$pid": {
+            ".write": "auth != null && newData.exists() && ((auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now))) || auth.token.m === 1)",
+            ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000"
+          }
+        }
       }
     },
     "game_plays": {
@@ -639,7 +715,7 @@
       }
     },
     "game_presence": {
-      ".read": "auth != null && (auth.token.admin === 1 || root.child('arena_hosts/' + auth.uid + '/ok').val() === true)",
+      ".read": "auth != null && (auth.token.admin === 1)",
       "$uid": {
         ".write": "auth != null && auth.uid === $uid",
         ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('game').isString() && newData.child('game').val().length <= 20 && newData.child('t').isNumber())",

@@ -78,18 +78,14 @@ const Arena = (() => {
     // 관리자 = 토큰(admin:1) 또는 Gate 가 토큰으로 확인한 것만 (이 기기의 예전 표시 game.gate.admin 은 안 믿음 — 계정이 바뀌어도 남아서)
     if (!adminFlag && window.Gate && Gate.state && Gate.state.isAdmin === true) adminFlag = true;
     if (adminFlag || TEST_HOST || LOCAL) { hostFlag = true; return; }
-    // 방 만들기 = 관리자 · 허용된 기기(game_devices 활성·안 끝남) · 옛 가족 방장(arena_hosts — 계속 허용으로 침)
+    // 방 만들기 = 관리자 · 허용된 기기(game_devices 활성·안 끝남)
     const get = path => Promise.race([app.database().ref(path).get(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2000))]);
     let ok = false;
-    try { ok = (await get("arena_hosts/" + user.uid + "/ok")).val() === true; }
-    catch (e) { try { ok = localStorage.getItem("game.arena.host_ok") === user.uid; } catch (_) {} }
-    if (!ok) {
-      try {
-        const d = (await get("game_devices/" + user.uid)).val();
-        const exp = Number((d && d.expiresAt) || 0);
-        ok = !!d && d.status === "active" && (!exp || exp > now());
-      } catch (e) {}
-    }
+    try {
+      const d = (await get("game_devices/" + user.uid)).val();
+      const exp = Number((d && d.expiresAt) || 0);
+      ok = !!d && d.status === "active" && (!exp || exp > now());
+    } catch (e) {}
     if (!ok && window.Gate && Gate.state && (Gate.state.canHost || Gate.state.role === "admin")) ok = true;
     hostFlag = ok;
   }
@@ -110,36 +106,12 @@ const Arena = (() => {
       user = await new Promise(ok => { const t = setTimeout(() => ok(null), 8000); const off = app.auth().onAuthStateChanged(u => { clearTimeout(t); off(); ok(u); }); });
       if (!user) user = (await app.auth().signInAnonymously()).user;
       watchOffset();
-      const inv = new URLSearchParams(location.search).get("host_invite");
-      if (inv) { try { await claimHostInvite(inv); } catch (e) {} }
       await refreshPerms();
       return app;
     })();
     try { return await loading; } catch (e) { loading = null; throw e; }
   }
 
-  // 관리자(베니 님)가 가족(와이프)에게 방 만들기(호스트) 권한을 줄 초대 코드 6자리 발급
-  async function createHostInvite() {
-    await init();
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-    await db().ref("arena_invites/" + code).set({ by: user.uid, t: TS() });
-    const u = new URL(location.href);
-    u.searchParams.delete("room");
-    u.searchParams.set("host_invite", code);
-    return { code, url: u.toString() };
-  }
-
-  // 가족(와이프)이 6자리 초대 코드로 방장(Host) 권한 등록
-  async function claimHostInvite(rawCode, name) {
-    if (!app) await init();
-    const code = String(rawCode || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
-    if (code.length !== 6) throw new Error("호스트 등록 코드 6자리를 입력해 주세요");
-    await db().ref("arena_hosts/" + user.uid).set({ ok: true, token: code, name: String(name || "가족").slice(0, 12), t: TS() });
-    try { localStorage.setItem("game.arena.host_ok", user.uid); } catch (e) {}
-    hostFlag = true;
-    return true;
-  }
   // 같은 계정으로 같은 방에 또 들어오면(관리자로 PC·휴대폰 둘 다 등) 한 사람으로 겹치므로, 이 탭만 임시 계정
   const db = () => app.database();
   const TS = () => firebase.database.ServerValue.TIMESTAMP;
@@ -615,7 +587,7 @@ const Arena = (() => {
     init, host, join, listRooms, deleteRoom, inviteUrl, roomFromUrl, cleanCode, now, GUEST, ROOT, mock: false,
     db: () => app && app.database(), get uid() { return user && user.uid; }, get ready() { return !!app; },
     get canHost() { return hostFlag; }, get isAdmin() { return adminFlag; },
-    createHostInvite, claimHostInvite, refreshPerms, ...ACCESS_API,
+    refreshPerms, ...ACCESS_API,
   };
 })();
 window.Arena = Arena;   // 은행(bank.js)·포털이 window.Arena 로 찾음 (const 는 window 에 안 붙음)
