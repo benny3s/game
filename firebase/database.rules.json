@@ -8,7 +8,7 @@
         "$code": {
           ".validate": "$code.length === 4",
           "meta": {
-            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1)) || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "state": {
@@ -109,7 +109,7 @@
           ".validate": "$code.length === 4",
           ".write": "auth != null && !newData.exists() && (root.child('nyang/rooms/' + $code + '/meta/host').val() === auth.uid || !data.child('meta').exists() || !data.child('players').exists() || !data.child('players').child(data.child('meta/host').val() + '').exists())",
           "meta": {
-            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1)) || data.child('host').val() === auth.uid)",
+            ".write": "auth != null && ((!data.exists() && (auth.token.admin === 1 || (root.child('game_devices/' + auth.uid + '/status').val() === 'active' && (!root.child('game_devices/' + auth.uid + '/expiresAt').exists() || root.child('game_devices/' + auth.uid + '/expiresAt').val() === 0 || root.child('game_devices/' + auth.uid + '/expiresAt').val() > now)))) || data.child('host').val() === auth.uid)",
             ".validate": "!newData.exists() || newData.child('host').val() === auth.uid"
           },
           "players": {

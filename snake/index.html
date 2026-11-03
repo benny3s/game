@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>지렁이 대결</title>
+<!-- 아이폰 두 손가락·두 번 톡 확대 막기 (다른 게임은 common/cozy 에) -->
+<script>try{for(const ev of ["gesturestart","gesturechange","gestureend"])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});document.addEventListener("touchmove",e=>{if(e.touches.length>1||(e.scale&&e.scale!==1))e.preventDefault()},{passive:false});document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false})}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -236,6 +238,6 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
 <script src="render.js?v=24"></script>
 <script src="ac.js?v=24"></script>
 <script src="net.js?v=25"></script>
-<script src="main.js?v=27"></script>
+<script src="main.js?v=28"></script>
 </body>
 </html>

@@ -13,7 +13,7 @@
         Gate.canManage() → boolean  관리자 또는 허용된 기기(활성·안 끝남) — 방 만들기·(다음) 은행 초기화 같은 '관리' 권한의 한 곳
         Gate.requestHost({ title }) → Promise<boolean>  방 만들기 권한이 없으면 허용 창을 띄우고, 허용되면 true · 닫으면 false
         규칙(RTDB)에서 같은 판단: auth.token.admin === 1 ||
-          (game_devices/{uid}/status === 'active' && (expiresAt 없음 || 0 || > now))  — arena/$game/rooms/$code/meta 만들기에 씀
+          (game_devices/{uid}/status === 'active' && (expiresAt 없음 || 0 || > now))  — arena/$game/rooms/$code/meta · nyang·snake rooms/$code/meta 만들기에 씀
         Gate.onChange(fn) · openAdminModal() · requestDeviceApproval … */
 const Gate = (() => {
   // ── 설정: true = 혼자 하기는 누구나 (잠금은 방 만들기 때만) · false = 허용된 기기만 게임 페이지가 열림

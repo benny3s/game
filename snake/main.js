@@ -120,7 +120,7 @@
       roomCode = hostCtl.code; msg("");
       LOG.info({ room: roomCode }); LOG.joined(meId, { name: settings.name, role: "방장" });
       showLobby("host");
-    } catch (e) { msg("방을 못 만들었어요: " + (e.message || e)); mode = "menu"; }
+    } catch (e) { msg(/PERMISSION_DENIED/.test(String(e && e.message)) ? "방 만들기는 허용된 기기만 돼요. 아케이드에서 허용을 요청하거나, 친구의 방 코드로 들어가 주세요" : "방을 못 만들었어요: " + (e.message || e)); mode = "menu"; }
   }
   // 방장: 대기실에서 '게임 시작'
   function hostStartGame() {

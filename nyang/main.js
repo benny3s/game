@@ -154,6 +154,8 @@
     afterMove("x", k);
   });
   window.addEventListener("pointerup", () => { drag = null; });
+  // 아이폰: 칸을 두 번 누르는 것이 화면 확대로 먹히지 않게 (판은 pointerdown 으로 받으니 click 은 안 씀)
+  $("board").addEventListener("touchend", e => e.preventDefault(), { passive: false });
 
   function setAutoX(v) { autoX = v; store.set("autoX", v); $("autoX").setAttribute("aria-pressed", v); if (G) G.autoX = v; }
   $("autoX").onclick = () => setAutoX(!autoX);
@@ -551,7 +553,10 @@
     conn(ok, why) { if (!ok && why) toast(why, 3000); },
     closed() { toast("방이 닫혔어요", 3000); leaveRoom(); },
   };
+  // 방 만들기 = 관리자 · 허용된 기기 (규칙도 같은 판단, Gate 는 me.js 가 불러옴). 아니면 허용 창 → 허용되면 이어서
+  const canHost = async () => !window.Gate || !Gate.requestHost || Gate.state.canHost || await Gate.requestHost({ title: "냥도쿠" });
   async function makeRoom() {
+    if (!(await canHost())) return;
     if (!(await needName())) return;
     leaving = false;
     try {
