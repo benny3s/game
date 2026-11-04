@@ -127,9 +127,9 @@ const SNK = (() => {
     get timeLeft() { return this.limit ? Math.max(0, this.limit - this.elapsed) : null; }
     finish() {
       this.over = true;
-      // 라운드: 끝날 때 길이(그때 죽어 있으면 0) = 순위표와 같음, 같으면 먼저 그 길이에 닿은 쪽 · 배틀로얄: 살아남은 순서
+      // 라운드: 끝날 때 길이(그때 죽어 있으면 0) = 순위표와 같음, 같으면 먼저 그 길이에 닿은 쪽 · 배틀로얄: 살아남은 순서 (중간 입장 구경꾼은 순위에 안 넣음)
       const score = s => this.mode === "royale" ? (s.alive ? 1e6 + s.length : (s.outAt || 0)) : (s.alive ? s.length : 0);
-      this.results = [...this.snakes].sort((a, b) => score(b) - score(a) || (a.bestAt || 0) - (b.bestAt || 0)).map(s => ({ id: s.id, name: s.name, hue: s.hue, len: Math.floor(s.alive ? s.length : 0), kills: s.kills, alive: s.alive }));
+      this.results = this.snakes.filter(s => !(s.out && !s.deaths)).sort((a, b) => score(b) - score(a) || (a.bestAt || 0) - (b.bestAt || 0)).map(s => ({ id: s.id, name: s.name, hue: s.hue, len: Math.floor(s.alive ? s.length : 0), kills: s.kills, alive: s.alive }));
     }
     step(now, hooks = {}) {
       const { snakes, food } = this;
