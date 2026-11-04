@@ -37,6 +37,10 @@ async function newCtx(browser, { fake, qa, ls, mock } = {}) {
       const rel = u.pathname.slice(6);
       const m = /^(?:[a-z]+\/)?(common\/[a-z0-9-]+\.js)$/.exec(rel);
       if (m) return r.fulfill({ status: 200, contentType: 'application/javascript; charset=utf-8', body: fs.readFileSync(path.join(ROOT, m[1]), 'utf8') });
+      if (/^snake\//.test(rel)) {                                  // 지렁이는 진짜 페이지 그대로
+        const f = path.join(ROOT, /\/$/.test(rel) ? rel + 'index.html' : rel);
+        if (fs.existsSync(f)) return r.fulfill({ status: 200, contentType: { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.json': 'application/json' }[path.extname(f)] || 'text/plain', body: fs.readFileSync(f) });
+      }
       const key = rel.replace(/\/?(index\.html)?$/, '');
       if (key in PAGES) return r.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html(PAGES[key]) });
       return r.fulfill({ status: 404, body: '' });
@@ -163,6 +167,36 @@ async function gateAdminTests(browser) {
   }
 }
 
+// ── 11-04 베니 님: 지렁이만 잠금이 없어 허용 안 된 기기도 그냥 함 → 다른 게임처럼 허용된 기기만, 방 링크 손님은 그 방만
+async function snakeGateTests(browser) {
+  console.log('출입 gate.js (지렁이)');
+  const read = p => p.evaluate(async () => {
+    for (let i = 0; i < 80 && !(window.Gate && Gate.state.status !== 'checking'); i++) await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 400));
+    const g = document.getElementById('bennyGateOverlay');
+    return { gate: !!window.Gate, unlocked: !!(window.Gate && Gate.state.unlocked), status: window.Gate && Gate.state.status, lock: !!(g && !g.hidden), game: !!document.getElementById('solo') };
+  });
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'snkNo', claims: {} } } });
+    const s = await read(await open(ctx, PROD + '/game/snake/'));
+    ok(s.gate && !s.unlocked && s.lock, `허용 안 된 기기 → 지렁이도 잠금 창 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'snkRoom', claims: {} } } });
+    const s = await read(await open(ctx, PROD + '/game/snake/?room=ABCD'));
+    ok(s.gate && s.unlocked && !s.lock, `방 링크로 온 손님 → 잠기지 않음 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'snkOk', claims: {} } } });
+    await ctx.addInitScript(() => { window.__fs.tree.game_devices = { snkOk: { status: 'active', expiresAt: 0, role: 'friend', name: '시험' } }; });
+    const s = await read(await open(ctx, PROD + '/game/snake/'));
+    ok(s.gate && s.unlocked && !s.lock, `허용된 기기 → 그대로 함 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+}
+
 // ── presence: 계정이 바뀌면(switchUser) 방문자 기록을 새 uid 자리에 씀 (예전 자리는 권한이 없음)
 async function presenceTests(browser) {
   console.log('출입 gate.js (계정 바뀜 → 방문자 기록)');
@@ -214,7 +248,7 @@ async function mePickTests(browser) {
   const t0 = Date.now();
   const pw = require(PW);
   const browser = await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--mute-audio'] });
-  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, presenceTests, mePickTests]) {
+  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, presenceTests, mePickTests]) {
     try { await t(browser); } catch (e) { fail++; console.log('  ✘ FAIL: 시험 도구 예외 ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | ')); }
   }
   await browser.close();

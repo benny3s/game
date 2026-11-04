@@ -22,6 +22,7 @@
 
   // ── 메뉴 선택지
   try { settings.name = localStorage.getItem("snake-name") || ""; const h = localStorage.getItem("snake-hue"); if (h != null) settings.hue = Number(h); } catch (e) {}
+  if (!settings.name && window.GME && GME.me && GME.me.name) settings.name = GME.me.name;   // 가입할 때 정한 이름
   $("name").value = settings.name;
   // 내 색 고르기 (기억해 둠)
   const HUES = [[48, "노랑"], [25, "주황"], [0, "빨강"], [330, "분홍"], [285, "보라"], [230, "파랑"], [195, "하늘"], [165, "청록"], [120, "초록"], [85, "연두"]];

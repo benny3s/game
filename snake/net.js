@@ -32,8 +32,8 @@ const NET = (() => {
     if (app) return app;
     if (loading) return loading;
     loading = (async () => {
-      await load(SDK + "firebase-app-compat.js");
-      await Promise.all(["firebase-auth-compat.js", "firebase-database-compat.js", "firebase-functions-compat.js"].map(f => load(SDK + f)));
+      if (!window.firebase || !firebase.initializeApp) await load(SDK + "firebase-app-compat.js");   // 잠금(gate.js)이 먼저 불러 뒀으면 그대로 (같은 앱·같은 계정)
+      await Promise.all(["auth", "database", "functions"].filter(k => !firebase[k]).map(k => load(SDK + "firebase-" + k + "-compat.js")));
       if (new URLSearchParams(location.search).has("guest")) {             // 손님 모드: 이 탭만의 익명 계정 (한 컴퓨터에서 여러 명 시험용)
         app = firebase.initializeApp(FB, "guest" + Math.random().toString(36).slice(2, 7));
         await app.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
