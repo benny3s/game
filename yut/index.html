@@ -8,10 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Gowun+Dodum&display=swap">
-<link rel="stylesheet" href="../common/cozy.css?v=13">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <div class="wrap" id="home">
@@ -22,19 +22,19 @@
 
   <section class="card" id="menuCard">
     <div class="tabs" role="tablist">
-      <button class="btn" id="tabLocal" aria-pressed="true">한 기기에서 여럿</button>
-      <button class="btn" id="tabAi" aria-pressed="false">AI와 대결</button>
+      <button class="btn" id="tabAi" aria-pressed="false">혼자</button>
+      <button class="btn" id="tabLocal" aria-pressed="true">한 기기</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
     </div>
 
-    <!-- 한 기기에서 여럿 (TV·태블릿 하나로 돌아가며) -->
+    <!-- 한 기기 (TV·태블릿 하나로 돌아가며 여럿) -->
     <div id="localBox" class="box">
       <p class="lede">TV나 태블릿 하나로 온 가족이 돌아가며 던져요. 팀마다 사람이나 AI를 고르세요.</p>
       <div class="optrow"><span class="small">팀 수</span><div class="seg" id="teamSeg"></div></div>
       <div class="teamrows" id="teamRows"></div>
     </div>
 
-    <!-- AI와 대결 -->
+    <!-- 혼자 (AI와 대결) -->
     <div id="aiBox" class="box" hidden>
       <div class="optrow"><span class="small">내 이름</span><input type="text" id="myName" maxlength="10" placeholder="나"></div>
       <div class="optrow"><span class="small">상대 수</span><div class="seg" id="aiCountSeg"></div></div>
@@ -51,9 +51,11 @@
       <li><b>윷·모</b>가 나오거나 상대 말을 <b>잡으면</b> 한 번 더! 내 말끼리 만나면 <b>업고</b> 같이 가요</li>
       <li>모서리나 가운데(방)에 <b>멈추면</b> 지름길로 가요. 말이 모두 먼저 나오는 팀이 이겨요</li>
     </ul>
-    <button class="btn primary big" id="startBtn">윷 놀러 가기</button>
-    <button class="btn ghost" id="rulesBtn">📖 규칙 · 확률 자세히 보기</button>
-    <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
+    <button class="btn primary big" id="startBtn">시작!</button>
+    <div class="row center minor">
+      <button class="btn ghost" id="rulesBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
+    </div>
   </section>
 </div>
 
@@ -111,6 +113,6 @@
 <script src="../common/coach.js?v=4"></script>
 <script src="core.js?v=2"></script>
 <script src="ai.js?v=2"></script>
-<script src="main.js?v=6"></script>
+<script src="main.js?v=7"></script>
 </body>
 </html>

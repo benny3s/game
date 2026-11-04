@@ -9,10 +9,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
-<link rel="stylesheet" href="../common/cozy.css?v=13">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div class="wrap" id="menu">
@@ -24,14 +24,13 @@
   <section class="card" id="home">
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
-      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabLocal" aria-pressed="false">한 기기</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
-    <button class="btn" id="rankBtn">🏆 랭킹</button>
     <div id="soloBox" class="box">
-      <div class="tiers" id="tiers"></div>
+      <div class="tiers three" id="tiers"></div>
       <div class="opt">
         <span class="small" id="furLbl">내 고양이</span>
         <div class="furs" id="fur1"></div>
@@ -45,7 +44,6 @@
         <span class="small">몇 점 내기</span>
         <div class="seg" id="target"></div>
       </div>
-      <button class="btn primary big" id="startBtn">▶ 시작!</button>
       <p class="keys small" id="keys"></p>
       <ul class="howto">
         <li>공이 머리에 닿으면 통 하고 넘어가요. 떨어질 곳에 먼저 가 있어요</li>
@@ -54,6 +52,7 @@
         <li>땅에서는 <b>방향키를 누른 채</b> 스매시해야 몸을 날려 낮은 공을 받아요 (그냥 누르면 안 움직여요)</li>
         <li>상대 쪽 모래에 공이 떨어지면 1점, 먼저 정한 점수를 내면 이겨요</li>
       </ul>
+      <button class="btn primary big" id="startBtn">시작!</button>
     </div>
 
     <div id="localBox" class="box" hidden>
@@ -68,7 +67,7 @@
         <span class="small">몇 점 내기</span>
         <div class="seg" id="ltarget"></div>
       </div>
-      <button class="btn primary big" id="localBtn">▶ 시작!</button>
+      <button class="btn primary big" id="localBtn">시작!</button>
     </div>
 
     <div id="watchBox" class="box" hidden>
@@ -89,7 +88,12 @@
         <span class="small">몇 점 내기</span>
         <div class="seg" id="wtarget"></div>
       </div>
-      <button class="btn primary big" id="watchBtn">▶ 구경하기</button>
+      <button class="btn primary big" id="watchBtn">시작!</button>
+    </div>
+
+    <div class="row center minor">
+      <button class="btn ghost" id="menuHelpBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
     </div>
   </section>
 </div>
@@ -160,6 +164,6 @@
 <script src="bots.js?v=6"></script>
 <script src="render.js?v=6"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=12"></script>
+<script src="main.js?v=13"></script>
 </body>
 </html>

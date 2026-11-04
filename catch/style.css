@@ -5,7 +5,7 @@
 /* 채팅 (맨 아래가 최신) */
 .clog{flex:none;height:78px;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:2px;background:rgba(0,0,0,.28);border:1px solid var(--line);border-radius:12px;padding:6px 10px;font:400 14px/1.35 var(--text);color:var(--ink)}
 .clog .ln{word-break:keep-all;overflow-wrap:anywhere}
-.clog .ln b{color:#ffe3a3;margin-right:6px;font-family:var(--round);font-weight:400}
+.clog .ln b{color:#ffe3a3;margin-right:6px}
 .clog .ln.hit{color:#86efac;font-weight:700}
 .clog .ln.hit b{color:#86efac;margin:0 0 0 4px}
 .clog .ln.close{color:#fcd34d;font-weight:700}
@@ -19,7 +19,7 @@
 /* 점수 줄 */
 .scs{flex:none;display:flex;gap:6px;overflow-x:auto;padding:2px 1px 4px;scrollbar-width:none}
 .scs::-webkit-scrollbar{display:none}
-.sc{flex:none;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid var(--line);font:400 14px var(--round);white-space:nowrap;color:var(--ink)}
+.sc{flex:none;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid var(--line);font:700 14px var(--round);white-space:nowrap;color:var(--ink)}
 .sc i{font-style:normal;color:#ffe3a3}
 .sc.dr{border-color:var(--gold);background:rgba(255,200,97,.16)}
 .sc.got{background:rgba(63,174,122,.25);border-color:rgba(63,174,122,.75)}
@@ -34,4 +34,4 @@
 .gc{display:grid;gap:4px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:6px}
 .gc canvas{width:100%;height:auto;aspect-ratio:4/3;border-radius:8px;background:var(--sheet);display:block}
 .gc .cap{font-size:12.5px;color:var(--soft);text-align:center}
-.gc .cap b{color:#ffe3a3;font-family:var(--round);font-weight:400;font-size:14px}
+.gc .cap b{color:#ffe3a3;font-size:14px}

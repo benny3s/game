@@ -104,6 +104,10 @@ header.top .mechip+a{margin-left:0}
 
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .row .grow{flex:1 1 150px}
+.row.center{justify-content:center;text-align:center}
+/* 맨 아래 작은 줄: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹 (CONVENTIONS 화면 틀) */
+.minor{gap:2px}
+.minor .btn{font-size:14px;padding:8px 9px}
 .seg{display:flex;flex-wrap:wrap;gap:6px}
 .seg .btn{padding:8px 13px;font-size:13.5px;border-radius:10px}
 
@@ -168,7 +172,7 @@ input[type=text]:focus{border-color:var(--gold)}
 body.playing{overflow:hidden;height:calc(100dvh - var(--gap-b, 0px));padding:0;overscroll-behavior:none}   /* --gap-b: 폴드 작업 표시줄 (common/fit.js) */
 body.playing .wrap{display:none}
 .play{
-  position:fixed;inset:0;display:flex;flex-direction:column;gap:10px;
+  position:fixed;inset:0 0 var(--gap-b,0px) 0;display:flex;flex-direction:column;gap:10px;
   padding:calc(env(safe-area-inset-top,0px) + 10px) 14px calc(env(safe-area-inset-bottom,0px) + 12px);
   max-width:680px;margin:0 auto;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
 }

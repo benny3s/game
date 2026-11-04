@@ -52,7 +52,7 @@
     rankPull();
     for (const [id, box, t] of [['tabSolo', 'soloBox', 'solo'], ['tabLocal', 'localBox', 'local'], ['tabWatch', 'watchBox', 'watch']]) { $(id).setAttribute('aria-pressed', String(cfg.tab === t)); $(box).hidden = cfg.tab !== t; }
     const items = TIER_IDS.map(id => ({ id, em: Cozy.TIERS[id].em, name: Cozy.TIERS[id].name, cls: Cozy.TIERS[id].cls, desc: TIER_TXT[id], rec: recLine(id) }));
-    items.push({ id: 'local', em: '👫', name: '한 기기에서', cls: 't-master', desc: '둘~넷이 한 화면에서 같이', rec: '' });   // 누르면 '한 기기' 탭으로
+    // (예전엔 여기 '한 기기에서' 카드가 있었음 — 맨 위 '한 기기' 탭과 겹쳐서 뺌)
     $('tiers').innerHTML = items.map(x => `<button class="tier ${x.cls}" data-id="${x.id}" aria-pressed="${cfg.mode === x.id}"><span class="em">${x.em}</span><b>${x.name}</b><span>${x.desc}</span>${x.rec ? `<span>${x.rec}</span>` : ''}</button>`).join('');
     furs($('fur1'), cfg.fur, id => { cfg.fur = id; if (cfg.fur2 === id) cfg.fur2 = FUR_IDS.find(f => f !== id); saveCfg(); drawMenu(); });
     seg($('team'), [[1, '1:1'], [2, '2:2 복식']], cfg.team, v => { cfg.team = v; saveCfg(); drawMenu(); });
@@ -63,13 +63,14 @@
     seg($('wr'), TIER_IDS.map(t => [t, tierName(t)]), cfg.wr, v => { cfg.wr = v; saveCfg(); drawMenu(); });
     seg($('wtarget'), [7, 11, 15].map(n => [n, n + '점']), cfg.wtarget, v => { cfg.wtarget = v; saveCfg(); drawMenu(); });
     $('keys').innerHTML = keysHtml(false);
-    $('startBtn').textContent = `▶ ${Cozy.TIERS[cfg.mode].name} 고양이와 시작!`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — 고른 고양이는 카드의 선택 표시로 알림
     drawLocal();
   }
   $('rankBtn').addEventListener('click', () => { if (window.GRank) try { GRank.open('volley'); } catch (e) {} });
+  $('menuHelpBtn').addEventListener('click', () => { Cozy.sfx.play('tap'); Cozy.howto('volley', '냥냥 배구 하는 법', howtoItems(), { force: true }); });
   $('tiers').addEventListener('click', e => {
     const b = e.target.closest('.tier'); if (!b) return; Cozy.sfx.play('tap');
-    if (b.dataset.id === 'local') cfg.tab = 'local'; else cfg.mode = b.dataset.id;
+    cfg.mode = b.dataset.id;
     saveCfg(); drawMenu();
   });
 
@@ -108,7 +109,7 @@
     const n = localHumans().length;
     $('ltip').textContent = touchUI ? `폰에서는 사람 2명까지 (아래 단추를 왼쪽·오른쪽으로 나눠 써요)${cfg.lteam === 2 ? ' · 남는 자리는 AI' : ''}`
       : '키보드 하나로 4명까지 · 자리마다 키가 달라요 (왼쪽 편은 왼손 쪽, 오른쪽 편은 오른손 쪽 키 · 키보드에 따라 한꺼번에 너무 많이 누르면 몇 개가 안 먹을 수 있어요)';
-    $('localBtn').textContent = n >= 2 ? `▶ ${n}명이서 시작!` : '▶ 시작!';
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀)
   }
   $('lseats').addEventListener('click', e => {
     const b = e.target.closest('button'), face = e.target.closest('.lface');

@@ -37,7 +37,8 @@ body.playing .wcenter,body.playing .wcenter .wmsg{color:#ccfbf1}
 .field>.small{font-weight:400}
 .rulelede{margin:0;background:var(--bg);border-radius:12px;padding:8px 11px;font-size:13.5px;min-height:2.6em}
 #tiers .tier span,#wTiers .tier span{line-height:1.45}
-.rulesbtn{justify-self:center;font-size:13.5px;padding:8px 12px}
+/* 맨 아래 작은 줄 (화면 틀: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹) — .center 는 이 게임에서 탁자 가운데 이름이라 따로 */
+.row.center.minor{justify-content:center;text-align:center;flex:none;min-height:0;gap:2px}
 .howto b{color:#d9785b;font-weight:400}
 
 /* ── 게임 틀 ──────────────────────────────────────────── */

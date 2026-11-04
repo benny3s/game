@@ -31,6 +31,7 @@ body{
 .fur[aria-pressed="true"]{border:2px solid var(--accent);background:rgba(255,130,71,0.2);box-shadow:0 0 18px rgba(255,130,71,0.25)}
 .fur:disabled{opacity:.35;cursor:default}
 .keys{margin:0;text-align:center;line-height:1.9;color:var(--soft)}
+/* 맨 아래 작은 줄 (화면 틀: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹) */
 kbd{display:inline-block;min-width:1.7em;padding:2px 7px;border-radius:7px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);font:700 12.5px/1.5 var(--round);color:#fff;text-align:center}
 /* 둘이서: 고양이 고르기 두 줄 → 조금 작게 (시작 단추가 첫 화면에 보이게) */
 .duo-pick .fur{padding:4px 2px 5px;font-size:13.5px}

@@ -15,7 +15,7 @@ module.exports = {
   probe: () => __catch.probe(),
   drive: () => { __catch.autoAct(); },
   online: {
-    open: () => document.getElementById('startBtn').click(),           // 메뉴엔 '👥 친구랑 시작' 하나
+    open: () => document.getElementById('startBtn').click(),           // 메뉴엔 '친구랑 시작' 하나
     beforeHost: () => { __catch.setMin(2); },
     started: () => { const s = window.__catch && __catch.ses; return !!(s && s.mode === 'online' && !document.getElementById('play').hidden && s.V); },
     setup: () => { __catch.fast(1); __catch.pause(false); window.__qaPause = false; },

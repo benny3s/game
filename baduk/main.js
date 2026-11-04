@@ -34,6 +34,7 @@
   const cfg = Object.assign({ tab: "solo", size: 9, tier: "easy", color: "black", handi: "k6.5", atari: true, wsize: 9, wb: "hard", ww: "normal", speed: "normal" }, store("cfg", {}));
   if (!TIERS[cfg.tier]) cfg.tier = "easy";
   const saveCfg = () => save("cfg", cfg);
+  let tabNow = cfg.tab === "watch" ? "watch" : "solo";   // 지금 보는 탭 (solo · duo · watch) — duo 는 저장 안 함
   const HOWTO = [
     "흑부터 번갈아 한 수씩, <b>줄이 만나는 곳</b>에 돌을 놓아요",
     "상대 돌을 사방으로 꽉 둘러싸면 <b>따내요</b> (숨구멍이 하나 남으면 '단수')",
@@ -76,27 +77,29 @@
     seg($("handiSeg"), handiItems(cfg.size), cfg.handi, v => { cfg.handi = v; saveCfg(); drawMenu(); });
     $("atariTog").setAttribute("aria-pressed", String(!!cfg.atari));
     const T = TIERS[cfg.tier];
-    $("startBtn").textContent = `${T.em} ${T.name}이랑 한 판!`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — 고른 난이도는 카드의 선택 표시로 알림
     seg($("wSizeSeg"), [[7, "⚡ 7줄"], [9, "9줄"], [13, "13줄"], [19, "19줄"]], cfg.wsize, v => { cfg.wsize = +v; saveCfg(); drawMenu(); });
     const tl = Object.values(TIERS).map(t => [t.id, `${t.em} ${t.name}`]);
     seg($("wBSeg"), tl, cfg.wb, v => { cfg.wb = v; saveCfg(); drawMenu(); });
     seg($("wWSeg"), tl, cfg.ww, v => { cfg.ww = v; saveCfg(); drawMenu(); });
     seg($("wSpeedSeg"), [["slow", "🐢 느리게"], ["normal", "보통"], ["fast", "🐇 빠르게"]], cfg.speed, v => { cfg.speed = v; saveCfg(); drawMenu(); });
-    setTab(cfg.tab);
+    setTab(tabNow);
     drawResume(); drawMst();
   }
+  // 탭 4개 — 혼자 · 한 기기 · (친구랑) · AI 구경. '한 기기'(둘이서)는 예전처럼 저장하지 않음 (저장되는 탭은 solo · watch 뿐)
   function setTab(t) {
-    cfg.tab = t;
-    $("tabSolo").setAttribute("aria-pressed", String(t === "solo")); $("tabWatch").setAttribute("aria-pressed", String(t === "watch"));
-    $("soloBox").hidden = t !== "solo"; $("watchBox").hidden = t !== "watch";
+    tabNow = t; cfg.tab = t === "duo" ? "solo" : t;
+    $("tabSolo").setAttribute("aria-pressed", String(t === "solo")); $("tabDuo").setAttribute("aria-pressed", String(t === "duo")); $("tabWatch").setAttribute("aria-pressed", String(t === "watch"));
+    $("soloBox").hidden = t === "watch"; $("watchBox").hidden = t !== "watch";
+    for (const el of document.querySelectorAll("#soloBox .solo-only")) el.hidden = t === "duo";
   }
   $("tabSolo").onclick = () => { sfx("tap"); setTab("solo"); saveCfg(); };
+  $("tabDuo").onclick = () => { sfx("tap"); setTab("duo"); saveCfg(); };
   $("tabWatch").onclick = () => { sfx("tap"); setTab("watch"); saveCfg(); };
   if ($("tabFriend")) $("tabFriend").onclick = () => { sfx("tap"); openFriendModal(); };
   $("atariTog").onclick = () => { cfg.atari = !cfg.atari; saveCfg(); sfx("toggle", { on: cfg.atari }); drawMenu(); };
   $("helpBtn").onclick = () => howto(true);
-  $("startBtn").onclick = () => startSolo();
-  $("duoBtn").onclick = () => startDuo();
+  $("startBtn").onclick = () => (tabNow === "duo" ? startDuo() : startSolo());
   $("watchBtn").onclick = () => startWatch();
   $("recBtn").onclick = () => showRecords();
   $("rankBtn").onclick = () => { sfx("tap"); try { if (window.GRank) GRank.open("baduk"); } catch (e) {} };

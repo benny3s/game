@@ -14,7 +14,7 @@ module.exports = {
   probe: () => __draw.probe(),
   drive: () => { __draw.autoAct(); },
   online: {
-    open: () => document.getElementById('startBtn').click(),           // 메뉴엔 '👥 친구랑 시작' 하나
+    open: () => document.getElementById('startBtn').click(),           // 메뉴엔 '친구랑 시작' 하나
     beforeHost: () => { __draw.setMin(2); },                                   // 시험: 손님 하나여도 시작
     started: () => { const s = window.__draw && __draw.ses; return !!(s && s.mode === 'online' && !document.getElementById('play').hidden && s.V); },
     setup: () => { __draw.fast(1); __draw.pause(false); window.__qaPause = false; },

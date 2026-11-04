@@ -107,7 +107,7 @@
     segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], houseRules.bonus, v => { setRules(Object.assign({}, houseRules, { bonus: +v })); drawMenu(); });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     if ($('coachSeg')) segBtns($('coachSeg'), [[1, '🧑‍🏫 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
-    $('startBtn').textContent = `🎴 ${mo.name} 대국 시작 (${TIER[opt.tier].em} ${TIER[opt.tier].names[foeIdx(opt.tier)]})`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — 고른 것은 카드의 선택 표시로 알림
     segBtns($('wModeSeg'), [[2, '2인 맞고'], [3, '3인 고스톱']], opt.wMode, v => { opt.wMode = +v; saveOpt('wMode'); drawMenu(); });
     const seatName = ['아래 자리', opt.wMode === 2 ? '맞은편 자리' : '오른쪽 자리', '왼쪽 자리'];
     $('wSeats').innerHTML = Array.from({ length: opt.wMode }, (_, i) => `<div class="wseat"><b>${seatName[i]}</b><div class="seg" data-i="${i}"></div></div>`).join('');
@@ -138,7 +138,7 @@
     const seats = hotSeats(), N = seats.length, humans = seats.filter(s => s.human).length, mo = G.modeOf(N);
     $('lNote').textContent = (mo.bench ? `${mo.n}명이 치고 ${mo.bench}명은 돌아가며 쉬어요 (쉬는 사람의 광을 살 수 있어요). ` : '') + (humans > 1 ? '사람 차례가 되면 덮개가 나와요. 기기를 받은 사람만 "내 패 보기"를 눌러요' : humans === 0 ? '사람이 한 명은 있어야 해요' : '');
     $('localBtn').disabled = humans < 1 || N < 2 || N > 5;
-    $('localBtn').textContent = `🎴 ${mo.name} 시작 (사람 ${humans} · AI ${N - humans})`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀)
   }
   function drawLocalMenu() {
     if (window.HotSeat && HotSeat.setup) {

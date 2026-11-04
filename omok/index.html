@@ -8,10 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
-<link rel="stylesheet" href="../common/cozy.css?v=13">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 <div class="wrap">
@@ -22,14 +22,14 @@
 
   <section id="home" class="card">
     <div class="tabs" role="tablist">
-      <button class="btn" id="tabSolo" aria-pressed="true">혼자·둘이</button>
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabDuo" aria-pressed="false">한 기기</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
-    <!-- 혼자·둘이: AI 대전 · 한 기기 둘이서 -->
+    <!-- 혼자(AI 대전) · 한 기기(둘이서) -->
     <div id="soloBox" class="box">
-      <div class="seg center" id="modeSeg"></div>
       <div id="aiOpts" class="box">
         <div class="tiers three" id="tiers"></div>
         <div class="optrow"><span class="small">내 돌</span><div class="seg" id="colorSeg"></div></div>
@@ -124,6 +124,6 @@
 <script src="board.js?v=5"></script>
 <script src="review.js?v=2"></script>
 <script src="../common/mistakes.js?v=2"></script>
-<script src="main.js?v=15"></script>
+<script src="main.js?v=16"></script>
 </body>
 </html>

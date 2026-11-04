@@ -8,10 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
-<link rel="stylesheet" href="../common/cozy.css?v=13">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
 <div class="wrap">
@@ -24,6 +24,7 @@
   <section id="home" class="card">
     <div class="tabs" role="tablist" id="tabs">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabDuo" aria-pressed="false">한 기기</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
@@ -31,26 +32,17 @@
     <div id="soloBox" class="pane">
       <div class="resume" id="resume" hidden></div>
       <div class="opt"><span class="small">판 크기</span><div class="seg" id="sizeSeg"></div></div>
-      <div class="tiers three" id="tiers"></div>
-      <div class="opt"><span class="small">내 돌</span><div class="seg" id="colorSeg"></div></div>
+      <div class="tiers three solo-only" id="tiers"></div>
+      <div class="opt solo-only"><span class="small">내 돌</span><div class="seg" id="colorSeg"></div></div>
       <div class="opt"><span class="small">덤 · 접바둑</span><div class="seg" id="handiSeg"></div></div>
       <button class="toggle" id="atariTog" aria-pressed="true"><span>🔔 단수(돌이 위험할 때) 알려 주기</span><span class="sw"></span></button>
-      <div class="startrow">
-        <button class="btn primary big" id="startBtn">시작!</button>
-        <div class="row">
-          <button class="btn grow" id="duoBtn">👥 한 기기 둘이서</button>
-          <button class="btn ghost" id="recBtn">📜 지난 대국</button>
-          <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
-          <button class="btn ghost" id="mstBtn" hidden>📒 아쉬운 장면</button>
-        </div>
-      </div>
       <ul class="howto">
         <li>흑부터 번갈아 한 수씩, 줄이 만나는 곳에 돌을 놓아요</li>
         <li>상대 돌을 사방으로 꽉 둘러싸면 따내요</li>
         <li>둘러싼 빈 곳이 내 집 · 집과 따낸 돌이 많으면 이겨요</li>
         <li>둘 다 패스하면 끝나고 집을 세요</li>
       </ul>
-      <button class="btn ghost more" id="helpBtn">❓ 더 자세한 규칙</button>
+      <button class="btn primary big" id="startBtn">시작!</button>
     </div>
 
     <div id="watchBox" class="pane" hidden>
@@ -62,7 +54,14 @@
         <div><h4>⚪ 백</h4><div class="seg" id="wWSeg"></div></div>
       </div>
       <div class="opt"><span class="small">빠르기</span><div class="seg" id="wSpeedSeg"></div></div>
-      <button class="btn primary big" id="watchBtn">▶ 구경하기</button>
+      <button class="btn primary big" id="watchBtn">시작!</button>
+    </div>
+
+    <div class="row center minor">
+      <button class="btn ghost" id="helpBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="recBtn">📜 지난 대국</button>
+      <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
+      <button class="btn ghost" id="mstBtn" hidden>📒 아쉬운 장면</button>
     </div>
   </section>
   <p class="small foot" id="aiNote">AI 두뇌: KataGo 신경망(공개 가중치)을 브라우저에서 직접 돌려요</p>
@@ -115,6 +114,6 @@
 <script src="ai.js?v=4"></script>
 <script src="room.js?v=6"></script>
 <script src="../common/mistakes.js?v=2"></script>
-<script src="main.js?v=14"></script>
+<script src="main.js?v=15"></script>
 </body>
 </html>

@@ -53,8 +53,6 @@ header.top h1{display:flex;align-items:center;gap:8px}
 .tiers.three .tier{padding:14px 10px;gap:3px}
 .tiers.three .tier .em{font-size:30px}
 .tiers.three .tier b{font-size:20px}
-.minor{gap:2px}
-.minor .btn{font-size:14px;padding:8px 9px}
 .seg .btn{white-space:nowrap}
 .reclist{list-style:none;margin:0;padding:0;display:grid;gap:8px;text-align:left;max-height:52dvh;overflow:auto}
 .reclist li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:16px;background:var(--paper);border:2px solid var(--line);cursor:pointer}

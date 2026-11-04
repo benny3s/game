@@ -27,8 +27,6 @@
 .optrow.stack .seg{flex:none;flex-wrap:nowrap}
 .optrow.stack .seg .btn{flex:1 1 0;min-width:0;padding:8px 0;text-align:center}
 .tiers.three .tier{padding:14px 11px}
-.minor{gap:2px}
-.minor .btn{font-size:14px;padding:8px 9px}
 .setlist{display:grid;gap:12px;text-align:left}
 .setlist .optrow>.small{min-width:86px}
 .setlist .note{margin:0;font-size:12.5px;line-height:1.45;color:var(--soft)}

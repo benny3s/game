@@ -58,7 +58,7 @@ module.exports = {
   path: 'chess/',
   query: 'debug',
   hookName: 'window.__chess (주소에 ?debug 가 있어야 생김)',
-  reproHint: (mode, seed) => mode === 'solo' ? `메뉴: 혼자 → ${['🐣 초급', '🐱 중급', '🐯 고급'][(seed >>> 3) % 3]} → 백 → 시계 없음 → 시작, 내 수 15번 두고 기권` : mode === 'hot' ? '메뉴: 둘이서 → 시계 5분 → 시작, 스칼라 메이트 e4 e5 Bc4 Nc6 Qh5 Nf6 Qxf7' : '메뉴: AI 구경 → 백 🐯 고급 · 흑 🐣 초급 · 빠르게 → 구경 시작',
+  reproHint: (mode, seed) => mode === 'solo' ? `메뉴: 혼자 → ${['🐣 초급', '🐱 중급', '🐯 고급'][(seed >>> 3) % 3]} → 백 → 시계 없음 → 시작, 내 수 15번 두고 기권` : mode === 'hot' ? '메뉴: 한 기기 → 시계 5분 → 시작, 스칼라 메이트 e4 e5 Bc4 Nc6 Qh5 Nf6 Qxf7' : '메뉴: AI 구경 → 백 🐯 고급 · 흑 🐣 초급 · 빠르게 → 시작',
   // 시험 손잡이의 빈틈 (버그 아님)
   gaps: ['__chess 손잡이는 ?debug 주소에서만 생기고 newGame · goMenu · hostAgain 이 없음 → 어댑터는 메뉴 단추를 눌러 시작·나가기 함 (메뉴 구조를 바꾸면 어댑터도 고쳐야 함)'],
   ready: withH((_, H) => !!window.__chess && !!document.getElementById('home') && !!window.__qa),

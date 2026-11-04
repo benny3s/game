@@ -56,7 +56,7 @@ module.exports = {
   path: 'janggi/',
   query: 'debug',
   hookName: 'window.__janggi (주소에 ?debug 가 있어야 생김)',
-  reproHint: (mode, seed) => mode === 'solo' ? '메뉴: 혼자 → AI 단계 → 초 → 시작, 상차림 아무거나, 내 수 15번 두고 기권' : mode === 'hot' ? '메뉴: 둘이서 → 시작, 상차림 둘 다, 20수 두고 기권' : '메뉴: AI 구경 → 초 🐯 고급 · 한 🐣 초급 · 빠르게 → 구경 시작',
+  reproHint: (mode, seed) => mode === 'solo' ? '메뉴: 혼자 → AI 단계 → 초 → 시작, 상차림 아무거나, 내 수 15번 두고 기권' : mode === 'hot' ? '메뉴: 한 기기 → 시작, 상차림 둘 다, 20수 두고 기권' : '메뉴: AI 구경 → 초 🐯 고급 · 한 🐣 초급 · 빠르게 → 시작',
   gaps: ['__janggi 손잡이는 ?debug 주소에서만 생기고 newGame · goMenu 가 없음 → 어댑터는 메뉴 단추를 눌러 시작·나가기 함, AI 씨앗은 게임 안 Math.random 이라 같은 판 재현 불가'],
   ready: withH((_, H) => !!window.__janggi && !!document.getElementById('home') && !!window.__qa),
   menu: withH((_, H) => document.getElementById('play').hidden && !document.getElementById('home').hidden),

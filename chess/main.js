@@ -76,7 +76,7 @@
     seg($('watchW'), tl, pref.ww, v => { pref.ww = v; savePref(); drawMenu(); });
     seg($('watchB'), tl, pref.wb, v => { pref.wb = v; savePref(); drawMenu(); });
     seg($('speedSeg'), [['slow', '🐢 느리게'], ['normal', '보통'], ['fast', '🐇 빠르게']], pref.speed, v => { pref.speed = v; savePref(); drawMenu(); });
-    $('startBtn').textContent = pref.tab === 'watch' ? '▶ 구경 시작' : pref.tab === 'duo' ? '👥 둘이서 시작!' : `${tierLabel(pref.tier)} AI와 한 판!`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — 고른 것은 카드의 선택 표시로 알림
     $('howtoList').hidden = pref.tab === 'watch';
     $('mstBtn').hidden = !(window.Mistakes && Mistakes.count('chess'));   // 📒 아쉬운 장면 (풀 것이 있을 때만)
   }

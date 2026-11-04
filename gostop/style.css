@@ -448,7 +448,7 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .seon.win{opacity:1;background:rgba(253,224,71,.22);box-shadow:0 0 0 2px #facc15 inset}
 .seon.win svg{transform:translateY(-4px) scale(1.06)}
 /* 🎞️ 다시 보기 */
-#replayBtn{width:100%;margin-top:10px}
+/* 맨 아래 작은 줄 (화면 틀: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹) */
 .rpbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 76px);z-index:40;display:flex;align-items:center;gap:4px;padding:6px 8px;border-radius:99px;background:rgba(10,18,14,.86);border:1px solid rgba(255,255,255,.18);box-shadow:0 6px 20px rgba(0,0,0,.45);max-width:calc(100vw - 16px)}
 .rpbar button{width:40px;height:38px;border-radius:12px;border:0;background:rgba(255,255,255,.1);color:#fff;font-size:17px;cursor:pointer;flex:none}
 .rpbar button.pp{background:#16a34a}

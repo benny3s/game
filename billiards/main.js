@@ -46,11 +46,16 @@
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); onPick(b.dataset.v); };
   }
   const targetLabel = (mode, t) => mode === '4gu' ? `${t}다마` : mode === '3c' ? `${t}점` : '';
+  // 탭 3개: 혼자 · 한 기기 · 친구랑 — '혼자' 안에서 혼자 연습 / AI와 대결을 고름 (저장은 예전 그대로: opt.tab = practice | ai | hot | friend)
+  const soloLike = t => t === 'practice' || t === 'ai';
+  let soloKind = soloLike(opt.tab) ? opt.tab : 'ai';
   function drawMenu() {
-    $('meChip').textContent = '👤 ' + meName();
     $('gameCards').innerHTML = Object.entries(GAMES).map(([id, g]) => `<button class="gcard" data-id="${id}" aria-pressed="${opt.game === id}"><span class="balls">${g.balls.map(c => `<i style="background:radial-gradient(circle at 35% 30%,#fff8,${c} 45%,${c})"></i>`).join('')}</span><b>${g.name}</b><span>${g.desc}</span></button>`).join('');
-    document.querySelectorAll('.tabs .btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tab === opt.tab)));
+    const vtab = soloLike(opt.tab) ? 'solo' : opt.tab;
+    document.querySelectorAll('.tabs .btn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tab === vtab)));
     const tab = opt.tab;
+    $('soloRow').hidden = !soloLike(tab);
+    segBtns($('soloSeg'), [['practice', '🎯 혼자 연습'], ['ai', '🤖 AI와 대결']], soloLike(tab) ? tab : soloKind, v => { opt.tab = soloKind = v; save('tab'); drawMenu(); });
     $('tiers').hidden = tab !== 'ai';
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: id === 'easy' ? '살살 쳐요 · 손이 떨려요' : id === 'normal' ? '동네 당구장 고수' : '수천 번 계산해요', cls: 't-' + id })), id => { opt.tier = id; save('tier'); drawMenu(); }, { selected: opt.tier });
     $('hotBox').hidden = tab !== 'hot';
@@ -71,15 +76,11 @@
     segBtns($('clothSeg'), [['green', '초록'], ['blue', '파랑']], opt.cloth, v => { opt.cloth = v; save('cloth'); drawMenu(); });
     $('howto').innerHTML = HOWTO[m].map(s => `<li>${s}</li>`).join('');
     drawHomeBtns();
-    $('startBtn').textContent = tab === 'friend' ? '👥 친구랑 방 열기 · 들어가기' : tab === 'practice' ? '🎱 연습 시작' : tab === 'hot' ? '🎱 같이 시작' : `🎱 ${TIER[opt.tier].em} AI와 시작`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — 고른 것은 카드의 선택 표시로 알림
   }
   $('gameCards').onclick = e => { const b = e.target.closest('.gcard'); if (!b) return; sfx('tap'); opt.game = b.dataset.id; save('game'); drawMenu(); };
-  document.querySelector('.tabs').onclick = e => { const b = e.target.closest('.btn'); if (!b) return; sfx('tap'); opt.tab = b.dataset.tab; save('tab'); drawMenu(); };
+  document.querySelector('.tabs').onclick = e => { const b = e.target.closest('.btn'); if (!b) return; sfx('tap'); opt.tab = b.dataset.tab === 'solo' ? soloKind : b.dataset.tab; save('tab'); drawMenu(); };
   $('hotNames').addEventListener('input', () => { opt.hotNames = [...$('hotNames').querySelectorAll('input')].map(i => i.value.trim()); save('hotNames'); });
-  $('meChip').onclick = () => {
-    if (!window.GME || !window.Arena) return;
-    Arena.init().then(() => Arena.db() && GME.pick(Arena.db(), { canClose: true })).then(() => drawMenu()).catch(() => C.toast('지금은 이름을 바꿀 수 없어요'));
-  };
   $('startBtn').onclick = () => {
     sfx('pop');
     if (opt.tab === 'friend') return openFriend();

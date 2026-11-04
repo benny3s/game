@@ -77,7 +77,7 @@
     segBtns($('pieceSeg'), [[2, '2개'], [3, '3개'], [4, '4개']], opt.pieces, v => { opt.pieces = +v; saveOpt('pieces'); drawMenu(); });
     segBtns($('backdoSeg'), [[1, '켬'], [0, '끔']], opt.backdo ? 1 : 0, v => { opt.backdo = +v; saveOpt('backdo'); drawMenu(); });
     segBtns($('speedSeg'), Object.keys(SPEEDS).map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
-    $('startBtn').textContent = tab === 'ai' ? `${TIER[opt.tier].em} ${TIER[opt.tier].name}${opt.aiCount > 1 ? ` ${opt.aiCount}팀과` : hasJong(TIER[opt.tier].name) ? '과' : '와'} 한 판` : `🎉 ${opt.nTeams}팀 윷놀이 시작`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — 고른 것은 카드의 선택 표시로 알림
   }
   $('myName').addEventListener('input', e => { opt.myName = e.target.value.slice(0, 10); saveOpt('myName'); });
   $('tabLocal').onclick = () => { sfx('tap'); opt.tab = 'local'; saveOpt('tab'); drawMenu(); };

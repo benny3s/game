@@ -75,7 +75,7 @@
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })), id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     segBtns($('coachSeg'), [[1, '🧑‍🏫 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
-    $('startBtn').textContent = `☝️ ${opt.nAi + 1}명 원카드 시작 (${TIER[opt.tier].em} ${TIER[opt.tier].name})`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — 고른 것은 카드의 선택 표시로 알림
     opt.wN = clamp(opt.wN | 0 || 4, 2, 6);
     segBtns($('wNSeg'), [2, 3, 4, 5, 6].map(k => [k, `${k}명`]), opt.wN, v => { opt.wN = +v; saveOpt('wN'); drawMenu(); });
     $('wSeats').innerHTML = Array.from({ length: opt.wN }, (_, i) => `<div class="wseat"><b>${i + 1}번 자리</b><div class="seg" data-i="${i}"></div></div>`).join('');
@@ -98,7 +98,7 @@
     const seats = lPick ? lPick.seats : [], N = seats.length, humans = seats.filter(s => s.kind === 'human').length;
     $('lNote').textContent = (N > 6 ? '7명 이상이면 카드 두 벌(108장)로 해요. ' : '') + (humans > 1 ? '사람 차례가 되면 가림 화면이 나와요. 기기를 받은 사람만 "내 패 보기"를 눌러요' : '');
     $('localBtn').disabled = !lPick || !lPick.valid;
-    $('localBtn').textContent = `☝️ 시작 (사람 ${humans} · AI ${N - humans})`;
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀)
   }
   function drawLocalMenu() {
     if (!lPick && window.HotSeat) lPick = HotSeat.setup($('lSeats'), { game: 'onecard', min: 2, max: 8, allowAI: true, tiers: ['easy', 'normal', 'hard'], onChange: drawLocalNote });

@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@900&text=%E8%BB%8A%E5%8C%85%E9%A6%AC%E8%B1%A1%E5%A3%AB%E5%8D%92%E5%85%B5%E5%B0%87%E5%B8%A5%E6%A5%9A%E6%BC%A2&display=swap">
-<link rel="stylesheet" href="../common/cozy.css?v=13">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
 <link rel="stylesheet" href="style.css?v=4">
@@ -23,7 +23,7 @@
   <section id="home" class="card">
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
-      <button class="btn" id="tabDuo" aria-pressed="false">둘이서</button>
+      <button class="btn" id="tabDuo" aria-pressed="false">한 기기</button>
       <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
@@ -34,7 +34,7 @@
       <div class="optrow"><span class="small">내 편</span><div class="seg" id="sideSeg"></div></div>
     </div>
 
-    <!-- 한 기기 둘이서 -->
+    <!-- 한 기기 (둘이서) -->
     <div id="duoBox" class="box" hidden>
       <p class="lede">폰·태블릿 하나로 마주 앉아 번갈아 둬요. 첫째 자리가 <b>초</b>(먼저), 둘째 자리가 <b>한</b>이에요.</p>
       <div id="seats"></div>
@@ -58,11 +58,11 @@
     </ul>
     <button class="btn primary big" id="startBtn">시작!</button>
     <div class="row center minor">
-      <button class="btn ghost" id="recBtn">🎞️ 지난 대국</button>
+      <button class="btn ghost" id="helpBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="setBtn">⚙ 설정</button>
+      <button class="btn ghost" id="recBtn">📜 지난 대국</button>
       <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
       <button class="btn ghost" id="mstBtn" hidden>📒 아쉬운 장면</button>
-      <button class="btn ghost" id="helpBtn">📖 규칙</button>
-      <button class="btn ghost" id="setBtn">⚙ 설정</button>
     </div>
   </section>
   <p class="small foot">AI 두뇌: 브라우저에서 바로 도는 알파베타 수읽기 엔진 (직접 만듦)</p>
@@ -123,6 +123,6 @@
 <script src="core.js?v=1"></script>
 <script src="intent.js?v=1"></script>
 <script src="board.js?v=3"></script>
-<script src="main.js?v=10"></script>
+<script src="main.js?v=11"></script>
 </body>
 </html>

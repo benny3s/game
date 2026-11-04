@@ -40,7 +40,7 @@ body:not(.playing){background:radial-gradient(120% 90% at 50% 0%,#17305a 0%,#0b1
 .tiers.three .tier{padding:14px 11px}
 .center-note{text-align:center;color:var(--soft);margin:0;line-height:1.4}
 .center-note:empty{display:none}
-#replayBtn{width:100%;margin-top:10px}
+/* 맨 아래 작은 줄 (화면 틀: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹) */
 
 /* ── 게임 화면 ── */
 body.playing{background:radial-gradient(110% 90% at 50% 35%,#132a52 0%,#0a1630 65%,#050b18 100%);color:#fef3c7}

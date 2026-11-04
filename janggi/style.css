@@ -50,8 +50,6 @@ header.top h1{display:flex;align-items:center;gap:8px}
 .tiers.three .tier .em{font-size:30px}
 .tiers.three .tier b{font-size:20px;white-space:nowrap}
 .tier .rec{font-size:12px;color:#d9c18f;min-height:1.2em}
-.minor{gap:2px}
-.minor .btn{font-size:14px;padding:8px 9px}
 .foot{text-align:center;margin:0 0 6px}
 .lede b{color:#fde68a}
 .setlist{display:grid;gap:10px;text-align:left}

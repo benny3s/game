@@ -8,10 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
-<link rel="stylesheet" href="../common/cozy.css?v=13">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 <div class="wrap" id="home">
@@ -23,8 +23,8 @@
   <section class="card" id="menuCard">
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
-      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabLocal" aria-pressed="false" hidden title="11-01 베니 님: 한 기기는 한 화면 게임만 — 패를 숨기는 게임은 뺌">한 기기</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
       <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
     </div>
 
@@ -40,15 +40,14 @@
         <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="speedSeg"></div></div>
         <div class="optrow"><span class="small">AI 선생님</span><div class="seg" id="coachSeg"></div></div>
       </div>
+      <div class="ruleline" id="ruleLine1"></div>
       <ul class="howto" id="howto">
         <li>같은 달(같은 그림)끼리 짝을 맞춰 가져와요</li>
         <li>손패를 누르면 짝이 되는 바닥 패가 반짝, 한 번 더 누르면 내요</li>
         <li>광·열끗·띠·피를 모아 점수를 내요. 맞고는 7점, 셋이면 3점부터 고·스톱</li>
         <li>AI 얼굴을 톡 누르면 👊 한 대 — 말로 받아쳐요 (판에는 영향 없음)</li>
       </ul>
-      <div class="ruleline" id="ruleLine1"></div>
-      <button class="btn primary big" id="startBtn">시작하기</button>
-      <button class="btn ghost" id="rulesBtn">📖 규칙 자세히 보기</button>
+      <button class="btn primary big" id="startBtn">시작!</button>
     </div>
 
     <div id="localBox" class="box" hidden>
@@ -61,7 +60,7 @@
       </div>
       <div class="ruleline" id="ruleLine2"></div>
       <p class="small center-note" id="lNote"></p>
-      <button class="btn primary big" id="localBtn">시작하기</button>
+      <button class="btn primary big" id="localBtn">시작!</button>
     </div>
 
     <div id="watchBox" class="box" hidden>
@@ -70,12 +69,16 @@
       <div class="wseats" id="wSeats"></div>
       <div class="optrow"><span class="small">진행 속도</span><div class="seg" id="wSpeedSeg"></div></div>
       <div class="ruleline" id="ruleLine3"></div>
-      <button class="btn primary big" id="watchBtn">관전 시작</button>
+      <button class="btn primary big" id="watchBtn">시작!</button>
+    </div>
+
+    <div class="row center minor">
+      <button class="btn ghost" id="rulesBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="replayBtn" hidden>📜 지난 대국</button>
+      <button class="btn ghost" id="gRankBtn">🏆 랭킹</button>
+      <button class="btn ghost" id="mistakeBtn" hidden>📒 아쉬운 장면</button>
     </div>
   </section>
-  <button class="btn ghost" id="replayBtn" hidden>🎞️ 지난 판 다시 보기</button>
-  <button class="btn ghost" id="mistakeBtn" hidden style="width:100%;margin-top:8px">📒 아쉬운 장면</button>
-  <button class="btn ghost" id="gRankBtn" style="width:100%;margin-top:8px">🏆 랭킹</button>
 </div>
 
 <!-- 게임 (화면 한 장) -->
@@ -125,6 +128,6 @@
 <script src="ai.js?v=10"></script>
 <script src="cards.js?v=5"></script>
 <script src="../common/mistakes.js?v=2"></script>
-<script src="main.js?v=42"></script>
+<script src="main.js?v=43"></script>
 </body>
 </html>

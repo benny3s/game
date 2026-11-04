@@ -1,7 +1,7 @@
 // 당구 어댑터 — 턴제 + 물리 애니메이션(canvas) 게임
 // 규칙: 아래 함수들은 브라우저 안에서 돌아감 (page.evaluate 로 문자열화) → 바깥 변수 못 씀, 인자 하나만 받음.
 //
-// 빨리 끝내는 법: 메뉴는 진짜 단추(.gcard · #targetSeg · #tiers · 탭 · #startBtn)를 눌러 설정 → 4구 30다마(=3점) 같은 짧은 판.
+// 빨리 끝내는 법: 메뉴는 진짜 단추(.gcard · #targetSeg · #tiers · 탭 · #soloSeg · #startBtn)를 눌러 설정 → 4구 30다마(=3점) 같은 짧은 판.
 //   내 차례는 BilliardsAI.chooseAsync(중급)로 고른 샷을 ses.aim 에 넣고 진짜 '샷!' 단추(#shootBtn)를 누름. 상대 AI 는 🌱 초급(느리게 침).
 //   공 구르는 애니메이션은 ses.anim.speed = 10 으로 빨리 감음 (frames 는 이미 계산돼 있어 판정·결과 코드는 그대로 돎). 단 포켓이 들어가는 샷(8볼)은 실제 속도로 —
 //   빨리 감으면 포켓 빠짐 그림(main.js ses.sinking)이 NaN 좌표로 오류를 내는데, 이건 진짜 게임 버그라 (프레임 끊김 150ms 만으로도 남) 어댑터가 일부러 피함.
@@ -20,17 +20,17 @@ module.exports = {
     try { __billiards.opt.coach = 0; localStorage.setItem('billiards.coach', '0'); } catch (e) {}   // 앞 판(연습)에서 켠 AI 선생님이 다른 판에 남지 않게
   },
   reproHint: (mode, seed) => ({
-    solo: "탭 'AI와 대결' · 4구 · 30다마 · 🌱 초급 → 시작 (내 차례는 BilliardsAI.chooseAsync(s,'normal') 샷을 ses.aim 에 넣고 샷! 단추)",
-    hot: "탭 '한 기기에서 여럿' · 3쿠션 5점 · 2명 → 시작 (두 사람 모두 BilliardsAI 중급 샷)",
-    practice: "탭 '혼자 연습' · 3쿠션 → 시작 → AI 선생님 켜기 · '이대로 겨누기' · 샷! 4번 (+다시 보기·되돌리기·처음 배치)",
-    pool: "탭 'AI와 대결' · 포켓볼 · 🌱 초급 → 시작",
+    solo: "탭 '혼자' → 'AI와 대결' · 4구 · 30다마 · 🌱 초급 → 시작 (내 차례는 BilliardsAI.chooseAsync(s,'normal') 샷을 ses.aim 에 넣고 샷! 단추)",
+    hot: "탭 '한 기기' · 3쿠션 5점 · 2명 → 시작 (두 사람 모두 BilliardsAI 중급 샷)",
+    practice: "탭 '혼자' → '혼자 연습' · 3쿠션 → 시작 → AI 선생님 켜기 · '이대로 겨누기' · 샷! 4번 (+다시 보기·되돌리기·처음 배치)",
+    pool: "탭 '혼자' → 'AI와 대결' · 포켓볼 · 🌱 초급 → 시작",
   }[mode] || `start ${mode}`),
   modes: {
     // AI와 대결: 4구 30다마(3점) — 나(중급 샷) vs 🌱 초급
     solo: {
       start: () => {
         const $ = id => document.getElementById(id), click = sel => { const e = document.querySelector(sel); if (e) e.click(); return !!e; };
-        $('tabAi').click(); click('.gcard[data-id="4gu"]'); click('#targetSeg button[data-v="30"]'); click('#tiers .tier[data-id="easy"]');
+        $('tabSolo').click(); click('#soloSeg button[data-v="ai"]'); click('.gcard[data-id="4gu"]'); click('#targetSeg button[data-v="30"]'); click('#tiers .tier[data-id="easy"]');
         $('startBtn').click();
       }, timeout: 120000,
     },
@@ -46,7 +46,7 @@ module.exports = {
     practice: {
       start: () => {
         const $ = id => document.getElementById(id), click = sel => { const e = document.querySelector(sel); if (e) e.click(); return !!e; };
-        $('tabPractice').click(); click('.gcard[data-id="3c"]');
+        $('tabSolo').click(); click('#soloSeg button[data-v="practice"]'); click('.gcard[data-id="3c"]');
         $('startBtn').click();
       }, timeout: 150000,
     },
@@ -54,7 +54,7 @@ module.exports = {
     pool: {
       start: () => {
         const $ = id => document.getElementById(id), click = sel => { const e = document.querySelector(sel); if (e) e.click(); return !!e; };
-        $('tabAi').click(); click('.gcard[data-id="8ball"]'); click('#tiers .tier[data-id="easy"]');
+        $('tabSolo').click(); click('#soloSeg button[data-v="ai"]'); click('.gcard[data-id="8ball"]'); click('#tiers .tier[data-id="easy"]');
         $('startBtn').click();
       }, timeout: 240000, stuckMs: 30000,
     },

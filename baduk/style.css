@@ -27,7 +27,7 @@ header.top h1{display:flex;align-items:center;gap:10px}
 .logo .st{position:absolute;width:26px;height:26px}
 .logo .st.b{left:0;top:2px}.logo .st.w{left:14px;top:7px}
 .st.mini{width:.92em;height:.92em;vertical-align:-.1em;margin:0 .12em}
-.more{justify-self:end;padding:6px 10px;font-size:14px;margin-top:-6px}
+/* 맨 아래 작은 줄 (화면 틀: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹) */
 
 /* ── 메뉴 ── */
 .pane{display:grid;gap:12px}

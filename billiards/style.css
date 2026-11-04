@@ -176,8 +176,7 @@ body .cpn{width:min(380px,95vw)}                   /* 읽을 말이 늘어서 �
 .rdy-w label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
 
 /* 🎞️ 복기 (지난 판 다시 보기) — 조작판 자리에 (당구대를 덜 가림) */
-.homex{justify-content:center}
-.homex .btn[hidden]{display:none}
+/* 맨 아래 작은 줄 (화면 틀: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹) */
 .rplist{display:grid;gap:6px;max-height:52vh;overflow:auto;text-align:left}
 .rplist .btn{display:grid;gap:2px;justify-items:start;text-align:left;padding:10px 12px}
 .rplist .small{opacity:.8}

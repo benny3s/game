@@ -259,7 +259,7 @@ body.playing .dock button[aria-pressed="true"] .ic{background:#047857;border-col
 .tbl.tight .hw-mini{width:19px;height:30px}
 
 /* 🎞️ 다시 보기: 지난 판 목록 · 다시 보기 줄 두 개는 내 자리 칸 안(배팅 단추 자리)에 — 패·단추를 안 가림 */
-#replayBtn{width:100%;margin-top:-4px}
+/* 맨 아래 작은 줄 (화면 틀: ❓ 하는 법 · ⚙ 설정 · 📜 지난 대국 · 🏆 랭킹) */
 .rplist{display:grid;gap:6px;max-height:52vh;overflow:auto;text-align:left}
 .rplist .btn{display:grid;gap:2px;justify-items:start;text-align:left;padding:10px 12px}
 .rplist .small{opacity:.8}

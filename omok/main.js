@@ -74,9 +74,11 @@
   const resRecFill = () => { const el = document.getElementById('rkRec'); if (!el || !G || G.mode !== 'ai') return; const t = resRecTxt(G); el.textContent = t; el.style.display = t ? '' : 'none'; };
   addEventListener('grank', e => { if (!e.detail || e.detail.game !== 'omok') return; rankFresh = true; recFill(); resRecFill(); });
   function drawMenu() {
-    for (const [t, box] of [['solo', 'soloBox'], ['watch', 'watchBox']]) { $('tab' + t[0].toUpperCase() + t.slice(1)).setAttribute('aria-pressed', String(pref.tab === t)); $(box).hidden = pref.tab !== t; }
-    seg($('modeSeg'), [['ai', '🤖 AI 대전'], ['two', '👥 한 기기 둘이서']], pref.mode, v => { pref.mode = v; savePref(); drawMenu(); });
-    $('aiOpts').hidden = pref.mode !== 'ai'; $('twoDesc').hidden = pref.mode !== 'two';
+    // 탭 4개: 혼자(AI 대전) · 한 기기(둘이서) · 친구랑 · AI 구경 — 저장은 예전 그대로 (pref.tab = solo|watch, pref.mode = ai|two)
+    const vt = menuTab();
+    for (const [t, id] of [['solo', 'tabSolo'], ['duo', 'tabDuo'], ['watch', 'tabWatch']]) $(id).setAttribute('aria-pressed', String(vt === t));
+    $('soloBox').hidden = vt === 'watch'; $('watchBox').hidden = vt !== 'watch';
+    $('aiOpts').hidden = vt !== 'solo'; $('twoDesc').hidden = vt !== 'duo';
     $('tiers').innerHTML = TIERS.map(t => `<button class="tier ${tier(t).cls}" data-t="${t}" aria-pressed="${pref.tier === t}"><span class="em">${tier(t).em}</span><b>${tier(t).name}</b><span>${TIER_DESC[t]}</span><span class="rec">${recLine(t)}</span></button>`).join('');
     recLoad();
     $('tiers').onclick = e => { const b = e.target.closest('.tier'); if (!b) return; sfx('tap'); pref.tier = b.dataset.t; savePref(); drawMenu(); };
@@ -86,11 +88,12 @@
     seg($('watchW'), tierItems, pref.ww, v => { pref.ww = v; savePref(); drawMenu(); });
     seg($('ruleSeg'), RULES.map(r => [r, O.RULES[r].name]), pref.rule, v => { pref.rule = v; savePref(); drawMenu(); });
     $('ruleDesc').textContent = RULE_LINE[pref.rule];
-    $('startBtn').textContent = pref.tab === 'watch' ? '▶ 구경 시작' : '시작!';
     $('howtoList').hidden = pref.tab === 'watch';
     drawMst();
   }
-  $('tabSolo').onclick = () => { sfx('tap'); pref.tab = 'solo'; savePref(); drawMenu(); };
+  function menuTab() { return pref.tab === 'watch' ? 'watch' : pref.mode === 'two' ? 'duo' : 'solo'; }
+  $('tabSolo').onclick = () => { sfx('tap'); pref.tab = 'solo'; pref.mode = 'ai'; savePref(); drawMenu(); };
+  $('tabDuo').onclick = () => { sfx('tap'); pref.tab = 'solo'; pref.mode = 'two'; savePref(); drawMenu(); };
   $('tabWatch').onclick = () => { sfx('tap'); pref.tab = 'watch'; savePref(); drawMenu(); };
   if ($('tabFriend')) $('tabFriend').onclick = () => { sfx('tap'); openFriendModal(); };
   $('startBtn').onclick = () => { sfx('tap'); startFromMenu(); };

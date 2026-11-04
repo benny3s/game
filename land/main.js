@@ -72,7 +72,7 @@
     if (duo) { const a = A.ANIMALS[p2Animal()]; $('p2Name').textContent = `${a.em} ${a.name}`; }
     $('howtoList').hidden = !play;
     $('howto1').textContent = duo ? '1P는 W·A·S·D, 2P는 방향키로 돌아요 · 멈춤은 Space' : '밀면(스와이프) 그쪽으로 돌아요 · PC는 방향키나 WASD';
-    $('startBtn').textContent = solo ? '시작!' : duo ? '⌨️ 둘이서 시작!' : '구경하기';
+    // 시작 단추 글자는 '시작!' 하나 (화면 틀) — HTML 그대로
     const best = Cozy.store('land.best', {})[bestKey(opts.mode, opts.tier, opts.count)];
     $('bestLine').textContent = solo && best ? `🏅 이 설정 최고 점수 · ${best.rank}등 · ${pctStr(best.pct)}%` : '';
   }
