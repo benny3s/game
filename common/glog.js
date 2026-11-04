@@ -16,6 +16,7 @@ window.GLOG = (getDb, game) => {
       safe(base.child("info").set({ ...info, game, host: uid, created: TS(), updated: TS() }));
       return sid;
     },
+    use(sid) { base = getDb().ref(`logs/${game}/${sid}`); isOwner = true; match = null; seen.clear(); return sid; },   // 방장: ArenaUI 가 만든 방 세션에 같이 씀 (한 방 = 한 줄)
     attach(sid) { if (sid && (!base || this.sid !== sid)) { base = getDb().ref(`logs/${game}/${sid}`); isOwner = false; } },   // 친구
     info(p) { if (ok() && isOwner) safe(base.child("info").update({ ...p, updated: TS() })); },
     player(uid, p) { if (ok() && isOwner) safe(base.child(`players/${uid}`).update(p)); },

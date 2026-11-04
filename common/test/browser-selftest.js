@@ -25,6 +25,7 @@ const PAGES = {
   czt: ['../common/cozy.js'],
   aut: ['../common/arena.js', '../common/arena-ui.js'],
   gtt: ['../common/gate.js', '../common/arena.js'],
+  glt: ['../common/glog.js', '../common/arena.js'],
   met: ['../common/me.js'],
 };
 const html = list => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main id="app">시험</main>${list.map(s => `<script src="${s}"></script>`).join('')}</body></html>`;
@@ -197,6 +198,51 @@ async function snakeGateTests(browser) {
   }
 }
 
+// ── 11-05: 같은 계정이 다른 기기에서 자기 방 링크를 열면 방이 닫히던 것 (관리자 PC·폰) → 이 탭만 임시 계정으로 손님. 방장이 새로 고침한 탭은 전처럼 닫음
+async function arenaOwnTests(browser) {
+  console.log('친구랑 arena.js (같은 계정 · 자기 방)');
+  const seed = () => { window.__fs.tree.arena = { omok: { rooms: { ABCD: { meta: { host: 'own1', max: 4, phase: 'lobby', cfg: {} }, players: { own1: { name: '베니' } } } } } }; };
+  const tryJoin = p => p.evaluate(async () => {
+    await Arena.init();
+    const out = { me0: Arena.uid };
+    try {
+      const n = await Promise.race([Arena.join('omok', 'ABCD', { name: '폰' }), new Promise((_, no) => setTimeout(() => no(new Error('join 시간 초과')), 6000))]);
+      out.uid = n.uid; out.host = n.meta && n.meta.host;
+    } catch (e) { out.own = !!e.own; out.err = String(e.message).slice(0, 40); }
+    out.room = !!(window.__fs.tree.arena.omok.rooms.ABCD);
+    out.seat = Object.keys(window.__fs.tree.arena.omok.rooms.ABCD.players || {});
+    return out;
+  });
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'own1', claims: {} } } });
+    await ctx.addInitScript(seed);
+    const r = await tryJoin(await open(ctx, PROD + '/game/gtt/'));
+    ok(!r.own && r.uid && r.uid !== 'own1' && r.host === 'own1' && r.room && r.seat.includes(r.uid) && r.seat.includes('own1'), `다른 기기에서 내 방 링크 → 방은 그대로, 임시 계정으로 손님 — ${JSON.stringify(r)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'own1', claims: {} } } });
+    await ctx.addInitScript(seed);
+    await ctx.addInitScript(() => sessionStorage.setItem('arena.hosted.omok.ABCD', '1'));
+    const r = await tryJoin(await open(ctx, PROD + '/game/gtt/'));
+    ok(r.own === true, `방장이 새로 고침한 탭 → 전처럼 e.own (방을 닫고 새로) — ${JSON.stringify(r)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'lg1', claims: {} } } });
+    const p = await open(ctx, PROD + '/game/glt/');
+    const r = await p.evaluate(async () => {
+      await Arena.init();
+      const L = GLOG(() => Arena.db(), 'omok');
+      if (!L.use) return { noUse: true };
+      L.use('2026-11-05/000000_ABCD'); L.matchStart({ mode: 'x' }); L.matchEnd({ won: true }); await new Promise(r => setTimeout(r, 200));
+      return { paths: window.__fs.log.map(x => x.path).filter(x => /^logs\//.test(x)), inMatch: L.inMatch };
+    });
+    ok(r.paths && r.paths.length && r.paths.every(x => x.startsWith('logs/omok/2026-11-05/000000_ABCD/matches')) , `판 기록이 방 세션 한 줄에 들어감 — ${JSON.stringify(r).slice(0, 160)}`);
+    await ctx.close();
+  }
+}
+
 // ── presence: 계정이 바뀌면(switchUser) 방문자 기록을 새 uid 자리에 씀 (예전 자리는 권한이 없음)
 async function presenceTests(browser) {
   console.log('출입 gate.js (계정 바뀜 → 방문자 기록)');
@@ -248,7 +294,7 @@ async function mePickTests(browser) {
   const t0 = Date.now();
   const pw = require(PW);
   const browser = await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--mute-audio'] });
-  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, presenceTests, mePickTests]) {
+  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, mePickTests]) {
     try { await t(browser); } catch (e) { fail++; console.log('  ✘ FAIL: 시험 도구 예외 ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | ')); }
   }
   await browser.close();

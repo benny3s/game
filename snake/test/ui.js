@@ -461,9 +461,8 @@ async function realArenaTests(T) {
     await H.evaluate(() => document.getElementById('again').click());
     T.ok(await U.waitFor(H, () => window.__snake.round === 2 && !window.__snake.sim.over, null, 3000), '다음 판');
     const logs = await H.evaluate(() => { const out = []; for (const day of Object.values(window.__fs.get('logs/snake') || {})) for (const s of Object.values(day)) out.push({ kind: s.info && s.info.kind, room: s.info && s.info.room, players: Object.keys(s.players || {}).length, finals: Object.values(s.matches || {}).filter(m => m.final).length, matches: Object.keys(s.matches || {}).length, net: Object.keys(s.net || {}).length }); return out; });
-    const gl = logs.find(x => x.kind === '친구랑');
-    T.ok(gl && gl.room === code && gl.finals === 1 && gl.net === 1, '판 결과·연결 품질 기록 (' + JSON.stringify(logs) + ')');
-    T.ok(logs.length === 2 && logs.some(x => !x.kind && x.players === 2), '참가자는 ArenaUI 공통 기록 세션에 (' + JSON.stringify(logs) + ')');
+    // 11-05: 한 방 = 기록 한 줄 (ArenaUI 세션에 판 결과·연결 품질까지 같이)
+    T.ok(logs.length === 1 && logs[0].room === code && logs[0].players === 2 && logs[0].finals === 1 && logs[0].matches === 2 && logs[0].net === 1, '한 방 = 기록 한 줄: 참가자·판 결과·연결 품질 (' + JSON.stringify(logs) + ')');
     T.ok(await H.evaluate(R => !!window.__fs.get(R + '/meta/log'), R), '손님이 쓸 기록 세션이 방 정보에');
     const ac = await H.evaluate(() => ({ p: [...new Set(window.__fs.log.map(x => x.path).filter(x => x.startsWith('snake/ac/')))], denied: window.__fs.denied.map(x => x.path) }));
     T.ok(ac.p.includes('snake/ac/' + code + '/' + hu + '/client') && ac.p.includes('snake/ac/' + code + '/' + hu + '/host') && ac.p.includes('snake/ac/' + code + '/' + hu + '/peer/gU'), '감지 기록 (' + ac.p.join(' ') + ')');

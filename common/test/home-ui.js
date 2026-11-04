@@ -31,6 +31,9 @@ U.main(async T => {
   T.ok(a.days.length === 7 && a.days[6] === '오늘' && a.days.slice(0, 6).every(d => '일월화수목금토'.includes(d)), '아래는 날짜 숫자 대신 요일 (' + a.days + ')');
   T.ok(a.games.length === 3 && a.games[0][1] === '100%' && parseInt(a.games[1][1]) < 100 && a.games[0][2] === '615', '게임은 많은 순 가로 막대 (' + JSON.stringify(a.games) + ')');
   T.ok(!a.over && a.fits, '화면을 넘치지 않음');
+  // 11-05: 아케이드 첫 화면도 아이폰 두 번 톡 확대 막기 (게임은 cozy 에 있음)
+  const z = await p.evaluate(() => { const e = new Event('gesturestart', { cancelable: true, bubbles: true }); document.dispatchEvent(e); return { touch: getComputedStyle(document.querySelector('.capsule') || document.body).touchAction, stopped: e.defaultPrevented }; });
+  T.ok(z.touch === 'manipulation' && z.stopped, '아케이드 첫 화면 확대 막이 (' + JSON.stringify(z) + ')');
   // 폰: 다른 날 막대를 누르면 그 날 숫자가 뜸
   await p.locator('.act-plot button').nth(1).tap();
   T.ok(await p.locator('.act-plot button').nth(1).locator('em').evaluate(e => getComputedStyle(e).visibility === 'visible'), '다른 날 막대를 누르면 숫자가 보임');

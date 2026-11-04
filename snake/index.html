@@ -38,13 +38,13 @@
 /* 레이아웃: 화면 전체 = 경기장(카메라가 나를 따라감). 위에 순위표·미니맵·내 길이, 시작 전엔 다른 게임과 같은 메뉴 화면 */
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{padding:0}
-#cv{position:fixed;inset:0;width:100vw;height:100dvh;display:block;touch-action:none;background:#0b0e12}
+#cv{position:fixed;inset:0;width:100vw;height:calc(100dvh - var(--gap-b,0px));display:block;touch-action:none;background:#0b0e12}
 .hud{position:fixed;pointer-events:none;font-size:12.5px;color:#cfd8d4;text-shadow:0 1px 2px #000}
 #lb{right:10px;top:calc(env(safe-area-inset-top,0px) + 8px);min-width:170px}
 #lb b{display:block;font-size:14px;margin-bottom:3px;color:#fff}
 #lb ol{margin:0;padding-left:20px;font:500 12px/1.45 var(--mono)}
 #lb li.me{color:var(--me)}
-#mini{position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);width:120px;height:120px;pointer-events:none}
+#mini{position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + var(--gap-b,0px) + 10px);width:120px;height:120px;pointer-events:none}
 #me{right:10px;top:150px;text-align:right;font:500 13px/1.5 var(--mono)}
 #me b{color:#fff;font-size:16px}
 #room{left:12px;top:calc(env(safe-area-inset-top,0px) + 8px);pointer-events:auto}
@@ -55,7 +55,7 @@ body.playing #czBug{display:none}   /* 화면 전체가 조종 칸: 문제 알�
 .topbtn .btn{padding:6px 10px;font-size:12px;background:rgba(6,24,20,.85)}
 #joy{position:fixed;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);pointer-events:none;z-index:3}
 #joy>i{position:absolute;left:16px;top:16px;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.6)}
-#boost{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);width:84px;height:84px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-radius:50%;border:2px solid rgba(255,214,102,.6);background:rgba(255,214,102,.15);color:var(--me);font:700 14px var(--sans);z-index:4;touch-action:none}
+#boost{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom,0px) + var(--gap-b,0px) + 150px);width:84px;height:84px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-radius:50%;border:2px solid rgba(255,214,102,.6);background:rgba(255,214,102,.15);color:var(--me);font:700 14px var(--sans);z-index:4;touch-action:none}
 #boost.on{background:rgba(255,214,102,.45)}
 
 /* ── 겹창: 첫 메뉴는 다른 게임 첫 화면처럼 한 장(.page), 죽음·멈춤·결과는 cozy 의 .overlay 창, 친구랑은 ArenaUI 창 ── */
@@ -112,7 +112,9 @@ body.playing #czBug{display:none}   /* 화면 전체가 조종 칸: 문제 알�
   #timer{left:12px;top:calc(env(safe-area-inset-top,0px) + 62px);transform:none;text-align:left;font-size:12.5px;max-width:calc(100vw - 165px)}
   #room .small{font-size:11px;white-space:nowrap}
 }
+.arena-slow{top:calc(env(safe-area-inset-top,0px) + 96px)!important;left:12px!important;right:auto!important}   /* 서버 경유 🐢: 위 오른쪽은 순위표 자리 */
 </style>
+<script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
 </head>
 <body>
@@ -129,7 +131,7 @@ body.playing #czBug{display:none}   /* 화면 전체가 조종 칸: 문제 알�
   <div class="acts"><button class="btn primary big" type="button" id="again">다시 하기 <span class="kbd">(Space · Enter)</span></button><button class="btn" type="button" id="resForce" hidden>안 기다리고 시작</button><button class="btn" type="button" id="resLobby" hidden>대기실로</button><button class="btn" type="button" id="resMenu">메뉴로</button></div>
   <p class="small" id="resNote"></p>
 </div></div>
-<div class="hud" id="spec" hidden style="left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);text-align:center;font-size:14px;pointer-events:auto"></div>
+<div class="hud" id="spec" hidden style="left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + var(--gap-b,0px) + 14px);transform:translateX(-50%);text-align:center;font-size:14px;pointer-events:auto"></div>
 <div class="topbtn" id="topbtn" hidden>
   <button class="btn" type="button" id="toMenu">메뉴 (ESC)</button>
   <button class="btn" type="button" id="myAc" hidden>내 감지기</button>
@@ -206,16 +208,16 @@ body.playing #czBug{display:none}   /* 화면 전체가 조종 칸: 문제 알�
 </div></div>
 
 <script src="../common/cozy.js?v=12"></script>
-<script src="../common/glog.js?v=1"></script>
+<script src="../common/glog.js?v=7"></script>
 <script src="core.js?v=25"></script>
 <script src="render.js?v=24"></script>
 <script src="ac.js?v=24"></script>
 <script src="../common/me.js?v=14"></script>
 <script src="../common/rank.js?v=10"></script>
 <script src="../common/arena-mock.js?v=9"></script>
-<script src="../common/arena.js?v=13"></script>
-<script src="../common/arena-ui.js?v=16"></script>
+<script src="../common/arena.js?v=14"></script>
+<script src="../common/arena-ui.js?v=17"></script>
 <script src="net.js?v=27"></script>
-<script src="main.js?v=31"></script>
+<script src="main.js?v=32"></script>
 </body>
 </html>

@@ -532,7 +532,7 @@
 
   function openFriend() {
     if (!window.ArenaUI) { toast("친구랑 모듈을 불러오지 못했어요"); return; }
-    ArenaUI.open({
+    ArenaUI.open({ ownMatchLog: true,
       game: "nyang", title: "냥도쿠", max: MAXP, min: 2,
       describe: lobbyLine,
       settings: { defaults: store.get("cfg", { tier: "normal", hint: "penalty", rounds: 3 }), label: cfgText, render: friendSettings },
@@ -546,7 +546,7 @@
     if (R === net) return;
     unbindNet();
     R = net; isHost = !!net.isHost; meta = net.meta || null; players = net.players || {}; prog = {}; myRound = 0; shownRound = 0; restored = 0; roundRes = null; bornAt = performance.now();
-    if (isHost) { sReady = Promise.resolve(); const lg = logInit(); if (lg) lg.start({ kind: "대결", hostName: myName(), room: net.code }, net.uid); }
+    if (isHost) { sReady = Promise.resolve(); const lg = logInit(); if (lg) { if (ArenaUI.logSid) lg.use(ArenaUI.logSid); else lg.start({ kind: "대결", hostName: myName(), room: net.code }, net.uid); } }
     else sReady = new Promise(ok => { sDone = ok; setTimeout(ok, 2500); });   // 다시 들어온 사람은 지금까지의 진행을 받고 시작 (못 받아도 2.5초 뒤엔)
     const ON = (ev, fn) => { const off = net.on(ev, (...a) => { if (R === net) fn(...a); }); if (typeof off === "function") boundOffs.push(off); };
     ON("players", v => { players = v || {}; drawOpp(); checkRoundEnd(); });

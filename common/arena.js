@@ -113,6 +113,15 @@ const Arena = (() => {
   }
 
   // 같은 계정으로 같은 방에 또 들어오면(관리자로 PC·휴대폰 둘 다 등) 한 사람으로 겹치므로, 이 탭만 임시 계정
+  async function separateIdentity() {
+    const a = firebase.initializeApp(FB, "tab" + Math.random().toString(36).slice(2, 8));
+    await a.auth().setPersistence(firebase.auth.Auth.Persistence.NONE);
+    await appCheck(a, load);
+    user = (await a.auth().signInAnonymously()).user;
+    app = a; adminFlag = false; hostFlag = false;
+    watchOffset();
+  }
+  const hostedKey = (game, code) => "arena.hosted." + game + "." + code;     // 이 탭이 만든 방 (새로 고침해도 남고, 다른 기기·탭엔 없음)
   const db = () => app.database();
   const TS = () => firebase.database.ServerValue.TIMESTAMP;
   const now = () => Date.now() + offset;                                     // 서버 시계 (카운트다운을 모두 같게)
@@ -227,6 +236,7 @@ const Arena = (() => {
     const base = db().ref(ROOT + game);
     let code;
     for (let i = 0; i < 6; i++) { code = code4(); if (!(await base.child(`rooms/${code}/meta`).get()).exists()) break; }
+    try { sessionStorage.setItem(hostedKey(game, code), "1"); } catch (e) {}
     const room = base.child(`rooms/${code}`), idx = base.child(`index/${code}`), S = subs(), E = emitter(["players", "meta"]);
     const gateRef = base.child(`gate/${code}`), passRef = base.child(`pass/${code}`);
     let title = cleanTitle(settings.title), pw = settings.pw ? normPw(settings.pw) : "";
@@ -349,10 +359,16 @@ const Arena = (() => {
     let room = db().ref(`${ROOT}${game}/rooms/${code}`);
     const meta0 = (await room.child("meta").get()).val();
     if (!meta0) throw new Error("그런 방이 없어요 (코드를 확인하거나 방장이 나갔을 수 있어요)");
+    if (meta0.host === user.uid) {
+      // 이 탭이 만든 방: 방장이 새로 고침한 것 → 방장 자리는 이어 받을 수 없음 (부른 쪽이 방을 닫고 새로)
+      let here = false; try { here = !!sessionStorage.getItem(hostedKey(game, code)); } catch (e) {}
+      if (here) { const e = new Error("새로 고침해서 전에 만든 방이 닫혔어요. 방을 다시 만들어 링크를 보내 주세요"); e.own = true; throw e; }
+      // 같은 계정의 다른 기기·탭: 방은 그대로 두고 이 탭만 손님으로
+      await separateIdentity();
+      room = db().ref(`${ROOT}${game}/rooms/${code}`);
+    }
     const pl = (await room.child("players").get()).val() || {};
     const seated = !!pl[user.uid];
-    // 내가 만든 방: 방장이 새로 고침한 것 → 방장 자리는 이어 받을 수 없음 (부른 쪽이 방을 닫고 새로)
-    if (meta0.host === user.uid) { const e = new Error("새로 고침해서 전에 만든 방이 닫혔어요. 방을 다시 만들어 링크를 보내 주세요"); e.own = true; throw e; }
     // 이미 앉아 있던 자리(새로 고침·다시 들어오기)는 같은 사람으로 이어서
     if (seated) {}
     else if (Object.keys(pl).length >= (meta0.max || 2) && !settings.watch) throw new Error(`방이 꽉 찼어요 (최대 ${meta0.max || 2}명)`);

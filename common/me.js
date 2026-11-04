@@ -321,7 +321,7 @@
   window.GME = { get me() { return me; }, P, ensure, pick, register, manage, rename, changePin, loadAll, onChange: f => listeners.push(f), nameKey };
   if (typeof document !== "undefined" && !window.Gate) {
     const cur = document.currentScript && document.currentScript.src;
-    const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=18") : "../common/gate.js?v=18";
+    const base = cur ? cur.replace(/\/me\.js.*$/, "/gate.js?v=19") : "../common/gate.js?v=19";
     const gs = document.createElement("script");
     gs.src = base;
     document.head.appendChild(gs);

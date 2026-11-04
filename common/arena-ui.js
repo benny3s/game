@@ -188,15 +188,16 @@
     }
   }
   // ── 📊 방 기록 (모든 게임 공통, 관리자만 읽음): logs/{게임}/{날짜}/{세션} — 방 · 참가자 들어옴·나감 · 판 시작 · 채팅. 방장만 씀
+  let logSid = null;
   let log = null, logSeen = new Set();
   const logTS = () => firebase.database.ServerValue.TIMESTAMP;
   const logSafe = p => { if (p && p.catch) p.catch(() => {}); };
   function logStart() {
-    log = null; logSeen = new Set();
+    log = null; logSid = null; logSeen = new Set();
     if (!net || !net.isHost || Arena.mock || Arena.GUEST || !window.firebase || !Arena.db) return;
     try {
       const t = new Date(Date.now() + 9 * 3600e3).toISOString();
-      const sid = `${t.slice(0, 10)}/${t.slice(11, 19).replace(/:/g, "")}_${net.code}`;
+      const sid = logSid = `${t.slice(0, 10)}/${t.slice(11, 19).replace(/:/g, "")}_${net.code}`;
       log = Arena.db().ref(`logs/${opt.game}/${sid}`);
       logSafe(log.child("info").set({ game: opt.game, room: net.code, host: net.uid, hostName: (me && me.name) || "", created: logTS(), updated: logTS() }));
     } catch (e) { log = null; }
@@ -209,7 +210,7 @@
     logSeen = now;
   }
   function logMatch() {
-    if (!log || !net) return;
+    if (!log || !net || opt.ownMatchLog) return;                            // ownMatchLog: 게임이 GLOG.use(ArenaUI.logSid) 로 판을 직접 남김
     const pl = net.players || {};
     logSafe(log.child("matches").push({ start: logTS(), players: Object.keys(pl).map(u => (pl[u] && pl[u].name) || "?").join(", "), cfg: opt.settings && opt.settings.label ? String(opt.settings.label(curCfg()) || "").slice(0, 80) : "" }));
   }
@@ -225,7 +226,7 @@
       let slow = false;
       if (net.isHost) { const pl = net.players || {}; slow = (net.peers ? net.peers() : []).some(([u, o]) => !o && pl[u] && !pl[u].watch); }
       else slow = net.p2p === false;
-      if (!badge) { style(); badge = document.createElement("div"); badge.style.cssText = "position:fixed;right:6px;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:56;font:700 11.5px/1 system-ui,sans-serif;padding:5px 8px;border-radius:99px;background:rgba(120,53,15,.85);color:#fde68a;border:1px solid rgba(253,230,138,.4);pointer-events:none"; badge.textContent = "🐢 서버 경유 · 느릴 수 있어요"; document.body.appendChild(badge); }
+      if (!badge) { style(); badge = document.createElement("div"); badge.className = "arena-slow"; badge.style.cssText = "position:fixed;right:6px;top:calc(env(safe-area-inset-top,0px) + 6px);z-index:56;font:700 11.5px/1 system-ui,sans-serif;padding:5px 8px;border-radius:99px;background:rgba(120,53,15,.85);color:#fde68a;border:1px solid rgba(253,230,138,.4);pointer-events:none"; badge.textContent = "🐢 서버 경유 · 느릴 수 있어요"; document.body.appendChild(badge); }
       badge.hidden = !slow;
     }, 4000);   // 처음 연결은 몇 초 걸리니 조금 기다렸다가
   }
@@ -616,7 +617,7 @@
     if (code) doJoin(code); else home();
   }
 
-  window.ArenaUI = {
+  window.ArenaUI = { get logSid() { return logSid; },
     open,
     toLobby() { if (net && net.isHost) { playing = false; net.setPhase("lobby"); opt.onLobby && opt.onLobby(ctx()); lobby(); } },
     leave() { if (net) end(""); },

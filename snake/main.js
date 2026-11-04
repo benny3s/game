@@ -152,7 +152,7 @@
   }
   function openFriend() {
     if (!window.ArenaUI) return msg("친구랑 모듈을 불러오지 못했어요");
-    ArenaUI.open({
+    ArenaUI.open({ ownMatchLog: true,
       game: "snake", title: "🐍 지렁이 대결", max: 8, min: 1, describe,
       settings: { defaults: cfg(), label: cfgLabel, render: friendSettings },
       onStart: ctx => startOnline(ctx),
@@ -222,7 +222,7 @@
     try {
       if (logRoom !== roomCode) {
         logRoom = roomCode;
-        const sid = LOG.start({ room: roomCode, hostName: curName(), kind: "친구랑" }, meId);
+        const sid = ArenaUI.logSid ? LOG.use(ArenaUI.logSid) : LOG.start({ room: roomCode, hostName: curName(), kind: "친구랑" }, meId);
         Promise.resolve(net.setMeta({ log: sid })).catch(() => {});      // 손님이 연결 품질을 씀
       }
       LOG.matchStart(matchInfo());
