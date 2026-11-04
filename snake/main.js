@@ -212,7 +212,7 @@
     hideGameHud(); $("menu").hidden = true; $("lobby").hidden = false;
     $("lobbyBox").dataset.kind = kind;
     $("lbTitle").textContent = kind === "solo" ? "혼자 연습 설정" : "대기실";
-    $("lbStart").textContent = kind === "solo" ? "시작 (Enter)" : "게임 시작 (Enter)";
+    $("lbStart").textContent = kind === "solo" ? "시작!" : "게임 시작!";
     $("lbLeave").textContent = kind === "solo" ? "뒤로" : "나가기";
     $("lbStart").hidden = kind === "guest";
     markHelper();
@@ -703,7 +703,7 @@
     const ok = e.key === "Enter" || e.key === " ";
     if (mode === "menu") {                                                // 첫 메뉴: Space/Enter = 혼자 연습 (이름 칸에서 Enter도)
       if (lobby) { if (ok && soloSetup && e.target.tagName !== "INPUT") { e.preventDefault(); startSolo(); } return; }
-      if (ok && $("login").hidden && (e.target.tagName !== "INPUT" || (e.key === "Enter" && e.target.id === "name"))) { e.preventDefault(); if (roomParam) startJoin(); else openSoloSetup(); }
+      if (ok && $("login").hidden && !e.target.closest(".tabs") && (e.target.tagName !== "INPUT" || (e.key === "Enter" && e.target.id === "name"))) { e.preventDefault(); if (roomParam) startJoin(); else if ($("tabFriend").getAttribute("aria-pressed") === "true") openRooms(); else openSoloSetup(); }   // 탭: 혼자 = 연습 설정 · 친구랑 = 방 목록
       return;
     }
     if (lobby) { if (ok && mode === "host" && e.target.tagName !== "INPUT") { e.preventDefault(); hostStartGame(); } return; }

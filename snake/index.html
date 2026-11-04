@@ -3,15 +3,41 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#06130f">
 <title>지렁이 대결</title>
 <!-- 아이폰 두 손가락·두 번 톡 확대 막기 (다른 게임은 common/cozy 에) -->
 <script>try{for(const ev of ["gesturestart","gesturechange","gestureend"])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});document.addEventListener("touchmove",e=>{if(e.touches.length>1||(e.scale&&e.scale!==1))e.preventDefault()},{passive:false});document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false})}catch(e){}</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
-<link rel="stylesheet" href="../common/ui.css">
+<link rel="stylesheet" href="../common/cozy.css?v=13">
 <style>
-/* 레이아웃: 화면 전체 = 경기장(카메라가 나를 따라감). 위에 순위표·미니맵·내 길이, 시작 전엔 가운데 메뉴 카드 */
+/* 지렁이 대결 테마: 다른 게임과 같은 common/cozy.css 위에 :root 변수만 지렁이 색(초록·청록)으로 */
+:root{
+  --bg:#06130f;
+  --bg-grad:radial-gradient(120% 90% at 50% 0%,#0f3a2f 0%,#081f1a 60%,#040c09 100%);
+  --card:rgba(10,31,26,.94);
+  --card-border:rgba(60,200,160,.34);
+  --ink:#e8fff7;
+  --soft:#8fc2b3;
+  --line:rgba(60,200,160,.22);
+  --accent:#0fa57b;
+  --accent-d:#066a53;
+  --accent2:#22b8cf;
+  --accent2-d:#0b7285;
+  --gold:#ffd666;
+  --bad:#ff6b6b;
+  --good:#4ade80;
+  --tint2:rgba(2,14,11,.8);
+  --paper:rgba(4,20,16,.88);
+  --note:rgba(8,28,23,.96);
+  /* 게임 안쪽(HUD·순위표 등)이 쓰는 이름 */
+  --me:#ffd666;
+  --ai:#5ec4b6;
+  --muted:var(--soft);
+  --panel:var(--card);
+  --danger:var(--bad);
+  --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,monospace;
+  --sans:var(--text);
+}
+/* 레이아웃: 화면 전체 = 경기장(카메라가 나를 따라감). 위에 순위표·미니맵·내 길이, 시작 전엔 다른 게임과 같은 메뉴 화면 */
 html,body{height:100%;overflow:hidden;overscroll-behavior:none}
 body{padding:0}
 #cv{position:fixed;inset:0;width:100vw;height:100dvh;display:block;touch-action:none;background:#0b0e12}
@@ -24,31 +50,41 @@ body{padding:0}
 #me{right:10px;top:150px;text-align:right;font:500 13px/1.5 var(--mono)}
 #me b{color:#fff;font-size:16px}
 #room{left:12px;top:calc(env(safe-area-inset-top,0px) + 8px);pointer-events:auto}
-#room .chip{font:600 12.5px/1 var(--mono);padding:6px 9px;border-radius:99px;background:rgba(20,28,26,.85);border:1px solid var(--line);color:var(--ai)}
+#room .chip{font:600 12.5px/1 var(--mono);padding:6px 9px;border-radius:99px;background:rgba(6,24,20,.85);border:1px solid var(--line);color:var(--ai)}
 .topbtn{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:5}
-.topbtn .btn{padding:6px 10px;font-size:12px;background:rgba(20,28,26,.85)}
+.topbtn .btn{padding:6px 10px;font-size:12px;background:rgba(6,24,20,.85)}
 #joy{position:fixed;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:2px solid rgba(255,255,255,.4);background:rgba(255,255,255,.08);pointer-events:none;z-index:3}
 #joy>i{position:absolute;left:16px;top:16px;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.6)}
 #boost{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom,0px) + 150px);width:84px;height:84px;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;border-radius:50%;border:2px solid rgba(255,214,102,.6);background:rgba(255,214,102,.15);color:var(--me);font:700 14px var(--sans);z-index:4;touch-action:none}
 #boost.on{background:rgba(255,214,102,.45)}
-.card{position:fixed;inset:0;display:grid;place-items:center;z-index:10;background:rgba(6,9,8,.55);padding:16px;overflow:auto}
-.card>div{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;width:min(560px,100%);display:grid;gap:12px;max-height:calc(100dvh - 32px);overflow:auto}
-.card h1{font-size:26px}
-.field{display:grid;gap:5px}
-.field>span{font-size:12.5px;color:var(--muted)}
-input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d1312;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
-.seg{display:flex;flex-wrap:wrap;gap:6px}
-.seg .btn{padding:8px 10px}
+
+/* ── 겹창: 메뉴·방 목록·대기실은 다른 게임 첫 화면처럼 한 장(.page), 죽음·멈춤·결과·로그인은 cozy 의 .overlay 창 ── */
+.page{position:fixed;inset:0;z-index:10;overflow:auto;background:var(--bg-grad);padding:calc(env(safe-area-inset-top,0px) + 16px) 16px calc(env(safe-area-inset-bottom,0px) + 28px)}
+.page,.overlay{word-break:keep-all;overflow-wrap:anywhere}
+#dead,#pause,#results{background:rgba(3,10,8,.6);backdrop-filter:none}   /* 뒤로 판이 비쳐 보이게 (큰 흐림은 폰에서 무거움) */
+.overlay>div{background:linear-gradient(165deg,#12372d 0%,#0a1c17 100%);border-color:rgba(60,200,160,.32)}
+/* cozy 는 마우스를 올리면 초록 단추가 회색으로 바뀜 → 지렁이 쪽은 색 그대로 */
+.btn.primary:hover:not(:disabled),.btn[aria-pressed="true"]:hover:not(:disabled){background:linear-gradient(135deg,var(--accent) 0%,var(--accent-d) 100%)}
+.overlay>div>p{margin:0}
+.acts{display:grid;gap:8px}
+.acts .btn{width:100%}
+.kbd{font-weight:600;opacity:.7;font-size:.85em}
+@media (pointer: coarse){.kbd{display:none}}
+.field{display:grid;gap:6px}
+.field>span{font-size:12.5px;font-weight:600;color:var(--soft)}
+input[type=password]{font:600 15px var(--text);background:var(--paper);color:var(--ink);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;width:100%;outline:none}
+input[type=password]:focus{border-color:var(--gold)}
+input[type=text].need,input[type=text].need:focus{border-color:var(--bad);box-shadow:0 0 0 2px rgba(255,107,107,.25)}
 .swatches{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .sw{width:34px;height:34px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;box-shadow:inset -4px -5px 8px rgba(0,0,0,.35),inset 3px 3px 6px rgba(255,255,255,.35)}
 .sw[aria-checked="true"]{border-color:#fff;transform:scale(1.12)}
 .sw:focus-visible{outline:2px solid var(--me);outline-offset:2px}
-#preview{width:150px;height:44px;border-radius:8px;background:#151b22}
-.go{display:flex;flex-wrap:wrap;gap:8px}
-.go .btn{flex:1 1 140px;padding:12px;font-size:15px}
-.go[style*="column"] .btn{flex:0 0 auto}
-.btn.primary{background:var(--ai);border-color:var(--ai);color:#06110f}
-#dead,#pause{background:rgba(6,9,8,.45)}
+.backchip{cursor:pointer}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.row.minor{justify-content:center;gap:2px}
+#msg:empty,#roomsMsg:empty,#lbMsg:empty{display:none}
+#msg,#roomsMsg,#lbMsg{text-align:center}
+#resList{text-align:left;margin:0;padding:12px 14px 12px 38px;display:grid;gap:4px;font-size:15px;background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.07);border-radius:14px}
 #admin{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 40px);width:min(420px,calc(100vw - 20px));max-height:calc(100dvh - 60px);overflow:auto;z-index:8;background:rgba(20,16,10,.95);border:1px solid #6b5426;border-radius:12px;padding:12px;display:grid;gap:8px;font-size:13px}
 #admin h2{margin:0;font-size:15px;color:#ffd38a}
 .acrow{border-top:1px dashed #4a3a1c;padding-top:6px;display:grid;gap:3px}
@@ -57,7 +93,6 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 .v-ok{color:var(--good)}.v-warn{color:var(--me)}.v-hot{color:var(--danger)}
 .acrow ul{margin:0;padding-left:16px;font:12px/1.5 var(--mono);color:#b9ad95}
 .acrow li.on{color:var(--danger)}
-.small{font-size:12px;color:var(--muted)}
 @media (pointer: coarse), (max-width: 640px){
   #lb{min-width:128px;font-size:11px}#lb ol{font-size:10.5px;line-height:1.35}#lb b{font-size:12px}
   #me{font-size:11.5px}#me b{font-size:14px}
@@ -67,47 +102,42 @@ input[type=text],input[type=password]{font:inherit;font-size:15px;background:#0d
 /* 초대 링크로 들어오면: 방장이 정하는 설정은 숨기고 이름·색·들어가기만 */
 .menu-card.invite .hostopt,.menu-card.invite .soloonly{display:none}
 .menu-card:not(.invite) .joinrow{display:none}
-#roomList{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-#roomList li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0d1312}
+.joinrow input{flex:1 1 120px;text-transform:uppercase}
+#inviteHead{margin:0;padding:10px 12px;border-radius:12px;background:rgba(15,165,123,.14);border:1px solid var(--accent);font-weight:700;font-size:14px}
+/* 방 목록 */
 #roomList .cd{font:700 17px/1 var(--mono);letter-spacing:.08em;color:var(--me)}
 #roomList .inf{flex:1;min-width:140px;display:grid;gap:2px}
 #roomList .inf b{font-size:14px}
 #roomList li.empty{opacity:.65;border-style:dashed}
-#roomList li.none{justify-content:center;color:var(--muted);border-style:dashed}
+#roomList li.none{justify-content:center;color:var(--soft);border-style:dashed}
 #roomList .btn{padding:7px 12px}
-.btn.danger{border-color:var(--danger);color:var(--danger)}
-.bigchoice .btn{display:grid;gap:4px;text-align:left;padding:16px 18px;flex:1 1 220px}
-.bigchoice .btn b{font-size:18px}
-.bigchoice .btn span{font-size:12.5px;font-weight:400;opacity:.8}
+.rowhead{display:flex;align-items:center;justify-content:space-between;gap:8px}
 /* 대기실 종류: host 방장 · guest 참가자 · solo 혼자 연습 */
 #lobbyBox[data-kind=solo] .lb-room,#lobbyBox[data-kind=solo] .lb-hostnote{display:none!important}
 #lobbyBox[data-kind=guest] .lb-host{display:none!important}
 #lobbyBox:not([data-kind=guest]) .lb-guest,#lobbyBox:not([data-kind=guest]) .lb-hostnote{display:none!important}
 .chatbox{display:grid;gap:6px}
-#lbChat{list-style:none;margin:0;padding:8px 10px;height:150px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:#0d1312;display:flex;flex-direction:column;gap:3px;font-size:13.5px}
+#lbChat{list-style:none;margin:0;padding:8px 10px;height:150px;overflow-y:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper);display:flex;flex-direction:column;gap:3px;font-size:13.5px}
 #lbChat li b,#gchat li b{margin-right:6px}
-#lbChat li.sys{color:var(--muted);font-size:12px}
+#lbChat li.sys{color:var(--soft);font-size:12px}
 .chatform{display:flex;gap:6px}
 .chatform input{flex:1;min-width:0}
 #gchat{left:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 60px);list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px;max-width:min(420px,60vw);font-size:13.5px}
-#gchat li{background:rgba(10,14,13,.6);padding:4px 9px;border-radius:8px;transition:opacity .6s}
+#gchat li{background:rgba(6,16,13,.62);padding:4px 9px;border-radius:8px;transition:opacity .6s}
 #gchat li.old{opacity:0}
 #gchatForm{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);width:min(460px,calc(100vw - 32px));z-index:9}
 @media (pointer: coarse){#gchat{bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}}
-#inviteHead{margin:0;padding:10px 12px;border-radius:10px;background:rgba(94,196,182,.12);border:1px solid var(--ai);font-weight:600}
-input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)}
 /* 대기실 */
 .lobby-code{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .lobby-code b{font:700 30px/1 var(--mono);letter-spacing:.12em;color:var(--me)}
-#lbLink{font:12px/1.4 var(--mono);color:var(--muted);word-break:break-all;user-select:all}
-#lbPlayers{list-style:none;margin:0;padding:0;display:grid;gap:6px}
-#lbPlayers li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#0d1312}
+#lbLink{margin:0;font:12px/1.4 var(--mono);color:var(--soft);word-break:break-all;user-select:all}
+#lbPlayers li{padding:8px 10px}
 #lbPlayers .dot{width:22px;height:22px;border-radius:50%;flex:none;box-shadow:inset -3px -4px 6px rgba(0,0,0,.35),inset 2px 2px 5px rgba(255,255,255,.35)}
 #lbPlayers .nm{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#lbPlayers .tg{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:99px;border:1px solid var(--line);color:var(--muted)}
+#lbPlayers .tg{font:600 11px/1 var(--mono);padding:4px 7px;border-radius:99px;border:1px solid var(--line);color:var(--soft)}
 #lbPlayers .tg.host{color:var(--me);border-color:var(--me)}
-#lbPlayers li.empty{border-style:dashed;color:var(--muted);justify-content:center;font-size:13px}
-#lbCfg{margin:0;padding:10px 12px;border-radius:10px;border:1px dashed var(--line);font-size:14px}
+#lbPlayers li.empty{border-style:dashed;color:var(--soft);justify-content:center;font-size:13px}
+#lbCfg{margin:0;padding:10px 12px;border-radius:12px;border:1px dashed var(--line);font-size:14px}
 </style>
 <script src="../common/backnav.js?v=3"></script>
 </head>
@@ -118,10 +148,10 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
 <div class="hud" id="me" hidden></div>
 <div class="hud" id="room" hidden></div>
 <div class="hud" id="timer" hidden style="left:50%;top:calc(env(safe-area-inset-top,0px) + 46px);transform:translateX(-50%);text-align:center;font:600 15px/1.4 var(--mono);color:#fff"></div>
-<div class="card" id="results" hidden><div style="text-align:center;width:min(420px,100%)">
-  <h1 style="font-size:24px" id="resTitle">결과</h1>
-  <ol id="resList" style="text-align:left;margin:0;padding-left:24px;display:grid;gap:4px;font-size:15px"></ol>
-  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="again">다시 하기 (Space · Enter)</button><button class="btn" type="button" id="resLobby" hidden>대기실로</button><button class="btn" type="button" id="resMenu">메뉴로</button></div>
+<div class="overlay" id="results" hidden><div>
+  <h2 id="resTitle">결과</h2>
+  <ol id="resList"></ol>
+  <div class="acts"><button class="btn primary big" type="button" id="again">다시 하기 <span class="kbd">(Space · Enter)</span></button><button class="btn" type="button" id="resLobby" hidden>대기실로</button><button class="btn" type="button" id="resMenu">메뉴로</button></div>
   <p class="small" id="resNote"></p>
 </div></div>
 <div class="hud" id="spec" hidden style="left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);text-align:center;font-size:14px;pointer-events:auto"></div>
@@ -135,109 +165,134 @@ input.need{border-color:var(--danger);box-shadow:0 0 0 2px rgba(255,107,107,.25)
 <form class="chatform" id="gchatForm" hidden><input type="text" id="gchatIn" maxlength="120" placeholder="메시지 보내기 (Enter · ESC 취소)" autocomplete="off"><button class="btn" type="submit">보내기</button></form>
 <button id="boost" type="button" hidden>부스트</button>
 <div id="joy" hidden aria-hidden="true"><i></i></div>
-<div class="card" id="dead" hidden><div style="text-align:center;width:min(360px,100%)">
-  <h1 style="font-size:24px">죽었어요</h1>
-  <p class="lede" id="deadMsg" style="margin:0 auto"></p>
-  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="respawn">새로 시작 (Space · Enter)</button><button class="btn" type="button" id="spectate">관전하기</button><button class="btn" type="button" id="deadMenu">메뉴로</button></div>
+<div class="overlay" id="dead" hidden><div>
+  <h2>죽었어요</h2>
+  <p class="lede" id="deadMsg"></p>
+  <div class="acts"><button class="btn primary big" type="button" id="respawn">새로 시작 <span class="kbd">(Space · Enter)</span></button><button class="btn" type="button" id="spectate">관전하기</button><button class="btn" type="button" id="deadMenu">메뉴로</button></div>
   <p class="small" id="deadNote">새로 시작하면 다른 지렁이에게서 먼 곳에서, 2초 동안 보호(반투명) 상태로 시작해요.</p>
 </div></div>
-<div class="card" id="pause" hidden><div style="text-align:center;width:min(360px,100%)">
-  <h1 style="font-size:22px" id="pauseTitle">잠깐 멈춤</h1>
+<div class="overlay" id="pause" hidden><div>
+  <h2 id="pauseTitle">잠깐 멈춤</h2>
   <p class="small" id="pauseNote"></p>
-  <div class="go" style="flex-direction:column"><button class="btn primary" type="button" id="newGame">새 게임 (Space · Enter)</button><button class="btn" type="button" id="resume">계속 (ESC)</button><button class="btn" type="button" id="toLobby" hidden>모두 대기실로</button><button class="btn" type="button" id="quit">메뉴로 나가기</button><button class="btn" type="button" id="pauseAdmin">관리자</button></div>
+  <div class="acts"><button class="btn primary big" type="button" id="newGame">새 게임 <span class="kbd">(Space · Enter)</span></button><button class="btn" type="button" id="resume">계속 <span class="kbd">(ESC)</span></button><button class="btn" type="button" id="toLobby" hidden>모두 대기실로</button><button class="btn" type="button" id="quit">메뉴로 나가기</button><button class="btn ghost" type="button" id="pauseAdmin">관리자</button></div>
 </div></div>
 <section id="admin" hidden aria-label="관리자 패널"></section>
 
-<div class="card" id="menu"><div class="menu-card">
-  <p class="crumb"><a href="../">← 게임 목록</a></p>
-  <h1>🐍 지렁이 대결</h1>
-  <p id="inviteHead" hidden></p>
-  <p class="lede soloonly">상대 AI는 셀프플레이로 학습한 신경망입니다. PC는 마우스 쪽으로 머리가 돌고 누르면 부스트, 휴대폰은 누른 곳 쪽으로 머리가 돌고 오른쪽 아래 버튼이 부스트예요.</p>
-  <label class="field"><span>내 이름 <span class="small">(친구들에게 보여요)</span></span><input type="text" id="name" maxlength="12" placeholder="예: 베니" autocomplete="nickname"></label>
-  <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
-  <div class="go soloonly bigchoice">
-    <button class="btn primary" type="button" id="solo"><b>혼자 하기</b><span>AI와 연습 · 게임 방식·헬퍼는 다음 화면에서</span></button>
-    <button class="btn" type="button" id="hostBtn"><b>친구랑 하기</b><span>방 목록에서 들어가거나 새 방 만들기</span></button>
-  </div>
-  <div class="go joinrow"><input type="text" id="code" maxlength="4" placeholder="방 코드 4자리" style="flex:1 1 120px;text-transform:uppercase"><button class="btn" type="button" id="joinBtn">방 들어가기</button></div>
-  <p class="small" id="msg"></p>
-  <p class="small invite-only" hidden><a href="./" id="inviteOff">초대 말고 혼자 하기</a></p>
-  <p class="small soloonly"><button class="btn" type="button" id="adminBtn">관리자</button> 포털·베니브릿지와 같은 관리자 로그인</p>
+<!-- 첫 메뉴: 제목 + 게임 목록 알약 · 탭(혼자/친구랑) · 이름 · 색 · 조작 · 큰 시작 단추 -->
+<div class="page" id="menu"><div class="wrap menu-card">
+  <header class="top"><h1>🐍 지렁이 대결</h1><a href="../">게임 목록</a></header>
+  <section class="card">
+    <p id="inviteHead" hidden></p>
+    <div class="tabs soloonly" role="tablist">
+      <button class="btn" type="button" id="tabSolo" role="tab" aria-pressed="true">혼자</button>
+      <button class="btn" type="button" id="tabFriend" role="tab" aria-pressed="false">친구랑</button>
+    </div>
+    <label class="field"><span>내 이름 <span class="small">(친구들에게 보여요)</span></span><input type="text" id="name" maxlength="12" placeholder="예: 베니" autocomplete="nickname"></label>
+    <div class="field"><span>내 색</span><div class="swatches" id="colors" role="radiogroup" aria-label="지렁이 색"></div></div>
+    <ul class="howto soloonly">
+      <li>PC: 마우스 쪽으로 머리가 돌고, 누르면 <b>부스트</b></li>
+      <li>폰: 누른 곳 쪽으로 돌고, 오른쪽 아래 버튼이 <b>부스트</b></li>
+      <li>상대 AI 는 셀프플레이로 배운 신경망이에요</li>
+    </ul>
+    <p class="lede soloonly" id="friendNote" hidden>방 목록에서 친구 방에 들어가거나, 새 방을 만들어 초대 링크를 보내요.</p>
+    <button class="btn primary big soloonly" type="button" id="solo">시작!</button>
+    <button class="btn primary big soloonly" type="button" id="hostBtn" hidden>방 목록 보기</button>
+    <div class="row joinrow"><input type="text" id="code" maxlength="4" placeholder="방 코드 4자리"><button class="btn big" type="button" id="joinBtn">방 들어가기</button></div>
+    <p class="small" id="msg"></p>
+    <p class="small invite-only" hidden><a href="./" id="inviteOff">초대 말고 혼자 하기</a></p>
+    <div class="row minor soloonly"><button class="btn ghost" type="button" id="adminBtn" title="포털·베니브릿지와 같은 관리자 로그인">관리자</button></div>
+  </section>
 </div></div>
 
-<div class="card" id="rooms" hidden><div>
-  <h1 style="font-size:24px">친구랑 하기</h1>
-  <div class="go"><button class="btn primary" type="button" id="newRoom">새 방 만들기</button></div>
-  <div class="go"><input type="text" id="code2" maxlength="4" placeholder="방 코드 4자리" style="flex:1 1 120px;text-transform:uppercase"><button class="btn" type="button" id="joinBtn2">코드로 들어가기</button></div>
-  <div class="field"><span>열려 있는 방 <button class="btn" type="button" id="roomsRefresh" style="padding:3px 8px;font-size:11px">새로고침</button></span><ul id="roomList"><li class="none">불러오는 중…</li></ul></div>
-  <p class="small" id="roomsMsg">아무도 없거나 방장이 나간 방은 누구나 지울 수 있어요.</p>
-  <div class="go"><button class="btn" type="button" id="roomsBack">뒤로</button></div>
+<div class="page" id="rooms" hidden><div class="wrap">
+  <header class="top"><h1>👥 친구랑 하기</h1><button class="backchip" type="button" id="roomsBack">← 뒤로</button></header>
+  <section class="card">
+    <button class="btn primary big" type="button" id="newRoom">새 방 만들기</button>
+    <div class="row"><input type="text" id="code2" maxlength="4" placeholder="방 코드 4자리" style="flex:1 1 120px;text-transform:uppercase"><button class="btn" type="button" id="joinBtn2">코드로 들어가기</button></div>
+    <div class="field"><span class="rowhead">열려 있는 방 <button class="btn ghost" type="button" id="roomsRefresh" style="padding:3px 8px;font-size:11.5px">새로고침</button></span><ul class="list" id="roomList"><li class="none">불러오는 중…</li></ul></div>
+    <p class="small" id="roomsMsg">아무도 없거나 방장이 나간 방은 누구나 지울 수 있어요.</p>
+  </section>
 </div></div>
 
-<div class="card" id="lobby" hidden><div id="lobbyBox">
-  <h1 style="font-size:24px" id="lbTitle">대기실</h1>
-  <div class="lobby-code lb-room"><span class="small">방 코드</span><b id="lbCode">----</b><button class="btn" type="button" id="lbCopy">초대 링크 복사</button></div>
-  <p id="lbLink" class="lb-room"></p>
-  <div class="field lb-room"><span>참가자 <b id="lbCount"></b></span><ul id="lbPlayers"></ul></div>
-  <div class="field lb-room"><span>채팅</span>
-    <div class="chatbox"><ul id="lbChat" aria-live="polite"></ul>
-    <form class="chatform" id="lbChatForm"><input type="text" id="lbChatIn" maxlength="120" placeholder="메시지 (Enter로 보내기)" autocomplete="off"><button class="btn" type="submit">보내기</button></form></div>
-  </div>
-  <div class="field lb-room"><span>내 이름·색 <span class="small">(바꾸면 바로 모두에게 보여요)</span></span>
-    <input type="text" id="lbName" maxlength="12" placeholder="이름">
-    <div class="swatches" id="lbColors" role="radiogroup" aria-label="지렁이 색"></div>
-  </div>
-  <p class="small lb-hostnote">방 설정은 방장만 바꿀 수 있어요.</p>
-  <div id="lbOpts" class="lb-host" style="display:grid;gap:12px">
-  <div class="field hostopt"><span>속도</span>
-    <div class="seg" id="speedSel">
-      <button class="btn" type="button" data-v="10">느리게</button>
-      <button class="btn" type="button" data-v="14" aria-pressed="true">보통</button>
-      <button class="btn" type="button" data-v="20">빠르게</button>
+<div class="page" id="lobby" hidden><div class="wrap" id="lobbyBox">
+  <header class="top"><h1 id="lbTitle">대기실</h1></header>
+  <section class="card lb-room">
+    <div class="lobby-code"><span class="small">방 코드</span><b id="lbCode">----</b><button class="btn" type="button" id="lbCopy">초대 링크 복사</button></div>
+    <p id="lbLink"></p>
+    <div class="field"><span>참가자 <b id="lbCount"></b></span><ul class="list" id="lbPlayers"></ul></div>
+    <div class="field"><span>채팅</span>
+      <div class="chatbox"><ul id="lbChat" aria-live="polite"></ul>
+      <form class="chatform" id="lbChatForm"><input type="text" id="lbChatIn" maxlength="120" placeholder="메시지 (Enter로 보내기)" autocomplete="off"><button class="btn" type="submit">보내기</button></form></div>
     </div>
-  </div>
-  <div class="field hostopt"><span>게임 방식</span>
-    <div class="seg" id="gameMode">
-      <button class="btn" type="button" data-v="free" aria-pressed="true">자유 (끝없이)</button>
-      <button class="btn" type="button" data-v="round">라운드 3분</button>
-      <button class="btn" type="button" data-v="royale">배틀로얄</button>
+  </section>
+  <section class="card">
+    <div class="field lb-room"><span>내 이름·색 <span class="small">(바꾸면 바로 모두에게 보여요)</span></span>
+      <input type="text" id="lbName" maxlength="12" placeholder="이름">
+      <div class="swatches" id="lbColors" role="radiogroup" aria-label="지렁이 색"></div>
     </div>
-    <span class="small" id="modeHelp">언제든 들어오고 나가는 기본 방식이에요.</span>
-  </div>
-  <div class="field hostopt"><span>AI 상대</span>
-    <div class="seg" id="aiLevel">
-      <button class="btn" type="button" data-v="raw">학습 전</button>
-      <button class="btn" type="button" data-v="rule">규칙 봇</button>
-      <button class="btn" type="button" data-v="easy">초급 (50만 번)</button>
-      <button class="btn" type="button" data-v="mid">중급 (200만 번)</button>
-      <button class="btn" type="button" data-v="hard" aria-pressed="true">상급 (1,000만 번)</button>
-      <button class="btn" type="button" data-v="mix">섞어서</button>
+    <p class="small lb-hostnote">방 설정은 방장만 바꿀 수 있어요.</p>
+    <div id="lbOpts" class="lb-host" style="display:grid;gap:14px">
+    <div class="field hostopt"><span>속도</span>
+      <div class="seg" id="speedSel">
+        <button class="btn" type="button" data-v="10">느리게</button>
+        <button class="btn" type="button" data-v="14" aria-pressed="true">보통</button>
+        <button class="btn" type="button" data-v="20">빠르게</button>
+      </div>
     </div>
-    <div class="seg" id="aiCount"><span class="small">마리 수</span>
-      <button class="btn" type="button" data-v="0">0</button><button class="btn" type="button" data-v="3">3</button><button class="btn" type="button" data-v="5" aria-pressed="true">5</button><button class="btn" type="button" data-v="8">8</button>
+    <div class="field hostopt"><span>게임 방식</span>
+      <div class="seg" id="gameMode">
+        <button class="btn" type="button" data-v="free" aria-pressed="true">자유 (끝없이)</button>
+        <button class="btn" type="button" data-v="round">라운드 3분</button>
+        <button class="btn" type="button" data-v="royale">배틀로얄</button>
+      </div>
+      <span class="small" id="modeHelp">언제든 들어오고 나가는 기본 방식이에요.</span>
     </div>
-  </div>
-  </div>
-  <p id="lbCfg" class="lb-guest"></p>
-  <div class="field"><span>헬퍼 <span class="small">(켜면 이름 앞에 🧪 · 게임 안 패널에서 레이더·예상 경로·예측 회피·자동 조종을 골라요 · <a href="helper.html">헬퍼 실습</a>)</span></span>
-    <div class="seg" id="lbHelper"><button class="btn" type="button" data-v="none">끄기</button><button class="btn" type="button" data-v="on">켜기</button></div>
-  </div>
-  <div class="go"><button class="btn primary" type="button" id="lbStart">게임 시작 (Enter)</button><button class="btn" type="button" id="lbLeave">나가기</button></div>
+    <div class="field hostopt"><span>AI 상대</span>
+      <div class="seg" id="aiLevel">
+        <button class="btn" type="button" data-v="raw">학습 전</button>
+        <button class="btn" type="button" data-v="rule">규칙 봇</button>
+        <button class="btn" type="button" data-v="easy">초급 (50만 번)</button>
+        <button class="btn" type="button" data-v="mid">중급 (200만 번)</button>
+        <button class="btn" type="button" data-v="hard" aria-pressed="true">상급 (1,000만 번)</button>
+        <button class="btn" type="button" data-v="mix">섞어서</button>
+      </div>
+      <div class="seg" id="aiCount"><span class="small">마리 수</span>
+        <button class="btn" type="button" data-v="0">0</button><button class="btn" type="button" data-v="3">3</button><button class="btn" type="button" data-v="5" aria-pressed="true">5</button><button class="btn" type="button" data-v="8">8</button>
+      </div>
+    </div>
+    </div>
+    <p id="lbCfg" class="lb-guest"></p>
+    <div class="field"><span>헬퍼 <span class="small">(켜면 이름 앞에 🧪 · 게임 안 패널에서 레이더·예상 경로·예측 회피·자동 조종을 골라요 · <a href="helper.html">헬퍼 실습</a>)</span></span>
+      <div class="seg" id="lbHelper"><button class="btn" type="button" data-v="none">끄기</button><button class="btn" type="button" data-v="on">켜기</button></div>
+    </div>
+  </section>
   <p class="small" id="lbMsg"></p>
+  <div class="row"><button class="btn primary big grow" type="button" id="lbStart">게임 시작!</button><button class="btn big" type="button" id="lbLeave">나가기</button></div>
 </div></div>
 
-<div class="card" id="login" hidden><div>
-  <h1 style="font-size:20px">관리자</h1>
+<div class="overlay" id="login" hidden><div>
+  <h2>관리자</h2>
   <input type="password" id="pw" placeholder="관리자 비밀번호" autocomplete="current-password">
   <p class="small" id="loginMsg">베니브릿지 서버가 확인합니다 (같은 비번 · 실패 잠금). 로그인하면 포털·베니브릿지도 관리자 상태가 됩니다.</p>
-  <div class="go"><button class="btn" type="button" id="loginCancel">취소</button><button class="btn primary" type="button" id="loginGo">들어가기</button></div>
+  <div class="row"><button class="btn grow" type="button" id="loginCancel">취소</button><button class="btn primary grow" type="button" id="loginGo">들어가기</button></div>
 </div></div>
 
+<script>
+// 첫 메뉴 탭 (혼자 / 친구랑): 바뀌는 건 시작 단추뿐 — #solo = 혼자 연습 설정, #hostBtn = 방 목록 (동작은 main.js)
+(() => {
+  const $ = id => document.getElementById(id), tabs = { solo: $("tabSolo"), friend: $("tabFriend") };
+  const pick = k => {
+    for (const [n, b] of Object.entries(tabs)) b.setAttribute("aria-pressed", String(n === k));
+    $("solo").hidden = k !== "solo"; $("hostBtn").hidden = k !== "friend"; $("friendNote").hidden = k !== "friend";
+  };
+  tabs.solo.onclick = () => pick("solo"); tabs.friend.onclick = () => pick("friend");
+})();
+</script>
 <script src="../common/glog.js?v=1"></script>
 <script src="core.js?v=24"></script>
 <script src="render.js?v=24"></script>
 <script src="ac.js?v=24"></script>
 <script src="net.js?v=25"></script>
-<script src="main.js?v=28"></script>
+<script src="main.js?v=29"></script>
 </body>
 </html>
