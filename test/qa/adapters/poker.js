@@ -1,6 +1,7 @@
 // 포커(텍사스 홀덤) 어댑터 — 손잡이 __poker 는 읽기 전용(ses 만) → 시작·진행은 진짜 화면 단추를 눌러서 함
-//  · 시작 창(#startModal) 에서 모드·인원·AI 실력을 고르고 #goStart 를 누름
+//  · 첫 화면(#home) 에서 탭(#tabSolo · #tabWatch)·인원(#countSeg)·AI 실력(#tiers)을 고르고 #goStart(시작!) 를 누름 · 친구랑은 #tabFriend
 //  · 한 핸드가 끝나면 결과 창(#endModal) 이 뜸 → over (게임 끝·탈락 창도 같은 #endModal)
+//  · 게임 중 나가기 = 위 줄 ‹(#backBtn) 두 번 (backGuard)
 //  · hot(한 기기) 는 차례마다 가림막(HotSeat.cover) → drive() 가 __qa.hot() 으로 닫음
 module.exports = {
   id: 'poker',
@@ -8,22 +9,23 @@ module.exports = {
   query: '',
   hookName: '__poker',
   reproHint: (mode) => mode === 'watchskip'
-    ? "시작 창 'AI 구경' · AI 2명 → 결과 창이 뜨면 바로 [다음 핸드 진행], 다음 결과 창(또는 우승 창)은 그대로 둠 → 앞서 누른 판의 4.2초 자동 넘김 타이머가 새 창을 닫아 버려 단추가 하나도 없는 채 멈춤"
-    : `시작 창 '${{ solo: '혼자', watch: 'AI 구경', hot: '한 기기' }[mode] || mode}' → 시작, 내 차례엔 콜 위주로`,
+    ? "첫 화면 'AI 구경' 탭 · AI 2명 → 결과 창이 뜨면 바로 [다음 핸드 진행], 다음 결과 창(또는 우승 창)은 그대로 둠 → 앞서 누른 판의 4.2초 자동 넘김 타이머가 새 창을 닫아 버려 단추가 하나도 없는 채 멈춤"
+    : `첫 화면 '${{ solo: '혼자', watch: 'AI 구경', hot: '한 기기' }[mode] || mode}' 탭 → 시작!, 내 차례엔 콜 위주로`,
   gaps: [
-    '__poker 는 ses 읽기만 — 시작/빠르기/씨앗/자동응답 손잡이가 없어 시작 창 단추를 눌러 시작하고 AI 차례(0.7초)를 그대로 기다림, 핸드 씨앗을 못 정해 재현 불가',
+    '__poker 는 ses 읽기만 — 시작/빠르기/씨앗/자동응답 손잡이가 없어 첫 화면 단추를 눌러 시작하고 AI 차례(0.7초)를 그대로 기다림, 핸드 씨앗을 못 정해 재현 불가',
   ],
-  ready: () => !!window.__poker && !!document.getElementById('goStart') && !!document.getElementById('startModal'),
-  menu: () => !document.getElementById('startModal').hidden,
-  home: () => document.getElementById('menuBtn').click(),
+  ready: () => !!window.__poker && !!document.getElementById('goStart') && !!document.getElementById('home'),
+  menu: () => !document.getElementById('home').hidden,
+  // 나가기 단추는 두 번 눌러야 나감 (backGuard)
+  home: () => { const b = document.getElementById('backBtn'); if (b) { b.click(); b.click(); } },
   setup: () => { window.__qaPause = false; window.__qaN = 0; },
   modes: {
     solo: {
       start: () => {
         const q = s => document.querySelector(s);
-        q('.seg[data-seg="mode"] [data-val="1p"]').click();
-        q('#countSeg [data-val="2"]').click();                       // 나 + AI 1명
-        q('.seg[data-seg="tier"] [data-val="easy"]').click();        // 가장 쉬운 AI
+        q('#tabSolo').click();
+        q('#countSeg [data-v="2"]').click();                         // 나 + AI 1명
+        q('#tiers [data-id="easy"]').click();                        // 가장 쉬운 AI
         q('#goStart').click();
       },
       timeout: 90000,
@@ -31,8 +33,8 @@ module.exports = {
     watch: {
       start: () => {
         const q = s => document.querySelector(s);
-        q('.seg[data-seg="mode"] [data-val="watch"]').click();
-        q('#countSeg [data-val="2"]').click();                       // AI 2명
+        q('#tabWatch').click();
+        q('#countSeg [data-v="2"]').click();                         // AI 2명
         q('#goStart').click();
       },
       timeout: 90000,
@@ -43,8 +45,8 @@ module.exports = {
       start: () => {
         window.__qaKey = ''; window.__qaEnds = 0;
         const q = s => document.querySelector(s);
-        q('.seg[data-seg="mode"] [data-val="watch"]').click();
-        q('#countSeg [data-val="2"]').click();                       // AI 2명 (판이 짧아야 타이머와 겹침)
+        q('#tabWatch').click();
+        q('#countSeg [data-v="2"]').click();                         // AI 2명 (판이 짧아야 타이머와 겹침)
         q('#goStart').click();
       },
       timeout: 120000,
@@ -90,12 +92,9 @@ module.exports = {
     (n % 4 === 0 ? btns[(n >> 2) % btns.length] : (call || btns[0])).click();
   },
   online: {
-    // 시작 창에서 '친구랑' → 방 만들기·들어가기 → 친구랑 창
-    open: () => {
-      document.querySelector('.seg[data-seg="mode"] [data-val="online"]').click();
-      document.getElementById('goStart').click();
-    },
-    started: () => { const ses = window.__poker && __poker.ses; return !!(ses && ses.net && (ses.S || ses.V) && document.getElementById('startModal').hidden); },
+    // 첫 화면 '친구랑' 탭 → 친구랑 창 (방 만들기·들어가기)
+    open: () => { document.getElementById('tabFriend').click(); },
+    started: () => { const ses = window.__poker && __poker.ses; return !!(ses && ses.net && (ses.S || ses.V) && document.getElementById('home').hidden); },
     setup: () => { window.__qaPause = false; window.__qaN = 0; },
     round: () => { const ses = window.__poker && __poker.ses, s = ses && (ses.S || ses.V); return s ? s.round + (s.over ? 'o' : '') : -1; },
     // 방장·손님이 같이 가져야 하는 것만 (남의 손패는 손님 화면에서 가려짐 → 제외, 보드·칩·차례만)

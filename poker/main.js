@@ -16,8 +16,8 @@
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
   const cfg = {
-    mode: '1p',                                        // 1p | online | watch | hot
-    tier: 'normal',
+    mode: store('poker.tab', 'solo') === 'watch' ? 'watch' : '1p',   // 1p | watch (친구랑은 탭을 누르면 바로 방 창) · hot 은 첫 화면에 없음
+    tier: ['easy', 'normal', 'hard'].includes(store('poker.tier', 'normal')) ? store('poker.tier', 'normal') : 'normal',
     count: Math.max(2, Math.min(MAXP, +store('poker.count', 4) || 4)),     // 혼자·구경·한 기기 인원
     fill: +store('poker.fill', 0) || 0,                // 친구랑: 빈자리를 AI 로 채울 목표 인원
     hotSeats: store('poker.hotSeats', ['h', 'h', 'h', 'a', 'a', 'a', 'a', 'a']),
@@ -29,6 +29,12 @@
     normal: { name: '레귤러 프로', avatar: '♠️' },
     hard:   { name: 'GTO 마스터', avatar: '👑' },
   };
+  // 첫 화면 'AI 상대' 카드 (다른 게임과 같은 .tiers three)
+  const TIER_CARDS = [
+    { id: 'easy',   em: '🌱', name: '루키',     desc: '대부분 콜만 하고 약한 패는 접어요',   cls: 't-easy' },
+    { id: 'normal', em: '♠️', name: '레귤러',   desc: '에퀴티와 팟 오즈로 따져요',           cls: 't-normal' },
+    { id: 'hard',   em: '👑', name: 'GTO 프로', desc: '세미 블러프 · 밸류 벳도 섞어요',      cls: 't-hard' },
+  ];
   const AI_NAMES = ['레귤러', '쿨러', '블러퍼', '샤크', '피쉬', '타이트', '루즈', '마스터'];
   const AI_EMS = ['♠️', '🦈', '🐟', '🃏', '🎩', '🦊', '🐺', '👑'];
   const ACT_LABELS = {
@@ -71,20 +77,29 @@
     return `<div class="pcard ${cls} ${colour}${glow ? ' best-glow' : ''}"><div class="corner"><span>${c.rankStr}</span><small>${c.suitChar}</small></div><div class="pip-center">${c.suitChar}</div></div>`;
   }
 
-  let toastT = null;
-  function showToast(msg, ms) {
-    const t = $('toast');
-    if (!t) return;
-    t.textContent = msg;
-    t.hidden = false;
-    clearTimeout(toastT);
-    toastT = setTimeout(() => { t.hidden = true; }, ms || 1500);
-  }
+  const showToast = (msg, ms) => Cozy.toast(msg, ms || 1500);
+  const sfx = n => { try { Cozy.sfx.play(n); } catch (e) {} };            // 첫 화면 단추 소리 (다른 게임과 같게)
   const vibrate = ms => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
 
   // ─────────────────────────────────────────────────────────────
   // 세션 (SES): { alive, mode: solo|hot|watch|host|guest, S(전체 상태, 방장·혼자) | V(받은 시점 상태, 손님), me(-1 = 아무도 안 보는 중), seats }
   let SES = null;
+  // 첫 화면(#home) ↔ 게임 화면(#play)
+  function showScreen(which) {
+    $('home').hidden = which !== 'home';
+    $('play').hidden = which !== 'play';
+    document.body.classList.toggle('playing', which === 'play');
+    if (which === 'play') requestAnimationFrame(placeSeats);
+  }
+  // 친구랑에서 첫 상태가 오기 전: 이전 판 그림이 남지 않게 빈 테이블 (단추는 꺼 둠)
+  function blankTable() {
+    $('seats').innerHTML = ''; $('commRow').innerHTML = ''; $('myHand').innerHTML = '';
+    $('streetBadge').textContent = '대기 중'; $('potVal').textContent = '0'; $('sideInfo').hidden = true;
+    $('callInfo').textContent = ''; delete $('callInfo').dataset.base;
+    $('myHandBadge').hidden = true; $('myCoins').textContent = '-'; $('myBet').textContent = '-';
+    $('mySeat').classList.remove('turn', 'pulse');
+    document.querySelectorAll('.bet-btn').forEach(b => { b.disabled = true; b.classList.remove('coach-best'); });
+  }
   const getMeInfo = () => (window.Me && window.Me.get ? window.Me.get() : null) || { name: '나', avatar: '🧑' };
 
   function endSession() {
@@ -135,10 +150,17 @@
   $('bankBtn').addEventListener('click', () => { if (SES && SES.bank && window.Bank) Bank.panel({ game: 'poker', gid: SES.bank.gid }); });
   function openMenu() {
     endSession();
-    $('startModal').hidden = false;
+    showScreen('home');
     $('coachBtn').hidden = true;
+    drawMenu();
     drawReplayBtn();
   }
+  // 위 줄 ‹ : 두 번 눌러야 나감 (다른 게임과 같음). 친구 방이면 방을 떠남 (onLeave 가 첫 화면으로)
+  function goHome() {
+    if (SES && SES.net && window.ArenaUI && ArenaUI.net) { ArenaUI.leave(); return; }
+    openMenu();
+  }
+  Cozy.backGuard($('backBtn'), () => { sfx('tap'); goHome(); });
 
   function getView(ses) {
     if (ses.mode === 'guest') return ses.V;
@@ -229,11 +251,10 @@
   function drawCoachBtn() {
     const b = $('coachBtn');
     b.hidden = !(SES && SES.coachAvail);
-    if (!SES || SES.cp || SES.idle) return;
+    if (!SES || SES.cp) return;
     const on = !!(SES && SES.coachOn);
-    b.classList.toggle('coach-on', on);
     b.setAttribute('aria-pressed', String(on));
-    b.textContent = on ? '🧑‍🏫 AI 선생님' : '🧑‍🏫 선생님 꺼짐';
+    b.innerHTML = `<span class="ic">🧑‍🏫</span><span>${on ? '선생님 켬' : '선생님 끔'}</span>`;
   }
   function evRow(c) {
     const items = Object.values(c.byAction || {}).map(x => `<span class="ev-chip ${x.tier}">${x.action === c.bestAction ? '👑 ' : ''}${ACT_LABELS[x.action]} ${x.evText}</span>`);
@@ -287,6 +308,7 @@
     const n = v.n;
 
     $('streetBadge').textContent = v.over ? '게임 끝' : (P.STREET_NAMES[v.street] || '쇼다운');
+    $('roundPill').textContent = `핸드 ${v.round}`;
     $('potVal').textContent = fmtN(v.pot);
     const pots = v.phase === 'end' ? [] : P.buildPots(v.totalBets, v.folded.map(f => !f));
     const realPots = pots.filter(p => !p.refund);
@@ -465,14 +487,8 @@
     return seats;
   }
 
-  // 한 기기 자리 고르기: 공용 HotSeat.setup 이 있으면 그걸로, 없으면 메뉴의 간단한 대체
-  let hotPick = null;
-  function ensureHotPick() {
-    if (hotPick || !(window.HotSeat && typeof HotSeat.setup === 'function')) return;
-    try { hotPick = HotSeat.setup($('hotSetup'), { game: 'poker', min: 2, max: MAXP, allowAI: true, tiers: ['easy', 'normal', 'hard'], onChange: () => drawMenu() }); } catch (e) { console.error(e); hotPick = null; }
-  }
+  // 한 기기 (11-01 베니 님: 패를 숨기는 게임은 한 기기 안 함 → 첫 화면에 없음. 코드만 남아 있음)
   function hotSeatsCfg() {
-    if (hotPick) return hotPick.seats;
     return Array.from({ length: cfg.count }, (_, i) => (cfg.hotSeats[i] === 'h'
       ? { kind: 'human', name: `플레이어${i + 1}`, emoji: ['🧑', '🌸', '🍀', '🔥', '🌙', '⭐', '🐱', '🐶'][i] }
       : { kind: 'ai', tier: cfg.tier }));
@@ -480,7 +496,7 @@
 
   function startLocal() {
     endSession();
-    $('startModal').hidden = true;
+    showScreen('play');
     $('endModal').hidden = true;
     const mode = cfg.mode;
     const hotCfg = mode === 'hot' ? hotSeatsCfg() : null;
@@ -522,12 +538,11 @@
     },
     renderConfig: c => `${c && c.fill ? `빈자리는 AI로 ${c.fill}명까지` : '온 사람끼리'}${c && c.coach ? ' · AI 선생님' : ''}${window.Bank && Bank.label(c) ? ' · ' + Bank.label(c) : ''}`,
     onStart: ({ net, role, cfg: c, players }) => startOnline({ net, role, cfg: c, players }),
-    onLobby: () => { endSession(); $('coachBtn').hidden = true; },         // 대기실이 위에 뜸 (시작 창은 띄우지 않음)
+    onLobby: () => { endSession(); showScreen('home'); $('coachBtn').hidden = true; drawMenu(); },         // 대기실이 첫 화면 위에 뜸
     onLeave: () => openMenu(),
   };
   function startOnlineGame() {
-    if (!window.ArenaUI) { alert('온라인 대결 모듈을 불러오지 못했습니다.'); return; }
-    $('startModal').hidden = true;
+    if (!window.ArenaUI) { Cozy.toast('온라인 모듈을 불러오지 못했어요'); return; }
     window.ArenaUI.open(FRIEND);
   }
 
@@ -538,7 +553,7 @@
   const readyKey = S => `${S.round}${S.over ? 'o' : ''}`;                  // 핸드 끝 = 라운드 번호, 게임 끝(우승) = 번호 + 'o'
   function startOnline({ net, role, cfg: c, players }) {
     endSession();
-    $('startModal').hidden = true;
+    showScreen('play'); blankTable();
     c = c || {};
     const coachAvail = !!c.coach;
     // 이 판(세션)이 붙인 듣기는 세션이 끝날 때 뗌 (대기실로 돌아갔다 다시 시작해도 겹치지 않게)
@@ -652,20 +667,13 @@
   }
   const canDropSeat = ses => ses.seats.filter(x => !x.drop).length > 2 && !ses.bank;     // 빼고도 2명 이상 남고, 은행 방이 아닐 때만
   // 작은 선택 창 (포커 화면용): buttons = [{label, primary, onClick}] — 누르면 닫힘
+  //  공용 Cozy.modal 로 (다른 게임 창과 같은 모양) — 어디를 눌러 닫혀도 onClose 가 한 번 불림
   function askBox({ title, html, buttons, onClose }) {
-    const ov = document.createElement('div');
-    ov.className = 'modal gone-modal';
-    ov.innerHTML = `<div class="modal-box"><h2>${esc(title)}</h2><p class="sub" style="margin-bottom:12px">${html}</p><div class="row-btns"></div></div>`;
-    let closed = false;
-    const close = () => { if (closed) return; closed = true; ov.remove(); if (onClose) try { onClose(); } catch (e) { console.error(e); } };
-    buttons.forEach(b => {
-      const el = document.createElement('button');
-      el.type = 'button'; el.className = b.primary ? 'primary' : 'ghost'; el.textContent = b.label;
-      el.onclick = () => { if (b.onClick) b.onClick(); close(); };
-      ov.querySelector('.row-btns').appendChild(el);
+    return Cozy.modal({
+      title, cls: 'goneAsk', dismiss: false, onClose,
+      html: `<p class="gone-note">${html}</p>`,
+      buttons: buttons.map(b => ({ label: b.label, primary: !!b.primary, onClick: () => { if (b.onClick) b.onClick(); } })),
     });
-    document.body.appendChild(ov);
-    return close;
   }
   function askGone(ses, i) {
     const st = ses.seats[i]; if (!st || st.sub || ses.goneAsk) return;
@@ -795,7 +803,7 @@
     rankNote(ses, m.v, m.me);
     if (!prev || prev.round !== m.v.round) ses.coachLog = [];
     if (prev && m.v.round < prev.round) { ses.readyMap = {}; ses.lastKey = ''; }      // 새 게임 (핸드 번호가 처음으로)
-    $('startModal').hidden = true;
+    if ($('play').hidden) showScreen('play');
     // 내 차례 시계: 방장이 보낸 남은 초부터 세기만 해요 (시간이 다 되면 방장이 AI 로 대신 둠)
     const mine = m.me >= 0 && m.v.phase === 'bet' && m.v.turn === m.me;
     if (mine && m.left != null) clockStart(ses, m.left, true, null);
@@ -829,7 +837,7 @@
     return new Promise(res => {
       const ov = document.createElement('div');
       ov.className = 'hsx-cover';
-      ov.innerHTML = `<div><div class="hsx-em">${esc(em || '🙂')}</div><h2>${esc(name)} 님 차례예요</h2><p>다른 사람은 화면을 보지 마세요<br>준비되면 아래 단추를 눌러 주세요</p><button class="primary" type="button">내 카드 보기</button></div>`;
+      ov.innerHTML = `<div><div class="hsx-em">${esc(em || '🙂')}</div><h2>${esc(name)} 님 차례예요</h2><p>다른 사람은 화면을 보지 마세요<br>준비되면 아래 단추를 눌러 주세요</p><button class="btn primary big" type="button">내 카드 보기</button></div>`;
       ov.querySelector('button').onclick = () => { ov.remove(); res(); };
       document.body.appendChild(ov);
     });
@@ -962,7 +970,7 @@
     for (const it of list) {
       if (it.note) { const p = document.createElement('p'); p.className = 'wait-note'; p.textContent = it.note; box.append(p); out.push(null); continue; }
       const b = document.createElement('button');
-      b.type = 'button'; b.className = it.primary ? 'primary' : 'ghost'; b.textContent = it.label;
+      b.type = 'button'; b.className = it.primary ? 'btn primary' : 'btn'; b.textContent = it.label;
       b.onclick = it.onClick;
       box.append(b); out.push(b);
     }
@@ -1095,7 +1103,7 @@
         if (ses.mode === 'host' && ses.bank && window.Bank) {
           list.push({ label: '🏦 정산', onClick: () => ses.bank.flush().then(() => Bank.panel({ game: 'poker', gid: ses.bank.gid, tab: 'settle' })) });
         }
-        list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });
+        list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '메뉴', onClick: () => done('menu') });
         const bs = setEndButtons(list);
         if (ses.mode === 'host') ses.drawReady = mountReady(ses, key, bs[0], bs[1], '다음 핸드 진행', false);
         if (ses.mode === 'watch' || ses.spectating) autoT = setTimeout(() => { if (!$('endModal').hidden && ses.alive) done('next'); }, 4200);
@@ -1151,7 +1159,7 @@
         const list = [{ label: '새 게임', primary: true, onClick: () => done('again') }];
         if (ses.mode === 'host') list.push({ label: '안 기다리고 시작', onClick: () => done('again') });
         if (ses.mode === 'host' && ses.bank && window.Bank) list.push({ label: '🏦 정산', onClick: () => ses.bank.flush().then(() => Bank.panel({ game: 'poker', gid: ses.bank.gid, tab: 'settle' })) });
-        list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '설정 바꾸기', onClick: () => done('menu') });
+        list.push(ses.mode === 'host' ? { label: '대기실로', onClick: () => done('lobby') } : { label: '메뉴', onClick: () => done('menu') });
         const bs = setEndButtons(list);
         if (ses.mode === 'host') ses.drawReady = mountReady(ses, key, bs[0], bs[1], '새 게임', true);
       }
@@ -1243,21 +1251,17 @@
   function openReplayList() {
     const list = loadReplays();
     if (!list.length) { drawReplayBtn(); return; }
-    const ov = document.createElement('div');
-    ov.className = 'modal rp-modal';
-    ov.innerHTML = `<div class="modal-box"><h2>🎞️ 지난 판 다시 보기</h2><p class="sub">이 기기에서 친 핸드 ${list.length}개 (최근 10개까지). 다시 보기에서는 모두의 카드가 보여요.</p>`
-      + `<div class="rplist">${list.map((x, i) => `<button type="button" data-i="${i}"><b>${esc(x.title || '핸드')}</b><span class="small">${fmtAt(x.at)} · ${esc(x.mode || '')} · ${x.seats.slice(0, 8).map(q => esc(q.name)).join(', ')}</span></button>`).join('')}</div>`
-      + '<div class="row-btns"><button type="button" class="ghost" data-x style="flex:1">닫기</button></div></div>';
-    ov.onclick = e => {
-      if (e.target === ov || e.target.closest('[data-x]')) { ov.remove(); return; }
-      const b = e.target.closest('[data-i]'); if (!b) return;
-      ov.remove(); startReplay(list[+b.dataset.i]);
-    };
-    document.body.appendChild(ov);
+    const close = Cozy.modal({
+      title: '🎞️ 지난 판 다시 보기',
+      html: `<p class="small" style="margin:0 0 8px">이 기기에서 친 핸드 ${list.length}개 (최근 10개까지). 다시 보기에서는 모두의 카드가 보여요.</p>`
+        + `<div class="rplist">${list.map((x, i) => `<button type="button" class="btn" data-i="${i}"><b>${esc(x.title || '핸드')}</b><span class="small">${fmtAt(x.at)} · ${esc(x.mode || '')} · ${x.seats.slice(0, 8).map(q => esc(q.name)).join(', ')}</span></button>`).join('')}</div>`,
+      buttons: [{ label: '닫기' }], dismiss: true,
+    });
+    document.querySelectorAll('.rplist [data-i]').forEach(b => { b.onclick = () => { sfx('tap'); close(); startReplay(list[+b.dataset.i]); }; });
   }
   function startReplay(rec) {
     endSession();
-    $('startModal').hidden = true; $('endModal').hidden = true;
+    showScreen('play'); $('endModal').hidden = true;
     runReplay(rec, false);
   }
   const stateAt = (rec, k) => { let st = P.fastClone(rec.start); for (let j = 0; j < k; j++) st = P.step(st, rec.acts[j]).state; return st; };
@@ -1268,7 +1272,7 @@
     try { st = stateAt(rec, k); } catch (e) { console.warn(e); }
     if (!st || st.phase !== 'bet') { showToast('이 장면에선 이어서 칠 수 없어요', 2000); return; }
     endSession();
-    $('startModal').hidden = true; $('endModal').hidden = true;
+    showScreen('play'); $('endModal').hidden = true;
     const meInfo = getMeInfo();
     const seats = rec.seats.map((x, i) => (i === seat
       ? { ctrl: 'me', name: '나', em: meInfo.avatar || '🧑' }
@@ -1422,65 +1426,76 @@
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 메뉴 (시작 모달)
-  function drawMenu() {
-    const mode = cfg.mode;
-    document.querySelectorAll('.seg[data-seg="mode"] button').forEach(b => b.classList.toggle('on', b.dataset.val === mode));
-    document.querySelectorAll('.seg[data-seg="tier"] button').forEach(b => b.classList.toggle('on', b.dataset.val === cfg.tier));
-    ensureHotPick();
-    $('hotField').hidden = !(mode === 'hot' && hotPick);
-    $('countField').hidden = mode === 'online' || (mode === 'hot' && !!hotPick);
-    $('goStart').disabled = mode === 'hot' && hotPick ? !hotPick.valid : false;
-    $('tierField').hidden = mode === 'online' || mode === 'watch' || (mode === 'hot' && !!hotPick);
-    $('countLabel').textContent = mode === 'watch' ? 'AI 인원' : mode === 'hot' ? '인원 (자리를 눌러 사람↔AI)' : '인원 (나 + AI)';
-    $('countSeg').innerHTML = Array.from({ length: MAXP - 1 }, (_, i) => `<button type="button" data-val="${i + 2}" class="${cfg.count === i + 2 ? 'on' : ''}">${i + 2}인</button>`).join('');
-    const hotBox = $('hotSeats');
-    hotBox.hidden = mode !== 'hot';
-    if (mode === 'hot') {
-      hotBox.innerHTML = Array.from({ length: cfg.count }, (_, i) => `<button type="button" data-i="${i}" class="${cfg.hotSeats[i] === 'h' ? 'on' : ''}">${i + 1}번 ${cfg.hotSeats[i] === 'h' ? '👤 사람' : '🤖 AI'}</button>`).join('');
-    }
-    $('goStart').textContent = mode === 'online' ? '방 만들기·들어가기' : mode === 'hot' ? '📱 한 기기로 시작' : '홀덤 테이블 입장';
+  // 첫 화면 (#home): 탭 혼자 · 친구랑 · AI 구경 → 고를 것 → 규칙 안내 → 시작! → 맨 아래 작은 줄
+  function segBtns(el, items, cur, onPick) {
+    if (!el) return;
+    el.innerHTML = items.map(([v, label]) => `<button class="btn" data-v="${esc(v)}" aria-pressed="${String(v) === String(cur)}">${label}</button>`).join('');
+    el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); onPick(b.dataset.v); };
   }
-  document.querySelectorAll('.seg').forEach(seg => {
-    seg.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-val]');
-      if (!btn) return;
-      const key = seg.dataset.seg, val = btn.dataset.val;
-      if (key === 'mode') cfg.mode = val;
-      else if (key === 'tier') cfg.tier = val;
-      else if (key === 'count') { cfg.count = +val; save('poker.count', cfg.count); }
-      drawMenu();
-    });
-  });
-  $('hotSeats').addEventListener('click', e => {
-    const b = e.target.closest('button[data-i]');
-    if (!b) return;
-    const i = +b.dataset.i;
-    cfg.hotSeats[i] = cfg.hotSeats[i] === 'h' ? 'a' : 'h';
-    save('poker.hotSeats', cfg.hotSeats);
-    drawMenu();
-  });
+  function drawMenu() {
+    const watch = cfg.mode === 'watch';
+    $('tabSolo').setAttribute('aria-pressed', String(!watch));
+    $('tabWatch').setAttribute('aria-pressed', String(watch));
+    $('tabFriend').setAttribute('aria-pressed', 'false');
+    $('watchDesc').hidden = !watch;
+    $('tiers').hidden = watch;
+    $('howtoList').hidden = watch;
+    $('countLabel').textContent = watch ? 'AI 인원' : '인원 (나 + AI)';
+    segBtns($('countSeg'), Array.from({ length: MAXP - 1 }, (_, i) => [i + 2, `${i + 2}인`]), cfg.count, v => { cfg.count = +v; save('poker.count', cfg.count); drawMenu(); });
+    Cozy.tierCards($('tiers'), TIER_CARDS, id => { cfg.tier = id; save('poker.tier', id); drawMenu(); }, { selected: cfg.tier });
+    drawReplayBtn();
+  }
+  $('tabSolo').onclick = () => { sfx('tap'); cfg.mode = '1p'; save('poker.tab', 'solo'); drawMenu(); };
+  $('tabWatch').onclick = () => { sfx('tap'); cfg.mode = 'watch'; save('poker.tab', 'watch'); drawMenu(); };
+  $('tabFriend').onclick = () => { sfx('tap'); startOnlineGame(); };
+  $('goStart').onclick = () => { sfx('pop'); startLocal(); };
 
-  $('jokboBtn').addEventListener('click', () => { $('jokboModal').hidden = false; });
-  $('closeJokboBtn').addEventListener('click', () => { $('jokboModal').hidden = true; });
-  $('menuBtn').addEventListener('click', () => {
-    if (SES && SES.net && window.ArenaUI && ArenaUI.net) { if (confirm('방에서 나갈까요?')) ArenaUI.leave(); return; }
-    openMenu();
-  });
-  $('goStart').addEventListener('click', () => {
-    if (cfg.mode === 'online') startOnlineGame();
-    else startLocal();
-  });
-  $('replayBtn').addEventListener('click', openReplayList);
+  // ❓ 하는 법 · ⚙ 설정
+  const HOWTO = [
+    '내 손패 <b>2장</b>과 테이블 가운데 <b>공용 카드 5장</b> 중 5장으로 가장 높은 족보를 만들면 이겨요 (최대 8명)',
+    '내 차례엔 <b>폴드</b>(포기) · <b>체크/콜</b> · <b>하프 벳</b> · <b>팟 벳</b> · <b>올인</b> 중에 골라요. 칩이 바닥나면 탈락, 마지막 한 명이 우승이에요',
+    '칩이 모자라 올인하면 자기가 낸 만큼의 팟(메인 팟)만 노릴 수 있어요. 나머지는 남은 사람끼리 겨루는 사이드 팟이에요',
+    '🧑‍🏫 <b>AI 선생님</b>을 켜면 내 차례마다 상대 흐름 · 내 흐름 · 수의 의미와 에퀴티 · 팟 오즈 · 아웃츠를 알려 줘요',
+    '📖 <b>족보</b> 단추로 족보 서열과 4-2 법칙(아웃츠 × 4 ≈ 리버까지 메이드 확률)을 볼 수 있어요',
+    '👥 친구랑: 방을 만들어 같이 해요 (최대 8명, 빈자리는 AI 로 채울 수 있어요)',
+  ];
+  $('helpBtn').onclick = () => { sfx('tap'); Cozy.howto('poker', '텍사스 홀덤 하는 법', HOWTO, { force: true }); };
   // 📱 아래 여백: 폴드처럼 작업 표시줄이 판 아래를 덮는 기기 (자동으로 켜지기도 함, common/fit.js)
-  const drawGap = () => { const b = $('gapBtn'); if (b) b.textContent = window.FitGap && FitGap.on ? '📱 화면 아래 여백: 켬 (누르면 끔)' : '📱 화면 아래가 가려지면 켜기'; };
-  $('gapBtn').addEventListener('click', () => { if (!window.FitGap) return; FitGap.set(!FitGap.on); drawGap(); showToast(FitGap.on ? '아래를 조금 비웠어요' : '아래 여백을 껐어요'); });
-  drawGap(); setTimeout(drawGap, 800);
-  $('gRankBtn').addEventListener('click', () => { if (window.GRank) GRank.open('poker'); else showToast('랭킹을 불러오지 못했어요'); });
+  function openSettings() {
+    sfx('tap');
+    Cozy.modal({
+      title: '⚙ 설정', dismiss: true, buttons: [{ label: '닫기', primary: true }],
+      html: `<div class="setlist"><div class="optrow"><span class="small">화면 아래 여백</span><div class="seg" id="sGap"></div></div>
+        <p class="note">갤럭시 폴드처럼 아래 작업 표시줄이 화면 아래를 가리면 켜 주세요. 판 아래를 조금 비워요.</p></div>`,
+    });
+    const draw = () => segBtns($('sGap'), [['1', '켬'], ['0', '끔']], window.FitGap && FitGap.on ? '1' : '0', v => { if (!window.FitGap) return; FitGap.set(v === '1'); showToast(FitGap.on ? '아래를 조금 비웠어요' : '아래 여백을 껐어요'); draw(); });
+    draw();
+  }
+  $('setBtn').onclick = openSettings;
+
+  // 📖 족보 (게임 중 단추 + 공용 창)
+  const JOKBO_HTML = `<div class="jokbo-grid">
+        <div class="j-card hi"><b>1. 로열 플러시</b><span>같은 무늬 A-K-Q-J-10 (최강 무적)</span></div>
+        <div class="j-card hi"><b>2. 스트레이트 플러시</b><span>같은 무늬 연속 숫자 5장</span></div>
+        <div class="j-card"><b>3. 포카드 (Four of a Kind)</b><span>같은 숫자 4장</span></div>
+        <div class="j-card"><b>4. 풀하우스 (Full House)</b><span>트리플(3장) + 원페어(2장)</span></div>
+        <div class="j-card"><b>5. 플러시 (Flush)</b><span>숫자 무관 같은 무늬 5장</span></div>
+        <div class="j-card"><b>6. 스트레이트 (Straight)</b><span>무늬 무관 연속 숫자 5장 (A-2-3-4-5 백스트레이트 포함)</span></div>
+        <div class="j-card"><b>7. 트리플 (Three of a Kind)</b><span>같은 숫자 3장</span></div>
+        <div class="j-card"><b>8. 투페어 (Two Pair)</b><span>페어 2쌍</span></div>
+        <div class="j-card"><b>9. 원페어 (One Pair)</b><span>같은 숫자 1쌍</span></div>
+        <div class="j-card"><b>10. 하이카드 (High Card)</b><span>메이드 없음 (가장 높은 숫자 비교)</span></div>
+        <div class="j-card sp"><b>💰 사이드 팟</b><span>누군가 칩이 모자라 올인하면, 그 사람은 자기가 낸 만큼의 팟(메인 팟)만 노릴 수 있어요. 나머지는 남은 사람끼리 겨루는 사이드 팟이 따로 생겨요.</span></div>
+        <div class="j-card sp"><b>🎯 4-2 법칙 (Outs)</b><span>플랍에서 내 패를 완성해 줄 카드(아웃츠) 개수 × <b>4</b> = 리버까지 메이드 확률(%)! (예: 플러시 드로 9장 × 4 = 약 36%, 양차 스트레이트 드로 8장 × 4 = 약 32%)</span></div>
+      </div>`;
+  $('jokboBtn').onclick = () => { sfx('tap'); Cozy.modal({ title: '📖 텍사스 홀덤 족보 서열 & 4-2 법칙', html: JOKBO_HTML, buttons: [{ label: '닫기', primary: true }], dismiss: true }); };
+  $('replayBtn').onclick = () => { sfx('tap'); openReplayList(); };
+  $('gRankBtn').onclick = () => { sfx('tap'); if (window.GRank) GRank.open('poker'); else showToast('랭킹을 불러오지 못했어요'); };
   try { if (window.GRank) GRank.migrateLocal('poker', () => { const st = loadStats(); return { n: st.games, w: st.wins, l: Math.max(0, st.games - st.wins) }; }); } catch (e) {}   // 예전 기기 기록 한 번 올림
   // 📒 아쉬운 장면: 시작 창 단추(없으면 숨김) · 목록을 닫으면 숫자 다시 · 노트에서 온 주소(?drill=)면 그 장면부터 연습 (맨 아래)
   $('mistakeBtn').addEventListener('click', () => {
     if (!window.Mistakes) return;
+    sfx('tap');
     Mistakes.open({ game: 'poker' });
     const t = setInterval(() => { if (!document.querySelector('.mst-ov')) { clearInterval(t); drawMistakeBtn(); } }, 400);
   });
@@ -1493,19 +1508,12 @@
   drawReplayBtn();
 
   window.__poker = { get ses() { return SES; } };          // 시험용 (읽기만)
-  // 처음 화면: 배경용 빈 테이블
   drawMenu();
+  showScreen('home');
   $('coachBtn').hidden = true;
-  // 초대 링크(?room=코드)로 오면 시작 창을 닫고 바로 대기실 (시작 창이 대기실을 가리지 않게)
+  // 초대 링크(?room=코드)로 오면 바로 대기실 (첫 화면 위에 뜸)
   const mDrill = window.Mistakes ? Mistakes.fromUrl('poker') : null;
-  if (!mDrill && window.ArenaUI) ArenaUI.checkUrl(() => { $('startModal').hidden = true; ArenaUI.open(FRIEND); });
-  (function idleTable() {
-    const S0 = P.create({ players: 4, seed: 2026 });
-    const seats = seatNames(4, ['me', 'ai', 'ai', 'ai'], 'normal');
-    SES = { alive: true, mode: 'solo', n: 4, me: 0, S: S0, seats, pending: null, coachLog: [], coachAvail: false, coachOn: false, idle: true };
-    renderGame(SES);
-    SES = null;
-  })();
+  if (!mDrill && window.ArenaUI) ArenaUI.checkUrl(FRIEND);
   if (mDrill && mDrill.drill && mDrill.drill.rec && mDrill.drill.rec.start) {     // 📒 노트에서 온 주소: 그 장면부터 연습 (선생님 켠 채, 첫 장면은 💡 로 답 보기)
     const d = mDrill.drill, seat = d.seat != null ? d.seat : Math.max(0, d.rec.seats.findIndex(x => x.name === '나'));
     try { startBranch(d.rec, d.k, seat, mDrill.id); } catch (e) { console.warn(e); showToast('이 장면은 다시 열 수 없어요', 2200); }

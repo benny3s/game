@@ -49,7 +49,7 @@ U.main(async T => {
     await U.waitFor(pg, A.ready, null, 15000);
     await pg.evaluate(() => {
       const q = s => document.querySelector(s);
-      q('.seg[data-seg="mode"] [data-val="1p"]').click(); q('#countSeg [data-val="3"]').click(); q('.seg[data-seg="tier"] [data-val="easy"]').click(); q('#goStart').click();
+      q('#tabSolo').click(); q('#countSeg [data-v="3"]').click(); q('#tiers [data-id="easy"]').click(); q('#goStart').click();
     });
     const turns = [];
     const t0 = Date.now();
@@ -110,7 +110,7 @@ U.main(async T => {
     const err0 = T.errors.length;
     await pg.evaluate(() => {
       const q = s => document.querySelector(s);
-      q('.seg[data-seg="mode"] [data-val="1p"]').click(); q('#countSeg [data-val="3"]').click(); q('.seg[data-seg="tier"] [data-val="easy"]').click(); q('#goStart').click();
+      q('#tabSolo').click(); q('#countSeg [data-v="3"]').click(); q('#tiers [data-id="easy"]').click(); q('#goStart').click();
     });
     // 첫 핸드가 끝날 때까지 콜 (결과 창이 뜨면 멈춤)
     let ended = false;
@@ -136,6 +136,13 @@ U.main(async T => {
     T.ok(!!pr, '51 🎮 여기서부터 내가 치기 → 연습 판이 열림');
     T.ok(!!pr && /👀/.test(pr.text) && /📊/.test(pr.text) && /👉/.test(pr.text), '51 연습 판에서도 👀·📊·👉 (' + (pr && pr.text.replace(/\s+/g, ' ').slice(0, 100)) + ')');
     T.ok(T.errors.length === err0, '51 복기·연습에서 페이지 오류 없음 ' + JSON.stringify(T.errors.slice(err0)));
+    // 52 (11-05): 게임 중 알림이 내 단추를 가리지 않음 — 공용 알림은 화면 아래라 폴드·콜 위로 올라옴
+    const hit = await pg.evaluate(() => {
+      Cozy.toast('친구83 님 칩이 바닥나 다시 채웠어요 — 손익은 마이너스로 이어져요', 3000);
+      const a = document.querySelector('.toast').getBoundingClientRect(), b = document.getElementById('betBar').getBoundingClientRect();
+      return !(a.bottom <= b.top || a.top >= b.bottom);
+    });
+    T.ok(!hit, '52 게임 중 알림이 내 베팅 단추를 가리지 않음');
     await pg.close();
   }
 }, 'poker ui');
