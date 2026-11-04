@@ -194,18 +194,19 @@ const Gate = (() => {
   // ── 허용됨 / 허용 안 됨 상태 반영
   // 👥 방문자: 게임·아케이드를 연 모든 기기(둘러보기 손님 포함)를 game_presence/{uid} 에 — 떠날 때 지우지 않고 마지막 시각만 남김
   //   (관리자만 읽음: 아케이드 첫 화면 '👥 방문자' · logs.html) · mode = admin | allowed | bridge | guest
+  const IS_BOT = !!navigator.webdriver && !FORCE_GATE;   // 자동 시험 브라우저는 방문자·열어 본 수에 안 남김 (11-04 실서버 시험이 '손님'으로 보였음)
   let presenceOn = false, presencePut = null, presenceSig = "", presenceRef = null, presenceT = null;
   const presMode = () => (state.isAdmin ? "admin" : state.allowed ? "allowed" : state.isMember || state.role === "bridge_free" ? "bridge" : "guest");
   const profName = () => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } };
   // 🔥 게임별 '열어 본 수' (아케이드 추천 순서용, 누구나 읽음) — 게임 페이지를 연 탭마다 한 번
   function countPlay() {
     const g = detectGameId();
-    if (IS_LOCAL || !user || !g || g === "portal" || !/^[a-z0-9]{2,20}$/.test(g)) return;
+    if (IS_LOCAL || IS_BOT || !user || !g || g === "portal" || !/^[a-z0-9]{2,20}$/.test(g)) return;
     try { if (sessionStorage.getItem("game.play." + g)) return; sessionStorage.setItem("game.play." + g, "1"); } catch (e) { return; }
     db().ref("game_plays/" + g + "/n").transaction(n => (n || 0) + 1).catch(() => {});
   }
   function startPresence() {
-    if (presenceOn || IS_LOCAL || !user) return;
+    if (presenceOn || IS_LOCAL || IS_BOT || !user) return;
     presenceOn = true;
     try {
       const ref = presenceRef = db().ref("game_presence/" + user.uid);
@@ -869,11 +870,11 @@ const Gate = (() => {
       const all = [...by.values()];
       const live = all.filter(p => now - p.t < 6 * 60000), today = all.filter(p => p.t >= d0.getTime()), week = all.filter(p => now - p.t < 7 * DAY);
       const rows = today.sort((a, b) => b.t - a.t).slice(0, 16).map(p =>
-        `<span class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" title="${esc(p.devs.join(" · "))}">${MODE[p.mode] || "👀"} ${esc(p.name || "손님")} <small>${esc(GAME_KO[p.game] || p.game || "")} · ${fmtTimeAgo(p.t)}${p.devs.length > 1 ? ` · ${p.devs.length}기기` : ""}</small></span>`).join("");
+        `<span class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" title="${esc(p.devs.join(" · "))}">${MODE[p.mode] || "👀"} ${p.name && p.name !== "손님" ? esc(p.name) : `손님${p.devs[0] !== "?" ? ` (${esc(p.devs[0])})` : ""}`} <small>${esc(GAME_KO[p.game] || p.game || "")} · ${fmtTimeAgo(p.t)}${p.devs.length > 1 ? ` · ${p.devs.length}기기` : ""}</small></span>`).join("");
       el.hidden = false;
       el.innerHTML = `<div class="bgate-sec" style="margin:0"><h4><span>👥 방문자 · 🟢 지금 ${live.length} · 오늘 ${today.length} · 7일 ${week.length}</span><a href="logs.html" style="color:#93c5fd;font-size:12.5px;text-decoration:none">📊 자세히 ›</a></h4>
         <div class="bgate-visl">${rows || '<span class="bgate-meta">오늘은 아직 아무도 안 왔어요.</span>'}</div>
-        <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 회원 · 👀 둘러보기 · 🟢 테두리 = 지금 · 같은 이름은 한 칸 (여러 기기면 'N기기') · 10-31부터 모음</div></div>`;
+        <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 회원 · 👀 손님 = 허용 안 된 기기 (게임은 잠겨 있고, 방 링크로 온 친구만 그 방에서 함) · 🟢 테두리 = 지금 · 같은 이름은 한 칸 (여러 기기면 'N기기') · 10-31부터 모음</div></div>`;
     };
     const fn = snap => { val = snap.val() || {}; draw(); };
     ref.on("value", fn, () => { el.hidden = true; });

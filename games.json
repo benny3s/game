@@ -399,10 +399,10 @@
   },
   {
     "id": "sc",
-    "name": "스타 봇 세상",
-    "subtitle": "진짜 스타1 엔진(OpenBW)과 공개 대회 봇 — 관전 · 나 vs 봇 · 봇 돕기",
+    "name": "스타크래프트 도전",
+    "subtitle": "공개 대회 봇과 1대1 · 관전 · 봇 돕기",
     "desc": "베니 님 PC 에 진짜 엔진 창을 띄워 공개 대회 봇(Stardust · Steamhammer · Iron · Locutus)끼리 관전하거나, 봇과 1대1을 하거나, 내 편 봇에게 운영을 맡기고(F9) 싸움만 직접 합니다.",
-    "emoji": "🤖",
+    "emoji": "🚀",
     "category": "action",
     "players": "1명",
     "modes": [

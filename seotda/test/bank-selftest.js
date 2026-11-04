@@ -150,7 +150,7 @@ function bruteMin(vals) {
   const by = Object.fromEntries(res.rows.map(r => [r.pid, r.won]));
   ok(by.a === 6000 && by.b === -3000 && by.c === -3000, 'AI 몫 −3,000원을 셋이 1,000원씩');
   ok(applyLines(by, res.lines), 'AI 몫 송금 맞음');
-  ok(B.text(res, { name: 'x' }).includes('AI·조정 몫'), '카톡 글에 AI 몫 안내');
+  ok(B.text(res, { name: 'x' }).includes('AI 판 몫'), '카톡 글에 AI 몫 안내');
   const resB = B.settle(members, 10, { residual: 'bank' });
   ok(resB.total === 0 && resB.rows.some(r => r.pid === '_bank' && r.won === 3000), '은행 자리 옵션: 은행이 3,000원 받음');
   // 나눠 떨어지지 않을 때 (−100칩 / 3명 × 1원)

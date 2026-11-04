@@ -166,7 +166,9 @@ async function gateAdminTests(browser) {
 // ── presence: 계정이 바뀌면(switchUser) 방문자 기록을 새 uid 자리에 씀 (예전 자리는 권한이 없음)
 async function presenceTests(browser) {
   console.log('출입 gate.js (계정 바뀜 → 방문자 기록)');
+  // 자동 시험 브라우저는 방문자에 안 남으니 (맨 아래에서 따로 확인) 여기선 보통 브라우저로
   const ctx = await newCtx(browser, { fake: { user: { uid: 'u1', claims: {} } } });
+  await ctx.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => false }));
   const p = await open(ctx, PROD + '/game/');
   const w1 = await waitFn(p, () => window.__fs.log.some(x => x.path === 'game_presence/u1'), null, 4000);
   ok(w1, `처음 계정 u1 방문자 기록 — ${await p.evaluate(() => window.__fs.log.map(x => x.path).filter(x => /presence/.test(x)).join(','))}`);
@@ -177,6 +179,13 @@ async function presenceTests(browser) {
   ok(w2 && r.uid === 'u2', `계정이 u2 로 바뀌면 방문자 기록도 game_presence/u2 — ${JSON.stringify(r)}`);
   ok(!r.denied.length, `예전 자리(u1)에 쓰다 막힌 것 없음 — ${r.denied.join(',') || '없음'}`);
   await ctx.close();
+  // 11-04: 실서버 자동 시험이 첫 화면에 '손님'으로 보였음 → navigator.webdriver 면 방문자·열어 본 수를 안 남김
+  const ctx2 = await newCtx(browser, { fake: { user: { uid: 'u3', claims: {} } } });
+  const q = await open(ctx2, PROD + '/game/');
+  await sleep(1500);
+  const left = await q.evaluate(() => window.__fs.log.map(x => x.path).filter(x => /game_presence|game_plays/.test(x)));
+  ok(!left.length, `자동 시험 브라우저는 방문자 기록을 안 남김 — ${left.join(',') || '없음'}`);
+  await ctx2.close();
 }
 
 // ── #4 me.js 이름 고르기 창: 새 이름은 PIN 을 먼저 받고 이름·프로필을 한 번에 → PIN 치다 새로 고침해도 이름이 안 묶임
