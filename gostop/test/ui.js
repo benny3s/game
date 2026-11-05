@@ -92,6 +92,7 @@ U.main(async T => {
     T.ok(!!(await U.waitFor(S, () => { const r = document.getElementById('resBox'); return r && !r.hidden; }, null, 25000)), '④ 구경꾼에게도 결과 창');
     const lab = await S.evaluate(() => { const b = document.querySelector('#resBox .btn.primary'); if (b && !b.disabled) { const t = b.textContent; b.click(); return t; } return null; });
     T.ok(/낄래요/.test(lab || ''), '④ 구경꾼이 낄래요를 누름 (' + lab + ')');
+    await U.waitFor(W, () => { const r = document.getElementById('resBox'), b = document.querySelector('#resBox .btn.primary'); return !!(r && !r.hidden && b && !b.disabled); }, null, 25000);   // 친구 결과 창이 뜬 뒤에 ✋ 준비 (먼저 누르면 놓쳐서 가끔 방장이 못 시작함)
     await W.evaluate(() => { const b = document.querySelector('#resBox .btn.primary'); if (b && !b.disabled) b.click(); });
     let next = false;
     for (let i = 0; i < 60 && !next; i++) {
@@ -106,5 +107,80 @@ U.main(async T => {
     T.ok(r && bal != null && r.chips[n0] === bal, '④ 새 자리 칩 = 장부 잔액 (' + (r && r.chips[n0]) + ' / ' + bal + ')');
     T.ok(r && r.on && r.on.length === n0 + 1 && r.on.every(Boolean), '④ 📊 통산 기록에도 새 자리가 켜짐 ' + (r && r.on && r.on.join()));
     for (const p of [H, W, S]) await p.close().catch(() => {});
+  }
+  // ── ⑥ 11-06 베니 님: 추천과 내지 말 것이 같은 표시 → 👑 초록 · 🚫 빨강+어두운 패 · 나머지는 회색 숫자
+  {
+    const p = await T.open('gostop/');
+    await U.waitFor(p, A.ready);
+    let marks = null;
+    for (let seed = 11; seed < 30 && !marks; seed++) {
+      await p.evaluate(sd => { localStorage.setItem('cozy.sound2', 'false'); __gostop.start({ seed: sd, mode: 2, tier: 'easy', rules: { seon: 'off' } }); }, seed);
+      if (!(await U.waitFor(p, myPlay, null, 20000))) continue;
+      await closeHow(p);
+      if (!(await p.evaluate(() => __gostop.ses.coachOn))) await p.click('#coachBtn');
+      await U.waitFor(p, () => document.querySelectorAll('.hw.mine .ev-badge:not([hidden])').length > 0, null, 8000);
+      marks = await p.evaluate(() => {
+        const rows = [...document.querySelectorAll('.hw.mine')].map(el => { const b = el.querySelector('.ev-badge'), cs = getComputedStyle(b), dim = el.querySelector('.ev-dim'); return { id: +el.dataset.id, tier: b.className.split(' ')[1], t: b.textContent, bg: cs.backgroundImage !== 'none' ? cs.backgroundImage : cs.backgroundColor, avoid: el.classList.contains('avoid'), dim: !!dim && getComputedStyle(dim).display !== 'none' }; });
+        return rows.some(r => r.tier === 'bad') && rows.some(r => r.tier === 'best') && rows.some(r => r.tier === 'good' || r.tier === 'ok') ? rows : null;
+      });
+    }
+    T.ok(!!marks, '⑥ 추천 · 보통 · 내지 말 것이 다 있는 손패');
+    if (marks) {
+      const of = t => marks.filter(r => t.includes(r.tier)), bg = rs => [...new Set(rs.map(r => r.bg))];
+      T.ok(of(['bad']).every(r => r.t === '🚫' && r.avoid && r.dim), '⑥ 내지 말 것 = 🚫 + 패가 어두워짐 ' + JSON.stringify(of(['bad'])));
+      T.ok(of(['best']).every(r => r.t === '👑' && !r.avoid && !r.dim), '⑥ 추천 = 👑 · 어둡지 않음');
+      T.ok(of(['good', 'ok']).every(r => /^-/.test(r.t) && !r.avoid), '⑥ 나머지는 숫자만 · 어둡지 않음');
+      T.ok(bg(of(['good', 'ok'])).length === 1, '⑥ 보통은 색을 나누지 않음 (회색 하나) ' + bg(of(['good', 'ok'])).join(' | '));
+      T.ok(!bg(of(['best'])).some(x => bg(of(['bad'])).includes(x)) && !bg(of(['good', 'ok'])).some(x => bg(of(['bad'])).includes(x) || bg(of(['best'])).includes(x)), '⑥ 세 표시의 색이 서로 다름');
+      const bad = of(['bad'])[0], best = of(['best'])[0];
+      const say = id => p.evaluate(async c => { const el = document.querySelector(`.hw[data-id="${c}"]`), r = el.getBoundingClientRect(); el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: r.x + 6, clientY: r.y + 20, pointerId: 1 })); el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: r.x + 6, clientY: r.y + 20, pointerId: 1 })); el.click(); await new Promise(z => setTimeout(z, 250)); return { sel: __gostop.ses.sel, html: __gostop.ses.coachHtml || '' }; }, id);
+      const b1 = await say(bad.id);
+      T.ok(b1.sel === bad.id && /🚫 내지 마세요/.test(b1.html) && !/\[[^\]]+\]<\/b> 👉/.test(b1.html), '⑥ 내지 말 패를 고르면 🚫 내지 마세요 — ' + b1.html.replace(/<[^>]+>/g, '').slice(-120));
+      await p.evaluate(() => { __gostop.ses.sel = -1; });
+      const b2 = await say(best.id);
+      T.ok(/👑/.test(b2.html) && !/🚫/.test(b2.html) && /👉/.test(b2.html), '⑥ 추천 패 말에는 🚫 이 없음 — ' + b2.html.replace(/<[^>]+>/g, '').slice(-80));
+    }
+    await p.close().catch(() => {});
+  }
+  // ── ⑦ 11-06 베니 님: 패 고르기 창이 판을 가림 → 아래쪽 작은 줄, 판은 어둡게 안 하고 후보 두 장이 보임
+  {
+    const p = await T.open('gostop/');
+    await U.waitFor(p, A.ready);
+    await p.evaluate(() => __gostop.fast(true));
+    let box = null;
+    for (let seed = 11; seed < 45 && !box; seed++) {
+      await p.evaluate(sd => { localStorage.setItem('cozy.sound2', 'false'); __gostop.start({ seed: sd, mode: 2, tier: 'easy', rules: { seon: 'off' } }); }, seed);
+      if (!(await U.waitFor(p, myPlay, null, 15000))) continue;
+      await closeHow(p);
+      for (let t = 0; t < 10 && !box; t++) {
+        const pick = await U.waitFor(p, () => { const s = __gostop.state, ses = __gostop.ses; return !!(s && ses && ses.pending && !ses.pending.isResult && s.turn === ses.cfg.me) && document.querySelectorAll('.overlay .picks button').length + (s.phase === 'play' ? 1 : 0) > 0 ? s.phase : null; }, null, 8000);
+        if (!pick) break;
+        if (String(pick).startsWith('pick')) {
+          await p.waitForTimeout(450);
+          box = await p.evaluate(() => {
+            const o = [...document.querySelectorAll('.overlay')].filter(x => !x.hidden && x.querySelector('.picks')).pop(), r = o.firstElementChild.getBoundingClientRect(), opts = __gostop.state.cur.opts;
+            const hand = [...document.querySelectorAll('.hw')].filter(el => __gostop.state.hands[__gostop.ses.cfg.me].includes(+el.dataset.id)).map(el => el.getBoundingClientRect().top);
+            const onTop = c => { const e = document.querySelector(`.hw[data-id="${c}"]`), q = e.getBoundingClientRect(); return !o.firstElementChild.contains(document.elementFromPoint(q.x + q.width / 2, q.y + 8)); };
+            return { top: r.top, h: r.height, vh: innerHeight, bottom: r.bottom, dimA: +(getComputedStyle(o).backgroundColor.match(/[\d.]+/g)[3] ?? 1), blur: getComputedStyle(o).backdropFilter, peek: !!o.querySelector('.peekbtn'), n: o.querySelectorAll('.picks button').length, names: [...o.querySelectorAll('.picks button span')].map(x => x.textContent), visible: opts.map(onTop), glow: opts.map(c => document.querySelector(`.hw[data-id="${c}"]`).classList.contains('glow')), handTop: hand.length ? Math.min(...hand) : 0, phase: __gostop.state.phase };
+          });
+          break;
+        }
+        await p.evaluate(() => { const s = __gostop.state, me = __gostop.ses.cfg.me, m = c => Math.floor(c / 4), L = __gostop.legal(); const two = s.phase === 'play' ? s.hands[me].filter(c => c < 48).find(c => s.table.filter(x => x < 48 && m(x) === m(c)).length === 2) : null; __gostop.act(two != null && L.includes(two) ? two : L[0]); });
+        await p.waitForTimeout(250);
+      }
+    }
+    T.ok(!!box, '⑦ 패 고르기 장면');
+    if (box) {
+      T.ok(box.n === 2 && box.names.every(Boolean), '⑦ 고를 패 두 장과 이름 ' + box.names.join(' / '));
+      T.ok(box.h <= box.vh * 0.22, `⑦ 창 높이가 화면의 22% 안 (${Math.round(box.h)} / ${box.vh})`);
+      T.ok(box.bottom >= box.vh - 12 && box.top > box.handTop + 15, `⑦ 창이 맨 아래 · 손패 윗부분이 보임 (창 ${Math.round(box.top)}, 손패 ${Math.round(box.handTop)})`);
+      T.ok(box.dimA === 0 && (!box.blur || box.blur === 'none'), `⑦ 판을 어둡게·흐리게 안 함 (${box.dimA}, ${box.blur})`);
+      T.ok(box.visible.every(Boolean), '⑦ 바닥의 후보 두 장이 창에 안 가림 ' + box.visible);
+      T.ok(box.glow.every(Boolean), '⑦ 바닥의 후보 두 장이 빛남 ' + box.glow);
+      T.ok(!box.peek, "⑦ '판 보기' 단추가 필요 없음");
+      await p.evaluate(() => [...document.querySelectorAll('.overlay .picks button')].pop().click());
+      T.ok(await U.waitFor(p, () => !document.querySelector('.overlay .picks') && ![...document.querySelectorAll('.hw.glow')].length, null, 5000), '⑦ 고르면 창이 닫히고 빛도 꺼짐');
+    }
+    await p.close().catch(() => {});
   }
 }, 'gostop ui');

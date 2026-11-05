@@ -1248,7 +1248,7 @@
       const el = document.createElement('div');
       el.className = 'hw down';
       el.dataset.id = id;
-      el.innerHTML = `<div class="bob"><span class="ev-badge" hidden></span><div class="in">${ART.use(id, 'f')}${ART.use(-1, 'b')}</div></div>`;
+      el.innerHTML = `<div class="bob"><span class="ev-dim"></span><span class="ev-badge" hidden></span><div class="in">${ART.use(id, 'f')}${ART.use(-1, 'b')}</div></div>`;
       layer.appendChild(el);
       els[id] = el;
     }
@@ -1656,7 +1656,7 @@
       }
       if (c && c.bestCard >= 0) {
         const ch = cardOfAct(st, p, a), info = ch >= 0 ? c.byCard[ch] : null;
-        const mark = info ? (info.tier === 'best' ? '👑 최선' : (info.tier === 'good' ? '🟢 ' : info.tier === 'ok' ? '🟡 ' : '🔴 ') + esc(info.deltaText || '')) : '';
+        const mark = info ? (info.tier === 'best' ? '👑 최선' : (info.tier === 'good' ? '🟢 ' : info.tier === 'ok' ? '🟡 ' : '🚫 ') + esc(info.deltaText || '')) : '';
         html = `<b>${who}</b> 차례 · <span class="cb-tag">👑 추천</span> <b>[${esc(c.bestName)}]</b> — ${esc(c.bestWhy)}`;
         // 🤔 실제로 낸 패의 속뜻 (선생님이 보기에 이 패로 노린 것) — 손해가 크면 노림수보다 실수일 수 있다고
         if (a === G.A_PASS) html += '<br>실제로 한 것: <b>폭탄패로 더미만 뒤집기</b> <span class="small">— 손패를 아끼고 뒤집은 패에 맡긴 수예요</span>';
@@ -2026,6 +2026,7 @@
     const showCoach = mine && coachOn(ses) && !mHide(ses);              // 📒 노트 연습 첫 장면은 💡 를 누를 때까지 추천을 감춤
     const coach = showCoach ? getCoachForTurn(ses) : null;
     const best = coach && coach.bestCard >= 0 && ses.sel < 0 ? coach.bestCard : -1;      // 추천 패는 반짝 (선생님이 켜져 있을 때만)
+    const pickOpts = s.turn === me && ses.pending && s.phase.startsWith('pick') && s.cur ? s.cur.opts || [] : [];   // 패 고르기 중: 바닥의 후보 두 장도 빛남
     for (const id in els) {
       const el = els[id], c = +id;
       const inHand = me >= 0 && VM.hand[me] && VM.hand[me].indexOf(c) >= 0;
@@ -2034,15 +2035,17 @@
       el.classList.toggle('sel', inHand && mine && ses.sel === c);
       el.classList.toggle('hint', inHand && best === c);
       const onTable = s.table.indexOf(c) >= 0;
-      el.classList.toggle('glow', onTable && mine && ses.sel >= 0 && !G.isBonus(ses.sel) && G.monthOf(c) === G.monthOf(ses.sel));
+      el.classList.toggle('glow', (onTable && mine && ses.sel >= 0 && !G.isBonus(ses.sel) && G.monthOf(c) === G.monthOf(ses.sel)) || pickOpts.includes(c));
       el.classList.toggle('pick', onTable && mine && ses.sel >= 0 && G.monthOf(c) === G.monthOf(ses.sel));
       const badge = el.querySelector('.ev-badge');
       if (badge) {
         const ci = coach && inHand ? coach.byCard[c] : null;
+        el.classList.toggle('avoid', !!ci && ci.tier === 'bad');
         if (ci) {
           badge.hidden = false;
           badge.className = 'ev-badge ' + ci.tier;
-          badge.textContent = ci.tier === 'best' ? '👑' : ci.deltaText;   // 좋음·보통·나쁨은 색으로 (패 왼쪽 아래 안에 작게 — 위쪽 노란 '낼 수 있는 패' 막대를 안 가리게)
+          // 11-06 베니 님 '고르라는 것과 내지 말라는 것이 같은 표시': 👑 추천 · 🚫 내지 말 것(패도 어둡게) · 나머지는 회색 숫자 (패 왼쪽 아래 — 노란 '낼 수 있는 패' 막대를 안 가리게)
+          badge.textContent = ci.tier === 'best' ? '👑' : ci.tier === 'bad' ? '🚫' : ci.deltaText;
         } else {
           badge.hidden = true;
         }
@@ -2078,9 +2081,14 @@
       if (coach.self) html += `<span class="cb-read">📊 <b>내 흐름</b> ${esc(coach.self.text)}</span><br>`;
       const selInfo = ses.sel >= 0 ? coach.byCard[ses.sel] : null;
       if (selInfo) {
-        const ic = selInfo.tier === 'best' ? '👑 최선 추천' : selInfo.tier === 'good' ? '🟢 좋은 수' : selInfo.tier === 'ok' ? '🟡 무난한 수' : '🔴 아쉬운 수';
-        const cmp = selInfo.tier !== 'best' ? ` (추천: <b>${esc(coach.bestName)}</b>)` : '';
-        html += `<span class="cb-tag">${ic} · ${esc(selInfo.tag)}</span><br><b>[${esc(selInfo.name)}]</b> 👉 ${esc(selInfo.why)}${cmp}`;
+        if (selInfo.tier === 'bad') {   // 내지 말 패: '덜 아까워요' 같은 좋은 말 대신 왜 손해인지 (경고 까닭이 있으면 그것도)
+          const warn = /^(⚠|🚨)/.test(selInfo.tag);
+          html += `<span class="cb-tag">🚫 내지 마세요${warn ? ' · ' + esc(selInfo.tag) : ''}</span><br><b>[${esc(selInfo.name)}]</b> 🚫 ${warn ? esc(selInfo.why) + ' · ' : ''}추천 <b>${esc(coach.bestName)}</b>보다 평균 ${esc(String(selInfo.deltaText).replace('-', ''))}점 손해예요`;
+        } else {
+          const ic = selInfo.tier === 'best' ? '👑 최선 추천' : selInfo.tier === 'good' ? '🟢 좋은 수' : '🟡 무난한 수';
+          const cmp = selInfo.tier !== 'best' ? ` (추천: <b>${esc(coach.bestName)}</b>)` : '';
+          html += `<span class="cb-tag">${ic} · ${esc(selInfo.tag)}</span><br><b>[${esc(selInfo.name)}]</b> 👉 ${esc(selInfo.why)}${cmp}`;
+        }
       } else {
         html += `<span class="cb-tag">👑 추천 · ${esc(coach.bestTag)}</span><br><b>[${esc(coach.bestName)}]</b> 👉 ${esc(coach.bestWhy)}`;
       }
@@ -2180,14 +2188,15 @@
   function askPick(ses, o) {
     sfx('pop');
     const s = ses.S;
+    // 11-06 베니 님 '선택 화면이 화면을 가림': 맨 아래 작은 줄로 (판은 어둡게 안 함, 후보 두 장은 바닥에서도 빛남)
     const close = C.modal({
       title: '어느 패를 가져올까요?',
-      html: `<div class="picks">${o.map((c, k) => `<button data-k="${k}">${ART.use(c)}<span>${esc(G.cardName(c))}</span></button>`).join('')}</div><p class="small" style="margin:6px 0 0">${s.phase === 'pickFlip' ? '뒤집은 패' : '낸 패'}와 같은 달이 바닥에 두 장이에요</p>`,
-      buttons: [], dismiss: false, cls: 'peek',
+      html: `<div class="picks">${o.map((c, k) => `<button data-k="${k}">${ART.use(c)}<span>${esc(G.cardName(c))}</span></button>`).join('')}</div>`,
+      buttons: [], dismiss: false, cls: 'pickbar',
     });
     ses.modals.push(close);
     const ov = document.querySelector('.overlay:last-of-type');
-    peekBtn(ov);
+    markHand(ses);
     ov.querySelectorAll('.picks button').forEach(b => b.onclick = () => { sfx('tap'); ses.modals = ses.modals.filter(x => x !== close); close(); finishHuman(ses, G.A_PICK + +b.dataset.k); });
     if (matchMedia('(hover: hover)').matches) setTimeout(() => { const b = ov.querySelector('.picks button'); if (b) b.focus({ preventScroll: true }); }, 30);
   }

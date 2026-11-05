@@ -76,7 +76,18 @@ U.main(async T => {
   T.ok(frame.minor.includes('🏆 랭킹') && frame.minorLast, '③ 맨 아래 작은 줄에 🏆 랭킹 (' + frame.minor.join('|') + ')');
   T.ok(frame.start[0] === '시작!' && frame.start[1] && frame.start[2], '③ 큰 단추 시작! (' + frame.start + ')');
   T.ok(frame.howBeforeStart, '③ 규칙 안내가 시작! 위에');
-  T.ok(frame.bg < 0.05 && frame.ink > 0.7, '③ 다크 라운지: 어두운 바탕 · 밝은 글자 (' + frame.bg.toFixed(3) + ' / ' + frame.ink.toFixed(3) + ')');
+  T.ok(frame.bg > 0.7 && frame.ink < 0.2, '③ 11-06 밝은 바탕 · 어두운 글자 (지민 님: 어두운 판이 눈 아픔) (' + frame.bg.toFixed(3) + ' / ' + frame.ink.toFixed(3) + ')');
+  {  // 11-06: 눈 피로 다시 안 생기게 — 칸과 틈(판 바탕)의 밝기 차이 (어두운 판은 평균 9.8배 · 최대 13.3배였음)
+    const c = await p.evaluate(() => {
+      const L = rgb => { const a = rgb.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * a[0] + 0.7152 * a[1] + 0.0722 * a[2]; };
+      const hex = h => h.slice(1).match(/../g).map(x => parseInt(x, 16));
+      const probe = document.createElement('div'); probe.id = 'board'; probe.style.display = 'none'; const old = document.getElementById('board'); (old || document.body).parentNode.appendChild(probe);
+      const bg = (old ? getComputedStyle(old) : getComputedStyle(probe)).backgroundColor.match(/[\d.]+/g).slice(0, 3).map(Number); probe.remove();
+      const r = __ny.NY.COLORS.map(x => { const a = L(hex(x[0])), b = L(bg); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); });
+      return { avg: r.reduce((x, y) => x + y, 0) / r.length, max: Math.max(...r) };
+    });
+    T.ok(c.avg < 2.5 && c.max < 3, `③ 칸과 판 바탕의 밝기 차이가 작음 (평균 ${c.avg.toFixed(1)}배 · 최대 ${c.max.toFixed(1)}배)`);
+  }
   T.ok(frame.playBox && frame.barBox, '③ 게임 화면도 cozy .play · .bar');
   T.ok(!frame.oldLobby, '③ 자체 대기실·방 목록·랭킹 탭 없음');
   T.ok(frame.netGone, '③ nyang/net.js 를 안 부름');

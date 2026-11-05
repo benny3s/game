@@ -332,10 +332,12 @@ body.playing .dock button .ic{
   border:1.5px solid #fff;
 }
 .hw .ev-badge[hidden]{display:none !important}
-.hw .ev-badge.best{background:linear-gradient(135deg,#10b981,#047857);color:#fff;border-color:#fde047;box-shadow:0 0 12px rgba(16,185,129,.85)}
-.hw .ev-badge.good{background:#15803d;color:#dcfce7;border-color:#86efac}
-.hw .ev-badge.ok{background:#b45309;color:#fef3c7;border-color:#fcd34d}
-.hw .ev-badge.bad{background:#991b1b;color:#fee2e2;border-color:#fca5a5}
+/* 11-06: 👑 추천(초록) · 🚫 내지 말 것(빨강 + 패가 어두워짐) · 나머지는 회색 숫자 — 모양부터 다르게 */
+.hw .ev-badge.best{background:linear-gradient(135deg,#10b981,#047857);color:#fff;border-color:#fde047;box-shadow:0 0 12px rgba(16,185,129,.85);font-size:15px}
+.hw .ev-badge.good,.hw .ev-badge.ok{background:rgba(15,23,36,.8);color:#d5dde8;border:1px solid rgba(213,221,232,.5);box-shadow:none}
+.hw .ev-badge.bad{background:#fff;color:#dc2626;border:2px solid #dc2626;font-size:15px}   /* 🚫 은 폰에서 빨간 그림 → 바탕은 흰색 */
+.hw .ev-dim{display:none;position:absolute;inset:0;z-index:8;border-radius:10px;background:rgba(18,0,4,.52);pointer-events:none}
+.hw.avoid .ev-dim{display:block}
 
 .coach-bar{
   position:absolute;left:8px;right:8px;z-index:15;
@@ -493,6 +495,13 @@ body.playing .dock button[aria-pressed="true"] .ic{
 .overlay.peek.peeking{background:transparent;pointer-events:none}
 .overlay.peek.peeking>div{display:none}
 .overlay.peek.peeking .peekbtn{pointer-events:auto}
+/* 패 고르기: 맨 아래 작은 줄 — 판이 그대로 보이고 어둡게 안 함 */
+.overlay.pickbar{place-items:end center;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;pointer-events:none;padding:0 8px calc(env(safe-area-inset-bottom,0px) + 6px)}
+.overlay.pickbar>div{pointer-events:auto;width:min(420px,100%);padding:8px 10px 9px;gap:6px;border-radius:16px;background:linear-gradient(165deg,rgba(24,38,56,.97),rgba(15,24,36,.97));box-shadow:0 -6px 22px rgba(0,0,0,.5)}
+.overlay.pickbar h2{font-size:15px}
+.overlay.pickbar .picks{gap:8px}
+.overlay.pickbar .picks button{flex:1 1 0;min-width:0;grid-template-columns:auto 1fr;align-items:center;justify-items:start;gap:8px;padding:5px 8px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);font-size:13.5px;line-height:1.25;text-align:left}
+.overlay.pickbar .picks svg{width:52px;height:83px;border-radius:6px}
 /* 🎞️ 복기 위 줄: 🧑‍🏫 선생님 · 🎮 여기서부터 내가 치기 */
 .rpgo{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 124px);z-index:40;display:flex;gap:6px;max-width:calc(100vw - 16px)}
 .rpgo button{height:36px;padding:0 13px;border-radius:99px;border:1px solid rgba(255,255,255,.22);background:rgba(10,18,14,.86);color:#fff;font:700 13.5px/1 var(--round,inherit);cursor:pointer;white-space:nowrap;box-shadow:0 4px 14px rgba(0,0,0,.4)}
