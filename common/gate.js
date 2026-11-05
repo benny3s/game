@@ -46,10 +46,11 @@ const Gate = (() => {
   const LOCAL_HOST = location.hostname === "127.0.0.1" || location.hostname === "localhost" || location.protocol === "file:";
   // 11-01: 실서버에서 ?guest·?mock 은 QA 도구(test/qa, 페이지보다 먼저 window.__qa 를 심음)가 연 탭에서만 시험 모드 — 주소만 붙여서는 잠금·방 만들기를 못 끔
   const IS_LOCAL = !FORCE_GATE && (LOCAL_HOST || ((qs.has("guest") || IS_MOCK) && !!window.__qa));
-  // ?room=ABCD (4자리 방 코드)로 초대받아 들어온 손님은 해당 방 세션 동안 임시 허용
+  // ?room=ABCD (4자리 방 코드)로 초대받아 들어온 손님은 그 방에 있는 동안만 임시 허용 — 방이 없거나 나오면 roomLinkEnded (arena-ui 가 부름)
   const roomParam = (qs.get("room") || "").trim().toUpperCase();
   const IS_ROOM_GUEST = !FORCE_GATE && /^[A-Z0-9]{4}$/.test(roomParam) && roomParam !== "HOST";
-  const SOLO_OPEN = OPEN_SOLO || IS_LOCAL || IS_ROOM_GUEST;   // 혼자 하기가 열려 있나
+  let roomLink = IS_ROOM_GUEST, permKnown = false;
+  const soloOpen = () => OPEN_SOLO || IS_LOCAL || roomLink;   // 혼자 하기가 열려 있나
   const IS_PORTAL = /(?:^|\/game)\/(?:index\.html)?$/.test(location.pathname);   // 아케이드 첫 화면 = 잠그지 않음 (둘러보기)
   const PORTAL_URL = /\/game\//.test(location.pathname) ? location.pathname.replace(/(\/game\/).*$/, "$1") : "../";
 
@@ -57,7 +58,7 @@ const Gate = (() => {
   const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
   let state = {
-    unlocked: SOLO_OPEN,
+    unlocked: soloOpen(),
     allowed: false,
     canHost: IS_LOCAL && !qs.has("nohost"),   // 시험: ?mock&nohost = 방 만들기 권한 없는 기기
     canApprove: false,     // 다른 기기 허용·관리 (관리자 · 옛 가족 방장)
@@ -171,7 +172,8 @@ const Gate = (() => {
         const t = setTimeout(() => ok(null), 7000);
         const off = app.auth().onAuthStateChanged(u => { clearTimeout(t); off(); ok(u); });
       });
-      if (!user) user = (await app.auth().signInAnonymously()).user;
+      // 방 링크로 처음 온 손님은 arena.js 도 같은 때 로그인함 → 임시 계정이 둘 생기지 않게 한 번만
+      if (!user) user = (await (window.__anonSignIn || (window.__anonSignIn = app.auth().signInAnonymously().catch(e => { window.__anonSignIn = null; throw e; })))).user;
       state.uid = user.uid;
       app.database().ref(".info/serverTimeOffset").on("value", s => { offset = s.val() || 0; });
       // 다른 탭에서 베니브릿지에 로그인·로그아웃하면 (같은 주소라 로그인이 이어짐) 이 기기 판단을 새로
@@ -194,7 +196,8 @@ const Gate = (() => {
   // ── 허용됨 / 허용 안 됨 상태 반영
   // 👥 방문자: 게임·아케이드를 연 모든 기기(둘러보기 손님 포함)를 game_presence/{uid} 에 — 떠날 때 지우지 않고 마지막 시각만 남김
   //   (관리자만 읽음: 아케이드 첫 화면 '👥 방문자' · logs.html) · mode = admin | allowed | bridge | guest
-  const IS_BOT = !!navigator.webdriver && !FORCE_GATE;   // 자동 시험 브라우저는 방문자·열어 본 수에 안 남김 (11-04 실서버 시험이 '손님'으로 보였음)
+  // 자동 시험 브라우저 · Claude 앱 안 브라우저는 방문자·열어 본 수에 안 남김 (11-04·11-05 실서버 확인이 '손님'으로 보였음)
+  const IS_BOT = (!!navigator.webdriver || /\bClaude\//.test(navigator.userAgent || "")) && !FORCE_GATE;
   let presenceOn = false, presencePut = null, presenceSig = "", presenceRef = null, presenceT = null;
   const presMode = () => (state.isAdmin ? "admin" : state.allowed ? "allowed" : state.isMember || state.role === "bridge_free" ? "bridge" : "guest");
   const profName = () => { try { const m = JSON.parse(localStorage.getItem("game.me") || "null"); return (m && m.name) || ""; } catch (e) { return ""; } };
@@ -246,7 +249,7 @@ const Gate = (() => {
     state.canHost = state.isAdmin;
     state.freeLeft = state.isMember ? freeLeft(state.uid) : 0;
     const free = !state.canHost && state.freeLeft > 0;      // 💞 브릿지 회원 무료 시간
-    state.unlocked = SOLO_OPEN || state.canHost || free;
+    state.unlocked = soloOpen() || state.canHost || free;
     state.role = free ? "bridge_free" : state.role === "bridge_free" ? "none" : state.role;
     state.status = status;
     state.reason = reason || "";
@@ -263,7 +266,7 @@ const Gate = (() => {
   // 💞 무료 시간: 게임 화면을 보고 있는 동안 5초씩 (아케이드 첫 화면·숨긴 탭은 안 셈)
   let freeTimer = null, freeWarned = false;
   function startFreeClock() {
-    if (freeTimer || IS_PORTAL || IS_LOCAL || IS_ROOM_GUEST) return;
+    if (freeTimer || IS_PORTAL || IS_LOCAL || roomLink) return;
     freeTimer = setInterval(() => {
       if (state.role !== "bridge_free") { clearInterval(freeTimer); freeTimer = null; return; }
       if (document.hidden) return;
@@ -275,6 +278,14 @@ const Gate = (() => {
         applyNotAllowed("free_over", `⏰ 오늘 무료 ${FREE_MIN}분을 다 썼어요. 허용을 요청하면 시간 제한 없이 할 수 있어요.`);
       }
     }, 5000);
+  }
+
+  // 방 링크로 열린 화면: 방이 없거나 방에서 나오면 여기까지 — 허용된 기기가 아니면 잠금 (10-30 베니 님 '방 링크 손님은 그 방에서만')
+  function roomLinkEnded() {
+    if (!roomLink) return;
+    roomLink = false;
+    if (state.role === "room_guest") state.role = "none";
+    if (permKnown && !state.allowed && !state.canHost) applyNotAllowed(state.status, state.reason || "방이 없거나 끝났어요. 혼자 하기는 허용된 기기만 돼요.");
   }
 
   // 로그인한 사람이 바뀜 (다른 탭에서 브릿지 로그인 등) → 새 uid 로 처음부터 판단
@@ -307,6 +318,7 @@ const Gate = (() => {
     }
 
     if (state.isAdmin) {
+      permKnown = true;
       state.canApprove = true;
       lsSet("game.gate.admin", "1");
       applyAllowed("admin", 0, state.name);
@@ -320,6 +332,7 @@ const Gate = (() => {
     devWatch = db().ref("game_devices/" + user.uid);
     devWatch.on("value", snap => {
       const d = snap.val();
+      permKnown = true;
       if (state.isAdmin) return;
       if (d && typeof d === "object") {
         const exp = Number(d.expiresAt || 0);
@@ -1055,6 +1068,12 @@ const Gate = (() => {
     if (IS_LOCAL || IS_ROOM_GUEST) {
       state.unlocked = true;
       state.status = "active";
+      if (IS_ROOM_GUEST) {
+        // 먼저 열어 두고 확인은 똑같이: 허용된 기기면 허용으로, 접속 기록도 남게 (11-05 규호 님 71판이 방문자에 안 보였음)
+        checkPermissionsAndWatch().catch(e => console.warn("Gate init error:", e));
+        const noRooms = () => { if (!window.ArenaUI) roomLinkEnded(); };   // 친구방이 없는 화면엔 그 방도 없음
+        if (document.readyState === "complete") noRooms(); else addEventListener("load", noRooms);
+      }
       return;
     }
     const cached = readCachedPass();
@@ -1096,6 +1115,7 @@ const Gate = (() => {
     get state() { return state; },
     OPEN_SOLO,
     onChange(fn) { listeners.add(fn); fn(state); return () => listeners.delete(fn); },
+    roomLinkEnded,
     // 관리 권한 한 곳: 관리자 또는 허용된 기기 (오늘만이면 아직 안 끝났을 때만)
     canManage() {
       if (state.isAdmin || (IS_LOCAL && state.canHost)) return true;

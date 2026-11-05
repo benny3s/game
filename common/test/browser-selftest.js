@@ -185,6 +185,7 @@ async function snakeGateTests(browser) {
   }
   {
     const ctx = await newCtx(browser, { fake: { user: { uid: 'snkRoom', claims: {} } } });
+    await ctx.addInitScript(() => { window.__fs.tree.arena = { snake: { rooms: { ABCD: { meta: { host: 'hst', max: 4, phase: 'lobby', cfg: {} }, players: { hst: { name: '방장' } } } } } }; window.__fs.tree.gp = { players: { pT: { n: '시험' } } }; localStorage.setItem('game.me', JSON.stringify({ pid: 'pT', name: '시험' })); });
     const s = await read(await open(ctx, PROD + '/game/snake/?room=ABCD'));
     ok(s.gate && s.unlocked && !s.lock, `방 링크로 온 손님 → 잠기지 않음 — ${JSON.stringify(s)}`);
     await ctx.close();
@@ -269,6 +270,90 @@ async function presenceTests(browser) {
 }
 
 // ── #4 me.js 이름 고르기 창: 새 이름은 PIN 을 먼저 받고 이름·프로필을 한 번에 → PIN 치다 새로 고침해도 이름이 안 묶임
+// ── 11-05: 규호 님이 하루 71판인데 접속 기록이 없었음 → 주소에 방 코드가 있으면 문지기가 확인 없이 열고 아무것도 안 남겼음
+//   없는 코드로도 잠금이 풀림 (10-30 베니 님 '방 링크 손님은 그 방에서만' 과 어긋남)
+async function roomLinkTests(browser) {
+  console.log('방 코드가 붙은 주소');
+  const ME = { 'game.me': JSON.stringify({ pid: 'pT', name: '시험' }) };
+  const real = ctx => ctx.addInitScript(() => Object.defineProperty(navigator, 'webdriver', { get: () => false }));
+  const seedRoom = () => { window.__fs.tree.arena = { snake: { rooms: { ABCD: { meta: { host: 'hst', max: 4, phase: 'lobby', cfg: {} }, players: { hst: { name: '방장' } } } } } }; };
+  const real0 = real;
+  const realMe = async ctx => { await real0(ctx); await ctx.addInitScript(() => { window.__fs.tree.gp = { players: { pT: { n: '시험' } } }; }); };
+  const read = async p => {
+    await sleep(1800);
+    return p.evaluate(() => {
+      const g = document.getElementById('bennyGateOverlay'), uid = Gate.state.uid, pres = (window.__fs.tree.game_presence || {})[uid];
+      const room = ((window.__fs.tree.arena || {}).snake || { rooms: {} }).rooms.ABCD;
+      return { lock: !!(g && !g.hidden), unlocked: Gate.state.unlocked, allowed: Gate.state.allowed, uid, cur: firebase.app().auth().currentUser.uid, game: pres && pres.game, mode: pres && pres.mode, lastSeen: window.__fs.log.some(x => /lastSeen/.test(x.path)), search: location.search, seats: room ? Object.keys(room.players || {}) : null };
+    });
+  };
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rOk', claims: {} } }, ls: ME });
+    await realMe(ctx);
+    await ctx.addInitScript(() => { window.__fs.tree.game_devices = { rOk: { status: 'active', expiresAt: 0, role: 'friend', name: '시험' } }; });
+    const s = await read(await open(ctx, PROD + '/game/snake/?room=ZZZZ'));
+    ok(s.allowed && !s.lock && s.game === 'snake' && s.mode === 'allowed' && s.lastSeen && s.search === '', `허용된 기기가 끝난 방 주소로 와도 접속 기록 · 최근 접속이 남고 잠기지 않음 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rNo', claims: {} } }, ls: ME });
+    await realMe(ctx);
+    const s = await read(await open(ctx, PROD + '/game/snake/?room=ZZZZ'));
+    ok(s.lock && !s.unlocked && s.search === '', `허용 안 된 기기 + 없는 방 코드 → 잠금 창 — ${JSON.stringify(s)}`);
+    ok(s.game === 'snake' && s.mode === 'guest', `그 손님도 접속 기록에 남음 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rIn', claims: {} } }, ls: ME });
+    await realMe(ctx);
+    await ctx.addInitScript(seedRoom);
+    const p = await open(ctx, PROD + '/game/snake/?room=ABCD');
+    const s = await read(p);
+    ok(!s.lock && s.unlocked && s.seats && s.seats.includes('rIn'), `허용 안 된 기기 + 있는 방 → 방 안에서는 안 잠김 — ${JSON.stringify(s)}`);
+    await p.evaluate(() => ArenaUI.leave());
+    const t = await read(p);
+    ok(t.lock && !t.unlocked, `방에서 나오면 잠금 창 — ${JSON.stringify(t)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: null }, ls: ME });
+    await realMe(ctx);
+    await ctx.addInitScript(seedRoom);
+    const s = await read(await open(ctx, PROD + '/game/snake/?room=ABCD'));
+    ok(s.uid && s.uid === s.cur && s.seats && s.seats.includes(s.cur) && s.seats.length === 2, `처음 온 손님 → 문지기와 방이 같은 임시 계정 하나 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rNm', claims: {} } } });
+    await real0(ctx);
+    await ctx.addInitScript(seedRoom);
+    const p = await open(ctx, PROD + '/game/snake/?room=ABCD');
+    await sleep(1000);
+    await p.evaluate(() => document.querySelector('.gme-x').click());
+    const s = await read(p);
+    ok(s.lock && !s.unlocked, `이름을 안 정하고 창을 닫으면 잠금 창 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rPg', claims: {} } } });
+    await real(ctx);
+    const p = await open(ctx, PROD + '/game/gtt/?room=ABCD');
+    await sleep(1200);
+    const lock = await p.evaluate(() => { const g = document.getElementById('bennyGateOverlay'); return !!(g && !g.hidden) && !Gate.state.unlocked; });
+    ok(lock, '방이 없는 화면(친구방 없는 페이지)은 방 코드를 붙여도 잠금');
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rApp', claims: {} } } });
+    await ctx.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => false }); Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Claude/4.4212.0 Chrome/152.0.7977.167 Safari/537.36 MSIX' }); });
+    const p = await open(ctx, PROD + '/game/');
+    await sleep(1000);
+    const left = await p.evaluate(() => window.__fs.log.map(x => x.path).filter(x => /game_presence|game_plays/.test(x)));
+    ok(!left.length, `Claude 앱 안 브라우저는 방문 기록을 안 남김 (11-05 22:57 손님) — ${left.join(',')}`);
+    await ctx.close();
+  }
+}
+
 async function mePickTests(browser) {
   console.log('이름 고르기 me.js (새 이름)');
   const ctx = await newCtx(browser, { fake: { rules: 'gp', user: { uid: 'devM', claims: {} } } });
@@ -294,7 +379,7 @@ async function mePickTests(browser) {
   const t0 = Date.now();
   const pw = require(PW);
   const browser = await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--mute-audio'] });
-  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, mePickTests]) {
+  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, roomLinkTests, mePickTests]) {
     try { await t(browser); } catch (e) { fail++; console.log('  ✘ FAIL: 시험 도구 예외 ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | ')); }
   }
   await browser.close();

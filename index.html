@@ -661,6 +661,12 @@ button { font: inherit; cursor: pointer; }
 .act-g span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .act-g i { display: block; height: 8px; min-width: 2px; border-radius: 0 4px 4px 0; background: #3d76ad; }
 .act-g b { font: 600 12px/1 var(--mono); text-align: right; }
+.act-who { display: grid; gap: 5px; margin-top: 12px; }
+.act-who h5 { margin: 0 0 1px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.act-w { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.act-w span { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.act-w small { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11px; }
+.act-w b { flex: none; font: 600 12px/1 var(--mono); }
 .brief-l { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
 .brief-l li { font-size: 12.5px; line-height: 1.45; }
 .quick-strip { display: flex; gap: 10px; margin: 0 0 14px; }
@@ -821,12 +827,12 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=19"></script>
+<script src="common/gate.js?v=20"></script>
 <script src="common/mistakes.js?v=2"></script>
-<script src="common/me.js?v=14"></script>
+<script src="common/me.js?v=15"></script>
 <script src="common/rank.js?v=10"></script>
 <script src="common/arena-mock.js?v=9"></script>
-<script src="common/arena.js?v=13"></script>
+<script src="common/arena.js?v=15"></script>
 <script src="common/bank.js?v=14"></script>
 <script>
 (() => {
@@ -1424,13 +1430,14 @@ button { font: inherit; cursor: pointer; }
     return rows[0] || null;
   }
   function sumHome(raw) {
-    const tot = raw.days.map(() => 0), byGame = {}, todayG = {}, byPid = {}, pidName = {};
+    const tot = raw.days.map(() => 0), byGame = {}, todayG = {}, byPid = {}, pidName = {}, who = raw.days.map(() => ({}));
     raw.perDay.forEach((dobj, i) => Object.entries(dobj || {}).forEach(([g, pm]) => Object.entries(pm && typeof pm === "object" ? pm : {}).forEach(([pid, v]) => {
       const n = nm(v); tot[i] += n; byGame[g] = (byGame[g] || 0) + n; byPid[pid] = (byPid[pid] || 0) + n; if (i === 6) todayG[g] = (todayG[g] || 0) + n;
+      if (n > 0) { const w = who[i][pid] = who[i][pid] || { n: 0, g: {} }; w.n += n; w.g[g] = n; }
     })));
     Object.values(raw.rank || {}).forEach(pm => Object.entries(pm || {}).forEach(([pid, r]) => { if (r && r.name) pidName[pid] = r.name; }));
     const top = o => Object.entries(o).filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-    return { days: raw.days, tot, today: tot[6], yest: tot[5], week: tot.reduce((a, b) => a + b, 0), games: top(byGame), todayGames: top(todayG), pids: top(byPid), pidName };
+    return { days: raw.days, tot, today: tot[6], yest: tot[5], week: tot.reduce((a, b) => a + b, 0), games: top(byGame), todayGames: top(todayG), pids: top(byPid), pidName, who };
   }
   function drawActivity(sm) {
     const n = $("pnlActN"), b = $("pnlActB");
@@ -1442,9 +1449,24 @@ button { font: inherit; cursor: pointer; }
     b.innerHTML = `<div class="act-head"><div class="act-big"><b>${sm.today}</b>판 오늘</div><div class="act-sub">어제 <b>${sm.yest}</b>판<br>하루 평균 <b>${avg}</b>판</div></div>
       <div class="act-plot">${sm.tot.map((v, i) => `<button type="button" class="${i === 6 ? "today lab" : i === peak && v ? "lab" : ""}" aria-label="${+sm.days[i].slice(5, 7)}월 ${+sm.days[i].slice(8)}일 ${v}판" title="${+sm.days[i].slice(8)}일 ${v}판"><em>${v}</em><i style="height:${Math.round(v / mx * H)}px"></i></button>`).join("")}${avg ? `<span class="act-avg" style="bottom:${Math.round(avg / mx * H)}px"></span>` : ""}</div>
       <div class="act-days">${sm.days.map((x, i) => i === 6 ? '<span class="today">오늘</span>' : `<span>${wday(x)}</span>`).join("")}</div>
+      ${isAdm() ? '<div class="act-who" id="actWho"></div>' : ""}
       ${games.length ? `<div class="act-games"><h5>이번 주 많이 한 게임</h5>${games.map(([g, v]) => `<div class="act-g"><span>${escH(gName(g))}</span><div><i style="width:${Math.round(v / gmx * 100)}%"></i></div><b>${v}</b></div>`).join("")}</div>` : `<p class="adm-soft">아직 기록이 없어요</p>`}`;
+    actSm = sm; drawWho();
   }
-  $("pnlActB").onclick = e => { const c = e.target.closest(".act-plot button"); if (c && !c.classList.contains("today")) c.classList.toggle("lab"); };
+  // 11-05 베니 님 '오늘 71판 누가 했는지': 관리자 화면에만 사람별 판 수 (막대를 누르면 그 날, 판마다의 시각은 기록에 없음)
+  let actSm = null, whoDay = 6;
+  function drawWho() {
+    const el = $("actWho"); if (!el || !actSm) return;
+    const rows = Object.entries(actSm.who[whoDay]).sort((a, b) => b[1].n - a[1].n), x = actSm.days[whoDay];
+    el.innerHTML = `<h5>${whoDay === 6 ? "오늘" : `${+x.slice(5, 7)}월 ${+x.slice(8)}일`} 누가 했나요</h5>` + (rows.length
+      ? rows.map(([pid, w]) => `<div class="act-w"><span>${escH(actSm.pidName[pid] || "?")}</span><small>${Object.entries(w.g).sort((a, b) => b[1] - a[1]).map(([g, v]) => `${escH(gName(g))} ${v}`).join(", ")}</small><b>${w.n}판</b></div>`).join("")
+      : `<p class="adm-soft">이 날은 아무도 안 했어요</p>`);
+  }
+  $("pnlActB").onclick = e => {
+    const c = e.target.closest(".act-plot button"); if (!c) return;
+    if (!c.classList.contains("today")) c.classList.toggle("lab");
+    whoDay = [...c.parentNode.querySelectorAll("button")].indexOf(c); drawWho();
+  };
   // 🤖 AI 브리핑: 위 숫자들로 만든 규칙 문장 (3~5줄). 연승은 기록에 없어서 '승률 1위'로 대신
   function drawBrief(sm, raw, live) {
     const el = $("pnlBriefB"), L = [];

@@ -8,7 +8,7 @@ U.main(async T => {
     const days = Array.from({ length: 7 }, (_, i) => kst(Date.now() - (6 - i) * 864e5));
     const tot = [48, 62, 258, 110, 120, 219, 100];
     const perDay = tot.map(n => ({ gostop: { a: Math.round(n * .67) }, nyang: { a: Math.round(n * .3) }, onecard: { a: n - Math.round(n * .67) - Math.round(n * .3) } }));
-    window.__HOME_FIXTURE = { stats: { days, rank: {}, perDay }, presence: {} };
+    window.__HOME_FIXTURE = { stats: { days, rank: { gostop: { a: { name: '규호' } } }, perDay }, presence: {} };
   });
   const p = await T.open('index.html');
   T.ok(await T.waitFor(p, () => !!document.querySelector('.act-plot')), '활발한 정도 그래프가 그려짐');
@@ -37,6 +37,20 @@ U.main(async T => {
   // 폰: 다른 날 막대를 누르면 그 날 숫자가 뜸
   await p.locator('.act-plot button').nth(1).tap();
   T.ok(await p.locator('.act-plot button').nth(1).locator('em').evaluate(e => getComputedStyle(e).visibility === 'visible'), '다른 날 막대를 누르면 숫자가 보임');
+
+  // 11-05 베니 님 '오늘 71판 누가 했는지': 관리자에게만 — 막대를 누르면 그 날
+  const q = await T.open('index.html', 'nohost');   // 시험 도구에선 ?mock 만 관리자, nohost = 관리자 아닌 기기
+  await T.waitFor(q, () => !!document.querySelector('.act-plot'));
+  T.ok(await q.evaluate(() => !document.querySelector('.act-who')), '관리자가 아니면 누가 했는지 안 보임');
+  await p.bringToFront();
+  T.ok(await T.waitFor(p, () => !!document.querySelector('.act-who .act-w')), '관리자에게는 누가 했는지 보임');
+  await p.locator('.act-plot button').nth(6).tap();
+  const who = () => p.evaluate(() => ({ h: document.querySelector('.act-who h5').textContent, rows: [...document.querySelectorAll('.act-w')].map(r => [r.querySelector('span').textContent, r.querySelector('small').textContent, r.querySelector('b').textContent]), over: document.documentElement.scrollWidth > innerWidth }));
+  const w1 = await who();
+  T.ok(/오늘 누가/.test(w1.h) && w1.rows.length === 1 && w1.rows[0][0] === '규호' && w1.rows[0][2] === '100판' && /맞고 67, 냥도쿠 30/.test(w1.rows[0][1]) && !w1.over, '오늘 누가 몇 판 · 게임별 (' + JSON.stringify(w1) + ')');
+  await p.locator('.act-plot button').nth(2).tap();
+  const w2 = await who();
+  T.ok(!/오늘/.test(w2.h) && /누가/.test(w2.h) && w2.rows[0][2] === '258판', '다른 날 막대를 누르면 그 날 사람 (' + JSON.stringify(w2) + ')');
 
   // 은행: 모두 0원 시작, 손으로 고치는 칸이 없음
   const b = await p.evaluate(async () => {

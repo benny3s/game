@@ -248,7 +248,7 @@
 
   const show = () => { chatDock(null); style(); if (!ov) { ov = document.createElement("div"); ov.className = "arn-ov"; ov.innerHTML = '<div class="arn-box"></div>'; document.body.appendChild(ov); box = ov.firstChild; } ov.hidden = false; };
   const hide = () => { chatDock(null); clearList(); if (ov) ov.hidden = true; };
-  const setUrlRoom = code => { try { const u = new URL(location.href); if (!code || u.searchParams.get("room") !== code) u.searchParams.delete("rk"); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} };
+  const setUrlRoom = code => { try { const u = new URL(location.href); if (!code || u.searchParams.get("room") !== code) u.searchParams.delete("rk"); if (code) u.searchParams.set("room", code); else u.searchParams.delete("room"); history.replaceState(null, "", u.pathname + (u.search || "") + u.hash); } catch (e) {} if (!code && window.Gate && Gate.roomLinkEnded) Gate.roomLinkEnded(); };
 
   async function myName() {
     if (window.GME && !Arena.mock) {
@@ -576,7 +576,7 @@
 
   function onClick(e) {
     const t = e.target.closest("button"); if (!t || !ov || !ov.contains(t)) return;
-    if (t.matches("[data-x]")) { if (box.querySelector("[data-pw]")) setUrlRoom(null); hide(); opt.onLeave && opt.onLeave(""); }
+    if (t.matches("[data-x]")) { if (!net) setUrlRoom(null); hide(); opt.onLeave && opt.onLeave(""); }
     else if (t.matches("[data-rename]")) { if (ov) ov.hidden = true; GME.pick(Arena.db(), { canClose: true }).then(m => { if (m) me = m; home(); }); }
     else if (t.matches("[data-host]")) {
       const nt = box.querySelector("[data-ntitle]"), np = box.querySelector("[data-npw]");
@@ -605,7 +605,7 @@
     try {
       await Arena.init();
       const picked = await myName();
-      if (!picked) { hide(); opt.onLeave && opt.onLeave(""); return; }
+      if (!picked) { setUrlRoom(null); hide(); opt.onLeave && opt.onLeave(""); return; }
     } catch (e) {
       show();
       box.innerHTML = `<button class="arn-x" data-x>✕</button><h2>연결하지 못했어요</h2><p class="arn-soft">인터넷 연결을 확인하고 다시 해 주세요. (${esc(e.message)})</p>`;

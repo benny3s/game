@@ -104,7 +104,7 @@ const Arena = (() => {
       await appCheck(app, load);
       loadIce();                                                              // 방에 들어가기 전에 끝나 있으면 TURN 도 씀
       user = await new Promise(ok => { const t = setTimeout(() => ok(null), 8000); const off = app.auth().onAuthStateChanged(u => { clearTimeout(t); off(); ok(u); }); });
-      if (!user) user = (await app.auth().signInAnonymously()).user;
+      if (!user) user = (await (GUEST ? app.auth().signInAnonymously() : window.__anonSignIn || (window.__anonSignIn = app.auth().signInAnonymously().catch(e => { window.__anonSignIn = null; throw e; })))).user;   // gate.js 와 같은 때여도 임시 계정은 하나
       watchOffset();
       await refreshPerms();
       return app;
