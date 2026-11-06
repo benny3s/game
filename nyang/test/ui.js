@@ -481,7 +481,7 @@ U.main(async T => {
     await U.waitFor(B, A.ready);
     await B.evaluate(() => { for (const k of ['nyang.bday', 'nyang.bdayTry', 'nyang.bbBest']) localStorage.removeItem(k); localStorage.setItem('nyang.kind', '"q"'); document.querySelector('#soloMode [data-v="one"]').click(); });
     const k0 = await B.evaluate(() => ({ seg: [...document.querySelectorAll('#kindSeg .btn')].map(b => b.textContent.trim()), vis: !document.getElementById('kindSeg').hidden }));
-    T.ok(k0.vis && k0.seg.length === 2 && /냥도쿠/.test(k0.seg[0]) && /반반/.test(k0.seg[1]), '⑪ 한 판: 🐱 냥도쿠 · 🌗 반반 고르기 (' + k0.seg.join(' · ') + ')');
+    T.ok(k0.vis && k0.seg.length >= 2 && /냥도쿠/.test(k0.seg[0]) && /반반/.test(k0.seg[1]), '⑪ 한 판: 🐱 냥도쿠 · 🌗 반반 고르기 (' + k0.seg.join(' · ') + ')');
     await B.evaluate(() => document.querySelector('#kindSeg [data-v="b"]').click());
     const k1 = await B.evaluate(() => ({ desc: [...document.querySelectorAll('#tiers .tier span:not(.em)')].map(s => s.textContent).join(' '), hb: !document.getElementById('howtoB').hidden, hq: document.getElementById('howto').hidden, fit: document.documentElement.scrollWidth <= innerWidth }));
     T.ok(/6×6/.test(k1.desc) && /8×8/.test(k1.desc) && k1.hb && k1.hq && k1.fit, '⑪ 반반 고르면 난이도 글이 6×6·8×8, 반반 하는 법 · 폰 폭 그대로');
@@ -524,6 +524,121 @@ U.main(async T => {
     T.ok(await B.evaluate(() => /✅/.test((document.querySelector('.bbcard') || {}).textContent || '')), '⑪ 카드에 ✅ 오늘 기록');
     await B.evaluate(() => { for (const k of ['nyang.bday', 'nyang.bdayTry', 'nyang.bbBest', 'nyang.kind', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
     await B.close();
+  }
+
+  // ── ⑫ 11-06 '와이프가 좋아하는 것' → 👨‍👩 이번 주 가족 목표 (같이 채움) · 📅 이번 달 달력 (지난 판으로 채우기 · 한 달 다 채우면 🏆)
+  {
+    const F = await T.open('nyang/');
+    await U.waitFor(F, A.ready);
+    await F.evaluate(() => { localStorage.setItem('game.me', JSON.stringify({ pid: 'pA', name: '지밍비' })); for (const k of ['nyang.day', 'nyang.dayArc', 'nyang.monthTrophy', 'nyang.famDone']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"day"'); });
+    await F.reload({ waitUntil: 'load' }); await U.waitFor(F, A.ready);
+    const fam = await F.evaluate(async () => {
+      __ny.setRk({ rec: {}, names: { pA: '지밍비', pB: '베니' } });
+      await __ny.setFam({ cur: { pA: 120, pB: 30 }, last: 200, week: '2026-11-02' });
+      const e = document.querySelector('#soloProg .pc-fam'); return e ? e.textContent.replace(/\s+/g, ' ') : '';
+    });
+    T.ok(/이번 주 가족 목표/.test(fam) && /같이 150\/220판/.test(fam) && /지밍비 120 · 베니 30/.test(fam), '⑫ 가족 목표: 지난주 200판 × 1.1 = 220 · 같이 150 · 사람별: ' + fam);
+    const fam2 = await F.evaluate(async () => { await __ny.setFam({ cur: { pA: 200, pB: 40 }, last: 200, week: '2026-11-02' }); const e = document.querySelector('#soloProg .pc-fam'); return { t: e ? e.textContent : '', done: JSON.parse(localStorage.getItem('nyang.famDone') || '{}') }; });
+    T.ok(/달성/.test(fam2.t) && fam2.done['2026-11-02'] === 1, '⑫ 넘기면 🎉 달성 · 그 주 도장');
+    // 📅 달력: 오늘 · 푼 날 🐱 · 미래는 못 누름
+    await F.evaluate(() => { const k = __ny.kstDay(); localStorage.setItem('nyang.day', JSON.stringify({ [k]: { s: 60, m: 0, h: 0, k: 1 } })); document.querySelector('#soloMode [data-v="day"]').click(); });
+    T.ok(await F.evaluate(() => /달력/.test((document.getElementById('dayCal') || {}).textContent || '')), '⑫ 오늘 카드에 📅 달력 단추');
+    await F.click('#dayCal');
+    const cal = await F.evaluate(() => { const ds = [...document.querySelectorAll('.cl-d')], k = __ny.kstDay(), last = new Date(Date.UTC(+k.slice(0, 4), +k.slice(5, 7), 0)).getUTCDate(); return { n: ds.length, last, today: ds.filter(b => b.classList.contains('today')).length, on: ds.filter(b => b.classList.contains('on')).length, fut: ds.filter(b => b.disabled).length, futWant: last - +k.slice(8) }; });
+    T.ok(cal.n === cal.last && cal.today === 1 && cal.on === 1 && cal.fut === cal.futWant, '⑫ 달력: 이번 달 날짜 모두 · 오늘 표시 · 푼 날 🐱 · 앞날은 못 누름 ' + JSON.stringify(cal));
+    await F.evaluate(() => __qa.clickText(/^닫기$/));
+    // 지난달을 하루만 빼고 채워 두고 → 달력에서 마지막 날 누르기 → 지난 판 → 다 풀면 🏆 10월 개근 (연속 일수엔 안 셈)
+    await F.evaluate(() => { const o = JSON.parse(localStorage.getItem('nyang.day')); for (let i = 1; i <= 30; i++) o['2026-10-' + String(i).padStart(2, '0')] = { s: 50, m: 0, h: 0, k: 1 }; localStorage.setItem('nyang.day', JSON.stringify(o)); __ny.openCalendar('2026-10'); });
+    T.ok(await F.evaluate(() => /30\/31일/.test((document.querySelector('.cl-nav') || {}).textContent || '')), '⑫ 지난달 달력 30/31일');
+    await F.evaluate(() => document.querySelector('.cl-d[data-k="2026-10-31"]').click());
+    T.ok(!!(await U.waitFor(F, () => window.__ny.G && !document.getElementById('play').hidden && /10\/31 퍼즐/.test(document.getElementById('stLabel').textContent), null, 4000)), '⑫ 지난 날을 누르면 그날 판 (위 줄 10/31 퍼즐)');
+    const same = await F.evaluate(() => { const d = __ny.dailyInfo('2026-10-31'), p = __ny.NY.variant(window.__nyBank[d.tier][d.idx], d.vs); return JSON.stringify(__ny.G.ans) === JSON.stringify(__ny.NY.decode(p).ans); });
+    T.ok(same, '⑫ 그날 오늘의 퍼즐과 같은 판');
+    await solve(F);
+    T.ok(!!(await U.waitFor(F, () => /10\/31 퍼즐 성공/.test(document.getElementById('resTitle').textContent), null, 4000)), '⑫ "10/31 퍼즐 성공!"');
+    const tr = await F.evaluate(() => ({ body: document.getElementById('resBody').textContent, tr: JSON.parse(localStorage.getItem('nyang.monthTrophy') || '{}'), arc: JSON.parse(localStorage.getItem('nyang.dayArc') || '{}'), streak: __ny.streakOf(__ny.myDays()) }));
+    T.ok(/10월 개근/.test(tr.body) && tr.tr['2026-10'] && tr.arc['2026-10-31'] && tr.streak === 1, '⑫ 🏆 10월 개근 · 지난 판은 달력에만 (연속 일수는 그대로 1) ' + JSON.stringify({ tr: !!tr.tr['2026-10'], arc: !!tr.arc['2026-10-31'], streak: tr.streak }));
+    await F.evaluate(() => __qa.clickText(/^닫기$/));
+    await F.evaluate(() => { for (const k of ['nyang.day', 'nyang.dayArc', 'nyang.monthTrophy', 'nyang.famDone', 'game.me', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await F.close();
+  }
+
+  // ── ⑬ 11-06 베니 님 '퍼즐 같은 거' → 🐾 냥산책 (LinkedIn Zip 같은 한붓그리기: 1 → 2 → … 순서대로 모든 칸 한 번씩, 끌어서 그림)
+  {
+    const Z = await T.open('nyang/');
+    await U.waitFor(Z, A.ready);
+    await Z.evaluate(() => { for (const k of ['nyang.zday', 'nyang.zdayTry', 'nyang.zzBest']) localStorage.removeItem(k); document.querySelector('#soloMode [data-v="one"]').click(); });
+    const segs = await Z.evaluate(() => [...document.querySelectorAll('#kindSeg .btn')].map(b => b.textContent.trim()));
+    T.ok(segs.length === 3 && /산책/.test(segs[2]), '⑬ 한 판 고르기에 🐾 산책 (' + segs.join(' · ') + ')');
+    await Z.evaluate(() => document.querySelector('#kindSeg [data-v="z"]').click());
+    const k1 = await Z.evaluate(() => ({ desc: [...document.querySelectorAll('#tiers .tier span:not(.em)')].map(s => s.textContent).join(' '), hz: !document.getElementById('howtoZ').hidden, fit: document.documentElement.scrollWidth <= innerWidth }));
+    T.ok(/5×5/.test(k1.desc) && /7×7/.test(k1.desc) && k1.hz && k1.fit, '⑬ 산책 난이도 글 5×5 … 7×7 · 하는 법 · 폰 폭 그대로');
+    await Z.evaluate(() => document.querySelector('#tiers .tier[data-t="easy"]').click());
+    await Z.click('#startBtn');
+    T.ok(!!(await U.waitFor(Z, () => window.NYZUI && NYZUI.pz && !document.getElementById('zplay').hidden && document.getElementById('home').hidden, null, 4000)), '⑬ 시작하면 산책 판');
+    const z0 = await Z.evaluate(() => ({ N: NYZUI.pz.N, cells: document.querySelectorAll('#zboard .zc').length, nums: document.querySelectorAll('#zboard .zn').length, K: NYZUI.pz.K }));
+    T.ok(z0.N === 5 && z0.cells === 25 && z0.nums === z0.K && z0.K >= 2, '⑬ 초급 5×5 · 번호 ' + z0.K + '개');
+    // 진짜 마우스로 끌기: 1번에서 시작해 답 길을 따라 세 칸
+    const center = k => Z.evaluate(k => { const r = document.querySelector(`#zboard .zc[data-k="${k}"]`).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }, k);
+    const drawPath = async (cells, release = true) => { let [x, y] = await center(cells[0]); await Z.mouse.move(x, y); await Z.mouse.down(); for (const k of cells.slice(1)) { [x, y] = await center(k); await Z.mouse.move(x, y, { steps: 3 }); } if (release) await Z.mouse.up(); };
+    const sol = await Z.evaluate(() => NYZUI.pz.sol);
+    await drawPath(sol.slice(0, 4), false);
+    const p1 = await Z.evaluate(() => ({ len: NYZUI.path.length, head: (document.querySelector('#zboard .zc.head .zh') || {}).textContent }));
+    T.ok(p1.len === 4 && p1.head === '🐈', '⑬ 끌면 길이 이어지고 머리에 🐈 (' + JSON.stringify(p1) + ')');
+    { const [x, y] = await center(sol[2]); await Z.mouse.move(x, y, { steps: 3 }); await Z.mouse.up(); }
+    T.ok(await Z.evaluate(() => NYZUI.path.length === 3), '⑬ 지나온 칸으로 되돌아가면 거기까지 지워짐');
+    // 💡 힌트: 처음부터 지운 뒤 → '1번 칸에서 시작' → 적용하면 1번 칸
+    await Z.click('#zClear'); await Z.click('#zHintBtn');
+    const h = await Z.evaluate(() => document.getElementById('zHintText').textContent);
+    await Z.click('#zHintApply');
+    T.ok(/1번/.test(h) && (await Z.evaluate(() => NYZUI.path.length === 1 && NYZUI.path[0] === NYZUI.pz.sol[0])), '⑬ 💡 힌트: ' + h);
+    // 끝까지 그리면 성공
+    await Z.click('#zClear');
+    await drawPath(sol);
+    T.ok(!!(await U.waitFor(Z, () => /산책 끝/.test(document.getElementById('resTitle').textContent) && !document.getElementById('resBox').hidden, null, 5000)), '⑬ 모든 칸을 순서대로 지나면 "산책 끝!"');
+    const r1 = await Z.evaluate(() => document.getElementById('resBody').textContent);
+    T.ok(/5×5/.test(r1) && /힌트 1번/.test(r1), '⑬ 결과: 판 크기 · 힌트 수: ' + r1.replace(/\s+/g, ' ').slice(0, 70));
+    await Z.evaluate(() => __qa.clickText(/난이도 고르기/));
+    // 📅 오늘 아래 '오늘의 산책': 날짜 씨앗 · 처음 성공만 기록
+    await Z.evaluate(() => document.querySelector('#soloMode [data-v="day"]').click());
+    T.ok(await Z.evaluate(() => !!document.getElementById('dayZZ')), '⑬ 📅 오늘에 🐾 오늘의 산책 카드');
+    await Z.click('#dayZZ');
+    await U.waitFor(Z, () => window.NYZUI && !document.getElementById('zplay').hidden, null, 4000);
+    const dz = await Z.evaluate(() => ({ seed: NYZUI.pz.seed, want: __ny.dailyInfo().zseed, sol: NYZUI.pz.sol }));
+    T.ok(dz.seed === dz.want, '⑬ 오늘의 산책 = 날짜 씨앗 (누구나 같은 판)');
+    await Z.evaluate(sol => { for (const k of sol) NYZUI.step(k, true); }, dz.sol);
+    T.ok(!!(await U.waitFor(Z, () => /오늘의 산책 성공/.test(document.getElementById('resTitle').textContent), null, 5000)), '⑬ "오늘의 산책 성공!"');
+    T.ok(await Z.evaluate(() => { const v = JSON.parse(localStorage.getItem('nyang.zday') || '{}')[__ny.kstDay()]; return !!v && typeof v.s === 'number'; }), '⑬ 오늘의 산책 기록');
+    await Z.evaluate(() => __qa.clickText(/^닫기$/));
+    await Z.evaluate(() => { for (const k of ['nyang.zday', 'nyang.zdayTry', 'nyang.zzBest', 'nyang.kind', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await Z.close();
+  }
+
+  // ── ⑭ 11-06 '게임 중간중간' → 🎁 단계 지도 5단계마다 보너스 판 (🌗 반반 · 🐾 산책 번갈아, 깬 단계만 열림, 진행은 안 막음)
+  {
+    const M = await T.open('nyang/');
+    await U.waitFor(M, A.ready);
+    await M.evaluate(() => { const o = {}; for (let k = 1; k <= 12; k++) o[k] = 3; localStorage.setItem('nyang.stageStars', JSON.stringify(o)); localStorage.removeItem('nyang.bonus'); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await M.reload({ waitUntil: 'load' }); await U.waitFor(M, A.ready);
+    await U.waitFor(M, () => document.querySelectorAll('#stageBox .bonus').length > 0, null, 4000);
+    const b0 = await M.evaluate(() => [...document.querySelectorAll('#stageBox .bonus')].map(b => ({ k: +b.dataset.bk, t: b.dataset.bt, lock: b.classList.contains('lock') })));
+    const at = k => b0.find(x => x.k === k);
+    T.ok(at(10) && at(10).t === 'z' && !at(10).lock && (!at(15) || at(15).lock), '⑭ 지도에 보너스: 10단계 🐾 열림 · 15단계 잠김 ' + JSON.stringify(b0));
+    const fit = await M.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('#stageBox .stage-row')].every(r => r.scrollWidth <= r.clientWidth + 2));
+    T.ok(fit, '⑭ 보너스 단추가 단계 줄에 들어감 (가로 넘침 없음)');
+    if (at(15)) { await M.evaluate(() => document.querySelector('#stageBox .bonus[data-bk="15"]').click()); T.ok(await M.evaluate(() => !document.getElementById('home').hidden), '⑭ 잠긴 보너스는 안 열림'); }
+    await M.evaluate(() => document.querySelector('#stageBox .bonus[data-bk="10"]').click());
+    T.ok(!!(await U.waitFor(M, () => window.NYZUI && !document.getElementById('zplay').hidden && /10단계 보너스/.test(document.getElementById('zLabel').textContent), null, 4000)), '⑭ 10단계 보너스 = 🐾 산책 판');
+    const seed1 = await M.evaluate(() => NYZUI.pz.seed);
+    await M.evaluate(() => { for (const k of NYZUI.pz.sol) NYZUI.step(k, true); });
+    T.ok(!!(await U.waitFor(M, () => /10단계 보너스 성공/.test(document.getElementById('resTitle').textContent), null, 5000)), '⑭ "🎁 10단계 보너스 성공!"');
+    const st = await M.evaluate(() => JSON.parse(localStorage.getItem('nyang.bonus') || '{}').z10);
+    T.ok(st >= 1, '⑭ 보너스 별 저장 ' + st);
+    await M.evaluate(() => __qa.clickText(/다시/));
+    T.ok(!!(await U.waitFor(M, s => window.NYZUI && !document.getElementById('zplay').hidden && NYZUI.pz.seed === s, seed1, 4000)), '⑭ 다시 하면 같은 판 (단계마다 정해진 판)');
+    await M.evaluate(() => { NYZUI.close(); document.getElementById('resBox').hidden = true; });
+    await M.evaluate(() => { for (const k of ['nyang.stageStars', 'nyang.bonus', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await M.close();
   }
 
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');

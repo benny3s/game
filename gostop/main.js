@@ -90,6 +90,54 @@
     { name: '각성 아귀', title: '👑 진짜 타짜' },
   ];
   const GNT_WIN = 3;
+  // 🎯 오늘의 미션 (11-06 · 벤치마킹: 한게임 일일 챌린지 · Hearthstone 일일 퀘스트 — 판 수보다 '여러 가지'를 해 보게)
+  //   하루(한국 0시) 3개 = 판 수 하나 + 기술 둘, 날짜로 정해져 누구나 같은 미션. 깨면 판돈 냥(놀이 돈, 은행 장부와 따로). 창은 안 띄우고 결과 줄 · 첫 화면 카드에만
+  const MIS = {
+    play10:  { g: 'n', t: '10판 치기', need: 10, pay: 300, ok: c => true },
+    win5:    { g: 'n', t: '5판 이기기', need: 5, pay: 500, ok: c => c.won },
+    nocoach: { g: 'n', t: '선생님 안 켜고 3판 이기기', need: 3, pay: 600, ok: c => c.won && !c.coach },
+    go3:     { g: 's', t: '3고 이상으로 이기기', need: 1, pay: 800, ok: c => c.won && c.r.go >= 3 },
+    agwi:    { g: 's', t: '아귀 · 각성 아귀 이기기', need: 1, pay: 800, ok: c => c.won && /아귀/.test(c.foe || '') },
+    pibak:   { g: 's', t: '피박 씌우고 이기기', need: 2, pay: 600, ok: c => c.won && c.loseM('피박') },
+    gwangbak: { g: 's', t: '광박 씌우고 이기기', need: 1, pay: 600, ok: c => c.won && c.loseM('광박') },
+    gobak:   { g: 's', t: '고한 상대를 잡기 (고박)', need: 1, pay: 700, ok: c => c.won && c.loseM('고박') },
+    shake:   { g: 's', t: '흔들기 · 폭탄 하고 이기기', need: 1, pay: 500, ok: c => c.won && c.r.mults.some(m => /흔들기/.test(m.k)) },
+    godori:  { g: 's', t: '고도리로 이기기', need: 1, pay: 500, ok: c => c.won && c.item(/^고도리$/) },
+    dan:     { g: 's', t: '홍단 · 청단 · 초단으로 이기기', need: 2, pay: 500, ok: c => c.won && c.item(/^(홍|청|초)단$/) },
+    gwang:   { g: 's', t: '광 3장 이상으로 이기기', need: 1, pay: 500, ok: c => c.won && c.item(/광$/) },
+    big:     { g: 's', t: '한 판에 30점 이상 따기', need: 1, pay: 800, ok: c => c.won && c.r.points >= 30 },
+  };
+  const kstDay = (t = Date.now()) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
+  let misForce = null;                                                       // 시험: 오늘 미션을 정해 둠
+  function misToday(day = kstDay()) {                                       // 날짜 → 미션 3개 (판 수 1 + 기술 2, 같은 날이면 늘 같음)
+    if (misForce) return misForce.slice();
+    const n = Math.round(Date.parse(day + 'T00:00:00Z') / 86400e3), R = G.makeRng((Math.imul(n + 2027, 2654435761) >>> 0) || 1);
+    const ids = g => Object.keys(MIS).filter(k => MIS[k].g === g), pick = (a, k) => { a = a.slice(); const out = []; while (out.length < k && a.length) out.push(a.splice(Math.floor(R() * a.length), 1)[0]); return out; };
+    return pick(ids('n'), 1).concat(pick(ids('s'), 2));
+  }
+  function misState() { const d = kstDay(), m = C.store(KEY + 'mis', {}); return m.day === d ? Object.assign({ prog: {}, done: {} }, m) : { day: d, prog: {}, done: {} }; }
+  // 판 끝: 맞는 미션 칸 올리기 → 결과 줄 (다 채우면 냥) · 혼자 · 친구랑 모두 (내가 친 판만, 구경 · 한 기기 · 다시 보기 · 연습은 안 셈)
+  function missionAfter(ses, r) {
+    if (!ses || ses.cfg.watch || ses.hot || ses.isDrill || ses.cfg.replay || r.kind === 'nagari' || r.winner < 0 || !(meSeat(ses) >= 0)) return '';
+    const me = meSeat(ses), m = misState(), won = r.winner === me, f = soloFoe(ses);
+    const c = { r, won, coach: !!(ses.coachOn || ses.coachEver), foe: f ? f.name : null, loseM: k => (r.per || []).some(l => (l.mults || []).some(x => x.k === k)), item: re => (r.items || []).some(it => re.test(it.k)) };
+    const lines = [];
+    for (const id of misToday(m.day)) {
+      const x = MIS[id]; if (m.done[id] || !x.ok(c)) continue;
+      m.prog[id] = (m.prog[id] || 0) + 1;
+      if (m.prog[id] >= x.need) { m.done[id] = 1; coins += x.pay; C.save(KEY + 'coins', coins); lines.push(`🎯 미션 완료! <b>${esc(x.t)}</b> · 🪙 +${fmtN(x.pay)}냥`); }
+      else lines.push(`🎯 미션 ${esc(x.t)} ${m.prog[id]}/${x.need}`);
+    }
+    C.save(KEY + 'mis', m);
+    if (lines.length && Object.keys(m.done).length === 3 && lines.some(l => /완료/.test(l))) lines.push('🏅 오늘 미션 다 깼어요!');
+    return lines.map(l => `<p class="rescoin mis-res">${l}</p>`).join('');
+  }
+  function drawMissions() {
+    const el = $('misCard'); if (!el) return;
+    const m = misState(), ids = misToday(m.day), all = ids.every(id => m.done[id]);
+    el.innerHTML = `<div class="mis-top"><b>🎯 오늘의 미션</b><span class="small">${all ? '🏅 오늘 다 깼어요!' : '밤 12시에 새 미션'}</span></div>` +
+      ids.map(id => { const x = MIS[id], p = Math.min(x.need, m.prog[id] || 0), ok = !!m.done[id]; return `<div class="mis-row${ok ? ' ok' : ''}"><span>${ok ? '✅' : '⬜'}</span><b>${esc(x.t)}</b><em>${p}/${x.need}</em><i>🪙 ${fmtN(x.pay)}</i></div>`; }).join('');
+  }
   const gnt = () => Object.assign({ stage: 0, w: 0, l: 0, coach: false, stars: {} }, C.store(KEY + 'gnt', {}));
   const gntSave = g => C.save(KEY + 'gnt', g);
   const gntTitle = g => { let t = ''; GAUNT.forEach((x, i) => { if (g.stars[i]) t = x.title; }); return t; };
@@ -122,7 +170,7 @@
     $('tabSolo').setAttribute('aria-pressed', String(tab === 'solo')); $('tabWatch').setAttribute('aria-pressed', String(tab === 'watch')); $('tabLocal').setAttribute('aria-pressed', String(tab === 'local'));
     $('soloBox').hidden = tab !== 'solo'; $('watchBox').hidden = tab !== 'watch'; $('localBox').hidden = tab !== 'local';
     $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 자금 ${fmtN(coins)}냥</b><span class="small">${rk && rk.all && rk.all.n ? `통산 ${fmtN(rk.all.n)}판 중 ${fmtN(rk.all.w)}승` : '승리 시 점수만큼 판돈이 쌓입니다 (1점 = 10냥)'}</span></span>`;
-    drawGauntlet();
+    drawGauntlet(); drawMissions();
     segBtns($('modeSeg'), [[2, '맞고 2인'], [3, '고스톱 3인'], [4, '광팔기 4인'], [5, '광팔기 5인']], opt.mode, v => { opt.mode = +v; saveOpt('mode'); drawMenu(); });
     const mo = G.modeOf(opt.mode);
     $('modeNote').textContent = mo.bench ? `${mo.n}명이 치고 ${mo.bench}명은 판마다 돌아가며 쉬어요. 쉬는 사람이 내놓는 광을 살 수 있어요` : '';
@@ -519,7 +567,7 @@
     if (watch) ses.seats = Array.from({ length: n }, (_, i) => mk(opt.wTiers[i] || 'normal'));
     else if (gn) ses.seats = [{ ctrl: 'me', tier: null, name: '나', em: '나' }, { ctrl: 'ai', tier: 'hard', name: gn.name, em: TIER.hard.em }];
     else ses.seats = [{ ctrl: 'me', tier: null, name: '나', em: '나' }].concat(Array.from({ length: n - 1 }, () => mk(opt.tier)));
-    ses.coachOn = !!opt.coach;
+    ses.coachOn = !!opt.coach; ses.coachEver = ses.coachOn;
     if (gn) { ses.gnt = gauntlet; if (ses.coachOn) { const g = gnt(); g.coach = true; gntSave(g); } }
     show('play');
     setupCoach(ses);
@@ -2490,7 +2538,8 @@
         stats.played++; if (r.winner === me) { stats.won++; stats.best = Math.max(stats.best, r.points); }
         C.save(KEY + 'stats', stats); drawCoinPill();
         rankReport(ses, s, r);
-        coinLine += foeAfter(ses, r) + gauntletAfter(ses, r);
+        coinLine += foeAfter(ses, r) + gauntletAfter(ses, r) + missionAfter(ses, r);
+        drawCoinPill();
       }
       // 점수 내역
       const saleRows = (r.sale || []).map(x => `<tr><td>💰 광 팔기 <span class="small">${esc(tname(ses, x.buyerSeat))} → ${esc(tname(ses, x.seat))} · 광 ${x.cards.length}장</span></td><td class="n">${x.price}점</td></tr>`).join('');
@@ -2627,6 +2676,7 @@
     const ses = SES; if (!coachAvail(ses)) return;
     ses.coachOn = !ses.coachOn;
     if (ses.coachOn && ses.gnt != null) { const g = gnt(); g.coach = true; gntSave(g); }   // 🥋 이 관은 선생님 별 없음
+    if (ses.coachOn) ses.coachEver = true;                                   // 🎯 '선생님 안 켜고' 미션은 한 번이라도 켜면 안 셈
     if (!ses.cfg.online && !ses.hot) { opt.coach = ses.coachOn ? 1 : 0; saveOpt('coach'); }
     sfx('tap');
     ses.coachHtml = null;
@@ -2659,6 +2709,7 @@
     get panel() { return SES && SES.panel; },
     get peeks() { return peekN; }, bossPeek(p) { BOSS_PEEK['각성 아귀'] = p; },   // 시험: 👹 몰래 본 수 · 확률 바꾸기
     gauntlet(stage) { startGauntlet(stage == null ? null : stage); }, get gnt() { return gnt(); }, menu: () => drawMenu(),   // 시험: 🥋 도장깨기
+    mis: { today: d => { const f = misForce; misForce = null; const t = misToday(d); misForce = f; return t; }, group: id => MIS[id] && MIS[id].g, check: (id, c) => MIS[id].ok(c), force(ids) { misForce = ids; }, get state() { return misState(); } },   // 시험: 🎯 미션
   };
 
   // ── 시작 ────────────────────────────────────────────────

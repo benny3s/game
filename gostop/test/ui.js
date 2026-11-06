@@ -243,4 +243,37 @@ U.main(async T => {
     await p.evaluate(() => { __gostop.autoHuman = false; __gostop.fast(false); localStorage.removeItem('gostop.gnt'); });
     await p.close().catch(() => {});
   }
+
+  // ── ⑩ 11-06 베니 님 '규호형이 좋아하는 것' → 🎯 오늘의 미션 (판 수 하나 + 기술 둘, 날짜로 정해짐, 깨면 판돈 냥)
+  {
+    const p = await T.open('gostop/');
+    await U.waitFor(p, () => window.__gostop && document.getElementById('misCard'));
+    const m0 = await p.evaluate(() => {
+      const M = __gostop.mis, days = [...Array(14).keys()].map(i => new Date(Date.parse('2026-11-01T00:00:00Z') + i * 864e5).toISOString().slice(0, 10)), sets = days.map(d => M.today(d));
+      const same = JSON.stringify(M.today('2026-11-06')) === JSON.stringify(M.today('2026-11-06'));
+      const shape = sets.every(s => s.length === 3 && new Set(s).size === 3 && M.group(s[0]) === 'n' && M.group(s[1]) === 's' && M.group(s[2]) === 's');
+      const skills = new Set(sets.flatMap(s => s.slice(1)));
+      return { same, shape, skills: skills.size };
+    });
+    T.ok(m0.same && m0.shape && m0.skills >= 6, '⑩ 미션 = 날짜로 정해짐 · 판 수 1 + 기술 2 · 2주 동안 기술 미션 ' + m0.skills + '가지');
+    const ck = await p.evaluate(() => {
+      const M = __gostop.mis, base = { r: { go: 0, points: 10, items: [], mults: [], per: [] }, won: true, coach: false, foe: '아귀', loseM: () => false, item: () => false };
+      const c = o => Object.assign({}, base, o, { r: Object.assign({}, base.r, o.r || {}) });
+      return [M.check('go3', c({ r: { go: 3 } })), !M.check('go3', c({ r: { go: 2 } })), M.check('agwi', c({})), !M.check('agwi', c({ foe: '평경장' })), M.check('nocoach', c({})), !M.check('nocoach', c({ coach: true })), !M.check('win5', c({ won: false })), M.check('big', c({ r: { points: 31 } })), M.check('shake', c({ r: { mults: [{ k: '흔들기·폭탄 1번', x: 2 }] } }))];
+    });
+    T.ok(ck.every(Boolean), '⑩ 미션 판정: 3고 · 아귀 · 선생님 없이 · 이긴 판만 · 30점 · 흔들기 ' + JSON.stringify(ck));
+    await p.evaluate(() => { localStorage.removeItem('gostop.mis'); __gostop.mis.force(['play10', 'go3', 'pibak']); __gostop.menu(); });
+    const card = await p.evaluate(() => [...document.querySelectorAll('#misCard .mis-row')].map(r => r.textContent.replace(/\s+/g, ' ').trim()));
+    T.ok(card.length === 3 && /10판 치기\s*0\/10/.test(card[0]) && /3고 이상/.test(card[1]) && /피박/.test(card[2]), '⑩ 첫 화면 미션 카드 셋 (' + card.join(' | ') + ')');
+    await p.evaluate(() => { localStorage.setItem('cozy.sound2', 'false'); __gostop.fast(true); __gostop.autoHuman = true; __gostop.start({ seed: 2468, mode: 2, tier: 'easy', rules: { seon: 'off' } }); });
+    const res = await U.waitFor(p, () => {
+      const s = __gostop.state, ses = __gostop.ses;
+      if (ses && ses.pending && ses.pending.isResult) return { big: document.getElementById('resBig').textContent, st: __gostop.mis.state, nag: s.result && s.result.kind === 'nagari' };
+      if (s && ses && s.turn === ses.cfg.me && ses.pending && !ses.pending.isResult && s.phase !== 'play') { const L = __gostop.legal(); if (L.length) __gostop.act(L[0]); }
+      return null;
+    }, null, 60000, 120);
+    T.ok(res && (res.nag || (res.st.prog.play10 === 1 && /미션 10판 치기 1\/10/.test(res.big))), '⑩ 한 판 끝나면 결과 줄 "🎯 미션 10판 치기 1/10" · 저장 ' + JSON.stringify(res && { big: res.big.slice(-60), prog: res.st.prog, nag: res.nag }));
+    await p.evaluate(() => { __gostop.mis.force(null); __gostop.autoHuman = false; __gostop.fast(false); localStorage.removeItem('gostop.mis'); });
+    await p.close().catch(() => {});
+  }
 }, 'gostop ui');

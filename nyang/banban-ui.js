@@ -39,7 +39,7 @@
   function start(o) {
     ensure();
     opt = o; P = o.pz; cells = Array.from(P.given); undo = []; hints = 0; over = false; hint = null;
-    for (const id of ["home", "play"]) if ($(id)) $(id).hidden = true;
+    for (const id of ["home", "play", "zplay"]) if ($(id)) $(id).hidden = true;
     $("bplay").hidden = false; document.body.classList.add("playing");
     $("bLabel").textContent = o.label || "🌗 반반"; $("bHint").hidden = true;
     build(); paint();

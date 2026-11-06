@@ -63,6 +63,18 @@ body:not(.playing){
 .gnt-foot .small{flex:1;color:#fecaca;line-height:1.35}
 .gnt-foot .btn{flex:none;padding:8px 12px;font-size:14px}
 .gnt-res b{color:#fde68a}
+/* 🎯 오늘의 미션 (11-06) */
+.mis{display:grid;gap:5px;background:rgba(0,0,0,.25);border:1px solid rgba(212,175,55,.3);border-radius:14px;padding:9px 11px}
+.mis:empty{display:none}
+.mis-top{display:flex;align-items:baseline;gap:8px}
+.mis-top b{font:800 15.5px var(--round);color:#fde68a}
+.mis-top .small{margin-left:auto;color:#a7f3d0}
+.mis-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:7px;align-items:center;font-size:13.5px;color:#e5f6ec}
+.mis-row b{font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mis-row em{font-style:normal;font:700 13px var(--round);color:#fde68a}
+.mis-row i{font-style:normal;font-size:12px;color:#a7f3d0;white-space:nowrap}
+.mis-row.ok b{text-decoration:line-through;opacity:.7}
+.mis-res b{color:#fde68a}
 .optrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .optrow>.small{min-width:68px;color:#fde68a;font-weight:700}
 .wseats{display:grid;gap:8px}

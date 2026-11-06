@@ -103,6 +103,30 @@ header.top h1{gap:8px}
 .cheer{color:var(--ink)}
 .cheer:empty{display:none}
 
+/* ── 📅 이번 달 달력 (11-06) ── */
+.dc-cal{justify-self:start;border:1px solid var(--line);background:#fff;border-radius:10px;padding:5px 10px;font:700 13px var(--round);color:var(--ink);cursor:pointer}
+.cal{display:grid;gap:6px}
+.cl-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;font:800 15px var(--round);color:var(--ink)}
+.cl-nav .btn{padding:4px 12px}
+.cl-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cl-grid i{font-style:normal;text-align:center;font:700 11.5px var(--round);color:var(--soft)}
+.cl-e{min-height:38px}
+.cl-d{display:grid;justify-items:center;align-content:center;min-height:40px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:2px 0;cursor:pointer;color:var(--ink);font:700 12px var(--round)}
+.cl-d b{font-weight:800;font-size:12px;color:var(--soft)}
+.cl-d em{font-style:normal;font-size:16px;line-height:1.1;min-height:17px}
+.cl-d.on{background:#fff4e6;border-color:#f5c99b}
+.cl-d.arc{background:#f4f0fa;border-color:#d9cdea}
+.cl-d.today{box-shadow:0 0 0 2px var(--accent)}
+.cl-d.fut{opacity:.4;cursor:default}
+
+/* ── 👨‍👩 이번 주 가족 목표 (11-06) ── */
+.pc-fam{display:grid;gap:4px;border-top:1px dashed var(--line);padding-top:7px}
+.pf-top{display:flex;align-items:baseline;gap:8px}
+.pf-top b{font:800 14px var(--round);color:var(--ink)}
+.pf-top span{margin-left:auto;font:700 13px var(--round);color:var(--gold-ink);white-space:nowrap}
+.pc-fam .small{color:var(--soft)}
+.pc-fam.ok .pc-bar i{background:linear-gradient(90deg,var(--good),#7ed3a8)}
+
 /* ── 🌗 반반 판 (11-06): 흰 판 위 칸 · 치즈냥 칸은 옅은 귤색 · 까망냥 칸은 옅은 회보라 · 칸 사이 =·× 동그라미 ── */
 .bplay .bb-rule{margin:0 6px;text-align:center;color:var(--soft);line-height:1.4}
 .bplay .bb-rule b{color:var(--ink)}
@@ -124,6 +148,16 @@ header.top h1{gap:8px}
 .bboard.won{animation:bbwin .9s ease}
 @keyframes bbwin{30%{transform:scale(1.03);box-shadow:0 0 0 6px rgba(63,174,122,.35)}}
 .kindseg{gap:6px}
+/* ── 🐾 냥산책 판 (11-06): 지나간 칸은 순서대로 귤색 → 보라 · 길은 선 · 머리에 🐈 ── */
+.zboard{--n:6;position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));grid-template-rows:repeat(var(--n),minmax(0,1fr));width:min(94vw,460px,calc(100dvh - 330px));aspect-ratio:1;background:#fff;border:2px solid #ecd3b9;border-radius:18px;overflow:hidden;box-shadow:var(--shadow);touch-action:none;user-select:none;-webkit-user-select:none}
+.zc{position:relative;min-width:0;min-height:0;display:grid;place-items:center;border-right:1px solid #f1e2d2;border-bottom:1px solid #f1e2d2;background:#fff;transition:background .1s}
+.zc.hint{box-shadow:inset 0 0 0 3px var(--gold);animation:look 1.1s ease-in-out infinite}
+.zn{position:relative;z-index:3;display:grid;place-items:center;width:62%;aspect-ratio:1;border-radius:50%;background:#5b4636;color:#fff;font:800 clamp(13px,calc(40vw / var(--n)),22px)/1 var(--round)}
+.zh{position:absolute;z-index:4;font-style:normal;font-size:clamp(14px,calc(40vw / var(--n)),26px);line-height:1;pointer-events:none}
+.zc.head .zn{box-shadow:0 0 0 3px var(--accent)}
+.zline{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.zline polyline{fill:none;stroke:rgba(242,135,95,.85);stroke-width:.34;stroke-linecap:round;stroke-linejoin:round}
+.zboard.won{animation:bbwin .9s ease}
 .daycard.bbcard{gap:7px;background:linear-gradient(#fbf7ff,#f0e9f7)}
 .daycard.bbcard.done{background:linear-gradient(#f1fbf5,#e3f5ea)}
 .daycard.bbcard>.btn{justify-self:stretch}
@@ -174,6 +208,11 @@ header.top h1{gap:8px}
 .stg.lock{background:#f3e7da;border-color:#ead9c7;color:var(--soft);font-size:16px}
 .stg .gift{position:absolute;right:-8px;top:-8px;font-style:normal;font-size:19px}
 .stage-row .st{font-size:13px;min-width:48px;letter-spacing:-1px}
+/* 🎁 보너스 판 (5단계마다 🌗 반반 · 🐾 산책) */
+.stage-row .bonus{display:grid;justify-items:center;gap:0;border:1.5px dashed #e6b98f;background:#fffaf3;border-radius:12px;padding:3px 7px;font-size:19px;line-height:1.1;cursor:pointer;touch-action:manipulation;color:var(--ink)}
+.stage-row .bonus small{font:700 10.5px var(--round);color:var(--soft);letter-spacing:-.5px}
+.stage-row .bonus.done{border-style:solid;border-color:#f5c99b;background:#fff4e6}
+.stage-row .bonus.lock{opacity:.5}
 .stage-mark{text-align:center;font:800 13.5px var(--round);color:var(--gold-ink);padding:4px 0}
 .skins{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .skins button{border:1.5px solid var(--line);background:#fff;border-radius:11px;font-size:22px;padding:3px 6px;cursor:pointer;line-height:1.2}

@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 <!-- 카톡 안 브라우저에 냥도쿠 기록이 쌓여 있으면 기본 브라우저로 넘기지 않음 (cozy.js 가 넘기면 그 기록이 안 보임: 저장 칸이 브라우저마다 따로) -->
 <script>try{if(/KAKAOTALK/i.test(navigator.userAgent)&&["stageStars","solved","bestT","taBest"].some(k=>localStorage.getItem("nyang."+k)))sessionStorage.setItem("cozy.kakaoOut","1")}catch(e){}</script>
 </head>
@@ -46,6 +46,12 @@
         <li>같은 고양이 셋이 연달아 붙으면 안 돼요</li>
         <li>칸 사이 <b>=</b> 는 같은 고양이, <b>×</b> 는 다른 고양이</li>
         <li>누를 때마다 🐈 → 🐈‍⬛ → 빈칸. 규칙에 어긋나면 빨개져요 (물고기 없음)</li>
+      </ul>
+      <ul class="howto" id="howtoZ" hidden>
+        <li>1번 칸에 손가락을 대고 끌어서 길을 그려요 (위아래 · 옆으로만)</li>
+        <li>번호는 1 → 2 → 3 … 순서대로만 지나요</li>
+        <li>모든 칸을 한 번씩 지나 마지막 번호에서 끝나면 성공</li>
+        <li>지나온 칸으로 되돌아가면 거기까지 지워져요 (물고기 없음)</li>
       </ul>
       <button class="btn primary big" id="startBtn">시작!</button>
     </div>
@@ -119,9 +125,11 @@
 <script src="../common/arena-ui.js?v=18"></script>
 <script src="core.js?v=6"></script>
 <script src="banban.js?v=1"></script>
-<script src="banban-ui.js?v=1"></script>
+<script src="banban-ui.js?v=2"></script>
+<script src="zip.js?v=1"></script>
+<script src="zip-ui.js?v=1"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=27"></script>
+<script src="main.js?v=28"></script>
 <script src="watch.js?v=7"></script>
 </body>
 </html>
