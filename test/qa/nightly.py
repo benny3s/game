@@ -84,7 +84,7 @@ def main():
     if code not in (0, 1) or not fresh:   # 1 = high 문제 있음 (정상 종료), 그 밖은 점검기 자체 고장
         phone(f"🎮 게임 밤 점검기가 못 돌았어요 (코드 {code}) — {tail}\nClaude 에게 '게임 점검기 봐줘' 하시면 고칩니다.", "game-qa:broken")
         beat(False, f"점검기 고장 코드 {code} {tail}")
-        return
+        return 3   # (11-06) 작업 스케줄러 '마지막 실행 결과'에도 실패로 보이게 — 예전엔 고장 나도 0
 
     issues = [dict(i, game=g) for g, x in D["games"].items() for i in x.get("issues", []) if i.get("cat", "bug") == "bug"]
     cnt = {s: sum(1 for i in issues if i.get("sev") == s) for s in ("high", "medium", "low")}
@@ -111,4 +111,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
