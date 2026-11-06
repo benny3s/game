@@ -22,7 +22,7 @@
   const logInit = () => { if (!glog && Arena.db()) glog = GLOG(() => Arena.db(), "nyang"); return glog; };
 
   // ── 화면 바꾸기
-  const show = id => { for (const s of ["home", "play"]) $(s).hidden = s !== id; document.body.classList.toggle("playing", id === "play"); if (id === "play") requestAnimationFrame(() => fitBoard(true)); };
+  const show = id => { for (const s of ["home", "play", "bplay"]) if ($(s)) $(s).hidden = s !== id; document.body.classList.toggle("playing", id === "play"); if (id === "play") requestAnimationFrame(() => fitBoard(true)); };
   // 판 크기 = 남은 공간(가로·세로 중 작은 쪽) — 휴대폰에서 위아래가 잘리지 않게
   // 휴대폰 주소창이 나타났다 사라지며 높이가 조금씩 바뀔 때마다 판이 출렁이지 않게: 판이 바뀌었거나, 너비가 바뀌었거나, 높이가 크게(80px+) 바뀔 때만 다시 맞춤
   let fitKey = "", fitW = 0, fitH = 0;
@@ -378,7 +378,7 @@
   function dailyInfo(key = kstDay()) {
     const n = Math.round(Date.parse(key + "T00:00:00Z") / 86400e3), wd = new Date(key + "T00:00:00Z").getUTCDay(), tier = DAY_TIER[wd];
     let h = Math.imul(n + 977, 2654435761) >>> 0; h = (h ^ (h >>> 15)) >>> 0;
-    return { key, wd, tier, idx: h % bank[tier].length, vs: ((n * 7919 + 4099) >>> 0) || 1 };
+    return { key, wd, tier, idx: h % bank[tier].length, vs: ((n * 7919 + 4099) >>> 0) || 1, bseed: (Math.imul(n + 31337, 2246822519) >>> 0) || 1 };   // bseed = 🌗 오늘의 반반
   }
   const dayVal = v => v.s + (v.h || 0) * PENALTY;
   function myDays() {                                                       // 폰에 저장 + 서버 기록 (둘 중 있는 것)
@@ -396,10 +396,10 @@
     for (const k of Object.keys(days).sort()) { run = prev && dayShift(prev, 1) === k ? run + 1 : 1; best = Math.max(best, run); prev = k; }
     return best;
   }
-  function dayBoard(key) {                                                  // 그날 푼 사람들 (빠른 순)
+  function dayBoard(key, f = "day") {                                       // 그날 푼 사람들 (빠른 순) · f = day 냥도쿠 · bday 🌗 반반
     const R = (rkData && rkData.rec) || {}, N = (rkData && rkData.names) || {}, me = GME.me && GME.me.pid;
-    const rows = Object.entries(R).map(([pid, r]) => ({ pid, name: N[pid] || "?", v: r && r.day && r.day[key] })).filter(x => x.v && x.v.s);
-    const mine = store.get("day", {})[key];
+    const rows = Object.entries(R).map(([pid, r]) => ({ pid, name: N[pid] || "?", v: r && r[f] && r[f][key] })).filter(x => x.v && x.v.s);
+    const mine = store.get(f, {})[key];
     if (mine && !rows.some(x => x.pid === (me || "me"))) rows.push({ pid: me || "me", name: myName() || "나", v: mine });   // 서버에 아직 안 올라간 내 기록
     return rows.sort((a, b) => dayVal(a.v) - dayVal(b.v));
   }
@@ -423,8 +423,20 @@
       ${mine ? `<p class="dc-mine">✅ 오늘 <b>${fmt(mine.s)}</b> · 실수 ${mine.m || 0} · 힌트 ${mine.h || 0}${mine.k > 1 ? ` · ${mine.k}번째 만에` : ""}</p>` : `<p class="small dc-sub">모두 같은 판 · 가족끼리 오늘 시간 겨루기 (힌트 한 번 = +${PENALTY}초)</p>`}
       ${boardHtml(board) || `<p class="small dc-sub">아직 아무도 안 풀었어요 — 첫 번째가 돼 보세요!</p>`}
       ${mine ? `<div class="dc-foot"><span class="small">다시 풀어도 오늘 기록은 그대로 · 내일 0시에 새 판</span><button class="btn mint" id="dayShare">📤 자랑</button></div>` : ""}
-    </div>`;
+    </div>${bbDayHtml(d)}`;
     const sb = $("dayShare"); if (sb) sb.onclick = () => shareDay(d, mine, st, board);
+    const bb = $("dayBB"); if (bb) bb.onclick = () => playBB(d.tier, d);
+  }
+  // 🌗 오늘의 반반: 같은 요일 난이도 · 모두 같은 판 · 가족 기록 (냥도쿠 오늘의 퍼즐 아래 작은 카드)
+  function myBDays() { const out = { ...store.get("bday", {}) }, m = myRec(); if (m && m.bday) for (const [k, v] of Object.entries(m.bday)) if (v && v.s && !out[k]) out[k] = v; return out; }
+  function bbDayHtml(d) {
+    if (!window.NYB) return "";
+    const L = NYB.LEVELS[d.tier], mine = myBDays()[d.key], board = dayBoard(d.key, "bday");
+    return `<div class="daycard bbcard${mine ? " done" : ""}">
+      <div class="dc-top"><b>🌗 오늘의 반반</b><span class="small">${L.N}×${L.N} · 🐈 치즈냥 🐈‍⬛ 까망냥</span>${mine ? `<span class="dc-fire" style="color:var(--good)">✅ ${fmt(mine.s)}</span>` : ""}</div>
+      ${boardHtml(board, 3)}
+      <button class="btn${mine ? "" : " mint"}" id="dayBB" type="button">${mine ? "다시 풀기 (기록은 그대로)" : "🌗 반반 풀기"}</button>
+    </div>`;
   }
   function playDaily() {
     const d = dailyInfo(), tries = store.get("dayTry", {});
@@ -455,11 +467,12 @@
     ["day1", "📅", "오늘의 퍼즐", "오늘의 퍼즐 처음 풀기", s => s.days >= 1],
     ["day7", "🔥", "일주일 개근", "오늘의 퍼즐 7일 연속", s => s.dayRun >= 7],
     ["dayTop", "🥇", "오늘의 1등", "오늘의 퍼즐 가족 1등 (2명 이상 푼 날)", s => s.dayTop >= 1],
+    ["bb1", "🌗", "반반 입문", "치즈냥·까망냥 반반 처음 깨기", s => s.bb >= 1],
   ];
   function myStats() {
     const m = myRec() || {}, c = m.cnt || {}, days = myDays();
     return { sv: solvedN(), wins: (gm && gm.f && gm.f.w) || 0, nhNormal: c.nhNormal || 0, perfHard: c.perfHard || 0, star3: c.star3 || 0, coopWin: c.coopWin || 0,
-      taMax: Math.max(0, ...Object.values(m.ta || {})), stage: maxStage(), days: Object.keys(days).length, dayRun: bestStreak(days), dayTop: dayTops() };
+      taMax: Math.max(0, ...Object.values(m.ta || {})), stage: maxStage(), days: Object.keys(days).length, dayRun: bestStreak(days), dayTop: dayTops(), bb: c.bb || 0 };
   }
   function checkBadges() {
     const m = myRec(); if (!m) return;
@@ -514,19 +527,59 @@
     const bs = bests(), tb = store.get("taBest", {}), ta = soloMode === "ta";
     segBtns($("soloMode"), [["day", "📅 오늘"], ["map", "🗺 단계"], ["one", "🧩 한 판"], ["ta", `⏱ 타임어택`]], soloMode, v => { soloMode = v; store.set("soloMode2", v); drawTiers(); });
     drawDayDot();
-    const pick = soloMode === "map" || soloMode === "day";
-    $("tiers").hidden = pick; $("stageBox").hidden = soloMode !== "map"; $("dayBox").hidden = soloMode !== "day"; $("howto").hidden = pick;
+    const pick = soloMode === "map" || soloMode === "day", bbOn = soloMode === "one" && bbKind === "b";
+    $("tiers").hidden = pick; $("stageBox").hidden = soloMode !== "map"; $("dayBox").hidden = soloMode !== "day"; $("howto").hidden = pick || bbOn; $("howtoB").hidden = !bbOn;
+    $("kindSeg").hidden = soloMode !== "one";
+    if (soloMode === "one") segBtns($("kindSeg"), [["q", "🐱 냥도쿠"], ["b", "🌗 반반 (새로)"]], bbKind, v => { bbKind = v; store.set("kind", v); drawTiers(); });
     if (soloMode === "map") { $("soloDesc").hidden = true; drawStages(); return; }
     if (soloMode === "day") { $("soloDesc").hidden = true; drawDay(); return; }
     $("soloDesc").textContent = ta ? `${TA_SOLO_MIN}분 동안 몇 개 풀 수 있을까요? 다 풀거나 🐟를 다 잃으면 바로 다음 문제. 힌트는 한 번에 -${PENALTY}초` : "";
     $("soloDesc").hidden = !ta;
+    const bb = bbOn ? store.get("bbBest", {}) : null;
     $("tiers").innerHTML = TIERS.map(t => {
-      const rec = ta ? (tb[t.id] ? `최고 ${tb[t.id]}개` : "") : (bs[t.id] ? `최고 ${fmt(bs[t.id])}` : "");
-      return `<button class="tier t-${t.id}" data-t="${t.id}" aria-pressed="${t.id === soloTier}"><span class="em">${t.em}</span><b>${t.label}</b><span>${t.desc}</span>${rec ? `<span>${rec}</span>` : ""}</button>`;
+      const rec = bbOn ? (bb[t.id] ? `최고 ${fmt(bb[t.id])}` : "") : ta ? (tb[t.id] ? `최고 ${tb[t.id]}개` : "") : (bs[t.id] ? `최고 ${fmt(bs[t.id])}` : "");
+      return `<button class="tier t-${t.id}" data-t="${t.id}" aria-pressed="${t.id === soloTier}"><span class="em">${t.em}</span><b>${t.label}</b><span>${bbOn ? BB_DESC[t.id] : t.desc}</span>${rec ? `<span>${rec}</span>` : ""}</button>`;
     }).join("");
     for (const b of $("tiers").children) b.onclick = () => { soloTier = b.dataset.t; store.set("soloTier", soloTier); for (const o of $("tiers").children) o.setAttribute("aria-pressed", o === b); };
   }
-  $("startBtn").onclick = () => { if (!bank) return; if (soloMode === "map") playStage(maxStage() + 1); else if (soloMode === "day") playDaily(); else if (soloMode === "ta") playTA(soloTier); else playSolo(soloTier); };
+  $("startBtn").onclick = () => { if (!bank) return; if (soloMode === "map") playStage(maxStage() + 1); else if (soloMode === "day") playDaily(); else if (soloMode === "ta") playTA(soloTier); else if (bbKind === "b") playBB(soloTier); else playSolo(soloTier); };
+
+  // ══ 🌗 치즈냥·까망냥 반반 (11-06 — 벤치마킹: LinkedIn Tango · 지민 님 새 퍼즐, 엔진 banban.js · 판 화면 banban-ui.js) ══
+  //   한 판(난이도 넷) · 오늘의 반반(📅 오늘 아래, nyang/rec/{pid}/bday). 별 = ⭐ 깸 · +⭐ 힌트 없이 · +⭐ 목표 시간 안 (물고기·실패 없음)
+  const BB_DESC = { easy: "6×6 · 가볍게", normal: "6×6 · 처음 칸 적게", hard: "8×8 · 줄 전체 따지기", master: "8×8 · 표시 적게" };
+  let bbKind = store.get("kind", "q");
+  function playBB(tier, daily) {
+    if (!window.NYB || !window.NYBUI) return toast("반반을 못 불러왔어요. 새로 고침해 주세요");
+    const seed = daily ? daily.bseed : NY.rseed(), pz = NYB.make(seed, tier), T = TIERS.find(t => t.id === tier);
+    if (daily) { const tr = store.get("bdayTry", {}); tr[daily.key] = (tr[daily.key] || 0) + 1; store.set("bdayTry", Object.fromEntries(Object.entries(tr).filter(([k]) => k >= dayShift(daily.key, -7)))); }
+    Arena.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, Arena.uid); if (lg) lg.matchStart({ mode: daily ? "bday" : "bb", tier, seed, n: pz.N }); }).catch(() => {});
+    NYBUI.start({ pz, label: daily ? `🌗 오늘의 반반 · ${pz.N}×${pz.N}` : `🌗 반반 · ${T.label} ${pz.N}×${pz.N}`,
+      onExit: () => { if (glog) glog.matchEnd({ won: false, gaveUp: true }); goHome(); },
+      onWin: w => bbEnd(w, tier, pz, daily) });
+  }
+  function bbEnd(w, tier, pz, daily) {
+    const T = TIERS.find(t => t.id === tier), secs = w.secs;
+    if (glog) glog.matchEnd({ won: true, bb: 1, secs: Math.round(secs * 10) / 10, hints: w.hints });
+    if (window.GRank) try { GRank.result("nyang", { mode: "ai", res: "w", beat: 1, tier: "bb" }); } catch (e) {}
+    REC.solved(1); REC.cnt("bb");
+    const st = Math.max(1, 3 - (w.hints ? 1 : 0) - (secs > pz.par ? 1 : 0));
+    const stars = `<div class="stars">${[0, 1, 2].map(j => `<span class="${j < st ? "on" : ""}" style="animation-delay:${.15 + j * .25}s">⭐</span>`).join("")}</div>
+      <p class="small" style="margin:0">${[w.hints ? `힌트 ${w.hints}번` : "힌트 0 ✓", secs > pz.par ? `목표 ${fmt(pz.par)} 넘음` : `목표 ${fmt(pz.par)} 안 ✓`].join(" · ")}</p>`;
+    [0, 1, 2].slice(0, st).forEach(j => setTimeout(() => S("star", { i: j }), 200 + j * 250));
+    const bst = store.get("bbBest", {}), best = !w.hints && (!bst[tier] || secs < bst[tier]); if (best) { bst[tier] = Math.round(secs * 10) / 10; store.set("bbBest", bst); }
+    const bl = baseLine(baseline("bb_" + tier, secs), secs, { label: `반반 ${T.label}` });
+    let fam = "", title = "🎉 다 맞혔어요!";
+    if (daily) {
+      const before = myBDays()[daily.key], tries = store.get("bdayTry", {})[daily.key] || 1;
+      if (!before) REC.bday(daily.key, { s: Math.round(secs * 10) / 10, h: w.hints, k: tries }, pz.N);
+      const board = dayBoard(daily.key, "bday");
+      title = before ? "✅ 다시 풀었어요" : "🎉 오늘의 반반 성공!";
+      fam = (before ? `<p class="small" style="margin:0">오늘 기록은 처음 성공한 <b>${fmt(before.s)}</b> 그대로예요</p>` : "") + (board.length > 1 ? `<p class="small" style="margin:0">오늘 가족 기록</p>${boardHtml(board, 4)}` : "");
+    }
+    result(title, `${stars}<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">🌗 ${pz.N}×${pz.N} ${T.label}${best ? " · <b style='color:var(--good)'>최고 기록!</b>" : ""}</p>${bl}${fam}${cheerLine(true)}`,
+      daily ? [["닫기", goHome, "primary"]] : [["한 판 더", () => playBB(tier), "primary"], ["난이도 고르기", goHome]]);
+    setTimeout(checkBadges, 1200);
+  }
   function pickRandom(tier) {
     const n = bank[tier].length, sv = new Set(solved()[tier] || []), recent = new Set(store.get("recent_" + tier, []));
     let pool = [...Array(n).keys()].filter(i => !sv.has(i) && !recent.has(i));
@@ -1103,6 +1156,13 @@
       if (!loc[key]) { loc[key] = v; store.set("day", Object.fromEntries(Object.entries(loc).sort().slice(-400))); }
       const m = myRec(); if (m) { m.day = m.day || {}; if (!m.day[key]) m.day[key] = v; }
       const r = recRef(); if (r && !tooFast(v.s, n)) tx(r, `day/${key}`, cur => cur && cur.s ? undefined : v);
+    },
+    bday(key, v, n) {                                                        // 🌗 오늘의 반반 (같은 모양)
+      const loc = store.get("bday", {});
+      if (!loc[key]) { loc[key] = v; store.set("bday", Object.fromEntries(Object.entries(loc).sort().slice(-400))); }
+      const m = myRec(); if (m) { m.bday = m.bday || {}; if (!m.bday[key]) m.bday[key] = v; }
+      const r = recRef(); if (r && !(v.s >= n * n * 0.25)) return;            // 말이 안 되게 빠른 기록은 폰에만
+      if (r) tx(r, `bday/${key}`, cur => cur && cur.s ? undefined : v);
     },
   };
   // 대결 한 판 끝: 내가 이긴 사람 수만큼 승점 (같은 판을 두 번 세지 않게)

@@ -45,6 +45,24 @@ body:not(.playing){
 .coinline .small{line-height:1.35;color:#a7f3d0}
 .coinline .grow{flex:1;display:grid;gap:2px}
 .optrows{display:grid;gap:9px;background:rgba(0,0,0,.22);border:1px solid rgba(212,175,55,.18);border-radius:14px;padding:12px}
+/* 🥋 타짜 도장깨기 (11-06) */
+.gnt{display:grid;gap:8px;background:linear-gradient(135deg,rgba(40,12,12,.9),rgba(70,22,18,.88));border:1.5px solid rgba(239,68,68,.45);border-radius:15px;padding:11px 12px;color:#fde7d7}
+.gnt:empty{display:none}
+.gnt-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.gnt-top b{font:800 17px var(--round);color:#fecaca}
+.gnt-title{margin-left:auto;font:800 13.5px var(--round);color:#fde68a;white-space:nowrap}
+.gnt-path{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.gnt-st{display:grid;justify-items:center;gap:1px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:4px 2px;min-width:0}
+.gnt-st i{font-style:normal;font:700 10.5px var(--round);color:#fca5a5}
+.gnt-st b{font:800 12.5px var(--round);color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.gnt-st em{font-style:normal;font-size:11px;min-height:15px;color:#fde68a;letter-spacing:-1px}
+.gnt-st.ok{border-color:rgba(250,204,21,.6);cursor:pointer}
+.gnt-st.now{box-shadow:0 0 0 2px #f87171;background:rgba(127,29,29,.55)}
+.gnt-st.lock{opacity:.5}
+.gnt-foot{display:flex;align-items:center;gap:8px}
+.gnt-foot .small{flex:1;color:#fecaca;line-height:1.35}
+.gnt-foot .btn{flex:none;padding:8px 12px;font-size:14px}
+.gnt-res b{color:#fde68a}
 .optrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .optrow>.small{min-width:68px;color:#fde68a;font-weight:700}
 .wseats{display:grid;gap:8px}

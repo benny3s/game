@@ -211,4 +211,36 @@ U.main(async T => {
     await p.evaluate(() => { __gostop.bossPeek(0.3); __gostop.autoHuman = false; __gostop.fast(false); localStorage.removeItem('gostop.lastVs'); });
     await p.close().catch(() => {});
   }
+
+  // ── ⑨ 11-06 베니 님 '다 진행': 🥋 타짜 도장깨기 — 다섯 관 · 관마다 먼저 3승 · 깨면 칭호 · 져도 그 관부터
+  {
+    const p = await T.open('gostop/');
+    await U.waitFor(p, () => window.__gostop && document.getElementById('gntCard'));
+    await p.evaluate(() => { localStorage.setItem('cozy.sound2', 'false'); localStorage.removeItem('gostop.gnt'); __gostop.menu(); });
+    const c0 = await p.evaluate(() => ({ st: [...document.querySelectorAll('#gntCard .gnt-st')].map(x => x.textContent.replace(/\s+/g, '')), btn: document.getElementById('gntGo').textContent, vis: !!document.getElementById('gntCard').offsetHeight }));
+    T.ok(c0.vis && c0.st.length === 5 && /1관고광렬0:0/.test(c0.st[0]) && /🔒/.test(c0.st[4]) && /도전/.test(c0.btn), '⑨ 첫 화면 도장깨기: 다섯 관 · 1관 고광렬 0:0 · 나머지 잠김 (' + c0.st.join(' | ') + ')');
+    await p.evaluate(() => { localStorage.setItem('gostop.gnt', JSON.stringify({ stage: 1, w: 2, l: 2, coach: false, stars: { 0: 2 } })); __gostop.menu(); });
+    const c1 = await p.evaluate(() => ({ txt: document.getElementById('gntCard').textContent.replace(/\s+/g, ' '), btn: document.getElementById('gntGo').textContent }));
+    T.ok(/입담 이긴 꾼/.test(c1.txt) && /⭐⭐/.test(c1.txt) && /2관 짝귀 · 나 2 : 2/.test(c1.txt) && /이어서/.test(c1.btn), '⑨ 깬 관은 별 · 칭호, 지금 관 점수 · 이어서: ' + c1.txt.slice(0, 90));
+    const fit = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+    T.ok(fit, '⑨ 도장깨기 카드가 폰 폭에 들어감');
+    // 2:2 에서 한 판 — 이기면 2관 돌파(다음 관 평경장), 지면 탈락(0:0 으로 그 관 다시)
+    await p.evaluate(() => { __gostop.fast(true); __gostop.autoHuman = true; __gostop.gauntlet(null); });
+    T.ok(await U.waitFor(p, () => __gostop.ses && __gostop.ses.seats[1] && __gostop.ses.seats[1].name === '짝귀' && __gostop.ses.seats.length === 2, null, 5000), '⑨ 도전하면 맞고로 지금 관 상대(짝귀)');
+    const res = await U.waitFor(p, () => {
+      const s = __gostop.state, ses = __gostop.ses;
+      if (ses && ses.pending && ses.pending.isResult) return { title: document.getElementById('resTitle').textContent, big: document.getElementById('resBig').textContent, nb: (document.querySelector('#resBtns .btn.primary') || {}).textContent, g: __gostop.gnt, win: s.result && s.result.winner === ses.cfg.me, nag: s.result && s.result.kind === 'nagari' };
+      if (s && ses && s.turn === ses.cfg.me && ses.pending && !ses.pending.isResult && s.phase !== 'play') { const L = __gostop.legal(); if (L.length) __gostop.act(L[0]); }
+      return null;
+    }, null, 60000, 120);
+    const ok = res && (res.nag ? /다음 판/.test(res.nb) : res.win ? res.g.stage === 2 && res.g.stars[1] >= 1 && res.g.w === 0 && /2관 돌파/.test(res.big) && /다음 관: 평경장/.test(res.nb) : res.g.stage === 1 && res.g.w === 0 && res.g.l === 0 && /2관 탈락/.test(res.big) && /다시 도전/.test(res.nb));
+    T.ok(ok, '⑨ 3승째면 돌파(⭐ · 다음 관 단추), 3패째면 탈락(그 관 0:0 · 다시 도전): ' + JSON.stringify(res && { big: res.big.slice(0, 60), nb: res.nb, g: res.g, win: res.win, nag: res.nag }));
+    if (res && !res.nag) {
+      await p.evaluate(() => document.querySelector('#resBtns .btn.primary').click());
+      const want = res.win ? '평경장' : '짝귀';
+      T.ok(await U.waitFor(p, w => __gostop.ses && __gostop.ses.seats[1] && __gostop.ses.seats[1].name === w && __gostop.state && __gostop.state.phase !== 'end', want, 8000), '⑨ 단추를 누르면 새 판으로 ' + want);
+    }
+    await p.evaluate(() => { __gostop.autoHuman = false; __gostop.fast(false); localStorage.removeItem('gostop.gnt'); });
+    await p.close().catch(() => {});
+  }
 }, 'gostop ui');

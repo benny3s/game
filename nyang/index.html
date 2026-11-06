@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 <!-- 카톡 안 브라우저에 냥도쿠 기록이 쌓여 있으면 기본 브라우저로 넘기지 않음 (cozy.js 가 넘기면 그 기록이 안 보임: 저장 칸이 브라우저마다 따로) -->
 <script>try{if(/KAKAOTALK/i.test(navigator.userAgent)&&["stageStars","solved","bestT","taBest"].some(k=>localStorage.getItem("nyang."+k)))sessionStorage.setItem("cozy.kakaoOut","1")}catch(e){}</script>
 </head>
@@ -31,6 +31,7 @@
       <div class="progcard" id="soloProg"></div>
       <div class="seg center" id="soloMode"></div>
       <p class="lede center" id="soloDesc" hidden></p>
+      <div class="seg center kindseg" id="kindSeg" hidden></div>
       <div class="tiers" id="tiers"></div>
       <div id="stageBox" hidden></div>
       <div id="dayBox" hidden></div>
@@ -39,6 +40,12 @@
         <li>고양이끼리는 대각선으로도 붙으면 안 돼요</li>
         <li>한 번 누르면 ✕ 표시, 두 번 빠르게 누르면 🐱</li>
         <li>정답이 아닌 칸에 놓으면 🐟를 잃어요 (3번이면 실패)</li>
+      </ul>
+      <ul class="howto" id="howtoB" hidden>
+        <li>가로줄·세로줄마다 🐈 치즈냥 · 🐈‍⬛ 까망냥 반반</li>
+        <li>같은 고양이 셋이 연달아 붙으면 안 돼요</li>
+        <li>칸 사이 <b>=</b> 는 같은 고양이, <b>×</b> 는 다른 고양이</li>
+        <li>누를 때마다 🐈 → 🐈‍⬛ → 빈칸. 규칙에 어긋나면 빨개져요 (물고기 없음)</li>
       </ul>
       <button class="btn primary big" id="startBtn">시작!</button>
     </div>
@@ -111,8 +118,10 @@
 <script src="../common/arena.js?v=15"></script>
 <script src="../common/arena-ui.js?v=18"></script>
 <script src="core.js?v=6"></script>
+<script src="banban.js?v=1"></script>
+<script src="banban-ui.js?v=1"></script>
 <script src="sound.js?v=4"></script>
-<script src="main.js?v=26"></script>
+<script src="main.js?v=27"></script>
 <script src="watch.js?v=7"></script>
 </body>
 </html>

@@ -475,5 +475,56 @@ U.main(async T => {
     await D.close();
   }
 
+  // ── ⑪ 🌗 치즈냥·까망냥 반반 (11-06 베니 님 '다 진행' — 벤치마킹 1순위 새 퍼즐: LinkedIn Tango 같은 규칙)
+  {
+    const B = await T.open('nyang/');
+    await U.waitFor(B, A.ready);
+    await B.evaluate(() => { for (const k of ['nyang.bday', 'nyang.bdayTry', 'nyang.bbBest']) localStorage.removeItem(k); localStorage.setItem('nyang.kind', '"q"'); document.querySelector('#soloMode [data-v="one"]').click(); });
+    const k0 = await B.evaluate(() => ({ seg: [...document.querySelectorAll('#kindSeg .btn')].map(b => b.textContent.trim()), vis: !document.getElementById('kindSeg').hidden }));
+    T.ok(k0.vis && k0.seg.length === 2 && /냥도쿠/.test(k0.seg[0]) && /반반/.test(k0.seg[1]), '⑪ 한 판: 🐱 냥도쿠 · 🌗 반반 고르기 (' + k0.seg.join(' · ') + ')');
+    await B.evaluate(() => document.querySelector('#kindSeg [data-v="b"]').click());
+    const k1 = await B.evaluate(() => ({ desc: [...document.querySelectorAll('#tiers .tier span:not(.em)')].map(s => s.textContent).join(' '), hb: !document.getElementById('howtoB').hidden, hq: document.getElementById('howto').hidden, fit: document.documentElement.scrollWidth <= innerWidth }));
+    T.ok(/6×6/.test(k1.desc) && /8×8/.test(k1.desc) && k1.hb && k1.hq && k1.fit, '⑪ 반반 고르면 난이도 글이 6×6·8×8, 반반 하는 법 · 폰 폭 그대로');
+    await B.evaluate(() => document.querySelector('#tiers .tier[data-t="normal"]').click());
+    await B.click('#startBtn');
+    T.ok(!!(await U.waitFor(B, () => window.NYBUI && NYBUI.pz && !document.getElementById('bplay').hidden && document.getElementById('home').hidden, null, 4000)), '⑪ 시작하면 반반 판 (첫 화면은 숨김)');
+    const b0 = await B.evaluate(() => { const P = NYBUI.pz; return { N: P.N, cells: document.querySelectorAll('#bboard .bc').length, signs: document.querySelectorAll('#bboard .bs').length, want: NYB.signs(P).length, given: document.querySelectorAll('#bboard .bc.g').length, gv: [...P.given].filter(v => v >= 0).length }; });
+    T.ok(b0.N === 6 && b0.cells === 36 && b0.signs === b0.want && b0.given === b0.gv && b0.gv > 0, '⑪ 중급 6×6 판: 칸 36 · 표시 · 처음 칸 ' + JSON.stringify(b0));
+    // 누르기: 빈칸 → 🐈 → 🐈‍⬛ → 빈칸 (처음 칸은 안 바뀜)
+    const cyc = await B.evaluate(() => { const P = NYBUI.pz, k = [...P.given].findIndex(v => v < 0), g = [...P.given].findIndex(v => v >= 0), el = i => document.querySelector(`#bboard .bc[data-k="${i}"]`), out = []; for (let i = 0; i < 3; i++) { el(k).click(); out.push(el(k).textContent); } const before = el(g).textContent; el(g).click(); return { out, fixed: el(g).textContent === before }; });
+    T.ok(JSON.stringify(cyc.out) === JSON.stringify(['🐈', '🐈‍⬛', '']) && cyc.fixed, '⑪ 누를 때마다 🐈 → 🐈‍⬛ → 빈칸 · 처음 칸은 그대로 ' + JSON.stringify(cyc));
+    // 셋 연속이면 빨개짐 (가로로 비어 있는 세 칸이 있으면)
+    const three = await B.evaluate(() => { const P = NYBUI.pz, N = P.N; for (let r = 0; r < N; r++) for (let c = 0; c + 2 < N; c++) { const ks = [0, 1, 2].map(i => r * N + c + i); if (ks.every(k => P.given[k] < 0)) { ks.forEach(k => document.querySelector(`#bboard .bc[data-k="${k}"]`).click()); const bad = ks.every(k => document.querySelector(`#bboard .bc[data-k="${k}"]`).classList.contains('bad')); ks.forEach(k => { const e = document.querySelector(`#bboard .bc[data-k="${k}"]`); e.click(); e.click(); }); return bad ? 'bad' : 'nobad'; } } return 'none'; });
+    T.ok(three === 'bad' || three === 'none', '⑪ 같은 고양이 셋 연속 → 빨간 칸 (' + three + ')');
+    // 힌트: 까닭 글 + 적용하면 정답과 같은 칸
+    await B.click('#bHintBtn');
+    const h = await B.evaluate(() => ({ txt: document.getElementById('bHintText').textContent, vis: !document.getElementById('bHint').hidden }));
+    T.ok(h.vis && /💡/.test(h.txt) && h.txt.length > 8, '⑪ 💡 힌트 까닭: ' + h.txt.slice(0, 60));
+    await B.click('#bHintApply');
+    // 다 채우면 성공 (🧽 처음부터 → 정답대로 누르기)
+    const solveBB = p => p.evaluate(() => { document.getElementById('bClear').click(); const P = NYBUI.pz; for (let k = 0; k < P.N * P.N; k++) if (P.given[k] < 0) { const e = document.querySelector(`#bboard .bc[data-k="${k}"]`); for (let i = 0; i <= P.sol[k]; i++) e.click(); } });
+    await solveBB(B);
+    T.ok(!!(await U.waitFor(B, () => /다 맞혔어요/.test(document.getElementById('resTitle').textContent) && !document.getElementById('resBox').hidden, null, 5000)), '⑪ 다 맞히면 "다 맞혔어요!"');
+    const r1 = await B.evaluate(() => ({ body: document.getElementById('resBody').textContent, stars: document.querySelectorAll('#resBody .stars span').length }));
+    T.ok(r1.stars === 3 && /힌트 1번/.test(r1.body) && /6×6/.test(r1.body), '⑪ 결과: 별 · 힌트 수 · 판 크기: ' + r1.body.replace(/\s+/g, ' ').slice(0, 80));
+    await B.evaluate(() => __qa.clickText(/난이도 고르기/));
+    T.ok(await B.evaluate(() => !document.getElementById('home').hidden && document.getElementById('bplay').hidden), '⑪ 난이도 고르기 → 첫 화면');
+    // 📅 오늘 아래 '오늘의 반반': 모두 같은 판 · 처음 성공만 기록
+    await B.evaluate(() => document.querySelector('#soloMode [data-v="day"]').click());
+    T.ok(await B.evaluate(() => !!document.getElementById('dayBB') && /오늘의 반반/.test(document.getElementById('dayBox').textContent)), '⑪ 📅 오늘에 🌗 오늘의 반반 카드');
+    await B.click('#dayBB');
+    await U.waitFor(B, () => window.NYBUI && !document.getElementById('bplay').hidden, null, 4000);
+    const dd = await B.evaluate(() => ({ seed: NYBUI.pz.seed, want: __ny.dailyInfo().bseed, lbl: document.getElementById('bLabel').textContent }));
+    T.ok(dd.seed === dd.want && /오늘의 반반/.test(dd.lbl), '⑪ 오늘의 반반 = 날짜 씨앗 (누구나 같은 판)');
+    await solveBB(B);
+    T.ok(!!(await U.waitFor(B, () => /오늘의 반반 성공/.test(document.getElementById('resTitle').textContent), null, 5000)), '⑪ "오늘의 반반 성공!"');
+    const bd = await B.evaluate(() => JSON.parse(localStorage.getItem('nyang.bday') || '{}')[__ny.kstDay()]);
+    T.ok(bd && typeof bd.s === 'number' && bd.s >= 0 && bd.h === 0 && bd.k === 1, '⑪ 오늘의 반반 기록 (시험은 순식간에 풀어 0초일 수 있음) ' + JSON.stringify(bd));
+    await B.evaluate(() => __qa.clickText(/^닫기$/));
+    T.ok(await B.evaluate(() => /✅/.test((document.querySelector('.bbcard') || {}).textContent || '')), '⑪ 카드에 ✅ 오늘 기록');
+    await B.evaluate(() => { for (const k of ['nyang.bday', 'nyang.bdayTry', 'nyang.bbBest', 'nyang.kind', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await B.close();
+  }
+
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');
 }, 'nyang ui');

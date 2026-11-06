@@ -103,6 +103,31 @@ header.top h1{gap:8px}
 .cheer{color:var(--ink)}
 .cheer:empty{display:none}
 
+/* ── 🌗 반반 판 (11-06): 흰 판 위 칸 · 치즈냥 칸은 옅은 귤색 · 까망냥 칸은 옅은 회보라 · 칸 사이 =·× 동그라미 ── */
+.bplay .bb-rule{margin:0 6px;text-align:center;color:var(--soft);line-height:1.4}
+.bplay .bb-rule b{color:var(--ink)}
+.bboard{--n:6;position:relative;display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));grid-template-rows:repeat(var(--n),minmax(0,1fr));width:min(94vw,460px,calc(100dvh - 330px));aspect-ratio:1;background:#fff;border:2px solid #ecd3b9;border-radius:18px;overflow:hidden;box-shadow:var(--shadow);touch-action:manipulation}
+.bc{appearance:none;-webkit-appearance:none;min-width:0;min-height:0;overflow:hidden;border:0;border-right:1px solid #f1e2d2;border-bottom:1px solid #f1e2d2;background:#fff;display:grid;place-items:center;padding:0;margin:0;cursor:pointer;touch-action:manipulation;color:inherit;font-size:clamp(18px,calc(62vw / var(--n)),40px);line-height:1;transition:background .12s}
+.bc span{pointer-events:none}
+.bc.z{background:#ffe9cf}
+.bc.o{background:#ebe6f0}
+.bc.g{cursor:default}
+.bc.g.z{background:#ffd8a6}
+.bc.g.o{background:#d8d0e2}
+.bc.g::after{content:"";position:absolute}
+.bc.over{background-image:linear-gradient(rgba(224,80,107,.16),rgba(224,80,107,.16))}
+.bc.bad{box-shadow:inset 0 0 0 3px var(--bad)}
+.bc.hint{box-shadow:inset 0 0 0 3px var(--gold);animation:look 1.1s ease-in-out infinite}
+.bc.hfrom{box-shadow:inset 0 0 0 2px var(--accent2)}
+.bs{position:absolute;transform:translate(-50%,-50%);width:19px;height:19px;border-radius:50%;background:#fff;border:1.5px solid #d6b394;display:grid;place-items:center;font:800 13px/1 var(--round);font-style:normal;color:#8a5a3a;pointer-events:none;z-index:2}
+.bs.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+.bboard.won{animation:bbwin .9s ease}
+@keyframes bbwin{30%{transform:scale(1.03);box-shadow:0 0 0 6px rgba(63,174,122,.35)}}
+.kindseg{gap:6px}
+.daycard.bbcard{gap:7px;background:linear-gradient(#fbf7ff,#f0e9f7)}
+.daycard.bbcard.done{background:linear-gradient(#f1fbf5,#e3f5ea)}
+.daycard.bbcard>.btn{justify-self:stretch}
+
 /* ── 📅 오늘의 퍼즐 (11-06) ── */
 #soloMode{gap:6px;flex-wrap:nowrap}
 #soloMode .btn{padding:8px 10px;font-size:14px;min-width:0}

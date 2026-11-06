@@ -79,6 +79,20 @@
   const FOE_ID = { 고광렬: 'h_go', 짝귀: 'h_jjak', 평경장: 'h_pyeong', 아귀: 'h_agwi', '각성 아귀': 'h_boss' };
   // 👹 반칙 보스: 수마다 이 확률로 더미 순서·남의 손패를 몰래 봄 (test/bench.js 2000쌍: 아귀보다 판당 +14.6 ± 1.3점 · 57%) — 혼자·한 기기만
   const BOSS_PEEK = { '각성 아귀': 0.3 };
+  // 🥋 타짜 도장깨기 (11-06 베니 님 '다 진행' · 벤치마킹: 한게임 '타짜의 길' · 일단 맞고 '맞고의 탑' · Punch-Out!! 재대결 · chess.com 봇 왕관)
+  //   맞고로 다섯 관 차례로, 관마다 먼저 3승(5판 3선승). 져도 그 관부터 바로 다시. 깨면 칭호.
+  //   별: ⭐ 깸 · +⭐ 선생님 안 켜고 · +⭐ 한 판도 안 지고 (다시 도전해서 더 받을 수 있음). 진행은 이 기기에 (판·승패 숫자는 공용 랭킹 그대로)
+  const GAUNT = [
+    { name: '고광렬', title: '🃏 입담 이긴 꾼' },
+    { name: '짝귀', title: '👂 짝귀가 인정한 꾼' },
+    { name: '평경장', title: '🎓 평경장의 제자' },
+    { name: '아귀', title: '🦈 아귀 사냥꾼' },
+    { name: '각성 아귀', title: '👑 진짜 타짜' },
+  ];
+  const GNT_WIN = 3;
+  const gnt = () => Object.assign({ stage: 0, w: 0, l: 0, coach: false, stars: {} }, C.store(KEY + 'gnt', {}));
+  const gntSave = g => C.save(KEY + 'gnt', g);
+  const gntTitle = g => { let t = ''; GAUNT.forEach((x, i) => { if (g.stars[i]) t = x.title; }); return t; };
   if (C.store(KEY + 'foeV', 1) < 2) {                               // 11-01 타짜 순서 바꿈 (평경장·고광렬·아귀·짝귀 → 약한 순): 고른 사람 그대로
     if (opt.foe && opt.foe.hard != null) { opt.foe = Object.assign({}, opt.foe, { hard: [2, 0, 3, 1][opt.foe.hard | 0] | 0 }); saveOpt('foe'); }
     C.save(KEY + 'foeV', 2);
@@ -108,6 +122,7 @@
     $('tabSolo').setAttribute('aria-pressed', String(tab === 'solo')); $('tabWatch').setAttribute('aria-pressed', String(tab === 'watch')); $('tabLocal').setAttribute('aria-pressed', String(tab === 'local'));
     $('soloBox').hidden = tab !== 'solo'; $('watchBox').hidden = tab !== 'watch'; $('localBox').hidden = tab !== 'local';
     $('coinLine').innerHTML = `<span class="ic">🪙</span><span class="grow"><b>보유 자금 ${fmtN(coins)}냥</b><span class="small">${rk && rk.all && rk.all.n ? `통산 ${fmtN(rk.all.n)}판 중 ${fmtN(rk.all.w)}승` : '승리 시 점수만큼 판돈이 쌓입니다 (1점 = 10냥)'}</span></span>`;
+    drawGauntlet();
     segBtns($('modeSeg'), [[2, '맞고 2인'], [3, '고스톱 3인'], [4, '광팔기 4인'], [5, '광팔기 5인']], opt.mode, v => { opt.mode = +v; saveOpt('mode'); drawMenu(); });
     const mo = G.modeOf(opt.mode);
     $('modeNote').textContent = mo.bench ? `${mo.n}명이 치고 ${mo.bench}명은 판마다 돌아가며 쉬어요. 쉬는 사람이 내놓는 광을 살 수 있어요` : '';
@@ -473,9 +488,28 @@
   const D = ms => (FAST ? 1 : Math.round(ms * SP().mul));
 
   let startSeed = 0;                                       // 시험용: 첫 판 씨앗을 정할 때
-  function startGame({ watch }) {
+  // 🥋 도장깨기 카드 (혼자 탭 맨 위): 다섯 관 · 지금 관 점수 · 칭호 · 도전 단추
+  function drawGauntlet() {
+    const el = $('gntCard'); if (!el) return;
+    const g = gnt(), all = GAUNT.length, done = Object.keys(g.stars).length >= all && g.stage >= all;
+    const cur = GAUNT[Math.min(g.stage, all - 1)], title = gntTitle(g);
+    el.innerHTML = `<div class="gnt-top"><b>🥋 타짜 도장깨기</b>${title ? `<span class="gnt-title">${esc(title)}</span>` : '<span class="small">맞고 · 관마다 5판 3선승</span>'}</div>
+      <div class="gnt-path">${GAUNT.map((x, i) => { const st = g.stars[i] || 0, now = i === g.stage; return `<span class="gnt-st${st ? ' ok' : ''}${now ? ' now' : ''}${i > g.stage ? ' lock' : ''}"><i>${i + 1}관</i><b>${esc(x.name === '각성 아귀' ? '👹 각성' : x.name)}</b><em>${st ? '⭐'.repeat(st) : now ? `${g.w}:${g.l}` : i > g.stage ? '🔒' : ''}</em></span>`; }).join('')}</div>
+      <div class="gnt-foot"><span class="small">${done ? '🏆 다 깼어요! 관을 눌러 ⭐ 더 받기' : `${g.stage + 1}관 ${esc(cur.name)} · 나 ${g.w} : ${g.l} ${esc(cur.name)} (먼저 ${GNT_WIN}승)`}</span><button class="btn" id="gntGo" type="button">${done ? '🥋 다시 도전' : g.w || g.l ? '🥋 이어서' : '🥋 도전'}</button></div>`;
+    $('gntGo').onclick = () => { sfx('tap'); startGauntlet(done ? 0 : null); };
+    el.querySelectorAll('.gnt-st.ok').forEach((s, k) => { const i = [...el.querySelectorAll('.gnt-st')].indexOf(s); s.onclick = () => { if (i <= g.stage) { sfx('tap'); startGauntlet(i); } }; });
+  }
+  // stage = 다시 할 관 (깬 관만, 없으면 지금 관) — 다시 하면 그 관 점수는 0:0 부터
+  function startGauntlet(stage) {
+    const g = gnt();
+    if (stage != null && stage !== g.stage) { g.stage = stage; g.w = 0; g.l = 0; g.coach = false; gntSave(g); }
+    if (g.stage >= GAUNT.length) { g.stage = 0; g.w = 0; g.l = 0; g.coach = false; gntSave(g); }
+    startGame({ watch: false, gauntlet: g.stage });
+  }
+  function startGame({ watch, gauntlet }) {
     if (SES) SES.dispose();
-    const n = watch ? opt.wMode : opt.mode;
+    const gn = gauntlet != null && !watch ? GAUNT[gauntlet] : null;
+    const n = gn ? 2 : watch ? opt.wMode : opt.mode;
     const rules = G.normRules(watch && !houseRules.bonus ? Object.assign({}, houseRules, { bonus: 2 }) : houseRules);   // AI 구경은 보너스 피를 안 골랐으면 2장 (예전처럼)
     const cfg = { watch, N: n, rules, bonus: rules.bonus, seed: startSeed, me: watch ? -1 : 0 };
     startSeed = 0;
@@ -483,8 +517,10 @@
     const used = {};
     const mk = (tier) => { const t = TIER[tier]; used[tier] = (used[tier] || 0) + 1; return { ctrl: 'ai', tier, name: t.names[((watch ? 0 : foeIdx(tier)) + used[tier] - 1) % t.names.length], em: t.em }; };
     if (watch) ses.seats = Array.from({ length: n }, (_, i) => mk(opt.wTiers[i] || 'normal'));
+    else if (gn) ses.seats = [{ ctrl: 'me', tier: null, name: '나', em: '나' }, { ctrl: 'ai', tier: 'hard', name: gn.name, em: TIER.hard.em }];
     else ses.seats = [{ ctrl: 'me', tier: null, name: '나', em: '나' }].concat(Array.from({ length: n - 1 }, () => mk(opt.tier)));
     ses.coachOn = !!opt.coach;
+    if (gn) { ses.gnt = gauntlet; if (ses.coachOn) { const g = gnt(); g.coach = true; gntSave(g); } }
     show('play');
     setupCoach(ses);
     drawDock();
@@ -858,6 +894,32 @@
     return FOE_ID[st.name] ? { p: ais[0], name: st.name } : null;
   }
   function revengeOf(ses) { const f = soloFoe(ses); return f && lastVs()[f.name] === 'l' ? f : null; }
+  // 🥋 판 끝: 도장깨기 점수 · 관 돌파(별 · 칭호) / 탈락 — 정해지면 ses.gntDone (결과 창 단추가 다음 관 · 다시 도전으로)
+  function gauntletAfter(ses, r) {
+    if (ses.gnt == null || r.kind === 'nagari' || r.winner < 0) return '';
+    const g = gnt(); if (g.stage !== ses.gnt) return '';                    // 다른 탭에서 관을 바꿨으면 안 셈
+    const won = r.winner === meSeat(ses), x = GAUNT[g.stage];
+    if (won) g.w++; else g.l++;
+    let html;
+    if (g.w >= GNT_WIN) {
+      const st = 1 + (g.coach ? 0 : 1) + (g.l === 0 ? 1 : 0), first = !g.stars[g.stage];
+      g.stars[g.stage] = Math.max(g.stars[g.stage] || 0, st);
+      ses.gntDone = { cleared: true, next: g.stage + 1 < GAUNT.length ? GAUNT[g.stage + 1].name : null };
+      html = `<p class="rescoin gnt-res">🥋 ${g.stage + 1}관 돌파! ${'⭐'.repeat(st)} (${g.w}:${g.l})${first ? ` · 칭호 <b>${esc(x.title)}</b>` : ''}${g.coach ? ' · 선생님 없이 깨면 ⭐ 하나 더' : ''}</p>`;
+      aiSay(ses, 1, 'lost', true) || aiSay(ses, 1, 'ouch', true);
+      g.stage++; g.w = 0; g.l = 0; g.coach = false;
+      if (!FAST) setTimeout(() => C.confetti(), 250);
+    } else if (g.l >= GNT_WIN) {
+      ses.gntDone = { cleared: false };
+      html = `<p class="rescoin gnt-res">🥋 ${g.stage + 1}관 탈락 (${g.w}:${g.l}) — ${esc(x.name)}에게 바로 다시 도전할 수 있어요</p>`;
+      g.w = 0; g.l = 0; g.coach = false;
+    } else {
+      ses.gntDone = null;
+      html = `<p class="rescoin gnt-res">🥋 ${g.stage + 1}관 ${esc(x.name)} · 나 <b>${g.w}</b> : <b>${g.l}</b> ${esc(x.name)} (먼저 ${GNT_WIN}승)</p>`;
+    }
+    gntSave(g);
+    return html;
+  }
   function foeAfter(ses, r) {                                               // 판 끝: 이 타짜와의 마지막 결과를 기억
     const f = soloFoe(ses); if (!f || r.kind === 'nagari' || r.winner < 0) return '';
     const won = r.winner === meSeat(ses), all = lastVs(), was = all[f.name];
@@ -2428,7 +2490,7 @@
         stats.played++; if (r.winner === me) { stats.won++; stats.best = Math.max(stats.best, r.points); }
         C.save(KEY + 'stats', stats); drawCoinPill();
         rankReport(ses, s, r);
-        coinLine += foeAfter(ses, r);
+        coinLine += foeAfter(ses, r) + gauntletAfter(ses, r);
       }
       // 점수 내역
       const saleRows = (r.sale || []).map(x => `<tr><td>💰 광 팔기 <span class="small">${esc(tname(ses, x.buyerSeat))} → ${esc(tname(ses, x.seat))} · 광 ${x.cards.length}장</span></td><td class="n">${x.price}점</td></tr>`).join('');
@@ -2492,6 +2554,11 @@
         nb.onclick = () => { sfx('tap'); ses.myReady = s.round; ses.net.send({ t: '_ready', round: s.round }, true); paint(); };
         paint(); $('resBtns').appendChild(nb);
       } else nb = mk(host ? '다음 판 시작 ▶' : '다음 판 ▶', 'primary', 'next');
+      if (ses.gnt != null && ses.gntDone) {                                    // 🥋 관이 정해졌으면: 다음 관 · 다시 도전 (새 판으로)
+        const gd = ses.gntDone;
+        nb.textContent = gd.cleared ? (gd.next ? `🥋 다음 관: ${gd.next} ▶` : '🏆 도장깨기 끝! 첫 화면으로') : '🥋 다시 도전 ▶';
+        nb.onclick = () => { sfx('tap'); done('menu'); if (!gd.cleared || gd.next) setTimeout(() => startGauntlet(null), 0); };
+      }
       let fb = null;
       if (host) {
         fb = mk('안 기다리고 시작', '', 'next');
@@ -2559,6 +2626,7 @@
   $('coachBtn').onclick = () => {
     const ses = SES; if (!coachAvail(ses)) return;
     ses.coachOn = !ses.coachOn;
+    if (ses.coachOn && ses.gnt != null) { const g = gnt(); g.coach = true; gntSave(g); }   // 🥋 이 관은 선생님 별 없음
     if (!ses.cfg.online && !ses.hot) { opt.coach = ses.coachOn ? 1 : 0; saveOpt('coach'); }
     sfx('tap');
     ses.coachHtml = null;
@@ -2590,6 +2658,7 @@
     legal() { return SES ? G.legal(SES.S) : []; },
     get panel() { return SES && SES.panel; },
     get peeks() { return peekN; }, bossPeek(p) { BOSS_PEEK['각성 아귀'] = p; },   // 시험: 👹 몰래 본 수 · 확률 바꾸기
+    gauntlet(stage) { startGauntlet(stage == null ? null : stage); }, get gnt() { return gnt(); }, menu: () => drawMenu(),   // 시험: 🥋 도장깨기
   };
 
   // ── 시작 ────────────────────────────────────────────────
