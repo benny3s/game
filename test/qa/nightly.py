@@ -15,6 +15,8 @@ TG_SEND = r"C:\Users\1\Claude-Benny\secretary\telegram\tg_send.py"
 HUB = r"C:\Users\1\Claude-Benny\agent-hub\hub.py"
 NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 DRY = "--dry" in sys.argv
+STARTED = dt.datetime.now()
+LIMIT_MIN = 50   # register-nightly.bat 의 ExecutionTimeLimit — 넘으면 작업 스케줄러가 끊어 폰 알림 · 맥박이 안 남음
 
 
 def phone(text, key):
@@ -46,13 +48,17 @@ def auto_fix(new, t0):
 3. 통과하면 커밋 (메시지: '밤 점검 자동 수정: …'). push 하지 않는다. 못 고친 것은 이 파일 아래에 까닭을 적는다.
 하지 말 것: common/ 의 큰 구조 바꾸기, firebase 규칙 수정·배포, 다른 저장소(agent-hub 등) 건드리기, 시험을 고쳐서 통과시키기.
 """, encoding="utf-8")
+    # (11-06) 예전엔 일꾼 60분 + 여유 15분이라 점검 15분과 합치면 50분 제한을 넘겨, 새 문제가 있는 밤일수록 알림 · 맥박이 끊길 뻔함 → 남은 시간 안에서만
+    left = LIMIT_MIN - 3 - (dt.datetime.now() - STARTED).total_seconds() / 60   # 알림 · 맥박 쓸 3분은 남김
+    if left < 15:
+        return f"🛠 자동 수정 건너뜀 — 점검이 길어 {LIMIT_MIN}분 제한 안에 못 끝냄"
     try:
-        p = subprocess.run([PY, "-I", HUB, "work", "build", "--task", str(task), "--workdir", str(ROOT), "--tag", f"qa-fix-{t0:%m%d}", "--timeout", "60"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=75 * 60, creationflags=NOWIN)
+        p = subprocess.run([PY, "-I", HUB, "work", "build", "--task", str(task), "--workdir", str(ROOT), "--tag", f"qa-fix-{t0:%m%d}", "--timeout", str(int(left) - 5)],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=left * 60, creationflags=NOWIN)
         last = ((p.stdout or "") + (p.stderr or "")).strip().splitlines()[-1:] or [""]
         return f"🛠 자동 수정 시도 끝 (코드 {p.returncode}) — {last[0][:100]}"
     except subprocess.TimeoutExpired:
-        return "🛠 자동 수정이 75분 안에 안 끝남"
+        return f"🛠 자동 수정이 {int(left)}분 안에 안 끝남"
     except Exception as e:
         return f"🛠 자동 수정 못 돌림: {e}"[:140]
 
