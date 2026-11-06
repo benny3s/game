@@ -27,6 +27,8 @@ const CHROME = [
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1247/chrome-headless-shell-win64/chrome-headless-shell.exe',
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe',
 ];
+// (11-06) Claude 앱 안에서 깐 브라우저는 앱 전용 폴더에만 생김 — 앱 밖(작업 스케줄러 밤 점검)에서는 위 자리에 없어 'Executable doesn't exist'
+const PW_APP = process.env.LOCALAPPDATA + '/Packages/Claude_pzs8sxrjxfjjc/LocalCache/Local/ms-playwright';
 const ALL = ['portal', 'gostop', 'seotda', 'poker', 'baduk', 'omok', 'cube', 'chess', 'janggi', 'yut', 'billiards', 'volley', 'land', 'onecard', 'nyang', 'snake', 'sc', 'draw', 'catch'];
 
 // ── 인자
@@ -154,6 +156,7 @@ async function pool(tasks, n) {
 }
 
 (async () => {
+  if (!process.env.PLAYWRIGHT_BROWSERS_PATH && !CHROME.some(f => fs.existsSync(f)) && fs.existsSync(PW_APP)) process.env.PLAYWRIGHT_BROWSERS_PATH = PW_APP;   // WebKit 도 그 자리에서 (require 전에 정해야 먹음)
   const pw = require(PW);
   let srv = null, base;
   if (OPT.live) base = LIVE_BASE;

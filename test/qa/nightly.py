@@ -78,7 +78,7 @@ def run_once(t0):
 def main():
     t0 = dt.datetime.now()
     code, tail, D, fresh = run_once(t0)
-    if code not in (0, 1) or not fresh:   # 11-01 04:30 한 번 코드 3 (낮에 다시 돌리면 정상, 오류 글은 안 남았음) → 한 번 더 돌려 봄
+    if code not in (0, 1) or not fresh:   # 11-01 04:30 한 번 코드 3 (낮에 다시 돌리면 정상, 오류 글은 안 남았음) → 한 번 더 돌려 봄. 그 뒤 매일 밤 코드 3 의 진짜 까닭은 브라우저가 앱 전용 폴더에만 있던 것 (11-06 run.js 가 그 자리를 씀)
         t0 = dt.datetime.now()
         code, tail, D, fresh = run_once(t0)
     if code not in (0, 1) or not fresh:   # 1 = high 문제 있음 (정상 종료), 그 밖은 점검기 자체 고장
