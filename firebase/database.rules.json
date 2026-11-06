@@ -662,6 +662,9 @@
         "todoId": {
           ".validate": "auth.token.admin === 1 && (newData.isNumber() || newData.isString())"
         },
+        "ai": {
+          ".validate": "auth.token.admin === 1"
+        },
         "$other": {
           ".validate": false
         }
