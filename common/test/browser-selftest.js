@@ -27,6 +27,7 @@ const PAGES = {
   gtt: ['../common/gate.js', '../common/arena.js'],
   glt: ['../common/glog.js', '../common/arena.js'],
   met: ['../common/me.js'],
+  rpt: ['../common/cozy.js', '../common/arena.js'],
 };
 const html = list => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main id="app">시험</main>${list.map(s => `<script src="${s}"></script>`).join('')}</body></html>`;
 
@@ -269,6 +270,42 @@ async function presenceTests(browser) {
   await ctx2.close();
 }
 
+// ── 11-06: 지민 님이 🐞 로 신고했는데 처리됐는지 알 길이 없었음 → 비서 앱 단추가 game_reports/{id}.status 를 쓰면 🐞 에 보임
+async function reportStatusTests(browser) {
+  console.log('🐞 보낸 신고 처리 상태');
+  const ctx = await newCtx(browser, { fake: { user: { uid: 'r1', claims: {} } } });
+  await ctx.addInitScript(() => {
+    if (!sessionStorage.getItem('__repNow')) sessionStorage.setItem('__repNow', String(Date.now()));   // 새로 고침해도 같은 시각 (가짜 서버는 탭마다 새로 생김)
+    const now = +sessionStorage.getItem('__repNow');
+    window.__fs.tree.game_reports = {
+      a1: { kind: 'report', game: 'rpt', msg: '색이 눈 아파요\n[최근 오류] x', t: now - 86400000, uid: 'r1', seen: true, status: 'done', statusT: now - 1000 },
+      a2: { kind: 'report', game: 'rpt', msg: '남의 신고', t: now - 5000, uid: 'zz', seen: true, status: 'done', statusT: now - 900 },
+      a3: { kind: 'report', game: 'rpt', msg: '아직 안 간 것', t: now - 3000, uid: 'r1' },
+      e1: { kind: 'error', game: 'rpt', msg: '오류', t: now - 2000, uid: 'r1' },
+    };
+  });
+  const p = await open(ctx, PROD + '/game/rpt/');
+  const toasted = await waitFn(p, () => { const t = document.querySelector('.toast'); return t && !t.hidden && /고쳤어요/.test(t.textContent); }, null, 7000);
+  const s1 = await p.evaluate(() => ({ toast: (document.querySelector('.toast') || {}).textContent, dot: !(document.getElementById('czBugDot') || { hidden: true }).hidden, seen: localStorage.getItem('cz.repSeen') }));
+  ok(toasted && /색이 눈 아파요/.test(s1.toast) && !/남의/.test(s1.toast), `처음 보는 '고쳤어요' → 알림 한 번 (내 것만) — '${s1.toast}'`);
+  ok(s1.dot, `🐞 손잡이에 빨간 점 — ${JSON.stringify(s1)}`);
+  await p.click('#czBug');
+  await waitFn(p, () => document.querySelectorAll('.cz-rep').length > 0, null, 4000);
+  const rows = await p.evaluate(() => [...document.querySelectorAll('.cz-rep')].map(r => r.textContent));
+  ok(rows.length === 2 && /✅ 고쳤어요/.test(rows[1]) && /색이 눈 아파요/.test(rows[1]) && !/최근 오류/.test(rows[1]) && /📨 보냈어요/.test(rows[0]) && /아직 안 간 것/.test(rows[0]), `🐞 창: 내가 보낸 신고 2개만 (남의 것·자동 오류 빼고, 새것 먼저) — ${JSON.stringify(rows)}`);
+  ok(await p.evaluate(() => document.getElementById('czBugDot').hidden), `창을 열면 점이 사라짐`);
+  await p.fill('#czRep', '시험 신고');
+  await p.click('.overlay .btn.primary');
+  const sent = await waitFn(p, () => window.__fs.log.some(x => /^game_reports\/k/.test(x.path) && x.v && x.v.msg === '시험 신고'), null, 4000);
+  const row = await p.evaluate(() => (window.__fs.log.find(x => /^game_reports\/k/.test(x.path) && x.v && x.v.msg === '시험 신고') || {}).v);
+  ok(sent && row.uid === 'r1' && row.kind === 'report', `새 신고에는 내 uid 가 들어감 (나중에 처리 상태를 찾을 수 있게) — ${JSON.stringify(row)}`);
+  await p.reload({ waitUntil: 'load' });
+  await sleep(3800);
+  const s2 = await p.evaluate(() => ({ toast: (document.querySelector('.toast') || { hidden: true }).hidden ? '' : document.querySelector('.toast').textContent, dot: !document.getElementById('czBugDot').hidden }));
+  ok(!/고쳤어요/.test(s2.toast) && !s2.dot, `다시 와도 같은 알림 · 점은 안 나옴 — ${JSON.stringify(s2)}`);
+  await ctx.close();
+}
+
 // ── #4 me.js 이름 고르기 창: 새 이름은 PIN 을 먼저 받고 이름·프로필을 한 번에 → PIN 치다 새로 고침해도 이름이 안 묶임
 // ── 11-05: 규호 님이 하루 71판인데 접속 기록이 없었음 → 주소에 방 코드가 있으면 문지기가 확인 없이 열고 아무것도 안 남겼음
 //   없는 코드로도 잠금이 풀림 (10-30 베니 님 '방 링크 손님은 그 방에서만' 과 어긋남)
@@ -379,7 +416,7 @@ async function mePickTests(browser) {
   const t0 = Date.now();
   const pw = require(PW);
   const browser = await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--mute-audio'] });
-  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, roomLinkTests, mePickTests]) {
+  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, roomLinkTests, reportStatusTests, mePickTests]) {
     try { await t(browser); } catch (e) { fail++; console.log('  ✘ FAIL: 시험 도구 예외 ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | ')); }
   }
   await browser.close();

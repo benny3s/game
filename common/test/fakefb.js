@@ -54,11 +54,11 @@
   function makeRef(S, path, app, q) {
     q = q || {};
     const who = () => { const u = app && app.auth().currentUser; return u ? { uid: u.uid, claims: u._claims || {} } : null; };
-    const view = () => {                                     // 질의(orderByChild·startAt·limitToLast) 적용한 값
+    const view = () => {                                     // 질의(orderByChild·startAt·equalTo·limitToLast) 적용한 값
       let v = S.get(path);
       if (v && typeof v === "object" && (q.by || q.last || q.byKey)) {
         let ks = Object.keys(v);
-        if (q.by) { if (q.start != null) ks = ks.filter(k => v[k] && v[k][q.by] >= q.start); ks.sort((a, b) => ((v[a] || {})[q.by] || 0) - ((v[b] || {})[q.by] || 0)); }
+        if (q.by) { if (q.start != null) ks = ks.filter(k => v[k] && v[k][q.by] >= q.start); if (q.eq !== undefined) ks = ks.filter(k => v[k] && v[k][q.by] === q.eq); ks.sort((a, b) => ((v[a] || {})[q.by] || 0) - ((v[b] || {})[q.by] || 0)); }
         else ks.sort();
         if (q.last) ks = ks.slice(-q.last);
         v = ks.reduce((o, k) => { o[k] = v[k]; return o; }, {});
@@ -111,6 +111,7 @@
       orderByChild: k => makeRef(S, path, app, { ...q, by: k }),
       orderByKey: () => makeRef(S, path, app, { ...q, byKey: true }),
       startAt: v => makeRef(S, path, app, { ...q, start: v }),
+      equalTo: v => makeRef(S, path, app, { ...q, eq: v }),
       limitToLast: n => makeRef(S, path, app, { ...q, last: n }),
     };
     return ref;

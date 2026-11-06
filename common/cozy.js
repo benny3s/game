@@ -191,7 +191,40 @@
   function sendReport(kind, msg, extra) {
     if (TESTING || !window.Arena || !Arena.init) return Promise.resolve(false);
     const row = Object.assign({ kind, game: GAME, msg: String(msg || "").slice(0, 500), ua: navigator.userAgent.slice(0, 120), url: (location.pathname + location.search).slice(0, 120), name: String(myName()).slice(0, 16) }, extra || {});
-    return Arena.init().then(() => { row.t = firebase.database.ServerValue.TIMESTAMP; return Arena.db().ref("game_reports").push(row); }).then(() => true, () => false);
+    return Arena.init().then(() => { row.t = firebase.database.ServerValue.TIMESTAMP; if (Arena.uid) row.uid = Arena.uid; return Arena.db().ref("game_reports").push(row); }).then(() => true, () => false);
+  }
+  // 내가 보낸 신고의 처리 상태 (11-06): 베니 님이 비서 앱에서 할 일로 · 안 고침 · 고쳤음을 누르면 PC 가 game_reports/{id}.status · statusT 를 씀
+  //   읽기는 규칙이 '내 uid 로 찾기'만 허락 → 같은 기기에서 보낸 것만 보임 (규칙 배포 전이면 조용히 빈 목록)
+  //   처음 보는 상태는 알림 한 번 + 🐞 손잡이에 빨간 점 (🐞 창을 열면 지움)
+  const REP_ST = { todo: "🛠️ 고칠 거예요", done: "✅ 고쳤어요", wont: "🙏 이번엔 그대로 둘게요" };
+  const repLabel = r => REP_ST[r.status] || (r.seen ? "📬 베니 님께 갔어요" : "📨 보냈어요");
+  const repText = r => String(r.msg || "").split("\n[최근 오류]")[0];
+  const repDay = t => { const d = new Date(t || 0); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  function myReports() {
+    if (TESTING || !window.Arena || !Arena.init) return Promise.resolve([]);
+    return Arena.init().then(() => Arena.uid ? Arena.db().ref("game_reports").orderByChild("uid").equalTo(Arena.uid).limitToLast(10).once("value") : null)
+      .then(s => { const v = (s && s.val()) || {}; return Object.keys(v).map(id => Object.assign({}, v[id], { id })).filter(r => r.kind === "report").sort((a, b) => (b.t || 0) - (a.t || 0)); }, () => []);
+  }
+  const repDot = on => { const d = document.getElementById("czBugDot"); if (d) d.hidden = !on; };
+  function repNews() {
+    myReports().then(list => {
+      const seen = store("cz.repSeen", {}), opened = store("cz.repOpened", 0);
+      const done = list.filter(r => REP_ST[r.status]);
+      repDot(done.some(r => (r.statusT || 0) > opened));
+      const fresh = done.filter(r => (r.statusT || 0) > (seen[r.id] || 0));
+      if (!fresh.length) return;
+      toast(`🐞 보낸 신고 · ${REP_ST[fresh[0].status]}${fresh.length > 1 ? ` 외 ${fresh.length - 1}개` : ""}: ${repText(fresh[0]).slice(0, 24)}`, 5000);
+      fresh.forEach(r => { seen[r.id] = r.statusT || 1; });
+      save("cz.repSeen", seen);
+    });
+  }
+  function fillMine(list) {
+    const el = document.getElementById("czMine");
+    if (!el || !list.length) return;
+    el.innerHTML = `<div style="font-size:13px;opacity:.75;margin:10px 0 2px">내가 보낸 신고</div>` + list.slice(0, 5).map(r =>
+      `<div class="cz-rep" style="display:flex;gap:8px;align-items:baseline;text-align:left;font-size:13px;line-height:1.35;padding:6px 0;border-top:1px solid rgba(127,127,127,.25)"><b style="white-space:nowrap">${esc(repLabel(r))}</b><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(repText(r))}</span><small style="opacity:.6;white-space:nowrap">${repDay(r.t)}</small></div>`).join("");
+    save("cz.repOpened", Math.max(store("cz.repOpened", 0), ...list.map(r => r.statusT || 0)));
+    repDot(false);
   }
   function onErr(msg, src) {
     msg = String(msg || "");
@@ -207,18 +240,19 @@
   function openReport() {
     const close = modal({
       title: "🐞 문제 알리기",
-      html: `<p style="margin:0 0 8px">이상한 점을 적어 주세요. 베니 님 폰으로 바로 가요.</p><textarea id="czRep" maxlength="400" rows="4" placeholder="예: 고스톱에서 4월을 냈는데 안 가져와졌어요" style="width:100%;box-sizing:border-box;font:16px/1.4 inherit;border-radius:10px;padding:8px;background:rgba(0,0,0,.25);color:inherit;border:1px solid rgba(255,255,255,.2)"></textarea>`,
+      html: `<p style="margin:0 0 8px">이상한 점을 적어 주세요. 베니 님 폰으로 바로 가요.</p><textarea id="czRep" maxlength="400" rows="4" placeholder="예: 고스톱에서 4월을 냈는데 안 가져와졌어요" style="width:100%;box-sizing:border-box;font:16px/1.4 inherit;border-radius:10px;padding:8px;background:rgba(0,0,0,.25);color:inherit;border:1px solid rgba(255,255,255,.2)"></textarea><div id="czMine"></div>`,
       buttons: [{ label: "닫기" }, { label: "보내기", primary: true, onClick: () => {
         const t = (document.getElementById("czRep") || {}).value || "";
         if (!t.trim()) { toast("내용을 적어 주세요"); return false; }
         if (repSent >= 3) { toast("고마워요! 조금 뒤에 다시 보내 주세요"); return; }
         repSent++;
         const msg = t.trim().slice(0, 400) + (errRecent.length ? `\n[최근 오류] ${errRecent.join(" / ")}`.slice(0, 100) : "");
-        sendReport("report", msg).then(ok => toast(ok ? "🐞 보냈어요. 고마워요!" : TESTING ? "시험 화면이라 안 보냈어요" : "못 보냈어요. 인터넷을 확인해 주세요", 2200));
+        sendReport("report", msg).then(ok => toast(ok ? "🐞 보냈어요. 처리되면 🐞 에서 알려 드려요" : TESTING ? "시험 화면이라 안 보냈어요" : "못 보냈어요. 인터넷을 확인해 주세요", 2600));
       } }],
       dismiss: true,
     });
     setTimeout(() => { const el = document.getElementById("czRep"); if (el) el.focus(); }, 60);
+    myReports().then(fillMine);
     return close;
   }
   function bugTab() {
@@ -226,8 +260,10 @@
     const b = document.createElement("button");
     b.id = "czBug"; b.type = "button"; b.setAttribute("aria-label", "문제 알리기"); b.textContent = "🐞";
     b.style.cssText = "position:fixed;left:0;top:60%;z-index:54;width:30px;height:38px;border:1px solid rgba(255,255,255,.2);border-left:0;border-radius:0 12px 12px 0;background:rgba(15,23,42,.55);font-size:16px;cursor:pointer;opacity:.75;padding:0";
+    b.insertAdjacentHTML("beforeend", `<span id="czBugDot" hidden style="position:absolute;top:3px;right:3px;width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px rgba(15,23,42,.7)"></span>`);
     b.onclick = openReport;
     document.body.appendChild(b);
+    setTimeout(repNews, 2500);   // 게임이 먼저 뜨게 조금 뒤에
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bugTab); else bugTab();
 

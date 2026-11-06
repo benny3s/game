@@ -615,7 +615,8 @@
       }
     },
     "game_reports": {
-      ".read": "auth != null && auth.token.admin === 1",
+      ".read": "auth != null && (auth.token.admin === 1 || (query.orderByChild === 'uid' && query.equalTo === auth.uid))",
+      ".indexOn": ["uid"],
       "$id": {
         ".write": "auth != null && ((!data.exists() && newData.exists()) || auth.token.admin === 1)",
         ".validate": "newData.hasChildren(['kind','game','msg','t']) && newData.child('t').val() === now",
@@ -651,6 +652,15 @@
         },
         "seen": {
           ".validate": "newData.isBoolean() && auth.token.admin === 1"
+        },
+        "status": {
+          ".validate": "auth.token.admin === 1 && newData.isString() && newData.val().matches(/^(todo|wont|done)$/)"
+        },
+        "statusT": {
+          ".validate": "auth.token.admin === 1 && newData.isNumber()"
+        },
+        "todoId": {
+          ".validate": "auth.token.admin === 1 && (newData.isNumber() || newData.isString())"
         },
         "$other": {
           ".validate": false
