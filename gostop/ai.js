@@ -25,6 +25,10 @@
     짝귀:   { read: 1, block: 1.2, gm: 1.1, ga: 0.5 },                    // 전라도 3대 타짜 · 과묵·신중 — 상대 약을 먼저 막고 일찍 챙김
     평경장: { read: 1, gm: 0.9, block: 0.9 },                             // 고니의 스승 '패를 세라' — 정석·균형
     아귀:   { read: 1, gm: 0.7, block: 0.7, t: 1.6 },                     // 경상도 3대 타짜 · 최종 보스 — 상대를 읽고 판을 크게 (고를 세게 부르고 내 약에 몰빵)
+    // 11-06 멋쟁이규호 님 '아귀가 좀 쉬워진 것 같다' — 벤치(test/bench.js 2000쌍)로 보니 아귀 ≈ 평경장(+0.01 ± 0.63점)이고 고 문턱을 바꾸면 더 약해짐.
+    //   패 내기가 한 수 앞까지라 정직하게 더 세지기 어려움 → 타짜답게 '반칙 보스': 수마다 30% 확률로 더미 순서·남의 손패를 몰래 봄 (화면 쪽 main.js BOSS_PEEK)
+    //   아귀보다 판당 +14.6 ± 1.3점 · 이긴 판 57% (늘 보면 +48점 · 76% 라 너무 셈)
+    '각성 아귀': { read: 1, gm: 0.7, block: 0.7, t: 1.6 },
   };
   const BASE_K = { read: 0, block: 1, shakeB: 0.9, slip: 0, noise: 0 };
   let K = BASE_K;
@@ -253,9 +257,11 @@
     return pickRanked(rankPlays(v, L, p, rng), rng);
   }
   function oppGain(info, p, c) { let g = 0; for (let q = 0; q < info.n; q++) if (q !== p) g += gain(info, q, [c]); return g; }
+  // 👹 엿보기(peek, 11-06 '각성 아귀'): 온전한 상태를 받아 더미 순서·남의 손패를 그대로 씀 — 숨은 패를 섞지 않음 (반칙 보스 전용, 선생님은 안 씀)
+  const worldOf = (v, rng) => (K.peek ? G.fastClone(v) : G.sampleWorld(v, rng));
   // 내는 수마다 점수 (높은 순)
   function rankPlays(v, L, p, rng) {
-    const world = G.sampleWorld(v, rng), classes = flipClasses(unseenOf(v));
+    const world = worldOf(v, rng), classes = K.peek ? [] : flipClasses(unseenOf(v));
     if (!classes.length) classes.push({ u: -1, w: 1 });
     const out = [];
     for (const a of L) {
@@ -369,7 +375,7 @@
       // 지금 스톱한 점수 vs 고 하고 끝까지 둬 본 평균 (기댓값이 큰 쪽, 벤치에서 가장 셌음)
       const stopPts = G.stopPreview(v, p).points;
       let sum = 0, k = 0;
-      for (; more(k); k++) { const w = readWorld(G.sampleWorld(v, rng), v, p, rng); G.apply(w, A.GO, null); rollout(w, rng); sum += G.reward(w, p); }
+      for (; more(k); k++) { const w = K.peek ? G.fastClone(v) : readWorld(G.sampleWorld(v, rng), v, p, rng); G.apply(w, A.GO, null); rollout(w, rng); sum += G.reward(w, p); }
       const gm = opts.gm != null ? opts.gm : K.gm != null ? K.gm : 1, ga = opts.ga != null ? opts.ga : K.ga != null ? K.ga : 0;
       return sum / Math.max(1, k) > stopPts * gm + ga ? A.GO : A.STOP;
     }
@@ -381,7 +387,7 @@
     const sum = new Map(cand.map(r => [r.a, 0]));
     let k = 0;
     for (; more(k * cand.length); k++) {
-      const world = G.sampleWorld(v, rng);
+      const world = worldOf(v, rng);
       for (const r of cand) { const s = G.fastClone(world); G.apply(s, r.a, null); rollout(s, rng); sum.set(r.a, sum.get(r.a) + G.reward(s, p)); }
     }
     const avg = cand.map(r => sum.get(r.a) / Math.max(1, k)), mean = avg.reduce((a, b) => a + b, 0) / avg.length;
@@ -407,7 +413,7 @@
     const rng = opts.rng || G.makeRng((opts.seed >>> 0) || 12345);
     if (v.phase === 'buy') return buyChoice(v, tier, rng);
     const f = TIERS[tier] || normal;
-    const st = opts.style && STYLES[opts.style];
+    const st0 = opts.style && STYLES[opts.style], st = opts.peek ? Object.assign({}, st0 || {}, { peek: 1 }) : st0;   // peek = 온전한 상태(v)를 받았을 때만
     if (!st) return f(v, rng, opts);
     const o = Object.assign({}, opts);
     if (st.t) { if (o.samples) o.samples = Math.max(8, Math.round(o.samples * st.t)); else o.ms = Math.round((o.ms || 350) * st.t); }

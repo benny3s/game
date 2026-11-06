@@ -53,16 +53,17 @@
       const sc = r.score != null && Number.isFinite(+r.score) ? Math.round(+r.score) : null;
       base.child("name").set(String(m.name || "").slice(0, 12)).catch(() => {});
       base.child("t").set(Date.now()).catch(() => {});
-      const tier = r.tier != null && /^[A-Za-z0-9_-]{1,20}$/.test(String(r.tier)) ? String(r.tier) : null;
+      // tier = 난이도 하나 · tiers = 더 셀 칸 (11-06 고스톱 타짜별 전적 h_agwi 등) — 칸마다 n·w·l·d (+ 점수를 주면 s)
+      const tiers = [].concat(r.tier != null ? [r.tier] : [], r.tiers || []).map(String).filter((x, i, a) => /^[A-Za-z0-9_-]{1,20}$/.test(x) && a.indexOf(x) === i).slice(0, 4);
       const tx = withTier => base.child(`m/${mode}`).transaction(c => {
         c = c || {};
         c.n = num(c.n) + 1; c[res] = num(c[res]) + 1; c.p = num(c.p) + beat;
         if (sc != null) { c.s = num(c.s) + sc; c.b = c.b == null ? sc : Math.max(num(c.b), sc); }
-        if (withTier) { c.t = c.t || {}; const x = c.t[tier] || {}; x.n = num(x.n) + 1; x[res] = num(x[res]) + 1; c.t[tier] = x; }
+        if (withTier) { c.t = c.t || {}; for (const tier of tiers) { const x = c.t[tier] || {}; x.n = num(x.n) + 1; x[res] = num(x[res]) + 1; if (sc != null && tier !== r.tier) x.s = num(x.s) + sc; c.t[tier] = x; } }
         return c;
       });
       // 난이도별 칸(t)을 규칙이 아직 안 받으면 그 칸만 빼고 다시 (판 기록은 꼭 남게)
-      const done = (tier ? tx(true).catch(() => tx(false)) : tx(false)).catch(e => console.warn("[rank]", e && e.message));
+      const done = (tiers.length ? tx(true).catch(() => tx(false)) : tx(false)).catch(e => console.warn("[rank]", e && e.message));
       Promise.resolve(done).then(() => { delete mineCache[game]; mine(game).then(() => dispatchEvent(new CustomEvent("grank", { detail: { game } }))); });
       if (mode === "f") for (const o of r.opp || []) {
         const op = o.pid || pidOf(o.uid); const orr = o.res === "w" || o.res === "l" || o.res === "d" ? o.res : null;
@@ -125,7 +126,7 @@
       const m = me(), d = m && (await db());
       if (!d) { delete mineCache[game]; return null; }
       const rec = (await d.ref(`${P}rank/${game}/${m.pid}`).get()).val() || {};
-      const tier = {}, addT = src => { for (const [id, x] of Object.entries((src && src.t) || {})) { const o = tier[id] || (tier[id] = { n: 0, w: 0, l: 0, d: 0 }); for (const k of ["n", "w", "l", "d"]) o[k] += num(x[k]); } };
+      const tier = {}, addT = src => { for (const [id, x] of Object.entries((src && src.t) || {})) { const o = tier[id] || (tier[id] = { n: 0, w: 0, l: 0, d: 0, s: 0 }); for (const k of ["n", "w", "l", "d", "s"]) o[k] += num(x[k]); } };
       for (const k of ["f", "a", "h"]) addT((rec.m || {})[k]);
       for (const b of Object.values(rec.base || {})) addT(b);
       const out = { all: totalOf(rec, ""), f: totalOf(rec, "f"), a: totalOf(rec, "a"), tier, rec };

@@ -304,7 +304,25 @@ section('상대 읽기 · 선생님 해설 · 타짜 성격 (11-01)');
   ok(rm && /짝 없이 버림/.test(rm.text), '방금 수: 짝 없이 버림: ' + (rm && rm.text));
   // 타짜 성격: 모두 할 수 있는 행동만 · 성격은 그 한 수에만 (끝나면 원래대로)
   const names = Object.keys(AI.STYLES);
-  eq(names, ['고광렬', '짝귀', '평경장', '아귀'], '타짜 넷 (약한 → 센 순)');
+  eq(names, ['고광렬', '짝귀', '평경장', '아귀', '각성 아귀'], '타짜 넷 (약한 → 센 순) + 👹 반칙 보스');
+  // 👹 엿보기(peek): 온전한 상태를 받으면 숨은 패를 섞지 않음 → 같은 판이면 씨앗이 달라도 패 내기가 같음 · 할 수 있는 행동만
+  {
+    let badP = 0, diff = 0;
+    for (let i = 0; i < 8; i++) {
+      const t = G.create({ players: 2, seed: 900 + i });
+      for (let g = 0; t.phase !== 'end' && g < 400; g++) {
+        const full = G.fastClone(t);
+        const a = t.turn === 0 ? AI.choose(full, 'hard', { samples: 6, style: '각성 아귀', peek: true, seed: g + 1 }) : AI.choose(G.view(t, t.turn), 'hard', { samples: 6, style: '아귀', seed: g + 1 });
+        if (!G.isLegal(t, a)) badP++;
+        if (t.turn === 0 && t.phase === 'play') { const b = AI.choose(G.fastClone(t), 'hard', { samples: 6, style: '각성 아귀', peek: true, seed: g + 777 }); if (b !== a) diff++; }
+        G.apply(t, a, null);
+      }
+    }
+    eq([badP, diff], [0, 0], '👹 엿보기: 할 수 있는 행동만 · 숨은 패를 안 섞어서 씨앗이 달라도 같은 수');
+    const st = G.create({ players: 2, seed: 4242 }), before = JSON.stringify(st);
+    AI.choose(st, 'hard', { samples: 6, style: '각성 아귀', peek: true });
+    eq(JSON.stringify(st) === before, true, '👹 엿보기: 받은 상태를 바꾸지 않음');
+  }
   let bad = 0;
   for (let i = 0; i < 12; i++) {
     const t = G.create({ players: 2 + (i % 2), seed: 300 + i }), rng = G.makeRng(i + 1);
@@ -788,6 +806,18 @@ section('우리 집 규칙: 피 뺏기 장수');
   eq(swd([6, 7]).cap[1], [], '2장 몫: 쌍피가 없으면 일반피 두 장');
   eq(run({}, Object.assign({}, sw, { cap: [[], [41]] }), 0).s.cap[1], [], '1장 몫인데 쌍피뿐이면 쌍피를 줌');
   eq(run({}, Object.assign({}, sw, { cap: [[], [41, 6]] }), 0).s.cap[1], [41], '1장 몫: 일반피부터');
+  // 11-06 멋쟁이규호 님 신고: 자뻑(2장 몫)에 쓰리피 + 일반피 한 장이 다 털림 → 주는 사람이 가장 덜 잃는 묶음 (49 = 쓰리피)
+  eq(swd([49, 6]).cap[1], [6], '2장 몫: 쓰리피 + 피 한 장이면 쓰리피 한 장만 (피 한 장은 남음)');
+  eq(swd([49, 6, 7]).cap[1], [49], '2장 몫: 일반피 두 장으로 딱 맞으면 쓰리피는 남김');
+  eq(swd([49, 41]).cap[1], [49], '2장 몫: 쌍피가 있으면 쌍피 (쓰리피는 남김)');
+  eq(swd([49, 6], { stealSweep: 3 }).cap[1], [6], '3장 몫: 쓰리피 한 장으로 딱');
+  eq(swd([6]).cap[1], [], '몫보다 피가 적으면 있는 것 다');
+  {
+    const s = S({ hands: [[0, 1, 44], [36, 38, 39]], table: [2], deck: [3, 24, 25, 26, 27], cap: [[], [49, 6]] });
+    act(s, P(0)); act(s, P(38)); const ev = act(s, P(1));
+    const st = ev.filter(e => e.t === 'steal');
+    eq([s.cap[1], st.map(e => [e.card, e.v, e.need, e.only])], [[6], [[49, 3, 2, true]]], '자뻑(2장 몫) 실제 판: 쓰리피만 주고 일반피는 남음 · 알림은 몫보다 더 줌');
+  }
   const bm = { hands: [[0, 1, 2, 44], [36, 38, 39, 40]], table: [3, 20], deck: [24, 25, 26, 27], cap: [[], [6, 7, 10, 11]] };
   eq([{}, { stealBomb: 2 }, { stealBomb: 0 }].map(r => { const s = S(Object.assign({ rules: r }, bm)); act(s, G.A_BOMB); return s.cap[1].length; }), [3, 2, 4], '폭탄: 기본 1 · 2장 · 0장');
   const eat = rules => { const s = S({ rules, hands: [[0, 44], [1, 38]], table: [2], deck: [3, 24, 25, 26], cap: [[6, 7, 10], [14]] }); act(s, P(0)); act(s, P(1)); return s.cap[0].length; };

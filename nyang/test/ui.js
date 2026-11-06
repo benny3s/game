@@ -416,5 +416,64 @@ U.main(async T => {
   await Z.evaluate(() => localStorage.clear());
   await Z.close();
 
+  // ── ⑩ 📅 오늘의 퍼즐 (11-06 베니 님 "와이프가 단골이니까 맞춰서 · 벤치마킹": LinkedIn Queens · NYT 처럼 하루 한 판, 가족끼리 시간 겨루기)
+  {
+    const D = await T.open('nyang/');
+    await U.waitFor(D, A.ready);
+    await D.evaluate(() => { for (const k of ['nyang.day', 'nyang.dayTry']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await D.reload({ waitUntil: 'load' }); await U.waitFor(D, A.ready);
+    await U.waitFor(D, () => document.querySelectorAll('#soloMode .btn').length === 4, null, 3000);
+    const seg = await D.evaluate(() => [...document.querySelectorAll('#soloMode .btn')].map(b => ({ t: b.textContent.trim(), dot: b.classList.contains('dot') })));
+    T.ok(seg[0] && /📅 오늘/.test(seg[0].t) && seg[0].dot, '⑩ 맨 앞 📅 오늘 · 안 풀었으면 점 (' + JSON.stringify(seg) + ')');
+    const fit = await D.evaluate(() => { const s = document.getElementById('soloMode'); return [...s.children].every(b => b.scrollWidth <= b.clientWidth + 1) && s.scrollWidth <= s.clientWidth + 1 && document.documentElement.scrollWidth <= innerWidth; });
+    T.ok(fit, '⑩ 단추 넷이 폰 폭에 들어감');
+    await D.evaluate(() => document.querySelector('#soloMode [data-v="day"]').click());
+    const card = await D.evaluate(() => ({ box: !document.getElementById('dayBox').hidden, tiers: document.getElementById('tiers').hidden, stage: document.getElementById('stageBox').hidden, txt: document.getElementById('dayBox').textContent, d: __ny.dailyInfo() }));
+    T.ok(card.box && card.tiers && card.stage && /오늘의 퍼즐/.test(card.txt) && card.txt.includes('일월화수목금토'[card.d.wd] + '요일'), '⑩ 오늘 카드 (요일 · 난이도): ' + card.txt.replace(/\s+/g, ' ').slice(0, 70));
+    const tiers = await D.evaluate(() => ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08'].map(k => __ny.dailyInfo(k).tier));
+    T.ok(JSON.stringify(tiers) === JSON.stringify(['easy', 'easy', 'normal', 'normal', 'hard', 'hard', 'master']), '⑩ 월·화 초급 → 수·목 중급 → 금·토 고급 → 일 고수 (' + tiers + ')');
+    const diff = await D.evaluate(() => { const a = __ny.dailyInfo('2026-11-06'), b = __ny.dailyInfo('2026-11-13'), c = __ny.dailyInfo('2026-11-06'); return [a.idx === c.idx && a.vs === c.vs, a.idx !== b.idx || a.vs !== b.vs]; });
+    T.ok(diff[0] && diff[1], '⑩ 같은 날 = 같은 판, 다른 날 = 다른 판');
+    await D.click('#startBtn');
+    await U.waitFor(D, () => window.__ny.G && !document.getElementById('play').hidden);
+    const same = await D.evaluate(() => { const d = __ny.dailyInfo(), p = __ny.NY.variant(window.__nyBank[d.tier][d.idx], d.vs); return JSON.stringify(__ny.G.ans) === JSON.stringify(__ny.NY.decode(p).ans) && /오늘의 퍼즐/.test(document.getElementById('stLabel').textContent); });
+    T.ok(same, '⑩ 시작하면 오늘 판 (누구나 같은 모양) · 위 줄 📅 오늘의 퍼즐');
+    await solve(D);
+    T.ok(!!(await U.waitFor(D, () => /오늘의 퍼즐 성공/.test(document.getElementById('resTitle').textContent), null, 4000)), '⑩ 다 풀면 "오늘의 퍼즐 성공!"');
+    const rec = await D.evaluate(() => JSON.parse(localStorage.getItem('nyang.day') || '{}')[__ny.kstDay()]);
+    T.ok(rec && rec.s > 0 && rec.m === 0 && rec.k === 1, '⑩ 오늘 기록이 남음 ' + JSON.stringify(rec));
+    await D.evaluate(() => __qa.clickText(/^닫기$/));
+    const after = await D.evaluate(() => ({ txt: document.getElementById('dayBox').textContent, dot: document.querySelector('#soloMode [data-v="day"]').classList.contains('dot') }));
+    T.ok(/✅ 오늘/.test(after.txt) && !after.dot && /🔥 1일/.test(after.txt), '⑩ 카드에 ✅ 오늘 기록 · 🔥 1일 · 점 사라짐: ' + after.txt.replace(/\s+/g, ' ').slice(0, 80));
+    // 연속: 어제 · 그제도 풀었으면 3일 (나흘 전은 끊겨서 안 셈)
+    await D.evaluate(() => { const k = __ny.kstDay(), sh = (key, d) => new Date(Date.parse(key + 'T00:00:00Z') + d * 864e5).toISOString().slice(0, 10), o = JSON.parse(localStorage.getItem('nyang.day')); o[sh(k, -1)] = { s: 50, m: 0, h: 0, k: 1 }; o[sh(k, -2)] = { s: 60, m: 1, h: 0, k: 1 }; o[sh(k, -4)] = { s: 70, m: 0, h: 0, k: 1 }; localStorage.setItem('nyang.day', JSON.stringify(o)); document.querySelector('#soloMode [data-v="day"]').click(); });
+    T.ok(await D.evaluate(() => /🔥 3일 연속/.test(document.getElementById('dayBox').textContent)), '⑩ 어제 · 그제도 풀었으면 🔥 3일 (나흘 전은 끊김)');
+    // 가족 오늘 기록: 같은 판이라 시간으로 줄 세움 (힌트 한 번 = +10초)
+    const fam = await D.evaluate(() => {
+      const k = __ny.kstDay();
+      __ny.setRk({ rec: { pA: { day: { [k]: { s: 83, m: 0, h: 0 } } }, pB: { day: { [k]: { s: 70, m: 0, h: 2 } } }, pC: { day: { '2026-01-01': { s: 9 } } } }, names: { pA: '지밍비', pB: '베니', pC: '훈' } });
+      return [...document.querySelectorAll('#dayBox .dc-board li')].map(li => li.textContent.replace(/\s+/g, ' ').trim());
+    });
+    T.ok(fam.length === 3 && /지밍비/.test(fam.find(x => /🥈|🥇|🥉/.test(x) && /지밍비/.test(x)) || '') && fam.findIndex(x => /지밍비/.test(x)) < fam.findIndex(x => /베니/.test(x)) && !fam.some(x => /훈/.test(x)), '⑩ 가족 오늘 기록: 시간 + 힌트 벌점 순, 오늘 안 푼 사람은 빠짐 (' + fam.join(' / ') + ')');
+    // 다시 풀어도 오늘 기록은 그대로
+    await D.evaluate(() => __ny.setRk(null));
+    await D.click('#startBtn'); await U.waitFor(D, () => window.__ny.G && !window.__ny.G.over && !document.getElementById('play').hidden);
+    await solve(D);
+    T.ok(!!(await U.waitFor(D, () => /다시 풀었어요/.test(document.getElementById('resTitle').textContent), null, 4000)), '⑩ 두 번째는 "다시 풀었어요"');
+    const rec2 = await D.evaluate(() => JSON.parse(localStorage.getItem('nyang.day'))[__ny.kstDay()]);
+    T.ok(rec2 && rec2.s === rec.s, '⑩ 오늘 기록은 처음 성공한 그대로 (' + (rec2 && rec2.s) + ' = ' + rec.s + ')');
+    await D.evaluate(() => __qa.clickText(/^닫기$/));
+    // ⏱ 내 기준선 (벤치마킹 1순위: 판마다 '평소보다 몇 초' · 오늘 몇 판째) — 평균은 3판부터
+    const tierNow = await D.evaluate(() => __ny.dailyInfo().tier);
+    await D.evaluate(t => { localStorage.setItem('nyang.avg', JSON.stringify({ [t]: [500, 500, 500] })); localStorage.setItem('nyang.today', JSON.stringify({ [__ny.kstDay()]: 7 })); document.getElementById('resBody').innerHTML = ''; }, tierNow);
+    await D.click('#startBtn'); await U.waitFor(D, () => window.__ny.G && !window.__ny.G.over && !document.getElementById('play').hidden);
+    await solve(D);
+    const bl = await U.waitFor(D, () => { const e = document.querySelector('#resBody .baseln'); return e && e.textContent; }, null, 4000);
+    T.ok(bl && /평소\(.+평균 8:20\.0\)보다 [\d.]+초 빨라요/.test(bl) && /오늘 8판째/.test(bl), '⑩ 결과에 "평소보다 몇 초 빨라요 · 오늘 몇 판째": ' + bl);
+    await D.evaluate(() => __qa.clickText(/^닫기$/));
+    await D.evaluate(() => { for (const k of ['nyang.day', 'nyang.dayTry', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await D.close();
+  }
+
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');
 }, 'nyang ui');

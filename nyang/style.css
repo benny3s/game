@@ -103,6 +103,38 @@ header.top h1{gap:8px}
 .cheer{color:var(--ink)}
 .cheer:empty{display:none}
 
+/* ── 📅 오늘의 퍼즐 (11-06) ── */
+#soloMode{gap:6px;flex-wrap:nowrap}
+#soloMode .btn{padding:8px 10px;font-size:14px;min-width:0}
+@media (max-width:385px){#soloMode .btn{padding:7px 7px;font-size:13px}}
+@media (max-width:330px){#soloMode{flex-wrap:wrap}}
+#soloMode .btn.dot{position:relative}
+#soloMode .btn.dot::after{content:"";position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--bad)}
+.daycard{background:linear-gradient(var(--bg),#ffe9d6);border:1px solid var(--line);border-radius:15px;padding:12px;display:grid;gap:9px}
+.daycard.done{background:linear-gradient(#f1fbf5,#e3f5ea)}
+.dc-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.dc-top b{font:800 17px var(--round);color:var(--ink)}
+.dc-fire{margin-left:auto;font:800 14px var(--round);color:#d9622b;white-space:nowrap}
+.dc-week{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dc-week span{display:grid;justify-items:center;gap:1px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:3px 0 4px}
+.dc-week i{font-style:normal;font:700 11px var(--round);color:var(--soft)}
+.dc-week em{font-style:normal;font-size:16px;line-height:1.2;min-height:19px;color:var(--soft)}
+.dc-week .on{background:#fff4e6;border-color:#f5c99b}
+.dc-week .today{box-shadow:0 0 0 2px var(--accent)}
+.dc-week .fut{opacity:.45}
+.dc-sub{margin:0;color:var(--soft)}
+.dc-mine{margin:0;font:700 15px var(--round);color:var(--ink)}
+.dc-mine b{color:var(--good)}
+.dc-board{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.dc-board li{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:10px;padding:5px 10px;font-size:14.5px}
+.dc-board li.me{border-color:var(--accent);background:#fff6ee}
+.dc-board .md{min-width:22px;text-align:center}
+.dc-board b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.dc-board .tm{font:700 14px var(--round);color:var(--ink)}
+.dc-foot{display:flex;align-items:center;gap:8px}
+.dc-foot .small{flex:1;color:var(--soft)}
+.dc-foot .btn{flex:none;padding:8px 11px;font-size:13.5px}
+
 /* ── 단계 지도: 위가 앞으로 갈 길 · 아래에서 위로 ── */
 #stageBox{display:grid;gap:10px}
 .stage-path{position:relative;display:grid;gap:2px;align-content:start;background:linear-gradient(var(--bg),#ffe9d6);border:1px solid var(--line);border-radius:15px;padding:12px 8px;height:clamp(214px,calc(100dvh - 592px),430px);overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y}

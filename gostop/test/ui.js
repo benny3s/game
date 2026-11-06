@@ -183,4 +183,32 @@ U.main(async T => {
     }
     await p.close().catch(() => {});
   }
+
+  // ── ⑧ 11-06 멋쟁이규호 님 '아귀가 좀 쉬워진 것 같다' → 👹 각성 아귀(반칙 보스: 수마다 30% 더미·손패 몰래 봄) · 😤 복수전 · 🆚 타짜별 전적
+  {
+    const p = await T.open('gostop/');
+    await U.waitFor(p, () => window.__gostop && document.querySelector('#tiers .tier'));
+    await p.evaluate(() => { localStorage.setItem('cozy.sound2', 'false'); document.querySelector('#tiers .tier[data-id="hard"]').click(); });
+    const foes = await p.evaluate(() => [...document.querySelectorAll('#foeSeg .btn')].map(b => b.textContent.trim()));
+    T.ok(foes.length === 5 && foes[4] === '👹 각성' && foes[3] === '아귀', '⑧ 상대 다섯: 마지막이 👹 각성 (' + foes.join(' · ') + ')');
+    const fit = await p.evaluate(() => { const s = document.getElementById('foeSeg'); return [...s.children].every(b => b.scrollWidth <= b.clientWidth + 1) && document.documentElement.scrollWidth <= innerWidth; });
+    T.ok(fit, '⑧ 상대 단추 다섯이 폰 폭에 들어감');
+    await p.evaluate(() => [...document.querySelectorAll('#foeSeg .btn')].pop().click());
+    T.ok(await p.evaluate(() => /반칙/.test(document.getElementById('foeNote').textContent) && !document.getElementById('foeNote').hidden), '⑧ 고르면 안내에 "반칙"');
+    // 늘 엿보게 해서 판 한 판: AI 수마다 온전한 상태로 고르고, 할 수 있는 수만 (판이 끝까지 감)
+    await p.evaluate(() => { localStorage.setItem('gostop.lastVs', JSON.stringify({ '각성 아귀': 'l' })); __gostop.fast(true); __gostop.autoHuman = true; __gostop.bossPeek(1); __gostop.start({ seed: 4321, mode: 2, tier: 'hard', rules: { seon: 'off' } }); });
+    T.ok(!!(await U.waitFor(p, () => /복수전/.test((document.querySelector('.toast') || {}).textContent || ''), null, 8000)), '⑧ 지난번에 진 상대면 "😤 복수전!"');
+    T.ok(await p.evaluate(() => __gostop.ses.seats.some(x => x.ctrl === 'ai' && x.name === '각성 아귀')), '⑧ 상대 자리가 각성 아귀');
+    const end = await U.waitFor(p, () => {
+      const s = __gostop.state, ses = __gostop.ses;
+      if (s && s.phase === 'end') return { peeks: __gostop.peeks };
+      if (s && ses && s.turn === ses.cfg.me && ses.pending && !ses.pending.isResult && s.phase !== 'play') { const L = __gostop.legal(); if (L.length) __gostop.act(L[0]); }   // 고르기 · 고/스톱 · 국진은 시험이 대신
+      return null;
+    }, null, 60000, 120);
+    T.ok(end && end.peeks > 0, '⑧ 판 끝까지 감 · 몰래 본 수 ' + (end && end.peeks));
+    const lv = await U.waitFor(p, () => { const v = JSON.parse(localStorage.getItem('gostop.lastVs') || '{}')['각성 아귀']; return v === 'w' || (v === 'l' && __gostop.state.result && __gostop.state.result.winner !== __gostop.ses.cfg.me) ? v : null; }, null, 8000);
+    T.ok(!!lv, '⑧ 이 상대와의 마지막 결과를 기억 (' + lv + ')');
+    await p.evaluate(() => { __gostop.bossPeek(0.3); __gostop.autoHuman = false; __gostop.fast(false); localStorage.removeItem('gostop.lastVs'); });
+    await p.close().catch(() => {});
+  }
 }, 'gostop ui');

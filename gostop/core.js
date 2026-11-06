@@ -716,23 +716,29 @@
   }
 
   // 피 n 장어치 가져오기 (10-31: 쌍피는 2장 · 쓰리피는 3장 몫으로 셈 — 예전엔 장수로 세서 쌍피도 1장 몫이었음)
-  //   남은 몫 안에서 값이 가장 큰 피부터 (쌍피 한 장 = 2장 몫), 몫보다 작은 피가 없으면 가장 값싼 피 한 장 (없으면 못 받음)
+  //   주는 사람이 가장 덜 잃게: 몫 합이 n 이상인 묶음 중 합이 가장 작은 것 → 같으면 장수가 적은 것 → 같은 몫이면 번호 작은 피부터
+  //   (11-06 멋쟁이규호 님 신고: 자뻑 2장 몫에 쓰리피 + 피 한 장이 다 털림 — 피 한 장을 먼저 주고 남은 1장 몫에 쓰리피까지 줬음)
+  //   가진 피를 다 줘도 n 이 안 되면 있는 것 다 (없으면 못 받음)
   function stealPi(s, from, to, n, ev) {
-    for (let left = n; left > 0;) {
-      let best = -1, bv = 0, cheap = -1, cv = 99;
-      for (const c of s.cap[from]) {
-        let v = 0;
-        if (c === KOOK) { if (s.kook === 'P') v = 2; else continue; }
-        else if (KIND[c] === PI) v = PIV[c]; else continue;
-        if (v <= left && (v > bv || (v === bv && c < best))) { bv = v; best = c; }
-        if (v < cv || (v === cv && c < cheap)) { cv = v; cheap = c; }
-      }
-      const pick = best >= 0 ? best : cheap;
-      if (pick < 0) return;
-      removeFrom(s.cap[from], pick); s.cap[to].push(pick);
-      // v = 이 카드 몫(쌍피 2 · 쓰리피 3), need = 뺏을 몫 전체, only = 몫보다 작은 피가 없어서 큰 걸 줌
-      if (ev) ev.push({ t: 'steal', from, to, card: pick, v: best >= 0 ? bv : cv, need: n, only: best < 0 });
-      left -= best >= 0 ? bv : cv;
+    if (!(n > 0)) return;
+    const by = { 1: [], 2: [], 3: [] };
+    for (const c of s.cap[from]) {
+      if (c === KOOK) { if (s.kook === 'P') by[2].push(c); }
+      else if (KIND[c] === PI && by[PIV[c]]) by[PIV[c]].push(c);
+    }
+    for (const v of [1, 2, 3]) by[v].sort((a, b) => a - b);
+    let best = null;
+    for (let a = 0; a <= by[1].length; a++) for (let b = 0; b <= by[2].length; b++) for (let k = 0; k <= by[3].length; k++) {
+      const sum = a + 2 * b + 3 * k, cnt = a + b + k;
+      if (sum < n) continue;
+      if (!best || sum < best.sum || (sum === best.sum && cnt < best.cnt)) best = { a, b, k, sum, cnt };
+    }
+    if (!best) best = { a: by[1].length, b: by[2].length, k: by[3].length, sum: by[1].length + 2 * by[2].length + 3 * by[3].length };
+    const picks = [...by[3].slice(0, best.k).map(c => [c, 3]), ...by[2].slice(0, best.b).map(c => [c, 2]), ...by[1].slice(0, best.a).map(c => [c, 1])];
+    for (const [c, v] of picks) {
+      removeFrom(s.cap[from], c); s.cap[to].push(c);
+      // v = 이 카드 몫(쌍피 2 · 쓰리피 3), need = 뺏을 몫 전체, only = 딱 맞게 줄 피가 없어서 몫보다 더 줌
+      if (ev) ev.push({ t: 'steal', from, to, card: c, v, need: n, only: best.sum > n });
     }
   }
 

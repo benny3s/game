@@ -64,15 +64,21 @@
   const TIER = {
     easy:   { em: '🌱', name: '초짜', cls: 't-easy',   desc: '패를 솔직하게 내는 입문자', names: ['김씨', '박씨', '정씨', '한씨'] },
     normal: { em: '🎴', name: '꾼', cls: 't-normal', desc: '피 계산과 견제가 탄탄한 실력자', names: ['이생원', '최주사', '강서방', '윤참봉'] },
-    hard:   { em: '👑', name: '타짜', cls: 't-hard',   desc: '나온 패를 하나도 안 놓치고 세는 일류 — 🧑‍🏫 선생님이랑 치면 해 볼 만해요', names: ['고광렬', '짝귀', '평경장', '아귀'] },
+    hard:   { em: '👑', name: '타짜', cls: 't-hard',   desc: '나온 패를 하나도 안 놓치고 세는 일류 — 🧑‍🏫 선생님이랑 치면 해 볼 만해요', names: ['고광렬', '짝귀', '평경장', '아귀', '각성 아귀'] },
   };
-  // 타짜 넷은 약한 → 센 순, 손버릇은 ai.js STYLES (영화 '타짜' 인물 느낌, 벤치로 순서 확인)
+  // 타짜 넷은 약한 → 센 순, 손버릇은 ai.js STYLES (영화 '타짜' 인물 느낌, 벤치로 순서 확인) + 👹 반칙 보스 (11-06)
   const FOE_NOTE = {
     고광렬: '★☆☆☆ 고니 짝꿍 · 입담과 허세 — 고를 못 참고 가끔 손이 먼저 나가요',
     짝귀: '★★☆☆ 전라도 3대 타짜 · 과묵·신중 — 상대 약부터 막고 일찍 챙겨요',
     평경장: '★★★☆ 고니의 스승 — 나온 패를 세고, 상대가 버린 패로 손패까지 읽어요',
     아귀: '★★★★ 경상도 3대 타짜 · 최종 보스 — 상대를 읽고 고를 세게 불러 판을 키워요',
+    '각성 아귀': '👹 진짜 최종 보스 — 가끔 더미와 내 손패를 몰래 봐요 (반칙!). 아귀를 이기는 사람용',
   };
+  const FOE_LABEL = { '각성 아귀': '👹 각성' };                                   // 상대 고르기 단추 글자 (짧게)
+  // 🆚 타짜별 통산 전적 (11-06 규호 님 · 벤치마킹: 한게임 복수 노트 · chess.com 봇별 기록) — 공용 랭킹 m/a/t/{아래 id}, 맞고(상대 하나)만
+  const FOE_ID = { 고광렬: 'h_go', 짝귀: 'h_jjak', 평경장: 'h_pyeong', 아귀: 'h_agwi', '각성 아귀': 'h_boss' };
+  // 👹 반칙 보스: 수마다 이 확률로 더미 순서·남의 손패를 몰래 봄 (test/bench.js 2000쌍: 아귀보다 판당 +14.6 ± 1.3점 · 57%) — 혼자·한 기기만
+  const BOSS_PEEK = { '각성 아귀': 0.3 };
   if (C.store(KEY + 'foeV', 1) < 2) {                               // 11-01 타짜 순서 바꿈 (평경장·고광렬·아귀·짝귀 → 약한 순): 고른 사람 그대로
     if (opt.foe && opt.foe.hard != null) { opt.foe = Object.assign({}, opt.foe, { hard: [2, 0, 3, 1][opt.foe.hard | 0] | 0 }); saveOpt('foe'); }
     C.save(KEY + 'foeV', 2);
@@ -86,6 +92,12 @@
     el.onclick = e => { const b = e.target.closest('button'); if (!b) return; sfx('tap'); onPick(b.dataset.v); };
   }
   const foeIdx = t => { const i = (opt.foe && opt.foe[t]) | 0; return i >= 0 && i < TIER[t].names.length ? i : 0; };
+  // 🆚 '아귀와 통산 23승 41패 · +120점' (공용 랭킹 숫자, 아직 안 쳤으면 빈칸)
+  function foeLine(nm) {
+    const x = rk && rk.tier && FOE_ID[nm] && rk.tier[FOE_ID[nm]];
+    if (!x || !x.n) return '';
+    return `🆚 통산 ${fmtN(x.w || 0)}승 ${fmtN(x.l || 0)}패${x.s ? ` · ${x.s > 0 ? '+' : ''}${fmtN(x.s)}점` : ''}`;
+  }
   // 🏆 통산 판·승은 랭킹(GRank)에서만 읽음 (기기 localStorage 로는 안 보여줌) — 못 읽으면 숫자 없이
   let rk = null;
   function rankPull() { try { if (window.GRank) GRank.mine('gostop').then(v => { if (v !== rk) { rk = v; if (!SES) drawMenu(); } }, () => {}); } catch (e) {} }
@@ -102,8 +114,11 @@
     $('modeNote').hidden = !mo.bench;
     C.tierCards($('tiers'), ['easy', 'normal', 'hard'].map(id => ({ id, em: TIER[id].em, name: TIER[id].name, desc: TIER[id].desc, cls: TIER[id].cls })),
       id => { opt.tier = id; saveOpt('tier'); drawMenu(); }, { selected: opt.tier });
-    if ($('foeSeg')) segBtns($('foeSeg'), TIER[opt.tier].names.map((nm, i) => [i, nm]), foeIdx(opt.tier), v => { opt.foe = Object.assign({}, opt.foe, { [opt.tier]: +v }); saveOpt('foe'); drawMenu(); });
-    if ($('foeNote')) { const fn = FOE_NOTE[TIER[opt.tier].names[foeIdx(opt.tier)]]; $('foeNote').textContent = fn || ''; $('foeNote').hidden = !fn; }
+    if ($('foeSeg')) segBtns($('foeSeg'), TIER[opt.tier].names.map((nm, i) => [i, FOE_LABEL[nm] || nm]), foeIdx(opt.tier), v => { opt.foe = Object.assign({}, opt.foe, { [opt.tier]: +v }); saveOpt('foe'); drawMenu(); });
+    if ($('foeNote')) {
+      const nm = TIER[opt.tier].names[foeIdx(opt.tier)], fn = FOE_NOTE[nm], vs = foeLine(nm);
+      $('foeNote').textContent = (fn || '') + (vs ? ` · ${vs}` : ''); $('foeNote').hidden = !fn;
+    }
     segBtns($('bonusSeg'), [[0, '없음'], [2, '2장'], [3, '3장']], houseRules.bonus, v => { setRules(Object.assign({}, houseRules, { bonus: +v })); drawMenu(); });
     segBtns($('speedSeg'), SPEED_ORDER.map(k => [k, SPEEDS[k].em + ' ' + SPEEDS[k].label]), opt.speed, v => { opt.speed = v; saveOpt('speed'); drawMenu(); });
     if ($('coachSeg')) segBtns($('coachSeg'), [[1, '🧑‍🏫 켬'], [0, '끔']], opt.coach ? 1 : 0, v => { opt.coach = +v; saveOpt('coach'); drawMenu(); });
@@ -392,20 +407,25 @@
   let worker = null, wid = 0;
   const wjobs = new Map();
   try {
-    worker = new Worker('ai-worker.js?v=12');
+    worker = new Worker('ai-worker.js?v=13');
     worker.onmessage = e => { const j = wjobs.get(e.data.id); if (j) { wjobs.delete(e.data.id); j(e.data.a); } };
     worker.onerror = () => { worker = null; for (const j of wjobs.values()) j(-1); wjobs.clear(); };
   } catch (e) { worker = null; }
   const rand32 = () => { try { return crypto.getRandomValues(new Uint32Array(1))[0]; } catch (e) { return (Math.random() * 4294967296) >>> 0; } };
-  function aiChoose(v, tier, name) {
+  // full = 온전한 상태 (👹 반칙 보스만 받음) — 그 수에 몰래 볼지는 BOSS_PEEK 확률, 봤으면 lastPeek
+  let lastPeek = false, peekN = 0;
+  function aiChoose(v, tier, name, full) {
     const seed = rand32(), style = tier === 'hard' && AI.STYLES && AI.STYLES[name] ? name : undefined;   // 타짜는 사람마다 손버릇
-    const local = () => AI.choose(v, tier, { seed, samples: tier === 'hard' ? 80 : 0, style });
-    if (tier !== 'hard' || !worker) return Promise.resolve(local());
+    const peek = !!(full && style && BOSS_PEEK[name] && rand32() / 4294967296 < BOSS_PEEK[name]);
+    const vv = peek ? full : v;
+    lastPeek = peek; if (peek) peekN++;
+    const local = () => AI.choose(vv, tier, { seed, samples: tier === 'hard' ? 80 : 0, style, peek });
+    if (tier !== 'hard' || !worker) return Promise.resolve(local()).then(a => (G.isLegal(v, a) ? a : AI.choose(v, 'normal', { seed })));
     return new Promise(res => {
       const id = ++wid;
       const to = setTimeout(() => { if (wjobs.delete(id)) res(local()); }, 4000);
       wjobs.set(id, a => { clearTimeout(to); res(a >= 0 ? a : local()); });
-      worker.postMessage({ id, view: v, tier, seed, ms: 320, style });
+      worker.postMessage({ id, view: vv, tier, seed, ms: 320, style, peek });
     }).then(a => (G.isLegal(v, a) ? a : AI.choose(v, 'normal', { seed })));
   }
 
@@ -807,22 +827,43 @@
     고광렬: { start: ['자자 판 깔아 봅시다~', '오늘은 내가 쏜다! 돈은 니들이 내고'], brag: ['아이고 이거 미안해서 어쩌나~', '내가 또 해냈네? 박수 좀 쳐 줘', '오늘 손이 아주 그냥 불이야'], ouch: ['어어? 이건 반칙이지 이거', '패가 나를 싫어하네 오늘'], go: ['여기서 멈추면 사나이가 아니지! 고!', '간다간다 쭉쭉 간다~'], taunt: ['어이쿠, 그거 아프겠다~', '괜찮아 괜찮아, 다음 판도 있잖아'], hit: ['아야! 이거 폭행이야 폭행!', '어어 왜 때려~ 패나 봐', '내 얼굴 비싸다고!'] },
     아귀: { start: ['조용히 치자', '판 돌려'], brag: ['...가져간다', '눈 깜빡하면 끝이야', '계산 끝났어'], ouch: ['...운이 좋았다고 생각해', '이번만이야'], go: ['고. 멈출 이유가 없지', '더 간다. 겁나면 지금 말해'], taunt: ['손이 떨리는군', '그렇게 쳐서 남는 게 있겠어?'], hit: ['...한 번만 더 해 봐', '손 치워', '기억해 두지'] },
     짝귀: { start: ['시작하지', '잘 부탁해'], brag: ['됐다', '이 정도면 충분하지', '깔끔하게'], ouch: ['흠', '그럴 수도 있지'], go: ['한 번 더', '고'], taunt: ['천천히 해', '패는 도망 안 가'], hit: ['...아프군', '그 손으로 패나 쳐', '화가 많이 났나 보군'] },
+    // 👹 반칙 보스 (11-06) — 새로 지은 말, 무엇을 봤는지는 절대 말하지 않음
+    '각성 아귀': { start: ['오늘은 봐주는 거 없다', '...각오는 됐겠지', '판 깔아. 끝까지 간다'], brag: ['보이는 대로 친 거야', '...이게 실력이지', '운이라고 생각해 둬'], ouch: ['...제법이군', '이번 한 번이다', '흥, 패가 샜나'], go: ['고. 멈출 생각 없어', '더 간다. 다 보이거든'], taunt: ['그 패, 내가 알지', '손 떨리는 거 다 보여'], hit: ['...건드리지 마라', '패로 덤벼', '그 주먹, 기억해 두지'], peek: ['...흠, 다음 패가 마음에 드는군', '어디 보자… 아니, 아무것도 아냐', '더미가 날 부르는군', '눈은 정직하지'], revenge: ['또 왔나. 이번엔 다를 것 같아?', '지난 판 잊었나 보군'], lost: ['...다음엔 이렇게 안 끝나', '오늘은 네 날이다'] },
     _easy: { start: ['잘 부탁드려요!', '살살 해 주세요~'], brag: ['우와 먹었다!', '이게 되네?', '오 나 잘하는데?'], ouch: ['어? 이거 왜 안 붙어요?', '아 뻑이다 ㅠㅠ'], go: ['고...해도 되는 거 맞죠?', '에라 모르겠다 고!'], taunt: ['어? 그쪽도 뻑이네요 ㅎㅎ'], hit: ['아얏! 왜요 ㅠㅠ', '저 아무것도 안 했어요!'] },
     _normal: { start: ['자, 한 판 하세', '오랜만에 손맛 좀 보세'], brag: ['허허, 이걸 가져가는구먼', '어디 한번 보세나', '이 맛에 치는 거지'], ouch: ['에잉, 패가 고약하네', '허참, 이런 일이'], go: ['한 번 더 가 보세', '여기서 그만두면 섭하지'], taunt: ['젊은이, 서두르지 말게', '허허, 그럴 때도 있지'], hit: ['어허, 어른한테 무슨 짓인가', '이 사람 손이 맵구먼'] },
   };
   function aiSay(ses, p, kind, always) {
-    if (FAST || ses.cfg.online || ses.replaying || p == null || p < 0) return;
+    if (FAST || ses.cfg.online || ses.replaying || p == null || p < 0) return false;
     const st = seatAt(ses, p);
-    if (!st || st.ctrl !== 'ai') return;
+    if (!st || st.ctrl !== 'ai') return false;
     const now = Date.now();
-    if (!always && (now - (ses.sayAt || 0) < 9000 || Math.random() > 0.55)) return;
+    if (!always && (now - (ses.sayAt || 0) < 9000 || Math.random() > 0.55)) return false;
     const bank = SAY[st.name] || SAY['_' + st.tier] || SAY._normal, lines = bank[kind];
     const h = ses.hud && ses.hud[p];
-    if (!lines || !lines.length || !h || !h.seat) return;
+    if (!lines || !lines.length || !h || !h.seat) return false;
     ses.sayAt = now;
+    h.seat.querySelectorAll('.sayb').forEach(x => x.remove());
     const b = document.createElement('div'); b.className = 'sayb'; b.textContent = lines[Math.floor(Math.random() * lines.length)];
     h.seat.appendChild(b);
     setTimeout(() => b.classList.add('out'), D(2600)); setTimeout(() => b.remove(), D(3100));
+    return true;
+  }
+  // 😤 복수 노트 (11-06 벤치마킹: 한게임 '복수 노트') — 혼자 맞고에서 지난번에 진 타짜를 다시 만나면 '복수전!', 이기면 '복수 성공'
+  const lastVs = () => C.store(KEY + 'lastVs', {});
+  function soloFoe(ses) {                                                   // 혼자 맞고의 AI 상대 (하나일 때만)
+    if (!ses || !ses.S || ses.cfg.online || ses.cfg.watch || ses.hot || ses.isDrill) return null;
+    const ais = []; for (let p = 0; p < ses.S.n; p++) { const st = seatAt(ses, p); if (st && st.ctrl === 'ai') ais.push(p); }
+    if (ais.length !== 1) return null;
+    const st = seatAt(ses, ais[0]);
+    return FOE_ID[st.name] ? { p: ais[0], name: st.name } : null;
+  }
+  function revengeOf(ses) { const f = soloFoe(ses); return f && lastVs()[f.name] === 'l' ? f : null; }
+  function foeAfter(ses, r) {                                               // 판 끝: 이 타짜와의 마지막 결과를 기억
+    const f = soloFoe(ses); if (!f || r.kind === 'nagari' || r.winner < 0) return '';
+    const won = r.winner === meSeat(ses), all = lastVs(), was = all[f.name];
+    all[f.name] = won ? 'w' : 'l'; C.save(KEY + 'lastVs', all);
+    if (won && was === 'l') { aiSay(ses, f.p, 'lost', true) || aiSay(ses, f.p, 'ouch', true); return `<p class="rescoin">🎉 복수 성공! 지난번에 진 ${esc(f.name)}${hasJong(f.name) ? '을' : '를'} 이겼어요</p>`; }
+    return '';
   }
   // 👊 AI 얼굴 누르기 (11-01 멋쟁이규호 님 신고 '평경장 죽빵') — 주먹이 날아가고 한마디 받아침. 혼자·한 기기만, 판에는 아무 영향 없음
   function punch(ses, p) {
@@ -1440,7 +1481,9 @@
       if (s.seonDraw) { await showSeon(ses, s.seonDraw); ses.check(); }
       await shuffleAnim(ses); ses.check();
       await dealAnim(ses);
-      if (s.round === 1 || Math.random() < 0.3) aiSay(ses, firstAi(ses), 'start', true);
+      const rv = revengeOf(ses);
+      if (rv) { aiSay(ses, rv.p, 'revenge', true) || aiSay(ses, rv.p, 'start', true); C.toast(`😤 복수전! 지난 판은 ${iga(rv.name)} 이겼어요`, 2200); }
+      else if (s.round === 1 || Math.random() < 0.3) aiSay(ses, firstAi(ses), 'start', true);
     }
     while (ses.S.phase !== 'end') {
       await ses.ready();
@@ -1904,7 +1947,7 @@
           bounce(e.card);
           await syncAll(ses, D(150));
           {                                                   // 무엇을 왜: 쌍피면 '2장 몫', 일반 피가 없어 쌍피를 준 거면 그렇게
-            const v = e.v || 1, kind = v >= 3 ? '쓰리피' : v === 2 ? '쌍피' : '피', why = e.only ? ` — ${e.need || 1}장 몫인데 일반 피가 없어서` : (e.need || 1) > 1 ? ` (${e.need}장 몫)` : '';
+            const v = e.v || 1, kind = v >= 3 ? '쓰리피' : v === 2 ? '쌍피' : '피', why = e.only ? ` — ${e.need || 1}장 몫인데 딱 맞게 줄 피가 없어서` : (e.need || 1) > 1 ? ` (${e.need}장 몫)` : '';
             if (e.to === meSeat(ses)) C.toast(`🃏 ${nameOf(ses, e.from)}에게서 ${kind} 가져왔어요${why}`, 1900);
             else if (e.from === meSeat(ses)) C.toast(`🃏 ${nameOf(ses, e.to)}에게 ${kind} 줬어요${why}`, 1900);
           }
@@ -2312,8 +2355,9 @@
     setThinking(ses, p, true);
     const t0 = performance.now();
     const v = G.view(ses.S, p);
-    const a = await aiChoose(v, seat.tier, seat.name);
+    const a = await aiChoose(v, seat.tier, seat.name, BOSS_PEEK[seat.name] && !ses.cfg.online ? G.fastClone(ses.S) : null);
     ses.check();
+    if (lastPeek && ses.S.phase === 'play') aiSay(ses, p, 'peek');           // 👹 몰래 봤을 때 가끔 한마디 (무엇을 봤는지는 말 안 함)
     const want = FAST ? 0 : SP().think * (ses.S.phase === 'goStop' ? 1.5 : ses.S.phase === 'play' ? 1 : 0.6);
     const left = want - (performance.now() - t0);
     if (left > 0) await ses.wait(left);
@@ -2347,8 +2391,9 @@
       const wr = s.who[r.winner];                                                   // 이긴 사람의 방 자리
       const humans = ses.kind === 'solo' ? [] : s.who.filter(rs => rs !== mr && ses.seats[rs] && ses.seats[rs].uid && ses.seats[rs].uid !== myUid && !ses.seats[rs].sub);
       const aiSeat = humans.length ? null : ses.seats.find(x => x && x.ctrl === 'ai' && x.tier);   // 혼자 하기는 AI 난이도(easy·normal·hard)도 같이
+      const foe = humans.length ? null : soloFoe(ses);                              // 🆚 맞고 타짜별 전적 (m/a/t/h_…)
       GRank.result('gostop', {
-        mode: humans.length ? 'friend' : 'ai', tier: aiSeat ? aiSeat.tier : undefined, res: won ? 'w' : 'l', beat: won ? s.n - 1 : 0,
+        mode: humans.length ? 'friend' : 'ai', tier: aiSeat ? aiSeat.tier : undefined, tiers: foe ? [FOE_ID[foe.name]] : undefined, res: won ? 'w' : 'l', beat: won ? s.n - 1 : 0,
         score: ses.lastDeltas && ses.lastDeltas[mr] != null ? ses.lastDeltas[mr] : undefined,       // 이번 판 칩 손익
         opp: humans.map(rs => ({ uid: ses.seats[rs].uid, res: won ? 'w' : rs === wr ? 'l' : 'd' })),
       });
@@ -2383,6 +2428,7 @@
         stats.played++; if (r.winner === me) { stats.won++; stats.best = Math.max(stats.best, r.points); }
         C.save(KEY + 'stats', stats); drawCoinPill();
         rankReport(ses, s, r);
+        coinLine += foeAfter(ses, r);
       }
       // 점수 내역
       const saleRows = (r.sale || []).map(x => `<tr><td>💰 광 팔기 <span class="small">${esc(tname(ses, x.buyerSeat))} → ${esc(tname(ses, x.seat))} · 광 ${x.cards.length}장</span></td><td class="n">${x.price}점</td></tr>`).join('');
@@ -2543,6 +2589,7 @@
     act(a) { const ses = SES; if (ses && ses.pending && !ses.pending.isResult) finishHuman(ses, a); },
     legal() { return SES ? G.legal(SES.S) : []; },
     get panel() { return SES && SES.panel; },
+    get peeks() { return peekN; }, bossPeek(p) { BOSS_PEEK['각성 아귀'] = p; },   // 시험: 👹 몰래 본 수 · 확률 바꾸기
   };
 
   // ── 시작 ────────────────────────────────────────────────
