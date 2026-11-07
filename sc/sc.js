@@ -1,4 +1,4 @@
-/* 스타 봇 세상 — 관리자(포털과 같은 로그인)면 이 PC 에 진짜 엔진 창을 띄우는 단추판
+/* 스타크래프트(옛 스타 봇 세상) — 관리자(포털과 같은 로그인)면 이 PC 에 진짜 엔진 창을 띄우는 단추판
    benny-sc://bots/<모드>/<봇1|내 봇>/<상대>/<맵> → 이 PC 의 play/bots.bat (ai-practice rl-08 wsl/bots_run.sh) */
 (() => {
   const $ = id => document.getElementById(id);

@@ -24,6 +24,13 @@ li{margin:4px 0}
 a.btn{display:inline-block;text-decoration:none;color:var(--ink)}
 .btn.go{background:linear-gradient(135deg,var(--accent),var(--accent-d));border-color:transparent;color:#fff;font-weight:800;text-align:left}
 .btn.stop{background:linear-gradient(135deg,#7f1d1d,#5b1414);border-color:transparent;color:#fff}
+.rk{display:grid;gap:8px;border:1px solid var(--line);border-radius:12px;background:rgba(12,15,34,.72);padding:10px 12px;margin:8px 0}
+.rkl{font-size:12px;color:var(--soft);font-weight:700}
+.rkb{display:flex;flex-wrap:wrap;gap:6px}
+.rkbtn{width:44px;padding:6px 0;border-radius:8px;border:1px solid var(--line);background:rgba(99,102,241,.12);color:var(--ink);font:600 13px/1 inherit;cursor:pointer}
+.rkbtn.on{background:#238636;border-color:#2ea043;color:#fff}
+.rkd{font-size:12px;line-height:1.6;color:var(--soft)}
+.rkd b{color:var(--ink)}
 </style>
 <script src="../common/backnav.js?v=3"></script>
 </head>
@@ -32,19 +39,50 @@ a.btn{display:inline-block;text-decoration:none;color:var(--ink)}
   <header class="top"><h1>🚀 스타크래프트 도전</h1><a href="../">게임 목록</a></header>
   <section class="card">
   <p class="small" id="note">불러오는 중…</p>
-  <div id="launch">
-    <p class="small">진짜 스타1 엔진(OpenBW)과 공개 대회 봇. 창은 이 PC에 떠요 (관전: C = 자동 카메라 · 봇 돕기: F9 = 켬/끔).</p>
-    <div class="row"><span>모드</span><select id="botMode"><option value="watch">👀 봇끼리 관전</option><option value="vs">⚔️ 나 vs 봇</option><option value="assist">🤝 나 + 내 봇 vs 봇 (봇 돕기)</option></select></div>
-    <div class="row" id="botARow"><span id="botALab">봇 1</span><select id="botA"></select></div>
-    <div class="row"><span>상대 봇</span><select id="botB"></select></div>
-    <div class="row" id="raceRow" style="display:none"><span>내 종족</span><select id="botRace"><option>Zerg</option><option>Terran</option><option>Protoss</option></select></div>
-    <div class="row"><span>맵</span><select id="botMap"><option>FightingSpirit</option><option>CircuitBreaker</option><option>Python</option><option>Destination</option><option>HeartbreakRidge</option><option>Benzene</option><option>Andromeda</option><option>TauCross</option><option>Jade</option><option>LaMancha</option></select></div>
-    <div class="row"><button class="btn primary big" id="botGo">시작!</button><span class="small" id="botSt"></span></div>
+
+  <div class="rk">
+    <div class="rkl">플루토 난이도 — 누르면 바뀝니다 (다음에 띄우는 경기부터 적용)</div>
+    <div class="rkb" id="rkb">
+      <button class="rkbtn" data-rank="S">S</button>
+      <button class="rkbtn" data-rank="A">A</button>
+      <button class="rkbtn" data-rank="B">B</button>
+      <button class="rkbtn on" data-rank="C">C</button>
+      <button class="rkbtn" data-rank="D">D</button>
+      <button class="rkbtn" data-rank="E">E</button>
+      <button class="rkbtn" data-rank="F">F</button>
+    </div>
+    <div class="rkd" id="rkd"></div>
+  </div>
+
+  <div id="admin" class="hidden">
+    <h2>이 PC 에서 실행</h2>
+    <p class="small">버튼을 누르면 이 PC 에서 플루토 봇 클라이언트가 뜹니다 (스타크래프트: 리마스터 + Pluto 주입). 동시에 한 판만 돌 수 있어요.</p>
+    <div class="grid2">
+      <button class="btn go" data-mode="solo">⚔️ 나 vs 플루토 <span class="tag">로컬 1:1</span></button>
+      <button class="btn go" data-mode="guest">🤖 플루토 vs 친구 <span class="tag">친구가 방에 참가</span></button>
+      <button class="btn go" data-mode="duo">👥 나랑 친구랑 <span class="tag">봇 없음 · 사람끼리</span></button>
+      <button class="btn go" data-mode="team">🤝 나 + 친구 vs 플루토 <span class="tag">Top vs Bottom</span></button>
+      <button class="btn go" data-mode="ffa">🔥 나 vs 친구 vs 플루토 <span class="tag">3인</span></button>
+      <button class="btn stop" id="stop">■ 경기 종료 (스타크래프트 닫기)</button>
+      <a class="btn" href="benny-sc://open">📋 대전 신청 페이지 열기</a>
+    </div>
+    <p class="small" id="st"></p>
+  </div>
+
+  <div id="friend" class="hidden">
+    <h2>친구랑 대전하는 법</h2>
+    <ol>
+      <li><a class="btn" href="https://download.battle.net/ko/" target="_blank" rel="noopener">배틀넷 앱 설치</a> 후 스타크래프트: 리마스터를 켭니다</li>
+      <li>베니 님께 <b>대전 신청</b> (카톡/디스코드) — 방 이름과 시간을 받습니다</li>
+      <li><b>멀티플레이 → 배틀넷 → 커스텀 게임</b> 에서 그 방 이름으로 참가하면 끝</li>
+    </ol>
+    <p class="small">게임 연결은 배틀넷이 처리합니다. 베니 님 PC 주소·포트·설치 프로그램은 필요 없습니다.</p>
+    <p class="small" id="frk"></p>
+    <button class="btn" id="copy" type="button">📋 이 난이도로 신청 문구 복사</button>
   </div>
   </section>
 </div>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="sc.js?v=18"></script>
+<script src="../common/gate.js?v=1"></script>
+<script src="arcade.js?v=1"></script>
 </body>
 </html>
