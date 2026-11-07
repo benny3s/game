@@ -457,6 +457,28 @@ async function mePickTests(browser) {
   const r = await p.evaluate(() => ({ me: window.__picked, names: window.__fs.get('gp/names'), pl: window.__picked && window.__fs.get('gp/players/' + window.__picked.pid), pin: window.__picked && !!window.__fs.get('gp/pins/' + window.__picked.pid) }));
   ok(done && r.me && r.names && r.names['새친구'] === r.me.pid && r.pl && r.pl.n === '새친구' && r.pin, `PIN 뒤 이름·프로필·PIN 이 같이 생김 — ${JSON.stringify(r)}`);
   await ctx.close();
+  // 👀 11-08 손님(하루 5판)은 새 이름만: 가족 이름 목록이 안 보이고, PIN 없는 남의 이름도 못 잡음 (예전엔 '이어서 하기' → PIN 먼저 정하기)
+  {
+    const ctx = await newCtx(browser, { fake: { rules: 'gp', user: { uid: 'devG', claims: {} } } });
+    await ctx.addInitScript('window.Gate = window.Gate || { state: { role: "guest_free" } };');
+    await ctx.addInitScript(() => { const t = window.__fs && window.__fs.tree; if (t) { t.gp = { players: { pJ: { n: '지밍비', c: 1, l: 2 } }, names: { '지밍비': 'pJ' } }; } });
+    const p = await open(ctx, LOCAL + '/game/met/');
+    await waitFn(p, () => !!window.GME);
+    await p.evaluate(() => { firebase.initializeApp({ databaseURL: 'fake' }); window.__pick = GME.pick(firebase.app().database(), { canClose: true }).then(m => (window.__picked = m)); });
+    await waitFn(p, () => document.querySelector('.gme-list') && !/불러오는/.test(document.querySelector('.gme-list').textContent));
+    const seeded = await p.evaluate(() => !!window.__fs.get('gp/players/pJ'));
+    const l0 = await p.evaluate(() => ({ pids: document.querySelectorAll('.gme-list [data-pid]').length, txt: document.querySelector('.gme-list').textContent }));
+    ok(seeded && l0.pids === 0 && !/지밍비/.test(l0.txt), `손님 이름 창: 가족 이름 목록 안 보임 — ${JSON.stringify(l0)}`);
+    await p.fill('.gme-in', '지밍비');
+    await sleep(150);
+    const l1 = await p.evaluate(() => ({ pids: document.querySelectorAll('.gme-list [data-pid]').length, nw: !!document.querySelector('[data-new]'), taken: !!document.querySelector('.gme-taken') }));
+    ok(l1.pids === 0 && !l1.nw && l1.taken, `손님이 있는 이름(PIN 없음)을 적으면 '이미 있는 이름' · 이어서 하기 · 새로 만들기 단추 없음 — ${JSON.stringify(l1)}`);
+    await p.fill('.gme-in', '새손님');
+    ok(!!(await waitFn(p, () => !!document.querySelector('[data-new]'), null, 2000)), '손님도 새 이름은 만들 수 있음');
+    const pin = await p.evaluate(() => window.__fs.get('gp/pins/pJ'));
+    ok(pin == null, `남의 이름에 PIN 이 생기지 않음 — ${JSON.stringify(pin)}`);
+    await ctx.close();
+  }
 }
 
 (async () => {

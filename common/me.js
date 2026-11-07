@@ -55,14 +55,18 @@
   }
   function touch(db) { if (me && db) db.ref(P + "gp/players/" + me.pid + "/l").set(firebase.database.ServerValue.TIMESTAMP).catch(() => {}); }
 
+  // 👀 손님(허용 안 된 기기, 하루 5판 · gate.js guest_free) 은 새 이름만 — 가족 이름 목록을 안 보이고, 있는 이름은 못 이어 받음
+  //   (11-08: 지밍비·베니·규호 프로필은 PIN 이 없어, 모르는 손님이 '이어서 하기'로 그 이름을 잡고 PIN 까지 먼저 정할 수 있었음. 내 이름이면 가입 신청에서 PIN 으로)
+  const isGuest = () => { try { return !!(window.Gate && Gate.state && Gate.state.role === "guest_free"); } catch (e) { return false; } };
   function pick(db, { canClose = false, title = "플레이어 프로필 선택" } = {}) {
     style();
+    const guest = isGuest();
     return new Promise(resolve => {
       const ov = document.createElement("div"); ov.className = "gme-ov";
       ov.innerHTML = `<div class="gme-box">
         ${canClose ? '<button class="gme-x" data-x>닫기 ✕</button>' : ""}
         <h2>👤 ${esc(title)}</h2>
-        <p>친구들에게 보이는 이름이에요. 기존 이름을 누르면 전적과 기록이 그대로 이어집니다.</p>
+        <p>${guest ? "손님은 새 이름만 쓸 수 있어요. 원래 쓰던 이름이면 🔑 가입 신청에서 이름 · PIN 으로 이어 받아요." : "친구들에게 보이는 이름이에요. 기존 이름을 누르면 전적과 기록이 그대로 이어집니다."}</p>
         <input class="gme-in" maxlength="6" placeholder="새 이름 (6자까지) 또는 아래에서 선택" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done">
         <div class="gme-list"></div><div class="gme-msg"></div>
         ${me ? `<button class="gme-it" data-mg style="justify-content:center;font-size:14px">⚙️ 내 프로필 — 닉네임·PIN 바꾸기</button>` : ""}</div>`;
@@ -73,12 +77,14 @@
       const draw = () => {
         const q = inp.value.trim(), k = q ? nameKey(q) : "";
         if (!all) { list.innerHTML = '<p>명단 불러오는 중…</p>'; return; }
-        const hits = q ? all.filter(p => nameKey(p.n).includes(k)).sort((a, b) => (nameKey(b.n) === k) - (nameKey(a.n) === k) || b.l - a.l).slice(0, 8)
+        const hits = guest ? [] : q ? all.filter(p => nameKey(p.n).includes(k)).sort((a, b) => (nameKey(b.n) === k) - (nameKey(a.n) === k) || b.l - a.l).slice(0, 8)
                        : all.slice().sort((a, b) => b.l - a.l).slice(0, 6);
         const exact = q && all.some(p => nameKey(p.n) === k);
         list.innerHTML = hits.map(p => `<button class="gme-it" data-pid="${esc(p.pid)}">👤 <b>${esc(p.n)}</b><span>${me && me.pid === p.pid ? "지금 나" : "이어서 하기 →"}</span></button>`).join("")
           + (q && !exact ? `<button class="gme-it new" data-new>✨ <b>${esc(q)}</b><span>새 프로필로 시작</span></button>` : "")
-          + (!q && !hits.length ? "<p>위 입력칸에 이름을 적고 시작해 주세요.</p>" : "")
+          + (guest && exact ? "<p class='gme-taken'>이미 있는 이름이에요 — 다른 이름을 적어 주세요.</p>" : "")
+          + (guest && !q ? "<p>위 입력칸에 새 이름을 적어 주세요.</p>" : "")
+          + (!guest && !q && !hits.length ? "<p>위 입력칸에 이름을 적고 시작해 주세요.</p>" : "")
           + (!q && hits.length ? "<p style='font-size:12px;margin-top:2px'>위 목록에서 내 이름을 누르거나, 새 이름을 입력해 주세요.</p>" : "");
       };
       inp.addEventListener("input", () => { msg.textContent = ""; draw(); });
@@ -88,6 +94,7 @@
         if (e.target.closest("[data-mg]")) { ov.remove(); resolve(await manage(db)); return; }
         const it = e.target.closest(".gme-it"); if (!it || busy) return;
         if (it.dataset.pid) {
+          if (guest) return;
           const p = all.find(x => x.pid === it.dataset.pid);
           if (me && me.pid === p.pid) { touch(db); done(me); return; }   // 이 기기에서 쓰던 이름은 PIN 안 물음
           busy = true; msg.textContent = "";
@@ -107,6 +114,7 @@
             if (r.pid) { save({ pid: r.pid, name: n }); done(me); return; }
             other = r.other;                                    // 그 사이 누가 먼저 만듦 → 있는 이름 고르기
           }
+          if (guest) { msg.textContent = "이미 있는 이름이에요 — 다른 이름을 적어 주세요."; busy = false; return; }
           const p = (await db.ref(P + "gp/players/" + other).get()).val();
           if (await claim(db, other, (p && p.n) || n)) save({ pid: other, name: (p && p.n) || n }); else { busy = false; return; }
           done(me);
