@@ -16,6 +16,20 @@
   const now = () => Arena.now();                            // 서버 시계 (카운트다운·기록을 모두 같게)
   let bank = null;
   const bankP = fetch("puzzles.json?v=2").then(r => r.json()).then(b => (window.__nyBank = bank = b));
+  // 판 묶음 더하기 (11-08 지민 님 단계 973 — 고수 1,000판이 1,091단계에서 한 바퀴): bank/{난이도}-{c}.json 에 1,000판씩,
+  //   bank/index.json = 묶음 몇 개 (nyang/tools/bank_topup.py 가 제일 앞선 사람 단계를 보고 모자라면 저절로 더 만들어 올림).
+  //   번호는 이어 붙임 (c×1000 + i) → 폰에 저장된 '푼 판 번호'가 그대로 맞음. 오늘의 퍼즐 · 친구 방은 0번 묶음만 (모두 같은 판 · 옛 화면과도 같게)
+  const CHUNK = 1000, chunkP = {};
+  let bankIdx = {};
+  const bankIdxP = fetch("bank/index.json?d=" + new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10)).then(r => r.ok ? r.json() : {}).then(j => (bankIdx = (j && j.tiers) || {})).catch(() => {});
+  const chunksOf = tier => 1 + (+bankIdx[tier] || 0);
+  function loadChunks(tier, upto) {   // 1..upto 번 묶음을 차례로 bank[tier] 뒤에 붙임 (못 받으면 있는 판으로)
+    let p = bankP;
+    for (let c = 1; c <= Math.min(upto, chunksOf(tier) - 1); c++) {
+      p = p.then(() => chunkP[tier + c] || (chunkP[tier + c] = fetch(`bank/${tier}-${c}.json?v=1`).then(r => r.json()).then(a => { if (bank[tier].length === c * CHUNK && a.length === CHUNK) bank[tier].push(...a); })));
+    }
+    return p.catch(() => {});
+  }
 
   // ── 기록 (관리자만 읽음)
   let glog = null;
@@ -316,9 +330,18 @@
       if (best) { bs[ta.tier] = ta.solved; store.set("taBest", bs); }
       if (glog) glog.matchEnd({ mode: "ta", solved: ta.solved, failed: ta.failed });
       REC.ta(ta.tier, TA_SOLO_MIN, ta.solved); REC.solved(ta.solved); setTimeout(checkBadges, 1200);
-      result("⏱ 시간 끝!", `<p class="round big-num">${ta.solved}개</p><p class="small" style="margin:0">${TA_SOLO_MIN}분 동안 푼 문제${ta.failed ? ` · 실패 ${ta.failed}` : ""}${best && ta.solved ? " · <b style='color:var(--good)'>최고 기록!</b>" : bs[ta.tier] ? ` · 최고 ${bs[ta.tier]}개` : ""}</p>${cheerLine()}`,
+      result("⏱ 시간 끝!", `<p class="round big-num">${ta.solved}개</p><p class="small" style="margin:0">${TA_SOLO_MIN}분 동안 푼 문제${ta.failed ? ` · 실패 ${ta.failed}` : ""}${best && ta.solved ? " · <b style='color:var(--good)'>최고 기록!</b>" : bs[ta.tier] ? ` · 최고 ${bs[ta.tier]}개` : ""}</p><div id="resRank">${taResRank(ta.tier)}</div>${cheerLine()}`,
         [["한 번 더", () => playTA(ta.tier), "primary"], ["난이도 고르기", goHome]]);
+      if (myName()) setTimeout(() => loadRec(true).then(() => { const e = $("resRank"); if (e && !$("resBox").hidden) e.innerHTML = taResRank(ta.tier); }).catch(() => {}), 1500);   // 친구 새 기록까지 (내 기록이 서버에 올라간 뒤)
     } else { sendProg(); toast("⏱ 시간 끝! 다른 사람을 기다리는 중…", 3000); checkRoundEnd(); }
+  }
+  // 타임어택 결과창: 이번 주 친구 순위 (나 몇 등 · 1등과 몇 개 차이)
+  function taResRank(tier) {
+    const rows = taRows(tier), me = rows.findIndex(x => x.pid === myPid()), T = TIERS.find(t => t.id === tier);
+    if (!rows.length || !myName()) return "";
+    const gap = me > 0 ? rows[0].v - rows[me].v : 0;
+    const head = me === 0 ? (rows.length > 1 ? `🥇 이번 주 <b>1등</b>! (2등 ${esc(rows[1].name)} ${rows[1].v}개)` : "🥇 이번 주 첫 기록!") : me > 0 ? `이번 주 <b>${me + 1}등</b> · 1등 ${esc(rows[0].name)}까지 ${gap + 1}개 더` : "";
+    return `<p class="cheer" style="margin:0">${head}</p><p class="small" style="margin:0">🏆 이번 주 친구 순위 · ${T.em} ${T.label} ${TA_SOLO_MIN}분</p>${rankList(rows, taVal, 4)}`;
   }
   function progress() { if (ctx && ctx.onProgress) ctx.onProgress(); }
 
@@ -343,7 +366,10 @@
   // ══ 단계 지도: 1단계부터 차례로 (1~20 초급 · 21~50 중급 · 51~90 고급 · 91~ 고수). 단계마다 정해진 문제·모양이라 친구랑 같은 단계면 같은 판 ══
   const stageTier = k => k <= 20 ? "easy" : k <= 50 ? "normal" : k <= 90 ? "hard" : "master";
   const stageBase = { easy: 0, normal: 20, hard: 50, master: 90 };
-  function stageInfo(k) { const tier = stageTier(k), list = bank[tier], j = k - stageBase[tier] - 1; return { tier, idx: (j * 7919 + 101) % list.length, vs: k * 7919 + 13 }; }
+  function stageInfo(k) {   // 1,000단계마다 다음 묶음 (0번 묶음 안은 예전과 같은 판), 묶음이 모자라면 처음 묶음부터 다시 (모양은 단계마다 다름)
+    const tier = stageTier(k), j = k - stageBase[tier] - 1, c = Math.floor(j / CHUNK) % chunksOf(tier);
+    return { tier, chunk: c, idx: c * CHUNK + (j % CHUNK * 7919 + 101) % Math.min(CHUNK, bank[tier].length), vs: k * 7919 + 13 };
+  }
   const SKINS = [[0, "🐱"], [10, "🐈"], [20, "🐈‍⬛"], [35, "😺"], [50, "🐯"], [70, "🦁"], [90, "🐆"], [120, "😻"]];
   const localStars = () => store.get("stageStars", {});
   function stageStars() {                                                    // 폰에 저장 + 서버 기록 중 높은 쪽
@@ -370,7 +396,9 @@
   }
   function playStage(k) {
     if (k > maxStage() + 1) { toast("앞 단계를 먼저 깨 주세요"); return; }
-    const s = stageInfo(k); playSolo(s.tier, s.idx, s.vs, k);
+    const j = k - stageBase[stageTier(k)] - 1;
+    if (j < CHUNK) { const s = stageInfo(k); playSolo(s.tier, s.idx, s.vs, k); return; }
+    bankIdxP.then(() => { const s = stageInfo(k); return loadChunks(s.tier, s.chunk).then(() => { if (bank[s.tier][s.idx]) playSolo(s.tier, s.idx, s.vs, k); else toast("판을 못 받았어요 — 인터넷을 확인해 주세요"); }); });
   }
   function drawStages() {
     const st = stageStars(), top = maxStage(), cur = top + 1;
@@ -407,7 +435,7 @@
   function dailyInfo(key = kstDay()) {
     const n = Math.round(Date.parse(key + "T00:00:00Z") / 86400e3), wd = new Date(key + "T00:00:00Z").getUTCDay(), tier = DAY_TIER[wd];
     let h = Math.imul(n + 977, 2654435761) >>> 0; h = (h ^ (h >>> 15)) >>> 0;
-    return { key, wd, tier, idx: h % bank[tier].length, vs: ((n * 7919 + 4099) >>> 0) || 1, bseed: (Math.imul(n + 31337, 2246822519) >>> 0) || 1, zseed: (Math.imul(n + 7331, 3266489917) >>> 0) || 1 };   // bseed = 🌗 오늘의 반반 · zseed = 🐾 오늘의 산책
+    return { key, wd, tier, idx: h % Math.min(CHUNK, bank[tier].length), vs: ((n * 7919 + 4099) >>> 0) || 1, bseed: (Math.imul(n + 31337, 2246822519) >>> 0) || 1, zseed: (Math.imul(n + 7331, 3266489917) >>> 0) || 1 };   // bseed = 🌗 오늘의 반반 · zseed = 🐾 오늘의 산책
   }
   const dayVal = v => v.s + (v.h || 0) * PENALTY;
   function myDays() {                                                       // 폰에 저장 + 서버 기록 (둘 중 있는 것)
@@ -439,7 +467,52 @@
     return n;
   }
   const MEDAL = ["🥇", "🥈", "🥉"];
-  const boardHtml = (board, n = 5) => board.length ? `<ol class="dc-board">${board.slice(0, n).map((x, i) => `<li class="${x.pid === ((GME.me && GME.me.pid) || "me") ? "me" : ""}"><span class="md">${MEDAL[i] || i + 1}</span><b>${esc(x.name)}</b><span class="tm">${fmt(dayVal(x.v))}</span></li>`).join("")}</ol>` : "";
+  const hm = t => { const d = new Date(t + 9 * 3600e3); return `${d.getUTCHours()}:${String(d.getUTCMinutes()).padStart(2, "0")}`; };   // 푼 시각 (한국 시각) — 누가 먼저 풀었는지도 보이게 (11-08 '선착순')
+  const myPid = () => (GME.me && GME.me.pid) || "me";
+  // 줄 세운 목록 한 장 (오늘 순위 · 타임어택 순위 같이 씀): 나는 n 등 밖이어도 마지막에 한 줄
+  function rankList(rows, val, n = 5, at) {
+    if (!rows.length) return "";
+    const me = rows.findIndex(x => x.pid === myPid()), li = (x, i) => `<li class="${i === me ? "me" : ""}"><span class="md">${MEDAL[i] || i + 1}</span><b>${esc(x.name)}</b>${at && at(x) ? `<span class="at">${at(x)}</span>` : ""}<span class="tm">${val(x)}</span></li>`;
+    return `<ol class="dc-board">${rows.slice(0, n).map(li).join("")}${me >= n ? li(rows[me], me) : ""}</ol>`;
+  }
+  const boardHtml = (board, n = 5) => rankList(board, x => fmt(dayVal(x.v)), n, x => x.v.at ? hm(x.v.at) : "");
+  // ⏱ 타임어택 친구 순위 (11-08 베니 님 '친구끼리 경쟁하는 게 좋은 듯, 랭킹 잘 보이게 — 자꾸 나한테 물어봐'): 혼자 3분 기록 · 이번 주(월요일부터) 또는 역대
+  function taRows(tier, period = "week") {
+    const R = (rkData && rkData.rec) || {}, N = (rkData && rkData.names) || {}, wk = weekKey(), key = `${tier}_${TA_SOLO_MIN}`, me = myPid();
+    const rows = Object.entries(R).map(([pid, r]) => ({ pid, name: N[pid] || "", v: period === "week" ? (((r && r.w && r.w[wk]) || {}).ta || {})[key] : ((r && r.ta) || {})[key] })).filter(x => x.v > 0 && x.name);
+    const lw = store.get("taW", {}), loc = period === "week" ? (lw.wk === wk ? (lw.v || {})[key] : 0) : store.get("taBest", {})[tier];   // 서버에 아직 안 올라간 내 기록
+    const mine = rows.find(x => x.pid === me);
+    if (loc > 0 && myName()) { if (mine) mine.v = Math.max(mine.v, loc); else rows.push({ pid: me, name: myName(), v: loc }); }
+    return rows.sort((a, b) => b.v - a.v);
+  }
+  // 순위 띠에 올릴 타임어택 난이도: 이번 주 기록이 가장 많은 난이도 (같으면 어려운 쪽), 아무도 없으면 고른 난이도
+  function taTierNow() {
+    let best = soloTier, bn = 0;
+    for (const t of TIERS) { const n = taRows(t.id).length; if (n >= bn && n) { best = t.id; bn = n; } }
+    return best;
+  }
+  const taVal = x => `${x.v}개`;
+  // 🏆 혼자 화면 맨 위 순위 띠: 📅 오늘의 퍼즐 · ⏱ 이번 주 타임어택 1~3등 + 나 (누르면 그 화면으로) — 그 화면에 있으면 그 줄은 숨김 (아래 카드에 다 있음)
+  function drawRankStrip() {
+    const el = $("rankStrip"); if (!el) return;
+    if (!rkData || !bank) { el.innerHTML = ""; return; }
+    const top3 = (rows, v) => rows.slice(0, 3).map((x, i) => `<span class="${x.pid === myPid() ? "me" : ""}">${MEDAL[i]} ${esc(x.name)} <b>${v(x)}</b></span>`).join("");
+    const d = dailyInfo(), T = TIERS.find(t => t.id === d.tier), db = dayBoard(d.key), dMe = db.findIndex(x => x.pid === myPid());
+    const tt = taTierNow(), TT = TIERS.find(t => t.id === tt), tb = taRows(tt), tMe = tb.findIndex(x => x.pid === myPid());
+    const rows = [];
+    if (soloMode !== "day") rows.push(`<button type="button" class="rs-row" data-go="day"><span class="rs-h">📅 오늘의 퍼즐 순위 <i>${T.em} ${T.label}</i></span><span class="rs-l">${db.length ? top3(db, x => fmt(dayVal(x.v))) : "<span>아직 아무도 안 풀었어요 — 1등 기회!</span>"}</span><span class="rs-me">${dMe >= 0 ? `나 ${dMe + 1}등` : "나는 아직 ›"}</span></button>`);
+    if (soloMode !== "ta") rows.push(`<button type="button" class="rs-row" data-go="ta" data-t="${tt}"><span class="rs-h">⏱ 이번 주 타임어택 순위 <i>${TT.em} ${TT.label} ${TA_SOLO_MIN}분</i></span><span class="rs-l">${tb.length ? top3(tb, taVal) : "<span>이번 주 기록이 아직 없어요</span>"}</span><span class="rs-me">${tMe >= 0 ? `나 ${tMe + 1}등` : "도전 ›"}</span></button>`);
+    el.innerHTML = rows.length ? `<div class="rkstrip">${rows.join("")}</div>` : "";
+    for (const b of el.querySelectorAll("[data-go]")) b.onclick = () => { soloMode = b.dataset.go; store.set("soloMode2", soloMode); if (b.dataset.t) { soloTier = b.dataset.t; store.set("soloTier", soloTier); } drawTiers(); };
+  }
+  let taPeriod = "week";
+  function drawTABoard() {
+    const el = $("taBoard"); if (!el) return;
+    const T = TIERS.find(t => t.id === soloTier), rows = taRows(soloTier, taPeriod);
+    el.innerHTML = `<div class="taboard"><div class="tb-top"><b>🏆 친구 순위 · ${T.em} ${T.label} ${TA_SOLO_MIN}분</b><span class="seg">${[["week", "이번 주"], ["all", "역대"]].map(([v, l]) => `<button type="button" class="btn" data-p="${v}" aria-pressed="${taPeriod === v}">${l}</button>`).join("")}</span></div>
+      ${rankList(rows, taVal, 5) || `<p class="small dc-sub">${rkData ? (taPeriod === "week" ? "이번 주 기록이 아직 없어요 — 첫 기록을 남겨 보세요!" : "아직 기록이 없어요") : "이름을 정하면 친구 순위가 보여요"}</p>`}</div>`;
+    for (const b of el.querySelectorAll("[data-p]")) b.onclick = () => { taPeriod = b.dataset.p; drawTABoard(); };
+  }
   function drawDay() {
     const box = $("dayBox"); if (!box || !bank) return;
     const d = dailyInfo(), T = TIERS.find(t => t.id === d.tier), days = myDays(), mine = days[d.key], st = streakOf(days);
@@ -451,13 +524,21 @@
       <div class="dc-week">${wk.map(x => `<span class="${x.on ? "on" : ""}${x.today ? " today" : ""}${x.fut ? " fut" : ""}"><i>${x.w}</i><em>${x.on ? "🐱" : x.fut ? "" : "·"}</em></span>`).join("")}</div>
       <button type="button" class="dc-cal" id="dayCal">📅 ${+d.key.slice(5, 7)}월 달력 · ${monthCount(d.key.slice(0, 7))}일${store.get("monthTrophy", {})[d.key.slice(0, 7)] ? " 🏆" : ""} ›</button>
       ${mine ? `<p class="dc-mine">✅ 오늘 <b>${fmt(mine.s)}</b> · 실수 ${mine.m || 0} · 힌트 ${mine.h || 0}${mine.k > 1 ? ` · ${mine.k}번째 만에` : ""}</p>` : `<p class="small dc-sub">모두 같은 판 · 가족끼리 오늘 시간 겨루기 (힌트 한 번 = +${PENALTY}초)</p>`}
-      ${boardHtml(board) || `<p class="small dc-sub">아직 아무도 안 풀었어요 — 첫 번째가 돼 보세요!</p>`}
+      ${board.length ? `<p class="dc-rk">🏆 오늘 순위${board.length > 1 ? " <span class='small'>(빠른 순 · 옆 시각 = 푼 때)</span>" : ""}</p>${boardHtml(board)}` : `<p class="small dc-sub">아직 아무도 안 풀었어요 — 첫 번째가 돼 보세요!</p>`}
       ${mine ? `<div class="dc-foot"><span class="small">다시 풀어도 오늘 기록은 그대로 · 내일 0시에 새 판</span><button class="btn mint" id="dayShare">📤 자랑</button></div>` : ""}
-    </div>${bbDayHtml(d)}${zzDayHtml(d)}`;
+    </div>`;
     const sb = $("dayShare"); if (sb) sb.onclick = () => shareDay(d, mine, st, board);
+    const cb = $("dayCal"); if (cb) cb.onclick = () => openCalendar();
+  }
+  // 🌗 오늘의 반반 · 🐾 오늘의 산책 카드는 🧩 한 판에서 그 퍼즐을 고르면 위에 (11-08 '냥도쿠 화면 너무 복잡' — 📅 오늘엔 냥도쿠 한 판만)
+  function drawKindDay(kind) {
+    const el = $("kindDay"); if (!el) return;
+    el.hidden = kind !== "b" && kind !== "z";
+    if (el.hidden || !bank) { el.innerHTML = ""; return; }
+    const d = dailyInfo();
+    el.innerHTML = kind === "b" ? bbDayHtml(d) : zzDayHtml(d);
     const bb = $("dayBB"); if (bb) bb.onclick = () => playBB(d.tier, d);
     const zb = $("dayZZ"); if (zb) zb.onclick = () => playZZ(d.tier, d);
-    const cb = $("dayCal"); if (cb) cb.onclick = () => openCalendar();
   }
   const monthCount = ym => { const a = myDays(), b = store.get("dayArc", {}); return new Set([...Object.keys(a), ...Object.keys(b)].filter(k => k.startsWith(ym))).size; };
   // 🌗 오늘의 반반: 같은 요일 난이도 · 모두 같은 판 · 가족 기록 (냥도쿠 오늘의 퍼즐 아래 작은 카드)
@@ -581,22 +662,24 @@
   async function drawSoloProg(force) {
     const el = $("soloProg");
     if (!myName()) {
-      el.innerHTML = '<button class="pc-name" id="pcName">👤 이름을 정하면 몇 판 깼는지 쌓여요</button>';
+      el.innerHTML = '<button class="pc-name" id="pcName">👤 이름을 정하면 몇 판 깼는지 쌓이고 친구 순위에 올라가요</button>';
       $("pcName").onclick = () => { const db = Arena.db(); if (db) GME.ensure(db).then(() => drawSoloProg(true)).catch(() => {}); };
+      loadRec(force).then(() => { drawRankStrip(); if (soloMode === "day" && !$("soloBox").hidden) drawDay(); if (soloMode === "ta" && !$("soloBox").hidden) drawTABoard(); }).catch(() => {});   // 이름이 없어도 순위는 보여 줌
       return;
     }
     await Promise.all([loadRec(force).catch(() => {}), loadGM(), loadFam(force).catch(() => {})]);   // 퍼즐 기록(배지·단계)을 못 읽어도 공용 랭킹 숫자는 보여 줌
     const sv = solvedN(), lv = level(sv), nx = LEVELS.find(l => l[0] > sv);       // 판 수 = 공용 랭킹 (친구와 비교는 🏆 랭킹 탭)
     const pct = nx ? Math.round((sv - lv[0]) / (nx[0] - lv[0]) * 100) : 100;
     const cheer = !sv ? "첫 판을 깨 보세요!" : "";
-    el.innerHTML = `<div class="pc-top"><span class="lv">${lv[1]}</span><div class="pc-mid"><b class="round">${sv}판 깼어요</b><span class="small">${lv[2]}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : " · 최고 칭호!"}</span></div><button class="btn mint" id="shareBtn">📤 자랑</button></div>
-      <div class="pc-bar"><i style="width:${pct}%"></i></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}
-      <button class="pc-badges" id="badgeBtn">🏅 배지 ${Object.keys((myRec() || {}).ach || {}).length}/${ACHS.length} <span>${ACHS.filter(a => ((myRec() || {}).ach || {})[a[0]]).map(a => a[1]).join("")}</span></button>${famHtml()}`;
+    // 11-08 '화면이 너무 복잡' — 배지는 위 줄 작은 단추로 (모은 배지 그림은 배지 창에서)
+    el.innerHTML = `<div class="pc-top"><span class="lv">${lv[1]}</span><div class="pc-mid"><b class="round">${sv.toLocaleString()}판 깼어요</b><span class="small">${lv[2]}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : " · 최고 칭호!"}</span></div><button class="btn mint" id="shareBtn">📤 자랑</button></div>
+      <div class="pc-barrow"><div class="pc-bar"><i style="width:${pct}%"></i></div><button class="pc-badges" id="badgeBtn" aria-label="배지">🏅 배지 ${Object.keys((myRec() || {}).ach || {}).length}/${ACHS.length}</button></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}${famHtml()}`;
     $("shareBtn").onclick = () => shareMe(sv, lv);
     $("badgeBtn").onclick = showBadges;
     if (soloMode === "map" && !$("soloBox").hidden) drawStages();              // 서버 기록이 늦게 오면 지도도 다시
     if (soloMode === "day" && !$("soloBox").hidden) drawDay();                 // 가족 오늘 기록도
-    drawDayDot();
+    if (soloMode === "ta" && !$("soloBox").hidden) drawTABoard();
+    drawRankStrip(); drawDayDot();
   }
   // 👨‍👩 이번 주 가족 목표 (11-06 벤치마킹: Duolingo Friends Quest — 둘이 합쳐 채우는 목표, 지는 사람 없이)
   //   공용 랭킹 하루 판 수 rank_days/{날짜}/nyang/{pid} 를 이번 주(월요일부터) 다 더함 · 목표 = 지난주 합 × 1.1 (10판 단위, 최소 100) · 달성하면 그 주 도장
@@ -634,9 +717,12 @@
     segBtns($("soloMode"), [["day", "📅 오늘"], ["map", "🗺 단계"], ["one", "🧩 한 판"], ["ta", `⏱ 타임어택`]], soloMode, v => { soloMode = v; store.set("soloMode2", v); drawTiers(); });
     drawDayDot();
     const pick = soloMode === "map" || soloMode === "day", bbOn = soloMode === "one" && bbKind === "b", zzOn = soloMode === "one" && bbKind === "z";
-    $("tiers").hidden = pick; $("stageBox").hidden = soloMode !== "map"; $("dayBox").hidden = soloMode !== "day"; $("howto").hidden = pick || bbOn || zzOn; $("howtoB").hidden = !bbOn; $("howtoZ").hidden = !zzOn;
+    $("tiers").hidden = pick; $("stageBox").hidden = soloMode !== "map"; $("dayBox").hidden = soloMode !== "day"; $("howto").hidden = pick || bbOn || zzOn || ta; $("howtoB").hidden = !bbOn; $("howtoZ").hidden = !zzOn;
     $("kindSeg").hidden = soloMode !== "one";
     if (soloMode === "one") segBtns($("kindSeg"), [["q", "🐱 냥도쿠"], ["b", "🌗 반반"], ["z", "🐾 산책"]], bbKind, v => { bbKind = v; store.set("kind", v); drawTiers(); });
+    drawKindDay(soloMode === "one" ? bbKind : null);
+    $("taBoard").hidden = !ta; if (ta) drawTABoard();
+    drawRankStrip();
     if (soloMode === "map") { $("soloDesc").hidden = true; drawStages(); return; }
     if (soloMode === "day") { $("soloDesc").hidden = true; drawDay(); return; }
     $("soloDesc").textContent = ta ? `${TA_SOLO_MIN}분 동안 몇 개 풀 수 있을까요? 다 풀거나 🐟를 다 잃으면 바로 다음 문제. 힌트는 한 번에 -${PENALTY}초` : "";
@@ -644,9 +730,10 @@
     const bb = bbOn ? store.get("bbBest", {}) : zzOn ? store.get("zzBest", {}) : null;
     $("tiers").innerHTML = TIERS.map(t => {
       const rec = bb ? (bb[t.id] ? `최고 ${fmt(bb[t.id])}` : "") : ta ? (tb[t.id] ? `최고 ${tb[t.id]}개` : "") : (bs[t.id] ? `최고 ${fmt(bs[t.id])}` : "");
-      return `<button class="tier t-${t.id}" data-t="${t.id}" aria-pressed="${t.id === soloTier}"><span class="em">${t.em}</span><b>${t.label}</b><span>${bbOn ? BB_DESC[t.id] : zzOn ? ZZ_DESC[t.id] : t.desc}</span>${rec ? `<span>${rec}</span>` : ""}</button>`;
+      const top = ta && rkData ? taRows(t.id)[0] : null;   // 이번 주 친구 1등 (어느 난이도에서 겨루는지 보이게)
+      return `<button class="tier t-${t.id}" data-t="${t.id}" aria-pressed="${t.id === soloTier}"><span class="em">${t.em}</span><b>${t.label}</b><span>${bbOn ? BB_DESC[t.id] : zzOn ? ZZ_DESC[t.id] : t.desc}</span>${rec ? `<span>${rec}</span>` : ""}${top ? `<span class="tw">🥇 이번 주 ${esc(top.name)} ${top.v}개</span>` : ""}</button>`;
     }).join("");
-    for (const b of $("tiers").children) b.onclick = () => { soloTier = b.dataset.t; store.set("soloTier", soloTier); for (const o of $("tiers").children) o.setAttribute("aria-pressed", o === b); };
+    for (const b of $("tiers").children) b.onclick = () => { soloTier = b.dataset.t; store.set("soloTier", soloTier); for (const o of $("tiers").children) o.setAttribute("aria-pressed", o === b); if (soloMode === "ta") drawTABoard(); };
   }
   $("startBtn").onclick = () => { if (!bank) return; if (soloMode === "map") playStage(maxStage() + 1); else if (soloMode === "day") playDaily(); else if (soloMode === "ta") playTA(soloTier); else if (bbKind === "b") playBB(soloTier); else if (bbKind === "z") playZZ(soloTier); else playSolo(soloTier); };
 
@@ -729,6 +816,7 @@
     if (!pool.length) pool = [...Array(n).keys()].filter(i => !recent.has(i));
     if (!pool.length) pool = [...Array(n).keys()];
     const i = pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length < 100) bankIdxP.then(() => loadChunks(tier, Math.floor(n / CHUNK)));   // 안 푼 판이 얼마 안 남으면 다음 묶음을 미리 받아 둠
     store.set("recent_" + tier, [i, ...recent].slice(0, Math.min(60, n - 1)));   // 최근 60판은 다시 안 나옴
     return i;
   }
@@ -796,17 +884,18 @@
     if (st === 3) REC.cnt("star3");
     if (!G.hints && d.tier !== "easy") REC.cnt("nhNormal");
     if (!G.mistakes && (d.tier === "hard" || d.tier === "master")) REC.cnt("perfHard");
-    if (!before) REC.day(d.key, { s: Math.round(secs * 10) / 10, m: G.mistakes, h: G.hints, k: tries }, G.n);
+    if (!before) REC.day(d.key, { s: Math.round(secs * 10) / 10, m: G.mistakes, h: G.hints, k: tries, at: Date.now() }, G.n);
     if (!before) checkMonth(d.key.slice(0, 7));
     const days = myDays(), run = streakOf(days), board = dayBoard(d.key), me = (GME.me && GME.me.pid) || "me", rk = board.findIndex(x => x.pid === me);
     const stars = `<div class="stars">${[0, 1, 2].map(j => `<span class="${j < st ? "on" : ""}" style="animation-delay:${.15 + j * .25}s">⭐</span>`).join("")}</div><p class="small" style="margin:0">${starWhy(G, secs)}</p>`;
     [0, 1, 2].slice(0, st).forEach(j => setTimeout(() => S("star", { i: j }), 200 + j * 250));
     const head = before ? `<p class="small" style="margin:0">오늘 기록은 처음 성공한 <b>${fmt(before.s)}</b> 그대로예요</p>`
       : `${run > 1 ? `<p class="cheer">🔥 <b>${run}일 연속</b> 오늘의 퍼즐!</p>` : `<p class="cheer">📅 오늘의 퍼즐 성공! 내일 또 만나요</p>`}`;
-    const fam = board.length > 1 ? `<p class="small" style="margin:0">오늘 가족 기록 ${rk >= 0 ? `· 나는 <b>${rk + 1}등</b>` : ""}</p>${boardHtml(board, 4)}` : "";
+    const famOf = b => { const r = b.findIndex(x => x.pid === me); return b.length > 1 ? `<p class="small" style="margin:0">🏆 오늘 순위 ${r >= 0 ? `· 나는 <b>${r + 1}등</b>` : ""}</p>${boardHtml(b, 4)}` : ""; };
     const bl = baseLine(baseline(d.tier, secs), secs, T);
-    result(before ? "✅ 다시 풀었어요" : `🎉 오늘의 퍼즐 성공!`, `${stars}<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">${T.em} ${T.label} · 실수 ${G.mistakes}번 · 힌트 ${G.hints}번${tries > 1 && !before ? ` · ${tries}번째 만에` : ""}</p>${bl}${head}${fam}`,
-      [["📤 자랑", () => { shareDay(d, myDays()[d.key], run, board); goHome(); }, "primary"], ["닫기", goHome]]);
+    result(before ? "✅ 다시 풀었어요" : `🎉 오늘의 퍼즐 성공!`, `${stars}<p style="font-size:22px;margin:0" class="round">${fmt(secs)}</p><p class="small" style="margin:0">${T.em} ${T.label} · 실수 ${G.mistakes}번 · 힌트 ${G.hints}번${tries > 1 && !before ? ` · ${tries}번째 만에` : ""}</p>${bl}${head}<div id="resRank">${famOf(board)}</div>`,
+      [["📤 자랑", () => { shareDay(d, myDays()[d.key], run, dayBoard(d.key)); goHome(); }, "primary"], ["닫기", goHome]]);
+    if (myName()) setTimeout(() => loadRec(true).then(() => { const e = $("resRank"); if (e && !$("resBox").hidden) e.innerHTML = famOf(dayBoard(d.key)); }).catch(() => {}), 1500);   // 방금 푼 친구 기록까지
     setTimeout(checkBadges, 1200);
   }
   // ← 단추: 실수로 나가지 않게 2초 안에 두 번
@@ -972,13 +1061,14 @@
     if (!isHost) return;
     const list = bank[meta.cfg.tier];
     const used = new Set(meta.used || []);
-    let pid = Math.floor(Math.random() * list.length), guard = 0;
-    while (used.has(pid) && guard++ < 50) pid = Math.floor(Math.random() * list.length);
+    const LN = Math.min(CHUNK, list.length);   // 친구 방은 0번 묶음만 (옛 화면을 연 친구도 같은 판)
+    let pid = Math.floor(Math.random() * LN), guard = 0;
+    while (used.has(pid) && guard++ < 50) pid = Math.floor(Math.random() * LN);
     used.add(pid);
     const round = next ? (meta.round || 0) + 1 : 1, mode = MODE(), startAt = now() + 3500;
     const extra = {};
     if (mode === "ta") {                                                     // 타임어택: 모두 같은 순서 (섞은 문제 40개)
-      extra.seq = [...Array(list.length).keys()].map(i => [Math.random(), i]).sort((a, b) => a[0] - b[0]).map(x => x[1]).slice(0, 40);
+      extra.seq = [...Array(Math.min(CHUNK, list.length)).keys()].map(i => [Math.random(), i]).sort((a, b) => a[0] - b[0]).map(x => x[1]).slice(0, 40);
       extra.endAt = startAt + (meta.cfg.mins || 3) * 60000;
     }
     prog = {};
@@ -1295,7 +1385,12 @@
   const REC = {
     both(f) { const r = recRef(); if (!r) return; const w = weekKey(); f(r, ""); f(r, `w/${w}/`); },
     best(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}tb/${tier}`, secs)); },
-    ta(tier, mins, cnt) { if (!cnt) return; this.both((r, p) => maxTx(r, `${p}ta/${tier}_${mins}`, cnt)); const m = myRec(); if (m) { m.ta = m.ta || {}; m.ta[`${tier}_${mins}`] = Math.max(m.ta[`${tier}_${mins}`] || 0, cnt); } },
+    ta(tier, mins, cnt) {
+      if (!cnt) return; const key = `${tier}_${mins}`, wk = weekKey();
+      this.both((r, p) => maxTx(r, `${p}ta/${key}`, cnt));
+      const m = myRec(); if (m) { m.ta = m.ta || {}; m.ta[key] = Math.max(m.ta[key] || 0, cnt); m.w = m.w || {}; const w = (m.w[wk] = m.w[wk] || {}); w.ta = w.ta || {}; w.ta[key] = Math.max(w.ta[key] || 0, cnt); }
+      const lw = store.get("taW", {}), v = lw.wk === wk ? { ...(lw.v || {}) } : {}; v[key] = Math.max(v[key] || 0, cnt); store.set("taW", { wk, v });   // 이번 주 순위에 바로 (서버 다시 읽기 전)
+    },
     coop(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}co/${tier}`, secs)); },
     solved(k) { if (!k) return; this.both((r, p) => addTx(r, `${p}sv`, k)); const m = myRec(); if (m) m.sv = (m.sv || 0) + k; },   // 화면엔 바로 반영
     match(pts, won) { this.both((r, p) => { addTx(r, `${p}pts`, pts); addTx(r, `${p}games`, 1); addTx(r, `${p}wins`, won ? 1 : 0); }); const m = myRec(); if (m) { m.pts = (m.pts || 0) + pts; m.games = (m.games || 0) + 1; m.wins = (m.wins || 0) + (won ? 1 : 0); } },
@@ -1414,6 +1509,7 @@
     if (window.ArenaUI) ArenaUI.checkUrl(() => openFriend());
   }).catch(e => { $("tiers").textContent = "퍼즐을 못 불러왔어요: " + e.message; });
   window.__ny = { get G() { return G; }, get TA() { return TA; }, get meta() { return meta; }, get prog() { return prog; }, get myRound() { return myRound; }, NY,   // 점검용
-    dailyInfo, kstDay, dayBoard, dayTops, streakOf, bestStreak, setRk: d => { rkData = d; if (soloMode === "day") drawDay(); },
-    setFam: d => { fam = d; famAt = Date.now(); return drawSoloProg(); }, openCalendar, myDays };
+    dailyInfo, kstDay, dayBoard, dayTops, streakOf, bestStreak, setRk: d => { rkData = d; if (soloMode === "day") drawDay(); if (d) { drawRankStrip(); if (soloMode === "ta") drawTABoard(); } },
+    setFam: d => { fam = d; famAt = Date.now(); return drawSoloProg(); }, openCalendar, myDays,
+    stageInfo, playStage, loadChunks, bankIdxP, get bankIdx() { return bankIdx; }, weekKey, bankAt: (t, i) => bank[t][i] };
 })();

@@ -20,6 +20,10 @@ const Gate = (() => {
   const OPEN_SOLO = false;   // 10-30 베니 님: 혼자 하기도 허용된 기기만 (방 링크로 초대받은 손님은 그 방에서만)
   const FREE_MIN = 10;       // 💞 베니브릿지 회원 하루 무료 (분, 게임 화면을 보고 있는 시간만 — 고스톱 3판쯤)
   const FREE_KEY = "game.gate.free.v1";
+  // 👀 11-08 베니 님 '손님은 하루 5판, 방 만들기는 안 되고': 허용 안 된 기기(신청 전)도 혼자 판을 하루 GUEST_GAMES 판 — 이 기기에 셈 (GRank.result 가 판 끝마다 notePlay).
+  //   방 만들기 · 은행은 그대로 허용된 기기만, 랭킹은 프로필이 없어 안 남음. 멈춤 · 해제 · 기간 끝난 기기는 해당 없음
+  const GUEST_GAMES = 5;
+  const GUEST_KEY = "game.gate.guest.v1";
   const MEMBER_KEY = "game.gate.member";
   // ☕ 커피 사 주기 = 베니브릿지 '개발자 응원하기'와 같은 카카오페이
   const COFFEE_URL = "https://qr.kakaopay.com/281006011000080950628454";
@@ -87,6 +91,11 @@ const Gate = (() => {
     try { const d = JSON.parse(lsGet(FREE_KEY) || "null"); return d && d.uid === uid && d.d === dayKST() ? Math.max(0, +d.s || 0) : 0; } catch (e) { return 0; }
   }
   const freeLeft = uid => Math.max(0, FREE_MIN * 60 - freeUsed(uid));
+  function guestUsed() {
+    try { const d = JSON.parse(lsGet(GUEST_KEY) || "null"); return d && d.d === dayKST() ? Math.max(0, +d.n || 0) : 0; } catch (e) { return 0; }
+  }
+  const guestLeft = () => Math.max(0, GUEST_GAMES - guestUsed());
+  const GUEST_OVER = `🎮 오늘 손님 ${GUEST_GAMES}판을 다 했어요. 가입 신청을 보내면 베니가 확인하고 허용해요 — 허용되면 판 수 제한 없이 할 수 있어요.`;
   let toastEl = null, toastT = 0;
   function gToast(msg, ms = 3200) {
     injectStyle();
@@ -249,15 +258,18 @@ const Gate = (() => {
     state.canHost = state.isAdmin;
     state.freeLeft = state.isMember ? freeLeft(state.uid) : 0;
     const free = !state.canHost && state.freeLeft > 0;      // 💞 브릿지 회원 무료 시간
-    state.unlocked = soloOpen() || state.canHost || free;
-    state.role = free ? "bridge_free" : state.role === "bridge_free" ? "none" : state.role;
+    const taste = !state.canHost && !free && !state.isMember && (status === "unregistered" || status === "guest_over") && guestLeft() > 0;   // 👀 손님 하루 5판
+    state.unlocked = soloOpen() || state.canHost || free || taste;
+    state.role = free ? "bridge_free" : taste ? "guest_free" : (state.role === "bridge_free" || state.role === "guest_free") ? "none" : state.role;
+    state.guestLeft = taste ? guestLeft() : 0;
     state.status = status;
-    state.reason = reason || "";
+    state.reason = reason || (!state.unlocked && status === "unregistered" && guestUsed() >= GUEST_GAMES ? GUEST_OVER : "");
     writeCachedPass(null);
-    if (free) {
+    if (free || taste) {
       if (lockEl && !lockEl.hidden && lockMode === "lock") lockEl.hidden = true;
-      startFreeClock();
+      if (free) startFreeClock();
       startPresence();
+      if (taste) guestHello();
     }
     if (!state.unlocked && !IS_PORTAL) showLockOverlay({ mode: "lock" });
     notify();
@@ -278,6 +290,23 @@ const Gate = (() => {
         applyNotAllowed("free_over", `⏰ 오늘 무료 ${FREE_MIN}분을 다 썼어요. 허용을 요청하면 시간 제한 없이 할 수 있어요.`);
       }
     }, 5000);
+  }
+
+  // 👀 손님 판 세기: 판이 끝날 때 GRank.result 가 부름 (친구 방 판은 안 셈 — 방 링크 손님은 원래 됨)
+  let guestHi = false;
+  function guestHello() {
+    if (guestHi || IS_PORTAL || IS_LOCAL || roomLink) return;
+    guestHi = true;
+    setTimeout(() => { if (state.role === "guest_free") gToast(`👀 손님은 혼자 하기 하루 ${GUEST_GAMES}판 — 오늘 ${guestLeft()}판 남았어요`); }, 900);
+  }
+  function notePlay(game, mode) {
+    if (state.role !== "guest_free" || IS_LOCAL || roomLink || mode === "friend" || mode === "f") return;
+    const n = guestUsed() + 1;
+    lsSet(GUEST_KEY, JSON.stringify({ d: dayKST(), n }));
+    state.guestLeft = Math.max(0, GUEST_GAMES - n);
+    if (state.guestLeft === 1) gToast("👀 오늘 손님 판이 1판 남았어요");
+    if (state.guestLeft <= 0) setTimeout(() => { if (state.role === "guest_free") applyNotAllowed("guest_over", GUEST_OVER); }, 2500);   // 결과는 보고 나서
+    notify();
   }
 
   // 방 링크로 열린 화면: 방이 없거나 방에서 나오면 여기까지 — 허용된 기기가 아니면 잠금 (10-30 베니 님 '방 링크 손님은 그 방에서만')
@@ -633,7 +662,7 @@ const Gate = (() => {
           <h2 class="bgate-title">${isHostMode ? "가입이 허용되면 방을 만들 수 있어요" : "가입하고 같이 해요"}</h2>
           <p class="bgate-sub">${isHostMode
             ? `허용된 회원은 <b>혼자 하기</b>와 <b>친구 방 만들기</b>를 다 할 수 있어요.${title ? ` (${esc(title)})` : ""}`
-            : `가족·지인 전용이에요. 가입 신청을 보내면 베니가 확인하고 허용해요. 허용된 뒤로는 <b>이 기기에서 계속</b> 할 수 있어요. 둘러보기는 가입 없이 돼요.`}</p>
+            : `가족·지인 전용이에요. 가입 신청을 보내면 베니가 확인하고 허용해요. 허용된 뒤로는 <b>이 기기에서 계속</b> 할 수 있어요. 둘러보기와 혼자 하기 하루 ${GUEST_GAMES}판은 가입 없이 돼요.`}</p>
           ${state.reason ? `<div class="bgate-warn">${esc(state.reason)}</div>` : ""}
           ${isHostMode ? `<div class="bgate-alt"><span>같이 하기만 할 거면 <b style="color:#e2e8f0">가입이 필요 없어요.</b><br>방장이 보낸 <b style="color:#e2e8f0">방 링크</b>를 누르거나 방 목록에서 들어가세요.</span><button class="bgate-btn ghost" data-close>👍 그냥 들어갈게요</button></div>` : ""}
           <div id="bgateTabBody"></div>
@@ -935,6 +964,7 @@ const Gate = (() => {
     if (state.isAdmin) return "👑 관리자(베니)";
     if (state.allowed) return state.expiresAt > 0 ? `⏳ 기간 허용 · ${leftTxt(state.expiresAt)}` : "♾️ 계속 허용된 기기";
     if (state.role === "bridge_free") return `💞 브릿지 회원 · 오늘 무료 ${Math.ceil(freeLeft(state.uid) / 60)}분 남음`;
+    if (state.role === "guest_free") return `👀 손님 · 오늘 ${guestLeft()}판 남음`;
     return "🔒 허용 안 된 기기";
   }
 
@@ -948,7 +978,7 @@ const Gate = (() => {
           <button class="bgate-btn ghost sm" id="bgAdmClose">✕ 닫기</button>
         </div>
         <h2 class="bgate-title">출입 · 기기 허용</h2>
-        <p class="bgate-sub">둘러보기는 누구나, 게임은 <b>허용된 기기</b>만 (💞 베니브릿지 회원은 허용 전에도 하루 ${FREE_MIN}분). 허용된 기기는 친구 방도 만들 수 있어요. 친구는 방 링크로 등록 없이 그 방에만 들어와요.</p>
+        <p class="bgate-sub">둘러보기는 누구나, 게임은 <b>허용된 기기</b>만 (👀 손님은 혼자 하기 하루 ${GUEST_GAMES}판 · 💞 베니브릿지 회원은 하루 ${FREE_MIN}분). 허용된 기기는 친구 방도 만들 수 있어요. 친구는 방 링크로 등록 없이 그 방에만 들어와요.</p>
 
         <div class="bgate-sec">
           <h4><span>🙋 내 닉네임 · 이 기기</span> <span class="bgate-pill active">${myPill()}</span></h4>
@@ -1092,6 +1122,9 @@ const Gate = (() => {
       if (memUid && freeLeft(memUid) > 0) {
         // 지난번 브릿지 회원 + 오늘 무료 시간 남음 → 서버 확인 전까지 열어 둠 (확인되면 그대로 또는 로그인 창)
         Object.assign(state, { unlocked: true, isMember: true, uid: memUid, role: "bridge_free", freeLeft: freeLeft(memUid) });
+      } else if (!IS_PORTAL && guestLeft() > 0) {
+        // 👀 손님 판이 남음 → 서버 확인 전까지 열어 둠 (멈춤 · 해제된 기기면 확인 뒤 잠금)
+        Object.assign(state, { unlocked: true, role: "guest_free", guestLeft: guestLeft() });
       } else if (!IS_PORTAL) {
         // 게임 화면: 허용된 기기가 아니면 바로 로그인 창을 띄우고 Firebase 확인 (아케이드 첫 화면은 둘러보기라 안 띄움)
         if (document.readyState === "loading") {
@@ -1124,6 +1157,8 @@ const Gate = (() => {
     },
     requestHost,
     FREE_MIN,
+    GUEST_GAMES,
+    notePlay,   // 👀 손님 판 세기 (GRank.result 가 판 끝마다)
     // 아케이드에서 로그인 창 (next = 허용되면/무료로 하기 누르면 갈 주소)
     showLogin(o = {}) { showLockOverlay({ mode: "login", next: o.next || "" }); },
     adminLoginPrompt,

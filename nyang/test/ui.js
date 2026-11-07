@@ -539,8 +539,11 @@ U.main(async T => {
     await B.evaluate(() => __qa.clickText(/난이도 고르기/));
     T.ok(await B.evaluate(() => !document.getElementById('home').hidden && document.getElementById('bplay').hidden), '⑪ 난이도 고르기 → 첫 화면');
     // 📅 오늘 아래 '오늘의 반반': 모두 같은 판 · 처음 성공만 기록
+    // 11-08 '화면이 너무 복잡' → 📅 오늘엔 냥도쿠만, 오늘의 반반은 🧩 한 판에서 🌗 반반을 고르면 위에
     await B.evaluate(() => document.querySelector('#soloMode [data-v="day"]').click());
-    T.ok(await B.evaluate(() => !!document.getElementById('dayBB') && /오늘의 반반/.test(document.getElementById('dayBox').textContent)), '⑪ 📅 오늘에 🌗 오늘의 반반 카드');
+    T.ok(await B.evaluate(() => !document.getElementById('dayBB') && !/오늘의 반반|오늘의 산책/.test(document.getElementById('dayBox').textContent)), '⑪ 📅 오늘에는 반반 · 산책 카드가 없음 (냥도쿠 오늘의 퍼즐만)');
+    await B.evaluate(() => { document.querySelector('#soloMode [data-v="one"]').click(); document.querySelector('#kindSeg [data-v="b"]').click(); });
+    T.ok(await B.evaluate(() => !!document.getElementById('dayBB') && !document.getElementById('kindDay').hidden && /오늘의 반반/.test(document.getElementById('kindDay').textContent)), '⑪ 🧩 한 판 → 🌗 반반 위에 오늘의 반반 카드');
     await B.click('#dayBB');
     await U.waitFor(B, () => window.NYBUI && !document.getElementById('bplay').hidden, null, 4000);
     const dd = await B.evaluate(() => ({ seed: NYBUI.pz.seed, want: __ny.dailyInfo().bseed, lbl: document.getElementById('bLabel').textContent }));
@@ -643,8 +646,9 @@ U.main(async T => {
     T.ok(/5×5/.test(r1) && /힌트 1번/.test(r1), '⑬ 결과: 판 크기 · 힌트 수: ' + r1.replace(/\s+/g, ' ').slice(0, 70));
     await Z.evaluate(() => __qa.clickText(/난이도 고르기/));
     // 📅 오늘 아래 '오늘의 산책': 날짜 씨앗 · 처음 성공만 기록
-    await Z.evaluate(() => document.querySelector('#soloMode [data-v="day"]').click());
-    T.ok(await Z.evaluate(() => !!document.getElementById('dayZZ')), '⑬ 📅 오늘에 🐾 오늘의 산책 카드');
+    await Z.evaluate(() => { document.querySelector('#soloMode [data-v="one"]').click(); document.querySelector('#kindSeg [data-v="z"]').click(); });
+    T.ok(await Z.evaluate(() => !!document.getElementById('dayZZ') && /오늘의 산책/.test(document.getElementById('kindDay').textContent)), '⑬ 🧩 한 판 → 🐾 산책 위에 오늘의 산책 카드');
+    T.ok(await Z.evaluate(() => { document.querySelector('#kindSeg [data-v="q"]').click(); const h = document.getElementById('kindDay').hidden; document.querySelector('#kindSeg [data-v="z"]').click(); return h; }), '⑬ 🐱 냥도쿠를 고르면 오늘의 산책 카드는 숨김');
     await Z.click('#dayZZ');
     await U.waitFor(Z, () => window.NYZUI && !document.getElementById('zplay').hidden, null, 4000);
     const dz = await Z.evaluate(() => ({ seed: NYZUI.pz.seed, want: __ny.dailyInfo().zseed, sol: NYZUI.pz.sol }));
@@ -682,6 +686,64 @@ U.main(async T => {
     await M.evaluate(() => { NYZUI.close(); document.getElementById('resBox').hidden = true; });
     await M.evaluate(() => { for (const k of ['nyang.stageStars', 'nyang.bonus', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
     await M.close();
+  }
+
+  // ── ⑮ 11-08 베니 님 '오늘 선착순 · 타임어택 친구끼리 경쟁 — 랭킹 잘 보이게, 자꾸 나한테 물어봐' → 혼자 화면 맨 위 순위 띠 · 타임어택 친구 순위 · 결과창 순위
+  {
+    const K = await T.open('nyang/');
+    await U.waitFor(K, A.ready);
+    await K.evaluate(() => { localStorage.setItem('game.me', JSON.stringify({ pid: 'pA', name: '지밍비' })); for (const k of ['nyang.taW', 'nyang.taBest', 'nyang.day']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); localStorage.setItem('nyang.soloTier', '"easy"'); });
+    await K.reload({ waitUntil: 'load' }); await U.waitFor(K, A.ready);
+    await K.evaluate(() => {
+      const k = __ny.kstDay(), wk = __ny.weekKey(), at = h => Date.parse(k + 'T00:00:00+09:00') + h * 3600e3;
+      __ny.setRk({ rec: {
+        pA: { ta: { master_3: 7 }, w: { [wk]: { ta: { master_3: 6 } } } },
+        pB: { day: { [k]: { s: 95.2, m: 0, h: 0, at: at(7.2) } }, ta: { master_3: 4 }, w: { [wk]: { ta: { master_3: 4 } } } },
+        pC: { day: { [k]: { s: 80, m: 1, h: 2, at: at(6.5) } }, ta: { master_3: 7 }, w: { [wk]: { ta: { master_3: 7 } } } },
+        pD: { ta: { master_3: 9 }, w: { '2020-01-06': { ta: { master_3: 9 } } } },
+      }, names: { pA: '지밍비', pB: '베니', pC: '멋쟁이규호', pD: '훈' } });
+    });
+    const s0 = await K.evaluate(() => [...document.querySelectorAll('#rankStrip .rs-row')].map(r => ({ go: r.dataset.go, t: r.textContent.replace(/\s+/g, ' ').trim() })));
+    T.ok(s0.length === 2 && s0[0].go === 'day' && /오늘의 퍼즐 순위/.test(s0[0].t) && s0[0].t.indexOf('베니') < s0[0].t.indexOf('멋쟁이규호') && /나는 아직/.test(s0[0].t), '⑮ 🗺 단계 화면에도 📅 오늘 순위 (힌트 벌점 넣어 빠른 순 · 나는 아직): ' + (s0[0] && s0[0].t));
+    T.ok(s0[1] && s0[1].go === 'ta' && /이번 주 타임어택 순위/.test(s0[1].t) && /고수 3분/.test(s0[1].t) && /멋쟁이규호 7개/.test(s0[1].t) && /나 2등/.test(s0[1].t) && !/훈/.test(s0[1].t), '⑮ ⏱ 이번 주 타임어택 순위 (지난주 기록은 빠짐 · 나 2등): ' + (s0[1] && s0[1].t));
+    await K.evaluate(() => document.querySelector('#rankStrip [data-go="ta"]').click());
+    const t1 = await K.evaluate(() => ({ mode: document.querySelector('#soloMode [aria-pressed="true"]').dataset.v, tier: document.querySelector('#tiers [aria-pressed="true"]').dataset.t, rows: [...document.querySelectorAll('#taBoard li')].map(li => ({ t: li.textContent.replace(/\s+/g, ' ').trim(), me: li.classList.contains('me') })), strip: [...document.querySelectorAll('#rankStrip .rs-row')].map(r => r.dataset.go), card: document.querySelector('#tiers [data-t="master"]').textContent, howto: document.getElementById('howto').hidden }));
+    T.ok(t1.mode === 'ta' && t1.tier === 'master' && t1.rows.length === 3 && /멋쟁이규호.*7개/.test(t1.rows[0].t) && t1.rows[1].me && /지밍비.*6개/.test(t1.rows[1].t) && t1.strip.join() === 'day', '⑮ 띠를 누르면 ⏱ 타임어택 · 고수 · 친구 순위판 (나는 표시) · 띠엔 오늘 줄만: ' + JSON.stringify(t1.rows));
+    T.ok(/이번 주 멋쟁이규호 7개/.test(t1.card) && t1.howto, '⑮ 난이도 칸에 이번 주 1등 · 타임어택에선 규칙 글 숨김: ' + t1.card.replace(/\s+/g, ' '));
+    const t2 = await K.evaluate(() => { document.querySelector('#taBoard [data-p="all"]').click(); return [...document.querySelectorAll('#taBoard li')].map(li => li.textContent.replace(/\s+/g, ' ').trim()); });
+    T.ok(t2.length === 4 && /훈.*9개/.test(t2[0]), '⑮ 역대를 누르면 지난 기록까지 (훈 9개 1등): ' + t2.join(' / '));
+    // 📅 오늘: 순위 + 푼 시각 (누가 먼저 풀었는지)
+    await K.evaluate(() => document.querySelector('#soloMode [data-v="day"]').click());
+    const d1 = await K.evaluate(() => ({ t: document.getElementById('dayBox').textContent.replace(/\s+/g, ' '), at: [...document.querySelectorAll('#dayBox .dc-board .at')].map(e => e.textContent), strip: [...document.querySelectorAll('#rankStrip .rs-row')].map(r => r.dataset.go) }));
+    T.ok(/오늘 순위/.test(d1.t) && d1.at.join() === '7:12,6:30' && d1.strip.join() === 'ta', '⑮ 📅 오늘 카드: 🏆 오늘 순위 + 푼 시각 · 띠엔 타임어택 줄만: ' + JSON.stringify(d1.at));
+    // 타임어택 결과창: 이번 주 친구 순위 (8개면 1등)
+    await K.evaluate(() => { document.querySelector('#soloMode [data-v="ta"]').click(); document.querySelector('#tiers [data-t="master"]').click(); });
+    await K.click('#startBtn');
+    await U.waitFor(K, () => window.__ny.TA && window.__ny.G && !document.getElementById('play').hidden, null, 4000);
+    await K.evaluate(() => { __ny.TA.solved = 8; __ny.TA.endAt = Date.now() - 1; });
+    const r1 = await U.waitFor(K, () => !document.getElementById('resBox').hidden && /시간 끝/.test(document.getElementById('resTitle').textContent) && document.getElementById('resRank').textContent.replace(/\s+/g, ' '), null, 5000);
+    T.ok(r1 && /이번 주 1등/.test(r1) && /2등 멋쟁이규호 7개/.test(r1), '⑮ 타임어택 결과창: 이번 주 친구 순위 · 나 1등: ' + r1);
+    const lw = await K.evaluate(() => JSON.parse(localStorage.getItem('nyang.taW') || '{}'));
+    T.ok(lw.wk === (await K.evaluate(() => __ny.weekKey())) && lw.v && lw.v.master_3 === 8, '⑮ 이번 주 내 기록을 폰에도 (서버 다시 읽기 전에 순위에 바로) ' + JSON.stringify(lw));
+    await K.evaluate(() => { for (const k of ['game.me', 'nyang.taW', 'nyang.taBest', 'nyang.soloTier', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); localStorage.setItem('nyang.soloMode2', '"map"'); });
+    await K.close();
+  }
+
+  // ── ⑯ 11-08 '고수 판 더 만들고 — 매번 내가 만들라고 해야 하나?' → 고수 단계는 1,000판 묶음을 차례로 (bank/master-N.json · index.json)
+  {
+    const C = await T.open('nyang/');
+    await U.waitFor(C, A.ready);
+    const c0 = await C.evaluate(async () => { await __ny.bankIdxP; const a = __ny.stageInfo(1090), b = __ny.stageInfo(1091), c = __ny.stageInfo(91); return { n: __ny.bankIdx.master || 0, a, b, c, want: (999 * 7919 + 101) % 1000 }; });
+    T.ok(c0.n >= 1 && c0.a.chunk === 0 && c0.a.idx === c0.want && c0.c.chunk === 0 && c0.c.idx === 101, '⑯ 1090단계까지는 예전 그대로 (처음 묶음 · 같은 판 번호) ' + JSON.stringify({ a: c0.a, c: c0.c, n: c0.n }));
+    T.ok(c0.b.chunk === 1 && c0.b.idx >= 1000 && c0.b.idx < 2000, '⑯ 1091단계부터 다음 묶음 ' + JSON.stringify(c0.b));
+    await C.evaluate(() => { localStorage.setItem('nyang.stageStars', JSON.stringify({ 1090: 3 })); });
+    await C.reload({ waitUntil: 'load' }); await U.waitFor(C, A.ready);
+    await C.evaluate(() => __ny.playStage(1091));
+    const g = await U.waitFor(C, () => window.__ny.G && !document.getElementById('play').hidden && document.getElementById('stLabel').textContent, null, 8000);
+    T.ok(g && /1091/.test(g), '⑯ 1091단계를 누르면 새 묶음을 받아 판이 열림: ' + g);
+    T.ok(await C.evaluate(() => { const s = __ny.stageInfo(1091); return __ny.G.n === __ny.bankAt('master', s.idx).n; }), '⑯ 열린 판 = 새 묶음의 그 번호 판');
+    await C.evaluate(() => { for (const k of ['nyang.stageStars', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); });
+    await C.close();
   }
 
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');

@@ -44,6 +44,7 @@
   }
 
   async function result(game, r = {}) {
+    try { if ((r.res === "w" || r.res === "l" || r.res === "d") && window.Gate && Gate.notePlay) Gate.notePlay(game, r.mode); } catch (e) {}   // 👀 손님 하루 판 수
     try {
       const m = me(), mode = MODES[r.mode] || "a", res = r.res === "w" || r.res === "l" || r.res === "d" ? r.res : null;
       if (!m || !res) return;

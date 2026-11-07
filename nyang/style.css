@@ -88,6 +88,9 @@ header.top h1{gap:8px}
 .pc-mid{display:grid;line-height:1.3;min-width:0}
 .pc-mid b{font-size:18px;color:var(--ink)}
 .pc-top .btn{margin-left:auto;white-space:nowrap;padding:8px 11px;font-size:13.5px;flex:none}
+.pc-barrow{display:flex;align-items:center;gap:10px}
+.pc-barrow .pc-bar{flex:1}
+.pc-barrow .pc-badges{flex:none;padding:4px 9px;font-size:12.5px}
 .pc-bar{height:8px;border-radius:5px;background:var(--tint-d);overflow:hidden}
 .pc-bar i{display:block;height:100%;background:linear-gradient(90deg,var(--gold),var(--accent));border-radius:5px;transition:width .4s}
 .pc-cheer{color:var(--ink)}
@@ -346,3 +349,25 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
   .peek{bottom:8px}
   body.playing .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}
 }
+
+/* ── 🏆 순위 띠 · 타임어택 친구 순위 (11-08 '랭킹 잘 보이게 — 자꾸 나한테 물어봐') ── */
+#rankStrip:empty{display:none}
+.rkstrip{display:grid;gap:6px}
+.rs-row{display:grid;grid-template-columns:1fr auto;grid-template-areas:"h me" "l l";gap:3px 8px;align-items:center;text-align:left;width:100%;background:linear-gradient(#fffaf3,#fff1e2);border:1px solid var(--line);border-radius:13px;padding:7px 11px;font:inherit;color:var(--ink);cursor:pointer}
+.rs-row:active{transform:translateY(1px)}
+.rs-h{grid-area:h;font:800 13.5px var(--round);color:var(--ink)}
+.rs-h i{font-style:normal;font-weight:700;color:var(--soft);font-size:12.5px;margin-left:3px}
+.rs-me{grid-area:me;font:800 12.5px var(--round);color:#c2622f;white-space:nowrap}
+.rs-l{grid-area:l;display:flex;flex-wrap:wrap;gap:2px 10px;font-size:13.5px;color:var(--soft)}
+.rs-l span{white-space:nowrap}
+.rs-l b{color:var(--ink);font:700 13.5px var(--round)}
+.rs-l .me b,.rs-l .me{color:#c2622f}
+.dc-rk{margin:0;font:800 14.5px var(--round);color:var(--ink)}
+.dc-board .at{font-size:12px;color:var(--soft);white-space:nowrap}
+#kindDay[hidden],#taBoard[hidden]{display:none}
+.taboard{background:linear-gradient(var(--bg),#ffe9d6);border:1px solid var(--line);border-radius:15px;padding:10px 12px;display:grid;gap:8px}
+.tb-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tb-top b{font:800 15px var(--round);color:var(--ink);flex:1;min-width:0}
+.tb-top .seg{gap:4px}
+.tb-top .seg .btn{padding:5px 10px;font-size:12.5px;min-height:0}
+.tier .tw{color:#c2622f;font-weight:700}

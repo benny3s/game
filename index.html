@@ -827,10 +827,10 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=20"></script>
+<script src="common/gate.js?v=21"></script>
 <script src="common/mistakes.js?v=2"></script>
-<script src="common/me.js?v=15"></script>
-<script src="common/rank.js?v=11"></script>
+<script src="common/me.js?v=16"></script>
+<script src="common/rank.js?v=12"></script>
 <script src="common/arena-mock.js?v=9"></script>
 <script src="common/arena.js?v=15"></script>
 <script src="common/bank.js?v=14"></script>
@@ -1335,6 +1335,9 @@ button { font: inherit; cursor: pointer; }
     } else if (window.Gate && Gate.state.role === "bridge_free") {
       btn.classList.add("active");
       btn.textContent = `💞 ${name} · 오늘 무료 ${Math.ceil(Gate.state.freeLeft / 60)}분`;
+    } else if (window.Gate && Gate.state.role === "guest_free") {
+      btn.classList.remove("active");
+      btn.textContent = `🔑 로그인 · 손님 ${Gate.state.guestLeft}판 남음`;
     } else {
       btn.classList.remove("active");
       btn.textContent = `🔑 로그인`;

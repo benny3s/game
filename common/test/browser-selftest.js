@@ -28,7 +28,10 @@ const PAGES = {
   glt: ['../common/glog.js', '../common/arena.js'],
   met: ['../common/me.js'],
   rpt: ['../common/cozy.js', '../common/arena.js'],
+  grt: ['../common/gate.js', '../common/rank.js'],
 };
+// 👀 손님 하루 5판을 다 쓴 기기 (잠금 시험들은 이걸로 — 11-08 부터 허용 안 된 기기도 처음 5판은 열림)
+const GUEST_USED = { 'game.gate.guest.v1': JSON.stringify({ d: new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10), n: 5 }) };
 const html = list => `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main id="app">시험</main>${list.map(s => `<script src="${s}"></script>`).join('')}</body></html>`;
 
 async function newCtx(browser, { fake, qa, ls, mock } = {}) {
@@ -121,10 +124,10 @@ async function gateFlagTests(browser) {
     return { unlocked: Gate.state.unlocked, canHost: Gate.state.canHost, role: Gate.state.role, lock: !!(g && !g.hidden), mockAllow: typeof Gate._mockAllow, arena: ac };
   }, arena);
   for (const [q, arena] of [['?guest', true], ['?mock', false]]) {
-    const ctx = await newCtx(browser, { fake: { user: { uid: 'devX', claims: {} } } });
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'devX', claims: {} } }, ls: GUEST_USED });
     const p = await open(ctx, PROD + '/game/gtt/' + q);
     const s = await st(p, arena);
-    ok(!s.unlocked && !s.canHost && s.role !== 'local' && s.lock, `#3 실서버 ${q} (허용 안 된 기기) → 잠김 · 방 만들기 안 됨 — ${JSON.stringify(s)}`);
+    ok(!s.unlocked && !s.canHost && s.role !== 'local' && s.lock, `#3 실서버 ${q} (허용 안 된 기기 · 손님 5판 다 씀) → 잠김 · 방 만들기 안 됨 — ${JSON.stringify(s)}`);
     if (arena) ok(s.arena === false, `#3 실서버 ?guest → Arena.canHost 도 false (시험 방 test/arena 못 만듦) — ${s.arena}`);
     if (!arena) ok(s.mockAllow === 'undefined', `실서버 ?mock → 시험용 _mockAllow 없음 — ${s.mockAllow}`);
     await ctx.close();
@@ -141,6 +144,50 @@ async function gateFlagTests(browser) {
     const p = await open(ctx, LOCAL + '/game/gtt/?mock');
     const s = await st(p, false);
     ok(s.unlocked && s.canHost && s.role === 'local' && s.mockAllow === 'function', `로컬(127.0.0.1) ?mock → 시험 모드 그대로 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+}
+
+// ── 11-08 베니 님 '손님은 하루 5판, 방 만들기는 안 되고': 허용 안 된 기기도 혼자 판 하루 5판 → 다 하면 가입 신청 창, 멈춘 기기는 해당 없음
+async function guestTasteTests(browser) {
+  console.log('출입 gate.js (손님 하루 5판)');
+  const read = p => p.evaluate(async () => {
+    for (let i = 0; i < 60 && Gate.state.status === 'checking'; i++) await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 400));
+    const g = document.getElementById('bennyGateOverlay');
+    return { unlocked: Gate.state.unlocked, canHost: Gate.state.canHost, role: Gate.state.role, left: Gate.state.guestLeft, lock: !!(g && !g.hidden), reason: Gate.state.reason };
+  });
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'gst1', claims: {} } } });
+    const p = await open(ctx, PROD + '/game/gtt/');
+    const s = await read(p);
+    ok(s.unlocked && !s.canHost && s.role === 'guest_free' && s.left === 5 && !s.lock, `손님(허용 안 된 기기) → 혼자 하기 열림 · 방 만들기는 안 됨 · 오늘 5판 — ${JSON.stringify(s)}`);
+    await p.evaluate(() => { for (let i = 0; i < 4; i++) Gate.notePlay('gtt', 'ai'); Gate.notePlay('gtt', 'friend'); });
+    const s2 = await read(p);
+    ok(s2.unlocked && s2.left === 1, `4판 하면 1판 남음 · 친구 방 판은 안 셈 — ${JSON.stringify(s2)}`);
+    await p.evaluate(() => Gate.notePlay('gtt', 'ai'));
+    await sleep(2900);
+    const s3 = await read(p);
+    ok(!s3.unlocked && s3.lock && /5판/.test(s3.reason), `5판째가 끝나면 (결과를 본 뒤) 가입 신청 창 — ${JSON.stringify(s3)}`);
+    await p.reload({ waitUntil: 'load' });
+    const s4 = await read(p);
+    ok(!s4.unlocked && s4.lock && /5판/.test(s4.reason), `다시 열어도 오늘은 잠김 · 까닭이 보임 — ${JSON.stringify(s4)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'gstP', claims: {} } } });
+    await ctx.addInitScript(() => { window.__fs.tree.game_devices = { gstP: { status: 'paused' } }; });
+    const s = await read(await open(ctx, PROD + '/game/gtt/'));
+    ok(!s.unlocked && s.lock && s.role !== 'guest_free', `베니 님이 멈춘 기기는 손님 판도 없음 — ${JSON.stringify(s)}`);
+    await ctx.close();
+  }
+  {
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'gstR', claims: {} } } });
+    const p = await open(ctx, PROD + '/game/grt/');
+    await read(p);
+    await p.evaluate(async () => { await GRank.result('gtt', { mode: 'ai', res: 'w' }); await GRank.result('gtt', { mode: 'friend', res: 'l' }); });
+    const s = await read(p);
+    ok(s.role === 'guest_free' && s.left === 4, `판 끝 기록(GRank.result)이 손님 판을 셈 (친구 판은 안 셈) — ${JSON.stringify(s)}`);
     await ctx.close();
   }
 }
@@ -179,9 +226,9 @@ async function snakeGateTests(browser) {
     return { gate: !!window.Gate, unlocked: !!(window.Gate && Gate.state.unlocked), status: window.Gate && Gate.state.status, lock: !!(g && !g.hidden), game: !!document.getElementById('solo') };
   });
   {
-    const ctx = await newCtx(browser, { fake: { user: { uid: 'snkNo', claims: {} } } });
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'snkNo', claims: {} } }, ls: GUEST_USED });
     const s = await read(await open(ctx, PROD + '/game/snake/'));
-    ok(s.gate && !s.unlocked && s.lock, `허용 안 된 기기 → 지렁이도 잠금 창 — ${JSON.stringify(s)}`);
+    ok(s.gate && !s.unlocked && s.lock, `허용 안 된 기기(손님 5판 다 씀) → 지렁이도 잠금 창 — ${JSON.stringify(s)}`);
     await ctx.close();
   }
   {
@@ -333,15 +380,15 @@ async function roomLinkTests(browser) {
     await ctx.close();
   }
   {
-    const ctx = await newCtx(browser, { fake: { user: { uid: 'rNo', claims: {} } }, ls: ME });
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rNo', claims: {} } }, ls: { ...ME, ...GUEST_USED } });
     await realMe(ctx);
     const s = await read(await open(ctx, PROD + '/game/snake/?room=ZZZZ'));
-    ok(s.lock && !s.unlocked && s.search === '', `허용 안 된 기기 + 없는 방 코드 → 잠금 창 — ${JSON.stringify(s)}`);
+    ok(s.lock && !s.unlocked && s.search === '', `허용 안 된 기기(손님 5판 다 씀) + 없는 방 코드 → 잠금 창 — ${JSON.stringify(s)}`);
     ok(s.game === 'snake' && s.mode === 'guest', `그 손님도 접속 기록에 남음 — ${JSON.stringify(s)}`);
     await ctx.close();
   }
   {
-    const ctx = await newCtx(browser, { fake: { user: { uid: 'rIn', claims: {} } }, ls: ME });
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rIn', claims: {} } }, ls: { ...ME, ...GUEST_USED } });
     await realMe(ctx);
     await ctx.addInitScript(seedRoom);
     const p = await open(ctx, PROD + '/game/snake/?room=ABCD');
@@ -349,7 +396,7 @@ async function roomLinkTests(browser) {
     ok(!s.lock && s.unlocked && s.seats && s.seats.includes('rIn'), `허용 안 된 기기 + 있는 방 → 방 안에서는 안 잠김 — ${JSON.stringify(s)}`);
     await p.evaluate(() => ArenaUI.leave());
     const t = await read(p);
-    ok(t.lock && !t.unlocked, `방에서 나오면 잠금 창 — ${JSON.stringify(t)}`);
+    ok(t.lock && !t.unlocked, `방에서 나오면 잠금 창 (손님 5판 다 씀) — ${JSON.stringify(t)}`);
     await ctx.close();
   }
   {
@@ -361,23 +408,23 @@ async function roomLinkTests(browser) {
     await ctx.close();
   }
   {
-    const ctx = await newCtx(browser, { fake: { user: { uid: 'rNm', claims: {} } } });
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rNm', claims: {} } }, ls: GUEST_USED });
     await real0(ctx);
     await ctx.addInitScript(seedRoom);
     const p = await open(ctx, PROD + '/game/snake/?room=ABCD');
     await sleep(1000);
     await p.evaluate(() => document.querySelector('.gme-x').click());
     const s = await read(p);
-    ok(s.lock && !s.unlocked, `이름을 안 정하고 창을 닫으면 잠금 창 — ${JSON.stringify(s)}`);
+    ok(s.lock && !s.unlocked, `이름을 안 정하고 창을 닫으면 잠금 창 (손님 5판 다 씀) — ${JSON.stringify(s)}`);
     await ctx.close();
   }
   {
-    const ctx = await newCtx(browser, { fake: { user: { uid: 'rPg', claims: {} } } });
+    const ctx = await newCtx(browser, { fake: { user: { uid: 'rPg', claims: {} } }, ls: GUEST_USED });
     await real(ctx);
     const p = await open(ctx, PROD + '/game/gtt/?room=ABCD');
     await sleep(1200);
     const lock = await p.evaluate(() => { const g = document.getElementById('bennyGateOverlay'); return !!(g && !g.hidden) && !Gate.state.unlocked; });
-    ok(lock, '방이 없는 화면(친구방 없는 페이지)은 방 코드를 붙여도 잠금');
+    ok(lock, '방이 없는 화면(친구방 없는 페이지)은 방 코드를 붙여도 잠금 (손님 5판 다 씀)');
     await ctx.close();
   }
   {
@@ -416,7 +463,7 @@ async function mePickTests(browser) {
   const t0 = Date.now();
   const pw = require(PW);
   const browser = await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--mute-audio'] });
-  for (const t of [cozyTests, arenaUiTests, gateFlagTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, roomLinkTests, reportStatusTests, mePickTests]) {
+  for (const t of [cozyTests, arenaUiTests, gateFlagTests, guestTasteTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, roomLinkTests, reportStatusTests, mePickTests]) {
     try { await t(browser); } catch (e) { fail++; console.log('  ✘ FAIL: 시험 도구 예외 ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | ')); }
   }
   await browser.close();
