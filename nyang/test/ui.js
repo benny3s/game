@@ -140,6 +140,35 @@ U.main(async T => {
   await T.sleep(450);
   await p.mouse.move(pos.wrong.x, pos.wrong.y); await p.mouse.down(); await p.mouse.move(pos.wrong2.x, pos.wrong2.y, { steps: 6 }); await p.mouse.up();
   T.ok((await p.evaluate(() => window.__ny.G.xs.size)) >= xs0 + 2, '① 끌면 지나간 칸마다 ✕');
+  // ── 11-08 지민 님 아이폰 '옆 칸이 눌림 · 두 번 안 눌렀는데 🐱' (옛 코드로 셋 다 실패 확인)
+  const pe = (type, o) => p.evaluate(([type, o]) => {
+    const t = type === 'pointerdown' ? document.elementFromPoint(o.x, o.y) : window;
+    (t || window).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: o.x, clientY: o.y, pointerType: 'touch', pointerId: o.id || 7, isPrimary: o.prim !== false }));
+  }, [type, o]);
+  const two = await p.evaluate(() => {   // 옆으로 붙은 빈칸 두 개 A·B + 떨어진 빈칸 C·D (답 아님)
+    const G = window.__ny.G, n = G.n, free = k => !G.isAns(k) && !G.cats.has(k) && !G.bad.has(k) && !G.xs.has(k);
+    const rc = k => { const r = document.getElementById('board').children[k].getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; };
+    const pairs = []; for (let k = 0; k < n * n && pairs.length < 2; k++) if (k % n < n - 1 && free(k) && free(k + 1) && !pairs.some(a => Math.abs(a - k) < 2)) pairs.push(k);
+    const [a, a2] = pairs, far = []; for (let k = n * n - 1; k >= 0 && far.length < 2; k--) if (free(k) && [a, a2].every(q => Math.abs(k - q) > n + 1)) far.push(k);
+    return { a, b: a + 1, a2, b2: a2 + 1, c: far[0], d: far[1], A: rc(a), B: rc(a + 1), A2: rc(a2), B2: rc(a2 + 1), C: rc(far[0]), D: rc(far[1]), m0: G.mistakes };
+  });
+  const at = (R, fx, fy = .5) => ({ x: R.l + R.w * fx, y: R.t + R.h * fy });
+  const st = () => p.evaluate(o => { const G = window.__ny.G; return { ax: G.xs.has(o.a), bx: G.xs.has(o.b), a2x: G.xs.has(o.a2), b2x: G.xs.has(o.b2), cx: G.xs.has(o.c), dx: G.xs.has(o.d), acat: G.cats.has(o.a), m: G.mistakes }; }, two);
+  await T.sleep(450);
+  await pe('pointerdown', at(two.A, .5)); await pe('pointerup', at(two.A, .5));
+  await pe('pointerdown', at(two.A, .97)); await pe('pointerup', at(two.A, .97));       // 옆 칸 B 를 누르려다 A 가장자리에 닿음 (0.4초 안)
+  const s1 = await st();
+  T.ok(!s1.acat && s1.m === two.m0, '① 0.4초 안이라도 같은 칸 반대쪽 가장자리 두 번째 톡은 🐱 아님 (' + JSON.stringify(s1) + ')');
+  await T.sleep(450);
+  await pe('pointerdown', at(two.A2, .85)); await pe('pointermove', at(two.A2, .95)); await pe('pointermove', at(two.B2, .1)); await pe('pointerup', at(two.B2, .1));   // 톡 하다 손가락이 살짝 밀림 (앞 시험과 다른 칸)
+  const s2 = await st();
+  T.ok(s2.a2x && !s2.b2x, '① 톡 하다 옆 칸 가장자리로 살짝 밀려도 옆 칸은 그대로 (' + JSON.stringify(s2) + ')');
+  await T.sleep(450);
+  await pe('pointerdown', at(two.A2, .5));
+  await pe('pointerdown', { ...at(two.C, .5), id: 8, prim: false }); await pe('pointermove', { ...at(two.D, .5), id: 8, prim: false });   // 판을 누르는 동안 다른 손가락(손바닥)
+  await pe('pointerup', { ...at(two.D, .5), id: 8, prim: false }); await pe('pointerup', at(two.A2, .5));
+  const s3 = await st();
+  T.ok(!s3.cx && !s3.dx && !s3.a2x, '① 누르는 동안 다른 손가락이 닿은 칸은 그대로 (' + JSON.stringify(s3) + ')');
   // 판 밖 단추도 터치로 그대로 눌림
   const auto0 = await p.evaluate(() => document.getElementById('autoX').getAttribute('aria-pressed'));
   const ax = await p.evaluate(() => { const r = document.getElementById('autoX').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
@@ -587,6 +616,20 @@ U.main(async T => {
     T.ok(p1.len === 4 && p1.head === '🐈', '⑬ 끌면 길이 이어지고 머리에 🐈 (' + JSON.stringify(p1) + ')');
     { const [x, y] = await center(sol[2]); await Z.mouse.move(x, y, { steps: 3 }); await Z.mouse.up(); }
     T.ok(await Z.evaluate(() => NYZUI.path.length === 3), '⑬ 지나온 칸으로 되돌아가면 거기까지 지워짐');
+    // 11-08 지민 님 아이폰: 끌 때 옆 칸 가장자리를 스치면 길이 붙거나 지워지면 안 됨 (옛 코드로 실패 확인)
+    const edge = (b, a, f) => Z.evaluate(([b, a, f]) => {   // 칸 b 안, a 와 맞닿은 변에서 칸 크기 f 만큼 들어간 자리
+      const N = NYZUI.pz.N, r = document.querySelector(`#zboard .zc[data-k="${b}"]`).getBoundingClientRect(), dx = Math.sign(b % N - a % N), dy = Math.sign(Math.floor(b / N) - Math.floor(a / N));
+      return [r.left + r.width / 2 - dx * (.5 - f) * r.width, r.top + r.height / 2 - dy * (.5 - f) * r.height];
+    }, [b, a, f]);
+    await Z.click('#zClear');
+    { let [x, y] = await center(sol[0]); await Z.mouse.move(x, y); await Z.mouse.down();
+      [x, y] = await edge(sol[1], sol[0], .1); await Z.mouse.move(x, y, { steps: 3 }); }
+    const e1 = await Z.evaluate(() => NYZUI.path.length);
+    { const [x, y] = await center(sol[1]); await Z.mouse.move(x, y, { steps: 3 }); }
+    const e2 = await Z.evaluate(() => NYZUI.path.length);
+    { const [x, y] = await edge(sol[0], sol[1], .1); await Z.mouse.move(x, y, { steps: 3 }); await Z.mouse.up(); }
+    const e3 = await Z.evaluate(() => NYZUI.path.length);
+    T.ok(e1 === 1 && e2 === 2 && e3 === 2, `⑬ 옆 칸 가장자리를 스치면 그대로 · 안쪽까지 가야 이어짐 · 지난 칸 가장자리를 스쳐도 안 지워짐 (${e1}·${e2}·${e3})`);
     // 💡 힌트: 처음부터 지운 뒤 → '1번 칸에서 시작' → 적용하면 1번 칸
     await Z.click('#zClear'); await Z.click('#zHintBtn');
     const h = await Z.evaluate(() => document.getElementById('zHintText').textContent);

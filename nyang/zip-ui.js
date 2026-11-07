@@ -8,7 +8,7 @@
   const fmt = s => { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r < 10 ? "0" : ""}${r.toFixed(1)}`; };
   const snd = (n, o) => window.NYSND && NYSND.play(n, o);
   const toast = (m, ms) => window.Cozy && Cozy.toast(m, ms || 1600);
-  let P = null, path = [], hints = 0, t0 = 0, timerT = 0, over = false, hint = null, opt = null, backAt = 0, drag = false;
+  let P = null, path = [], hints = 0, t0 = 0, timerT = 0, over = false, hint = null, opt = null, backAt = 0, drag = false, dragId = -1;
 
   function ensure() {
     if ($("zplay")) return;
@@ -34,10 +34,15 @@
     $("zUndo").onclick = () => { if (over || !path.length) return; path.pop(); snd("unx"); paint(); };
     $("zClear").onclick = () => { if (over) return; path = []; paint(); };
     const el = $("zboard");
-    const cellAt = e => { const t = document.elementFromPoint(e.clientX, e.clientY), c = t && t.closest && t.closest(".zc"); return c && el.contains(c) ? +c.dataset.k : -1; };
-    el.addEventListener("pointerdown", e => { if (over) return; e.preventDefault(); drag = true; try { el.setPointerCapture(e.pointerId); } catch (x) {} const k = cellAt(e); if (k >= 0) step(k, true); });
-    el.addEventListener("pointermove", e => { if (!drag || over) return; const k = cellAt(e); if (k >= 0) step(k, false); });
-    const up = () => { drag = false; };
+    // 끌 때는 칸 안쪽(가장자리 20% 뺌)에 들어간 칸만 — 아이폰에서 손가락이 옆 칸 가장자리를 스치면 길이 붙거나 지워지던 것 (11-08 지민 님)
+    const cellAt = (e, inner) => {
+      const t = document.elementFromPoint(e.clientX, e.clientY), c = t && t.closest && t.closest(".zc"); if (!c || !el.contains(c)) return -1;
+      if (inner) { const r = c.getBoundingClientRect(), mx = r.width * .2, my = r.height * .2; if (e.clientX <= r.left + mx || e.clientX >= r.right - mx || e.clientY <= r.top + my || e.clientY >= r.bottom - my) return -1; }
+      return +c.dataset.k;
+    };
+    el.addEventListener("pointerdown", e => { if (over || (drag && !e.isPrimary)) return; e.preventDefault(); drag = true; dragId = e.pointerId; try { el.setPointerCapture(e.pointerId); } catch (x) {} const k = cellAt(e); if (k >= 0) step(k, true); });
+    el.addEventListener("pointermove", e => { if (!drag || over || e.pointerId !== dragId) return; const k = cellAt(e, true); if (k >= 0) step(k, false); });
+    const up = e => { if (e.pointerId === dragId) drag = false; };
     el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up); el.addEventListener("lostpointercapture", up);
   }
 

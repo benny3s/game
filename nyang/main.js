@@ -125,15 +125,24 @@
     if (res === "win") { celebrate(); const g0 = G, c0 = ctx; setTimeout(() => { if (G === g0) c0.onEnd(true); }, ctx.ta ? 450 : 1150); }
     if (res === "fail") { const g0 = G, c0 = ctx; setTimeout(() => { if (G === g0) c0.onEnd(false); }, 350); }
   }
-  // 누르기: 한 번 = ✕ 켜고 끔, 0.4초 안에 같은 칸 두 번 = 🐱 (앱과 같게). 누른 채 끌면 같은 방향으로 ✕ 칠하기
+  // 누르기: 한 번 = ✕ 켜고 끔, 0.4초 안에 같은 칸 같은 자리 두 번 = 🐱 (앱과 같게). 누른 채 끌면 같은 방향으로 ✕ 칠하기
+  // 11-08 지민 님 아이폰 '옆 칸이 눌림 · 두 번 안 눌렀는데 🐱': 옆 칸을 누르려다 앞 칸 가장자리에 닿으면 두 번으로 잡히고,
+  //   톡 누를 때 손가락이 살짝 밀리면 끌기로 잡혀 옆 칸까지 ✕ → 두 번은 처음 누른 자리 가까이(칸 0.45)만, 끌기는 칸 반 넘게 움직인 뒤
+  //   칸 안쪽(가장자리 20% 뺌)에 들어간 칸만, 판을 누르고 있는 동안 다른 손가락은 무시
   let lastTap = { k: -1, t: 0 }, drag = null;
   const cellAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest("#board .c"); };
+  const innerCellAt = (x, y) => {
+    const el = cellAt(x, y); if (!el) return null;
+    const r = el.getBoundingClientRect(), mx = r.width * .2, my = r.height * .2;
+    return x > r.left + mx && x < r.right - mx && y > r.top + my && y < r.bottom - my ? el : null;
+  };
   $("board").addEventListener("pointerdown", e => {
     if (!G || G.over || (ctx && ctx.spec)) return;
+    if (drag && !e.isPrimary) return;                                           // 누르고 있는 손가락 말고 다른 손가락(손바닥)
     const el = cellAt(e.clientX, e.clientY); if (!el) return;
     e.preventDefault();
-    const k = +el.dataset.k, t = performance.now();
-    if (lastTap.k === k && t - lastTap.t < 400) {                            // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이
+    const k = +el.dataset.k, t = performance.now(), cs = el.getBoundingClientRect().width;
+    if (lastTap.k === k && t - lastTap.t < 400 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < Math.max(14, cs * .45)) {   // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이
       const prevX = lastTap.prevX;
       lastTap = { k: -1, t: 0 }; drag = null;
       if (G.xs.has(k) !== prevX) G.toggleX(k);
@@ -141,19 +150,22 @@
     }
     const prevX = G.xs.has(k);
     if (G.toggleX(k)) S(G.xs.has(k) ? "x" : "unx");
-    lastTap = { k, t, prevX };
-    drag = { on: G.xs.has(k), seen: new Set([k]) };
+    lastTap = { k, t, prevX, x: e.clientX, y: e.clientY };
+    drag = { id: e.pointerId, on: G.xs.has(k), seen: new Set([k]), x: e.clientX, y: e.clientY, cs, moved: false };
     afterMove("x", k);
   });
   window.addEventListener("pointermove", e => {
-    if (!drag || !G || G.over) return;
-    const el = cellAt(e.clientX, e.clientY); if (!el) return;
+    if (!drag || !G || G.over || e.pointerId !== drag.id) return;
+    if (!drag.moved) { if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < drag.cs * .5) return; drag.moved = true; }
+    const el = innerCellAt(e.clientX, e.clientY); if (!el) return;
     const k = +el.dataset.k; if (drag.seen.has(k)) return;
     drag.seen.add(k); lastTap = { k: -1, t: 0 };
     const was = G.xs.has(k); G.setX(k, drag.on); if (G.xs.has(k) !== was) S(drag.on ? "x" : "unx");
     afterMove("x", k);
   });
-  window.addEventListener("pointerup", () => { drag = null; });
+  const dragEnd = e => { if (drag && e.pointerId === drag.id) drag = null; };
+  window.addEventListener("pointerup", dragEnd);
+  window.addEventListener("pointercancel", dragEnd);
   // 아이폰: 칸을 두 번 누르는 것이 화면 확대로 먹히지 않게 (판은 pointerdown 으로 받으니 click 은 안 씀)
   $("board").addEventListener("touchend", e => e.preventDefault(), { passive: false });
 
