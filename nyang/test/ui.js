@@ -802,7 +802,29 @@ U.main(async T => {
       };
     });
     T.ok(synced.qAfter === 0 && synced.pendAfter === null && synced.svVal === 1 && synced.st1Val >= 1 && synced.achFirst && synced.rankN === 1, '⑰ 온라인 복귀 시 대기 큐가 비워지고 서버(rank · nyang/rec)로 자동 동기화됨: ' + JSON.stringify(synced));
-    await O.evaluate(() => { for (const k of ['game.me', 'rank.q.v1', 'rank.mine.nyang.pOff', 'rank.mine.test/nyang.pOff', 'nyang.recPend', 'nyang.myRec', 'nyang.stageStars', 'nyang.bestT', 'nyang.solved', 'nyang.avg', 'nyang.today', 'nyang.gm']) localStorage.removeItem(k); });
+    // [✈️ 비행기용] 단추 → 6,090단계 완충 + 준비 완료 표시 + 홈 화면 앱(#s=...) 권한·프로필 이어받기
+    await O.evaluate(() => {
+      const b = [...document.querySelectorAll('#resBtns button')].pop(); if (b) b.click();
+      localStorage.setItem('game.gate.pass.v1', JSON.stringify({ uid: 'uJ', role: 'friend', status: 'active', expiresAt: 0 }));
+      document.getElementById('offBtn').click();
+    });
+    const offDone = await U.waitFor(O, () => {
+      const h = document.getElementById('offHead');
+      return h && /준비 완료/.test(h.textContent) && document.getElementById('offBtn').textContent;
+    }, null, 8000);
+    T.ok(offDone === '✈️ 준비됨 ✓', '⑰ [✈️ 비행기용] 누르면 6,090단계 저장 후 "✈️ 준비됨 ✓" 표시: ' + offDone);
+    const hash = await O.evaluate(() => location.hash);
+    T.ok(/^#s=/.test(hash), '⑰ 홈 화면 추가용 이어받기 해시(#s=...) 생성됨');
+    await O.evaluate(() => { for (const k of ['game.me', 'game.gate.pass.v1', 'rank.q.v1', 'rank.mine.nyang.pOff', 'rank.mine.test/nyang.pOff', 'nyang.recPend', 'nyang.myRec', 'nyang.stageStars', 'nyang.bestT', 'nyang.solved', 'nyang.avg', 'nyang.today', 'nyang.gm', 'nyang.offlineReady']) localStorage.removeItem(k); });
+    await O.reload({ waitUntil: 'load' });
+    await U.waitFor(O, A.ready);
+    const restored = await O.evaluate(() => ({
+      me: JSON.parse(localStorage.getItem('game.me') || 'null'),
+      pass: JSON.parse(localStorage.getItem('game.gate.pass.v1') || 'null'),
+      st: JSON.parse(localStorage.getItem('nyang.stageStars') || '{}'),
+    }));
+    T.ok(restored.me && restored.me.name === '지밍비' && restored.pass && restored.pass.pwa === 1 && restored.st[1] >= 1, '⑰ 홈 화면 앱(#s=...)으로 열면 프로필·허용 권한·단계가 자동 복원됨: ' + JSON.stringify(restored));
+    await O.evaluate(() => { for (const k of ['game.me', 'game.gate.pass.v1', 'nyang.stageStars', 'nyang.skin', 'nyang.offlineReady']) localStorage.removeItem(k); });
     await O.close();
   }
 

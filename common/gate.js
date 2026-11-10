@@ -385,7 +385,13 @@ const Gate = (() => {
             : "🚫 이 기기의 허용이 해제되었어요.");
         }
       } else {
-        applyNotAllowed("unregistered", "");
+        const pwaPass = readCachedPass();
+        if (pwaPass && pwaPass.pwa === 1) {
+          applyAllowed("friend", Number(pwaPass.expiresAt || 0), pwaPass.name || state.name);
+          writeCachedPass({ uid: state.uid || pwaPass.uid, role: "friend", status: "active", expiresAt: Number(pwaPass.expiresAt || 0), name: pwaPass.name || state.name, pwa: 1 });
+        } else {
+          applyNotAllowed("unregistered", "");
+        }
       }
     });
   }

@@ -964,6 +964,138 @@
   $("rankBtn").onclick = () => { $("rankBox").hidden = false; drawRank(); };
   $("rankClose").onclick = () => { $("rankBox").hidden = true; };
   $("gRankBtn").onclick = () => { if (window.GRank) Arena.init().then(() => GRank.open("nyang")).catch(() => {}); };   // 🏆 전체 게임 공용 랭킹
+  if ($("offBtn")) $("offBtn").onclick = () => openOfflineModal();
+
+  // ══ ✈️ 비행기 · 오프라인 완전 다운로드 (6,090단계 + 실행 파일 캐시 + 홈 화면 앱 이어주기) ══
+  const OFFLINE_CACHE = "benny-arcade-v2";
+  const OFFLINE_FILES = [
+    "./", "./index.html", "./manifest.json", "./icon-192.png", "./icon.svg",
+    "./style.css", "./core.js", "./banban.js", "./banban-ui.js", "./zip.js", "./zip-ui.js",
+    "./sound.js", "./main.js", "./watch.js", "./puzzles.json",
+    "./bank/index.json", "./bank/master-1.json", "./bank/master-2.json", "./bank/master-3.json", "./bank/master-4.json", "./bank/master-5.json",
+    "../", "../index.html", "../games.json",
+    "../common/cozy.css", "../common/cozy.js", "../common/fit.js", "../common/backnav.js",
+    "../common/glog.js", "../common/me.js", "../common/gate.js", "../common/rank.js",
+    "../common/arena-mock.js", "../common/arena.js", "../common/arena-ui.js",
+  ];
+  let deferredInstall = null;
+  if (typeof addEventListener === "function") addEventListener("beforeinstallprompt", e => { e.preventDefault(); deferredInstall = e; });
+  const isStandalone = () => !!(navigator.standalone || (window.matchMedia && matchMedia("(display-mode: standalone)").matches));
+  function updateOffBtn() {
+    const b = $("offBtn"); if (!b) return;
+    const r = store.get("offlineReady", null);
+    b.textContent = r && r.v === 2 ? "✈️ 준비됨 ✓" : "✈️ 비행기용";
+  }
+  function syncShareHash(force) {
+    try {
+      if (!force && /[?&](mock|guest)\b/.test(location.search)) return;
+      const me = window.GME && GME.me && GME.me.pid ? { pid: GME.me.pid, name: GME.me.name } : null;
+      let pass = null; try { pass = JSON.parse(localStorage.getItem("game.gate.pass.v1") || "null"); } catch (e) {}
+      const top = maxStage();
+      if (!me && !pass && !top) return;
+      const b64 = btoa(unescape(encodeURIComponent(JSON.stringify({ m: me, p: pass, t: top, k: skin() }))));
+      if (location.hash !== "#s=" + b64) history.replaceState(history.state, "", location.pathname + location.search + "#s=" + b64);
+    } catch (e) {}
+  }
+  async function prepareOffline(onStep) {
+    const total = OFFLINE_FILES.length;
+    let done = 0, okCount = 0;
+    const step = () => { if (onStep) try { onStep(done, total, okCount); } catch (e) {} };
+    try {
+      if ("serviceWorker" in navigator && !/[?&](mock|guest)\b/.test(location.search)) {
+        await navigator.serviceWorker.register("../sw.js").catch(() => {});
+      }
+    } catch (e) {}
+    const hasCache = typeof caches !== "undefined" && !!caches.open;
+    const cache = hasCache ? await caches.open(OFFLINE_CACHE).catch(() => null) : null;
+    const queue = [...OFFLINE_FILES];
+    const worker = async () => {
+      while (queue.length) {
+        const rel = queue.shift();
+        const abs = new URL(rel, location.href.split("#")[0]).href;
+        let ok = false;
+        if (isOn()) {
+          try {
+            const res = await fetch(abs, { cache: "no-cache" });
+            if (res && res.ok) { ok = true; if (cache) await cache.put(abs, res.clone()); }
+          } catch (e) {}
+        }
+        if (!ok && cache) {
+          try { const m = (await cache.match(abs)) || (await cache.match(abs, { ignoreSearch: true })); if (m) ok = true; } catch (e) {}
+        }
+        done++; if (ok) okCount++; step();
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker(), worker()]);
+    if (isOn()) {
+      await Promise.all([
+        bankIdxP.then(() => loadChunks("master", 5)).catch(() => {}),
+        loadRec(true).catch(() => {}),
+        loadGM().catch(() => {}),
+      ]);
+    }
+    const ready = { v: 2, at: Date.now(), files: okCount, total, stages: 6090 };
+    if (okCount >= total - 3) store.set("offlineReady", ready);
+    syncShareHash(true);
+    updateOffBtn();
+    return { ok: okCount >= total - 3, okCount, total, stages: 6090, at: ready.at };
+  }
+  function openOfflineModal() {
+    syncShareHash(true);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+    const close = Cozy.modal({
+      title: "✈️ 비행기 · 오프라인 준비",
+      dismiss: true,
+      html: `<div id="offModalBody" style="display:grid;gap:10px;text-align:left;font-size:14px;line-height:1.5">
+        <div id="offProgWrap" style="background:rgba(15,23,42,.06);border-radius:12px;padding:12px;display:grid;gap:6px">
+          <b id="offHead">⏳ 퍼즐 6,090단계와 게임 파일을 폰에 저장하는 중…</b>
+          <div class="pc-bar" style="height:8px"><i id="offBar" style="width:8%;transition:width .15s"></i></div>
+          <span class="small" id="offSub">잠시만 기다려 주세요 (약 1~2초)</span>
+        </div>
+        <div style="background:rgba(15,23,42,.04);border:1px solid rgba(15,23,42,.1);border-radius:12px;padding:12px;display:grid;gap:8px">
+          <b>${isStandalone() ? "📱 홈 화면 앱으로 실행 중이에요!" : "🛫 비행기에서 안전하게 켜는 2가지 방법"}</b>
+          ${isStandalone()
+            ? `<p style="margin:0" class="small">바탕화면의 <b>🐱 냥도쿠</b> 아이콘을 누르면 인터넷이 없어도 언제든 바로 켜져요. 비행기에서 내리면 기록이 저절로 동기화됩니다.</p>`
+            : `<div class="small" style="display:grid;gap:6px">
+                <div><b>① 이 탭 그대로 두기 (가장 간단)</b><br>지금 열린 이 화면을 닫지 말고 비행기에서 그대로 열면 바로 플레이돼요.</div>
+                <div><b>② 홈 화면에 🐱 앱 아이콘 추가 (탭이 닫혀도 안심 · 추천)</b><br>${isIOS
+                  ? `사파리 아래 공유 단추(<b>⬆️</b>) → <b>[홈 화면에 추가]</b>를 누른 뒤, <b>비행기 타기 전에 바탕화면의 🐱 냥도쿠 앱을 한 번만 눌러 열어 두세요.</b> (내 이름·허용 권한·단계 기록이 앱으로 자동 복사됩니다)`
+                  : `브라우저 메뉴(<b>⋮</b>) → <b>[홈 화면에 추가 / 앱 설치]</b>를 누른 뒤, 비행기 타기 전에 바탕화면의 🐱 냥도쿠 아이콘을 한 번 열어 두세요.`}</div>
+              </div>`}
+          <button type="button" class="btn primary" id="offInstallBtn" ${deferredInstall && !isStandalone() ? "" : "hidden"}>📲 홈 화면에 냥도쿠 앱 설치</button>
+        </div>
+      </div>`,
+      buttons: [
+        { label: "🔄 다시 받기", onClick: () => { close(); openOfflineModal(); } },
+        { label: "확인", primary: true },
+      ],
+    });
+    const instBtn = $("offInstallBtn");
+    if (instBtn) instBtn.onclick = async () => {
+      if (!deferredInstall) return;
+      deferredInstall.prompt();
+      try { await deferredInstall.userChoice; } catch (e) {}
+      deferredInstall = null; instBtn.hidden = true;
+    };
+    prepareOffline((done, total) => {
+      const bar = $("offBar"), sub = $("offSub");
+      if (bar) bar.style.width = Math.round(done / total * 100) + "%";
+      if (sub) sub.textContent = `파일 확인 및 저장 중… (${done} / ${total})`;
+    }).then(r => {
+      const head = $("offHead"), bar = $("offBar"), sub = $("offSub"), wrap = $("offProgWrap");
+      if (!head) return;
+      if (bar) bar.style.width = "100%";
+      const who = myName() ? `👤 <b>${esc(myName())}</b> · ${maxStage()}단계` : "👤 손님 모드";
+      if (r.ok) {
+        if (wrap) wrap.style.background = "rgba(16,185,129,.12)";
+        head.innerHTML = "✅ 비행기 모드 준비 완료!";
+        sub.innerHTML = `${who} · 퍼즐 <b>6,090단계</b> + 오늘의 퍼즐·반반·산책이 이 폰에 모두 저장되었어요.<br>비행기에서 깬 판 수·별·배지는 비행기 모드를 끄면 자동으로 올라가요.`;
+      } else {
+        head.innerHTML = "⚠️ 일부 파일을 아직 다 못 받았어요";
+        sub.innerHTML = `인터넷이 연결된 상태에서 [🔄 다시 받기]를 한 번 눌러 주세요. (${r.okCount}/${r.total})`;
+      }
+    });
+  }
 
   function openFriend() {
     if (!window.ArenaUI) { toast("친구랑 모듈을 불러오지 못했어요"); return; }
@@ -1589,11 +1721,12 @@
 
   // ── 시작
   setAutoX(autoX);
+  updateOffBtn();
   if (typeof addEventListener === "function") addEventListener("online", () => {
     if (window.GRank && GRank.flush) GRank.flush();
     drawSoloProg(true);
   });
-  Arena.init().then(() => { const db = Arena.db(); return db ? GME.ensure(db) : null; }).then(() => { drawMe(); drawSoloProg(true); }).catch(() => { drawMe(); drawSoloProg(false); });   // 처음 오면 이름부터 (시험 화면은 건너뜀)
+  Arena.init().then(() => { const db = Arena.db(); return db ? GME.ensure(db) : null; }).then(() => { drawMe(); return drawSoloProg(true); }).then(() => { syncShareHash(); }).catch(() => { drawMe(); drawSoloProg(false); syncShareHash(); });   // 처음 오면 이름부터 (시험 화면은 건너뜀)
   bankP.then(() => {
     drawTiers();
     if (window.ArenaUI) ArenaUI.checkUrl(() => openFriend());
@@ -1601,10 +1734,13 @@
       const s = stageInfo(maxStage() + 1);
       if (s.chunk > 0) loadChunks(s.tier, s.chunk);
       if (maxStage() >= 800) loadChunks("master", s.chunk + 1);
+      if (isStandalone() && !store.get("offlineReady", null)) {
+        prepareOffline().then(r => { if (r.ok) toast("✈️ 홈 화면 앱 오프라인 준비 완료! (6,090단계)", 3200); }).catch(() => {});
+      }
     }).catch(() => {});
   }).catch(e => { $("tiers").textContent = "퍼즐을 못 불러왔어요: " + e.message; });
   window.__ny = { get G() { return G; }, get TA() { return TA; }, get meta() { return meta; }, get prog() { return prog; }, get myRound() { return myRound; }, NY,   // 점검용
     dailyInfo, kstDay, dayBoard, dayTops, streakOf, bestStreak, setRk: d => { rkData = d; if (soloMode === "day") drawDay(); if (d) { drawRankStrip(); if (soloMode === "ta") drawTABoard(); } },
-    setFam: d => { fam = d; famAt = Date.now(); return drawSoloProg(); }, openCalendar, myDays, syncLocalToServer,
+    setFam: d => { fam = d; famAt = Date.now(); return drawSoloProg(); }, openCalendar, myDays, syncLocalToServer, prepareOffline, openOfflineModal, syncShareHash,
     stageInfo, playStage, loadChunks, bankIdxP, get bankIdx() { return bankIdx; }, weekKey, bankAt: (t, i) => bank[t][i] };
 })();

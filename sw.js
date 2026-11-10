@@ -1,7 +1,7 @@
 /* 베니 아케이드 — 오프라인(비행기 모드) 지원 Service Worker
    · 온라인일 때는 항상 서버에서 최신 파일을 먼저 받고(Network-first) 캐시를 갱신해 배포가 밀리지 않게 함
    · 비행기 모드·통신 음영 지역 등 오프라인일 때는 캐시된 화면·퍼즐 은행으로 즉시 열림 */
-const CACHE = "benny-arcade-v1";
+const CACHE = "benny-arcade-v2";
 const CORE = [
   "./",
   "./index.html",
@@ -21,6 +21,9 @@ const CORE = [
   "./common/mistakes.js",
   "./nyang/",
   "./nyang/index.html",
+  "./nyang/manifest.json",
+  "./nyang/icon-192.png",
+  "./nyang/icon.svg",
   "./nyang/style.css",
   "./nyang/main.js",
   "./nyang/core.js",
@@ -33,6 +36,10 @@ const CORE = [
   "./nyang/puzzles.json",
   "./nyang/bank/index.json",
   "./nyang/bank/master-1.json",
+  "./nyang/bank/master-2.json",
+  "./nyang/bank/master-3.json",
+  "./nyang/bank/master-4.json",
+  "./nyang/bank/master-5.json",
 ];
 
 self.addEventListener("install", e => {

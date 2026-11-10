@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="44" fill="#fff6ea"/>
+  <!-- 퍼즐 격자 배경 (부드러운 파스텔 4칸) -->
+  <g transform="translate(22,22)">
+    <rect x="0" y="0" width="70" height="70" rx="18" fill="#fde2cc"/>
+    <rect x="78" y="0" width="70" height="70" rx="18" fill="#d9f0e6"/>
+    <rect x="0" y="78" width="70" height="70" rx="18" fill="#dcebfb"/>
+    <rect x="78" y="78" width="70" height="70" rx="18" fill="#f7def2"/>
+  </g>
+  <!-- 귀여운 고양이 얼굴 -->
+  <g transform="translate(96,102)">
+    <!-- 귀 -->
+    <path d="M-44,-18 L-50,-58 L-14,-38 Z" fill="#f59e0b" stroke="#78350f" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M44,-18 L50,-58 L14,-38 Z" fill="#f59e0b" stroke="#78350f" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M-38,-22 L-42,-46 L-20,-34 Z" fill="#fda4af"/>
+    <path d="M38,-22 L42,-46 L20,-34 Z" fill="#fda4af"/>
+    <!-- 얼굴 -->
+    <ellipse cx="0" cy="0" rx="52" ry="44" fill="#fbbf24" stroke="#78350f" stroke-width="5"/>
+    <!-- 이마 줄무늬 -->
+    <path d="M0,-42 L0,-26 M-12,-39 L-8,-26 M12,-39 L8,-26" stroke="#b45309" stroke-width="4.5" stroke-linecap="round"/>
+    <!-- 볼터치 -->
+    <ellipse cx="-30" cy="8" rx="9" ry="5.5" fill="#fb7185" opacity="0.65"/>
+    <ellipse cx="30" cy="8" rx="9" ry="5.5" fill="#fb7185" opacity="0.65"/>
+    <!-- 눈 -->
+    <circle cx="-20" cy="-4" r="6.5" fill="#451a03"/>
+    <circle cx="20" cy="-4" r="6.5" fill="#451a03"/>
+    <circle cx="-22" cy="-6" r="2.2" fill="#fff"/>
+    <circle cx="18" cy="-6" r="2.2" fill="#fff"/>
+    <!-- 코와 입 -->
+    <polygon points="0,3 -5,-2 5,-2" fill="#e11d48"/>
+    <path d="M-10,9 Q-5,15 0,9 Q5,15 10,9" fill="none" stroke="#78350f" stroke-width="4" stroke-linecap="round"/>
+    <!-- 왕관 장식 -->
+    <path d="M-16,-45 L-20,-64 L-7,-53 L0,-68 L7,-53 L20,-64 L16,-45 Z" fill="#fde047" stroke="#78350f" stroke-width="4" stroke-linejoin="round"/>
+  </g>
+</svg>
