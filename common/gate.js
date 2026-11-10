@@ -42,6 +42,7 @@ const Gate = (() => {
   const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
   const GATE_BASE = (() => { const c = document.currentScript && document.currentScript.src; return c ? c.replace(/gate\.js.*$/, "") : ""; })();
   const PASS_KEY = "game.gate.pass.v1";
+  const BLOCK_KEY = "game.gate.block.v1";
   const NAME_KEY = "game.arena.name";
   const DAY = 24 * 3600 * 1000;
   const qs = new URLSearchParams(location.search);
@@ -139,7 +140,10 @@ const Gate = (() => {
       if (!raw) return null;
       const d = JSON.parse(raw);
       if (!d || d.status !== "active") return null;
-      if (d.expiresAt && d.expiresAt > 0 && Date.now() > d.expiresAt) return null;
+      if (d.expiresAt && d.expiresAt > 0 && Date.now() > d.expiresAt) {
+        lsSet(BLOCK_KEY, JSON.stringify({ status: "expired", reason: "⏰ '오늘만' 허용이 끝났어요. 다시 허용받아 주세요." }));
+        return null;
+      }
       return d;
     } catch (e) { return null; }
   }
@@ -249,6 +253,7 @@ const Gate = (() => {
     state.expiresAt = Number(exp || 0);
     if (name) state.name = name;
     if (state.uid) writeCachedPass({ uid: state.uid, role: state.role, status: "active", expiresAt: state.expiresAt, name: state.name });
+    lsSet(BLOCK_KEY, null);
     hideLockOverlay(true);
     startPresence();
     notify();
@@ -265,6 +270,8 @@ const Gate = (() => {
     state.status = status;
     state.reason = reason || (!state.unlocked && status === "unregistered" && guestUsed() >= GUEST_GAMES ? GUEST_OVER : "");
     writeCachedPass(null);
+    if (status === "paused" || status === "revoked" || status === "expired") lsSet(BLOCK_KEY, JSON.stringify({ status, reason: state.reason }));
+    else if (status === "unregistered") lsSet(BLOCK_KEY, null);
     if (free || taste) {
       if (lockEl && !lockEl.hidden && lockMode === "lock") lockEl.hidden = true;
       if (free) startFreeClock();
@@ -1119,13 +1126,19 @@ const Gate = (() => {
       state.isHost = true;
     } else if (!OPEN_SOLO) {
       const memUid = lsGet(MEMBER_KEY);
-      if (memUid && freeLeft(memUid) > 0) {
-        // 지난번 브릿지 회원 + 오늘 무료 시간 남음 → 서버 확인 전까지 열어 둠 (확인되면 그대로 또는 로그인 창)
+      let blocked = null; try { blocked = JSON.parse(lsGet(BLOCK_KEY) || "null"); } catch (e) {}
+      if (memUid && freeLeft(memUid) > 0 && !blocked) {
+        // 지난번 브릿지 회원 + 오늘 무료 시간 남음 → 서버 확인 전까지 열어 둠 (오프라인에서도 시간은 셈)
         Object.assign(state, { unlocked: true, isMember: true, uid: memUid, role: "bridge_free", freeLeft: freeLeft(memUid) });
-      } else if (!IS_PORTAL && guestLeft() > 0) {
-        // 👀 손님 판이 남음 → 서버 확인 전까지 열어 둠 (멈춤 · 해제된 기기면 확인 뒤 잠금)
+        startFreeClock();
+      } else if (!IS_PORTAL && !memUid && guestLeft() > 0 && !blocked) {
+        // 👀 손님 판이 남음 → 서버 확인 전까지 열어 둠 (오프라인에서도 하루 5판까지만)
         Object.assign(state, { unlocked: true, role: "guest_free", guestLeft: guestLeft() });
+        guestHello();
       } else if (!IS_PORTAL) {
+        if (blocked) { state.status = blocked.status || "revoked"; state.reason = blocked.reason || ""; }
+        else if (memUid) { state.isMember = true; state.uid = memUid; state.status = "free_over"; state.reason = `⏰ 오늘 무료 ${FREE_MIN}분을 다 썼어요. 허용을 요청하면 시간 제한 없이 할 수 있어요.`; }
+        else if (guestUsed() >= GUEST_GAMES) { state.status = "guest_over"; state.reason = GUEST_OVER; }
         // 게임 화면: 허용된 기기가 아니면 바로 로그인 창을 띄우고 Firebase 확인 (아케이드 첫 화면은 둘러보기라 안 띄움)
         if (document.readyState === "loading") {
           document.addEventListener("DOMContentLoaded", () => { if (!state.unlocked) showLockOverlay({ mode: "lock" }); });
@@ -1136,6 +1149,15 @@ const Gate = (() => {
     } else {
       state.status = "open";
     }
+    // ✈️ 오프라인(비행기 모드) 캐시 Service Worker 등록 (시험 브라우저 제외)
+    try {
+      if ("serviceWorker" in navigator && !window.__swReg && (location.protocol === "https:" || /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) && (!navigator.webdriver || /[?&]sw=1\b/.test(location.search)) && !/[?&](mock|guest)\b/.test(location.search)) {
+        window.__swReg = 1;
+        const swUrl = GATE_BASE ? GATE_BASE.replace(/\/common\/?$/, "/sw.js") : "../sw.js";
+        if (document.readyState === "complete") navigator.serviceWorker.register(swUrl).catch(() => {});
+        else addEventListener("load", () => navigator.serviceWorker.register(swUrl).catch(() => {}));
+      }
+    } catch (e) {}
     // OPEN_SOLO 면 꼭 필요할 때만 서버 확인 (허용됐던 기기 · 포털 · 관리자)
     if (!OPEN_SOLO || cached || IS_PORTAL || lsGet("game.gate.admin") === "1") {
       checkPermissionsAndWatch().catch(e => console.warn("Gate init error:", e));

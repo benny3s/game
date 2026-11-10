@@ -292,11 +292,17 @@
   }
   // ── 공용 랭킹 내 기록 (rank/nyang · common/rank.js) — 판·승·패·승점 숫자는 전부 여기서 (11-01 베니 님: 기록은 메인 한 곳)
   //   푼 문제 = 혼자(AI) 판 이긴 수 · 대결 = 친구 판. nyang/rec 는 시간·타임어택·단계 별·배지 같은 퍼즐 기록만 (판 수 숫자는 안 보여 줌)
-  let gm = null;
+  let gm = store.get("gm", null);
   const solvedN = () => (gm && gm.a && gm.a.w) || 0;
   async function loadGM() {
-    if (!window.GRank) return gm = null;
-    try { await Arena.init(); gm = await GRank.mine("nyang"); } catch (e) { gm = null; }
+    if (!window.GRank) return gm;
+    try {
+      if (typeof navigator === "undefined" || navigator.onLine !== false) {
+        await Promise.race([Arena.init(), new Promise((_, r) => setTimeout(() => r(new Error("timeout")), 2500))]).catch(() => {});
+      }
+      const m = await GRank.mine("nyang");
+      if (m) { gm = m; store.set("gm", { all: m.all, f: m.f, a: m.a }); }
+    } catch (e) {}
     return gm;
   }
   addEventListener("grank", e => {
@@ -659,15 +665,7 @@
   let soloMode = store.get("soloMode2", "map");                 // map = 단계 지도 · one = 한 판 · ta = 타임어택
   let soloTier = store.get("soloTier", "easy");                 // 한 판·타임어택에서 고른 난이도
   // 혼자 화면 맨 위: 몇 판 깼는지 · 다음 칭호까지 · 친구 중 몇 등 · 자랑하기
-  async function drawSoloProg(force) {
-    const el = $("soloProg");
-    if (!myName()) {
-      el.innerHTML = '<button class="pc-name" id="pcName">👤 이름을 정하면 몇 판 깼는지 쌓이고 친구 순위에 올라가요</button>';
-      $("pcName").onclick = () => { const db = Arena.db(); if (db) GME.ensure(db).then(() => drawSoloProg(true)).catch(() => {}); };
-      loadRec(force).then(() => { drawRankStrip(); if (soloMode === "day" && !$("soloBox").hidden) drawDay(); if (soloMode === "ta" && !$("soloBox").hidden) drawTABoard(); }).catch(() => {});   // 이름이 없어도 순위는 보여 줌
-      return;
-    }
-    await Promise.all([loadRec(force).catch(() => {}), loadGM(), loadFam(force).catch(() => {})]);   // 퍼즐 기록(배지·단계)을 못 읽어도 공용 랭킹 숫자는 보여 줌
+  function paintSoloProg(el) {
     const sv = solvedN(), lv = level(sv), nx = LEVELS.find(l => l[0] > sv);       // 판 수 = 공용 랭킹 (친구와 비교는 🏆 랭킹 탭)
     const pct = nx ? Math.round((sv - lv[0]) / (nx[0] - lv[0]) * 100) : 100;
     const cheer = !sv ? "첫 판을 깨 보세요!" : "";
@@ -676,6 +674,18 @@
       <div class="pc-barrow"><div class="pc-bar"><i style="width:${pct}%"></i></div><button class="pc-badges" id="badgeBtn" aria-label="배지">🏅 배지 ${Object.keys((myRec() || {}).ach || {}).length}/${ACHS.length}</button></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}${famHtml()}`;
     $("shareBtn").onclick = () => shareMe(sv, lv);
     $("badgeBtn").onclick = showBadges;
+  }
+  async function drawSoloProg(force) {
+    const el = $("soloProg");
+    if (!myName()) {
+      el.innerHTML = '<button class="pc-name" id="pcName">👤 이름을 정하면 몇 판 깼는지 쌓이고 친구 순위에 올라가요</button>';
+      $("pcName").onclick = () => { const db = Arena.db(); if (db) GME.ensure(db).then(() => drawSoloProg(true)).catch(() => {}); };
+      loadRec(force).then(() => { drawRankStrip(); if (soloMode === "day" && !$("soloBox").hidden) drawDay(); if (soloMode === "ta" && !$("soloBox").hidden) drawTABoard(); }).catch(() => {});   // 이름이 없어도 순위는 보여 줌
+      return;
+    }
+    paintSoloProg(el);                                                            // 오프라인·느린 망에서도 캐시된 판 수·칭호를 먼저 바로 그림
+    await Promise.all([loadRec(force).catch(() => {}), loadGM(), loadFam(force).catch(() => {})]);   // 퍼즐 기록(배지·단계)을 못 읽어도 공용 랭킹 숫자는 보여 줌
+    paintSoloProg(el);
     if (soloMode === "map" && !$("soloBox").hidden) drawStages();              // 서버 기록이 늦게 오면 지도도 다시
     if (soloMode === "day" && !$("soloBox").hidden) drawDay();                 // 가족 오늘 기록도
     if (soloMode === "ta" && !$("soloBox").hidden) drawTABoard();
@@ -686,9 +696,14 @@
   let fam = null, famAt = 0;
   async function loadFam(force) {
     if (!force && fam && Date.now() - famAt < 300000) return fam;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return fam;
     const db = Arena.db(); if (!db) return null;
     const mon = weekKey(), today = kstDay(), days = [...Array(14).keys()].map(i => dayShift(mon, i - 7));
-    const vals = await Promise.all(days.map(d => (d > today ? Promise.resolve({}) : db.ref(`${GME.P}rank_days/${d}/nyang`).get().then(s => s.val() || {}, () => ({})))));
+    const vals = await Promise.race([
+      Promise.all(days.map(d => (d > today ? Promise.resolve({}) : db.ref(`${GME.P}rank_days/${d}/nyang`).get().then(s => s.val() || {}, () => ({}))))),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
+    ]).catch(() => null);
+    if (!vals) return fam;
     const cur = {}; let last = 0;
     days.forEach((d, i) => { const v = vals[i] || {}; if (i < 7) last += Object.values(v).reduce((a, b) => a + (+b || 0), 0); else for (const [pid, n] of Object.entries(v)) cur[pid] = (cur[pid] || 0) + (+n || 0); });
     fam = { cur, last, week: mon }; famAt = Date.now();
@@ -1377,45 +1392,98 @@
   const GRADES = [[0, "🐾"], [5, "🥉"], [15, "🥈"], [30, "🥇"], [60, "💎"], [100, "👑"]];
   const level = sv => LEVELS.filter(l => (sv || 0) >= l[0]).pop();
   const grade = pts => GRADES.filter(g => (pts || 0) >= g[0]).pop()[1];
-  const recRef = () => GME.me && Arena.db() ? Arena.db().ref(`${GME.P}nyang/rec/${GME.me.pid}`) : null;
+  const isOn = () => typeof navigator === "undefined" || navigator.onLine !== false;
+  const recRef = () => isOn() && GME.me && Arena.db() ? Arena.db().ref(`${GME.P}nyang/rec/${GME.me.pid}`) : null;
   const tx = (ref, path, f) => ref.child(path).transaction(f).catch(() => {});
   const minTx = (ref, path, v) => tx(ref, path, cur => cur == null || v < cur ? Math.round(v * 10) / 10 : undefined);
   const maxTx = (ref, path, v) => tx(ref, path, cur => cur == null || v > cur ? v : undefined);
   const addTx = (ref, path, v) => v ? tx(ref, path, cur => (cur || 0) + v) : null;
+  let localMyRec = store.get("myRec", {});
+  const saveMyRec = () => { const m = myRec(); if (m) store.set("myRec", m); };
   const REC = {
     both(f) { const r = recRef(); if (!r) return; const w = weekKey(); f(r, ""); f(r, `w/${w}/`); },
-    best(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}tb/${tier}`, secs)); },
+    best(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}tb/${tier}`, secs)); const m = myRec(); if (m) { m.tb = m.tb || {}; if (!m.tb[tier] || secs < m.tb[tier]) m.tb[tier] = Math.round(secs * 10) / 10; saveMyRec(); } },
     ta(tier, mins, cnt) {
       if (!cnt) return; const key = `${tier}_${mins}`, wk = weekKey();
       this.both((r, p) => maxTx(r, `${p}ta/${key}`, cnt));
-      const m = myRec(); if (m) { m.ta = m.ta || {}; m.ta[key] = Math.max(m.ta[key] || 0, cnt); m.w = m.w || {}; const w = (m.w[wk] = m.w[wk] || {}); w.ta = w.ta || {}; w.ta[key] = Math.max(w.ta[key] || 0, cnt); }
+      const m = myRec(); if (m) { m.ta = m.ta || {}; m.ta[key] = Math.max(m.ta[key] || 0, cnt); m.w = m.w || {}; const w = (m.w[wk] = m.w[wk] || {}); w.ta = w.ta || {}; w.ta[key] = Math.max(w.ta[key] || 0, cnt); saveMyRec(); }
       const lw = store.get("taW", {}), v = lw.wk === wk ? { ...(lw.v || {}) } : {}; v[key] = Math.max(v[key] || 0, cnt); store.set("taW", { wk, v });   // 이번 주 순위에 바로 (서버 다시 읽기 전)
     },
     coop(tier, secs, n) { if (tooFast(secs, n)) return; this.both((r, p) => minTx(r, `${p}co/${tier}`, secs)); },
-    solved(k) { if (!k) return; this.both((r, p) => addTx(r, `${p}sv`, k)); const m = myRec(); if (m) m.sv = (m.sv || 0) + k; },   // 화면엔 바로 반영
-    match(pts, won) { this.both((r, p) => { addTx(r, `${p}pts`, pts); addTx(r, `${p}games`, 1); addTx(r, `${p}wins`, won ? 1 : 0); }); const m = myRec(); if (m) { m.pts = (m.pts || 0) + pts; m.games = (m.games || 0) + 1; m.wins = (m.wins || 0) + (won ? 1 : 0); } },
+    solved(k) {
+      if (!k) return;
+      const r = recRef(), wk = weekKey();
+      if (r) { addTx(r, "sv", k); addTx(r, `w/${wk}/sv`, k); }
+      else { const p = store.get("recPend", {}); p.sv = (p.sv || 0) + k; p.w = p.w || {}; p.w[wk] = (p.w[wk] || 0) + k; store.set("recPend", p); }
+      const m = myRec(); if (m) { m.sv = (m.sv || 0) + k; saveMyRec(); }
+    },
+    match(pts, won) { this.both((r, p) => { addTx(r, `${p}pts`, pts); addTx(r, `${p}games`, 1); addTx(r, `${p}wins`, won ? 1 : 0); }); const m = myRec(); if (m) { m.pts = (m.pts || 0) + pts; m.games = (m.games || 0) + 1; m.wins = (m.wins || 0) + (won ? 1 : 0); saveMyRec(); } },
     stage(k, st) {
       const loc = localStars(); if ((loc[k] || 0) < st) { loc[k] = st; store.set("stageStars", loc); }
       const r = recRef(); if (r) maxTx(r, `st/s${k}`, st);
-      const m = myRec(); if (m) { m.st = m.st || {}; m.st["s" + k] = Math.max(m.st["s" + k] || 0, st); }
+      const m = myRec(); if (m) { m.st = m.st || {}; m.st["s" + k] = Math.max(m.st["s" + k] || 0, st); saveMyRec(); }
     },
-    cnt(key) { const r = recRef(); if (r) addTx(r, `cnt/${key}`, 1); const m = myRec(); if (m) { m.cnt = m.cnt || {}; m.cnt[key] = (m.cnt[key] || 0) + 1; } },
-    ach(id) { const r = recRef(); if (r) r.child(`ach/${id}`).set(firebase.database.ServerValue.TIMESTAMP).catch(() => {}); },
+    cnt(key) {
+      const r = recRef();
+      if (r) addTx(r, `cnt/${key}`, 1);
+      else { const p = store.get("recPend", {}); p.cnt = p.cnt || {}; p.cnt[key] = (p.cnt[key] || 0) + 1; store.set("recPend", p); }
+      const m = myRec(); if (m) { m.cnt = m.cnt || {}; m.cnt[key] = (m.cnt[key] || 0) + 1; saveMyRec(); }
+    },
+    ach(id) { const r = recRef(); if (r) r.child(`ach/${id}`).set(firebase.database.ServerValue.TIMESTAMP).catch(() => {}); saveMyRec(); },
     day(key, v, n) {                                                         // 📅 오늘의 퍼즐: 그날 처음 성공한 판만 (폰에 먼저, 서버는 말이 안 되게 빠른 기록 빼고)
       const loc = store.get("day", {});
       if (!loc[key]) { loc[key] = v; store.set("day", Object.fromEntries(Object.entries(loc).sort().slice(-400))); }
-      const m = myRec(); if (m) { m.day = m.day || {}; if (!m.day[key]) m.day[key] = v; }
+      const m = myRec(); if (m) { m.day = m.day || {}; if (!m.day[key]) m.day[key] = v; saveMyRec(); }
       const r = recRef(); if (r && !tooFast(v.s, n)) tx(r, `day/${key}`, cur => cur && cur.s ? undefined : v);
     },
     bday(key, v, n) { this.kday("bday", key, v, n); },                       // 🌗 오늘의 반반
     kday(f, key, v, n) {                                                     // 🌗 bday · 🐾 zday: 오늘의 판 (같은 모양, 처음 성공만)
       const loc = store.get(f, {});
       if (!loc[key]) { loc[key] = v; store.set(f, Object.fromEntries(Object.entries(loc).sort().slice(-400))); }
-      const m = myRec(); if (m) { m[f] = m[f] || {}; if (!m[f][key]) m[f][key] = v; }
+      const m = myRec(); if (m) { m[f] = m[f] || {}; if (!m[f][key]) m[f][key] = v; saveMyRec(); }
       const r = recRef(); if (r && !(v.s >= n * n * 0.25)) return;            // 말이 안 되게 빠른 기록은 폰에만
       if (r) tx(r, `${f}/${key}`, cur => cur && cur.s ? undefined : v);
     },
   };
+  // 비행기 모드·오프라인에서 쌓인 내 퍼즐 기록(단계 별·오늘의 퍼즐·최고 시간·타임어택·배지·푼 수)을 온라인 복귀 때 서버로 자동 동기화
+  function syncLocalToServer(srvRec) {
+    const r = recRef(); if (!r) return;
+    const srv = srvRec || {};
+    const pend = store.get("recPend", null);
+    if (pend) {
+      store.set("recPend", null);
+      if (pend.sv) addTx(r, "sv", pend.sv);
+      for (const [wk, v] of Object.entries(pend.w || {})) addTx(r, `w/${wk}/sv`, v);
+      for (const [k, v] of Object.entries(pend.cnt || {})) addTx(r, `cnt/${k}`, v);
+    }
+    const locSt = localStars(), srvSt = srv.st || {};
+    for (const [k, st] of Object.entries(locSt)) if ((srvSt["s" + k] || 0) < st) maxTx(r, `st/s${k}`, st);
+    const locBt = store.get("bestT", {}), srvTb = srv.tb || {};
+    for (const [tier, secs] of Object.entries(locBt)) {
+      const T = TIERS.find(t => t.id === tier);
+      if (T && !tooFast(secs, T.n) && (srvTb[tier] == null || secs < srvTb[tier])) minTx(r, `tb/${tier}`, secs);
+    }
+    const locTa = store.get("taBest", {}), srvTa = srv.ta || {};
+    for (const [tier, cnt] of Object.entries(locTa)) { const key = `${tier}_${TA_SOLO_MIN}`; if (cnt > (srvTa[key] || 0)) maxTx(r, `ta/${key}`, cnt); }
+    const lw = store.get("taW", {});
+    if (lw && lw.wk && lw.v) {
+      const srvW = ((srv.w || {})[lw.wk] || {}).ta || {};
+      for (const [key, cnt] of Object.entries(lw.v)) {
+        if (cnt > (srvW[key] || 0)) maxTx(r, `w/${lw.wk}/ta/${key}`, cnt);
+        if (cnt > (srvTa[key] || 0)) maxTx(r, `ta/${key}`, cnt);
+      }
+    }
+    for (const f of ["day", "bday", "zday"]) {
+      const locD = store.get(f, {}), srvD = srv[f] || {};
+      for (const [key, v] of Object.entries(locD)) {
+        if (!v || !v.s || (srvD[key] && srvD[key].s)) continue;
+        if (f === "day") { const d = dailyInfo(key), T = TIERS.find(t => t.id === d.tier); if (T && tooFast(v.s, T.n)) continue; }
+        tx(r, `${f}/${key}`, cur => cur && cur.s ? undefined : v);
+      }
+    }
+    const locAch = (localMyRec && localMyRec.ach) || {}, srvAch = srv.ach || {};
+    for (const [id, ts] of Object.entries(locAch)) if (!srvAch[id]) r.child(`ach/${id}`).set(ts || firebase.database.ServerValue.TIMESTAMP).catch(() => {});
+  }
   // 대결 한 판 끝: 내가 이긴 사람 수만큼 승점 (같은 판을 두 번 세지 않게)
   const counted = new Set((() => { try { return JSON.parse(sessionStorage.getItem("nyang.counted") || "[]"); } catch (e) { return []; } })());
   const isCounted = k => counted.has(k);
@@ -1450,12 +1518,30 @@
   let rkData = null, rkAdmin = false;
   async function loadRec(force) {
     if (rkData && !force) return rkData;
+    if (!isOn()) { if (rkData) return rkData; throw new Error("오프라인 모드예요 — 내 기록은 폰에 저장되고 인터넷이 연결되면 자동으로 올라가요"); }
     await Arena.init();
     const db = Arena.db(); if (!db) throw new Error("랭킹은 인터넷에 연결된 실제 사이트에서 보여요");
-    const [rec, people] = await Promise.all([db.ref(`${GME.P}nyang/rec`).get(), GME.loadAll(db)]);
-    return (rkData = { rec: rec.val() || {}, names: Object.fromEntries(people.map(p => [p.pid, p.n])) });
+    const [rec, people] = await Promise.race([
+      Promise.all([db.ref(`${GME.P}nyang/rec`).get(), GME.loadAll(db)]),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("연결 시간 초과")), 3500))
+    ]);
+    const recVal = rec.val() || {};
+    if (GME.me && GME.me.pid) {
+      const srv = recVal[GME.me.pid] || {};
+      syncLocalToServer(srv);
+      localMyRec = Object.assign({}, localMyRec, srv, {
+        st: Object.assign({}, localMyRec.st, srv.st),
+        ach: Object.assign({}, localMyRec.ach, srv.ach),
+        cnt: Object.assign({}, localMyRec.cnt, srv.cnt),
+        ta: Object.assign({}, localMyRec.ta, srv.ta),
+        tb: Object.assign({}, localMyRec.tb, srv.tb),
+      });
+      recVal[GME.me.pid] = localMyRec;
+      store.set("myRec", localMyRec);
+    }
+    return (rkData = { rec: recVal, names: Object.fromEntries(people.map(p => [p.pid, p.n])) });
   }
-  const myRec = () => (rkData && GME.me && (rkData.rec[GME.me.pid] || (rkData.rec[GME.me.pid] = {}))) || null;
+  const myRec = () => (rkData && GME.me && (rkData.rec[GME.me.pid] || (rkData.rec[GME.me.pid] = localMyRec))) || (GME.me ? localMyRec : null);
   const rkSet = p => { Object.assign(RK, p); store.set("rk2", RK); drawRank(false); };
   async function drawRank(reload = true) {
     drawMe(); loadGM().then(drawMe);
@@ -1503,13 +1589,22 @@
 
   // ── 시작
   setAutoX(autoX);
-  Arena.init().then(() => { const db = Arena.db(); return db ? GME.ensure(db) : null; }).then(() => { drawMe(); drawSoloProg(true); }).catch(() => {});   // 처음 오면 이름부터 (시험 화면은 건너뜀)
+  if (typeof addEventListener === "function") addEventListener("online", () => {
+    if (window.GRank && GRank.flush) GRank.flush();
+    drawSoloProg(true);
+  });
+  Arena.init().then(() => { const db = Arena.db(); return db ? GME.ensure(db) : null; }).then(() => { drawMe(); drawSoloProg(true); }).catch(() => { drawMe(); drawSoloProg(false); });   // 처음 오면 이름부터 (시험 화면은 건너뜀)
   bankP.then(() => {
     drawTiers();
     if (window.ArenaUI) ArenaUI.checkUrl(() => openFriend());
+    bankIdxP.then(() => {
+      const s = stageInfo(maxStage() + 1);
+      if (s.chunk > 0) loadChunks(s.tier, s.chunk);
+      if (maxStage() >= 800) loadChunks("master", s.chunk + 1);
+    }).catch(() => {});
   }).catch(e => { $("tiers").textContent = "퍼즐을 못 불러왔어요: " + e.message; });
   window.__ny = { get G() { return G; }, get TA() { return TA; }, get meta() { return meta; }, get prog() { return prog; }, get myRound() { return myRound; }, NY,   // 점검용
     dailyInfo, kstDay, dayBoard, dayTops, streakOf, bestStreak, setRk: d => { rkData = d; if (soloMode === "day") drawDay(); if (d) { drawRankStrip(); if (soloMode === "ta") drawTABoard(); } },
-    setFam: d => { fam = d; famAt = Date.now(); return drawSoloProg(); }, openCalendar, myDays,
+    setFam: d => { fam = d; famAt = Date.now(); return drawSoloProg(); }, openCalendar, myDays, syncLocalToServer,
     stageInfo, playStage, loadChunks, bankIdxP, get bankIdx() { return bankIdx; }, weekKey, bankAt: (t, i) => bank[t][i] };
 })();

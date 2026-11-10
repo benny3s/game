@@ -266,6 +266,16 @@
     setTimeout(repNews, 2500);   // 게임이 먼저 뜨게 조금 뒤에
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bugTab); else bugTab();
+  // ✈️ 오프라인(비행기 모드) 캐시 Service Worker 등록 (gate.js 보다 먼저 불릴 때도 등록되게)
+  try {
+    if ("serviceWorker" in navigator && !window.__swReg && !/[?&](mock|guest)\b/.test(location.search) && (location.protocol === "https:" || /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) && (!navigator.webdriver || /[?&]sw=1\b/.test(location.search))) {
+      window.__swReg = 1;
+      const cur = document.currentScript && document.currentScript.src;
+      const swUrl = cur ? cur.replace(/\/common\/[^/]+$/, "/sw.js") : "../sw.js";
+      if (document.readyState === "complete") navigator.serviceWorker.register(swUrl).catch(() => {});
+      else addEventListener("load", () => navigator.serviceWorker.register(swUrl).catch(() => {}));
+    }
+  } catch (e) {}
 
   window.Cozy = { esc, store, save, toast, modal, confetti, sfx, backGuard, howto, tierCards, TIERS, vibrate, report: openReport, sendReport };
 })();

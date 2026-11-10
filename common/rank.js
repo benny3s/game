@@ -28,6 +28,7 @@
   const devId = () => { try { let d = localStorage.getItem("rank.dev"); if (!d) { d = Math.random().toString(36).slice(2, 10); localStorage.setItem("rank.dev", d); } return d; } catch (e) { return "x"; } };
 
   async function db() {
+    if (window.__rankTestDb) return window.__rankTestDb;
     if (MOCK || !window.firebase) return null;
     try {
       if (window.Arena && Arena.init && !Arena.mock) { await Arena.init(); return Arena.db(); }
@@ -43,35 +44,101 @@
     try { const pl = (window.ArenaUI && ArenaUI.net && ArenaUI.net.players) || {}; const p = pl[uid]; return (p && (p.pid || (p.me && p.me.pid))) || null; } catch (e) { return null; }
   }
 
+  // ── ✈️ 오프라인(비행기 모드) 내 기록 캐시 + 판 결과 대기열 (연결되면 자동 동기화)
+  const QKEY = "rank.q.v1";
+  const mineKey = (game, pid) => `rank.mine.${P}${game}.${pid}`;
+  const readQ = () => { try { const a = JSON.parse(localStorage.getItem(QKEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+  const writeQ = a => { try { if (!a.length) localStorage.removeItem(QKEY); else localStorage.setItem(QKEY, JSON.stringify(a.slice(-200))); } catch (e) {} };
+  const readLocalMine = (game, pid) => { try { return JSON.parse(localStorage.getItem(mineKey(game, pid)) || "null"); } catch (e) { return null; } };
+  const writeLocalMine = (game, pid, out) => { try { if (out) localStorage.setItem(mineKey(game, pid), JSON.stringify({ all: out.all, f: out.f, a: out.a, tier: out.tier })); } catch (e) {} };
+
+  function applyItemToOut(out, it) {
+    const bump = t => {
+      t.n = num(t.n) + 1; t[it.res] = num(t[it.res]) + 1; t.p = num(t.p) + num(it.beat);
+      if (it.sc != null) { t.s = num(t.s) + it.sc; t.b = t.b == null ? it.sc : Math.max(num(t.b), it.sc); }
+    };
+    bump(out.all);
+    bump(it.mode === "f" ? out.f : out.a);
+    out.tier = out.tier || {};
+    for (const tier of it.tiers || []) {
+      const x = out.tier[tier] || (out.tier[tier] = { n: 0, w: 0, l: 0, d: 0, s: 0 });
+      x.n = num(x.n) + 1; x[it.res] = num(x[it.res]) + 1;
+      if (it.sc != null && tier !== it.tier0) x.s = num(x.s) + it.sc;
+    }
+    return out;
+  }
+
+  function applyLocalResult(it) {
+    const cur = (mineCache[it.game] && mineCache[it.game].v) || readLocalMine(it.game, it.pid) || { all: Z(), f: Z(), a: Z(), tier: {}, rec: {} };
+    const next = applyItemToOut({ all: { ...cur.all }, f: { ...cur.f }, a: { ...cur.a }, tier: JSON.parse(JSON.stringify(cur.tier || {})), rec: cur.rec || {} }, it);
+    writeLocalMine(it.game, it.pid, next);
+    const p = Promise.resolve(next); p.v = next; mineCache[it.game] = p;
+    try { dispatchEvent(new CustomEvent("grank", { detail: { game: it.game } })); } catch (e) {}
+  }
+
+  async function sendItem(d, it) {
+    const base = d.ref(`${it.P}rank/${it.game}/${it.pid}`);
+    base.child("name").set(String(it.name || "").slice(0, 12)).catch(() => {});
+    base.child("t").set(it.t || Date.now()).catch(() => {});
+    const tiers = it.tiers || [];
+    const tx = withTier => base.child(`m/${it.mode}`).transaction(c => {
+      c = c || {};
+      c.n = num(c.n) + 1; c[it.res] = num(c[it.res]) + 1; c.p = num(c.p) + num(it.beat);
+      if (it.sc != null) { c.s = num(c.s) + it.sc; c.b = c.b == null ? it.sc : Math.max(num(c.b), it.sc); }
+      if (withTier) { c.t = c.t || {}; for (const tier of tiers) { const x = c.t[tier] || {}; x.n = num(x.n) + 1; x[it.res] = num(x[it.res]) + 1; if (it.sc != null && tier !== it.tier0) x.s = num(x.s) + it.sc; c.t[tier] = x; } }
+      return c;
+    });
+    const txP = tiers.length ? tx(true).catch(() => tx(false)) : tx(false);
+    await Promise.race([txP, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3500))]);
+    if (it.mode === "f") for (const o of it.opp || []) {
+      const op = o.pid; const orr = o.res === "w" || o.res === "l" || o.res === "d" ? o.res : null;
+      if (!op || op === it.pid || !orr) continue;
+      add(base.child(`vs/${op}`), c => { c.n = num(c.n) + 1; c[orr] = num(c[orr]) + 1; return c; });
+    }
+    d.ref(`${it.P}rank_days/${it.day}/${it.game}/${it.pid}`).transaction(v => num(v) + 1).catch(() => {});
+  }
+
+  let flushing = null;
+  function flush() {
+    if (flushing) return flushing;
+    return (flushing = (async () => {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+      const q = readQ(); if (!q.length) return true;
+      const d = await db(); if (!d) return false;
+      const touched = new Set();
+      for (const it of q) {
+        try {
+          await sendItem(d, it);
+          writeQ(readQ().filter(x => x.id !== it.id));
+          touched.add(it.game);
+        } catch (e) {
+          console.warn("[rank] queue wait:", e && e.message);
+          return false;
+        }
+      }
+      for (const g of touched) {
+        delete mineCache[g];
+        mine(g).then(() => { try { dispatchEvent(new CustomEvent("grank", { detail: { game: g } })); } catch (e) {} });
+      }
+      return true;
+    })().finally(() => { flushing = null; }));
+  }
+  if (typeof addEventListener === "function") addEventListener("online", () => { flush().catch(() => {}); });
+
   async function result(game, r = {}) {
     try { if ((r.res === "w" || r.res === "l" || r.res === "d") && window.Gate && Gate.notePlay) Gate.notePlay(game, r.mode); } catch (e) {}   // 👀 손님 하루 판 수
     try {
       const m = me(), mode = MODES[r.mode] || "a", res = r.res === "w" || r.res === "l" || r.res === "d" ? r.res : null;
       if (!m || !res) return;
-      const d = await db(); if (!d) return;
-      const base = d.ref(`${P}rank/${game}/${m.pid}`);
       const beat = r.beat != null ? Math.max(0, Math.round(num(r.beat))) : res === "w" ? 1 : 0;
       const sc = r.score != null && Number.isFinite(+r.score) ? Math.round(+r.score) : null;
-      base.child("name").set(String(m.name || "").slice(0, 12)).catch(() => {});
-      base.child("t").set(Date.now()).catch(() => {});
       // tier = 난이도 하나 · tiers = 더 셀 칸 (11-06 고스톱 타짜별 전적 h_agwi 등) — 칸마다 n·w·l·d (+ 점수를 주면 s)
       const tiers = [].concat(r.tier != null ? [r.tier] : [], r.tiers || []).map(String).filter((x, i, a) => /^[A-Za-z0-9_-]{1,20}$/.test(x) && a.indexOf(x) === i).slice(0, 4);
-      const tx = withTier => base.child(`m/${mode}`).transaction(c => {
-        c = c || {};
-        c.n = num(c.n) + 1; c[res] = num(c[res]) + 1; c.p = num(c.p) + beat;
-        if (sc != null) { c.s = num(c.s) + sc; c.b = c.b == null ? sc : Math.max(num(c.b), sc); }
-        if (withTier) { c.t = c.t || {}; for (const tier of tiers) { const x = c.t[tier] || {}; x.n = num(x.n) + 1; x[res] = num(x[res]) + 1; if (sc != null && tier !== r.tier) x.s = num(x.s) + sc; c.t[tier] = x; } }
-        return c;
-      });
-      // 난이도별 칸(t)을 규칙이 아직 안 받으면 그 칸만 빼고 다시 (판 기록은 꼭 남게)
-      const done = (tiers.length ? tx(true).catch(() => tx(false)) : tx(false)).catch(e => console.warn("[rank]", e && e.message));
-      Promise.resolve(done).then(() => { delete mineCache[game]; mine(game).then(() => dispatchEvent(new CustomEvent("grank", { detail: { game } }))); });
-      if (mode === "f") for (const o of r.opp || []) {
-        const op = o.pid || pidOf(o.uid); const orr = o.res === "w" || o.res === "l" || o.res === "d" ? o.res : null;
-        if (!op || op === m.pid || !orr) continue;
-        add(base.child(`vs/${op}`), c => { c.n = num(c.n) + 1; c[orr] = num(c[orr]) + 1; return c; });
-      }
-      d.ref(`${P}rank_days/${kstDay()}/${game}/${m.pid}`).transaction(v => num(v) + 1).catch(() => {});
+      const opp = (r.opp || []).map(o => ({ pid: o.pid || pidOf(o.uid), res: o.res })).filter(o => o.pid);
+      const it = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), P, game, pid: m.pid, name: String(m.name || "").slice(0, 12), mode, res, beat, sc, tiers, tier0: r.tier, opp, day: kstDay(), t: Date.now() };
+      applyLocalResult(it);
+      const q = readQ(); q.push(it); writeQ(q);
+      await flush();
     } catch (e) { console.warn("[rank]", e); }
   }
 
@@ -119,20 +186,39 @@
     if (window.GME && GME.onChange) GME.onChange(() => { if (me()) migrateTiers(game, sum); });
   }
 
-  // ── 내 기록 (게임 화면용): 전체·친구·AI 와 난이도별 — 캐시
+  // ── 내 기록 (게임 화면용): 전체·친구·AI 와 난이도별 — 캐시 (오프라인이면 기기 저장본)
   const mineCache = {};
   function mine(game) {
     if (mineCache[game]) return mineCache[game];
     return (mineCache[game] = (async () => {
-      const m = me(), d = m && (await db());
-      if (!d) { delete mineCache[game]; return null; }
-      const rec = (await d.ref(`${P}rank/${game}/${m.pid}`).get()).val() || {};
+      const m = me();
+      if (!m) { delete mineCache[game]; return null; }
+      const fallback = () => {
+        const loc = readLocalMine(game, m.pid);
+        if (loc) mineCache[game].v = loc; else delete mineCache[game];
+        return loc;
+      };
+      if (typeof navigator !== "undefined" && navigator.onLine === false) return fallback();
+      await flush().catch(() => {});
+      const d = await db();
+      if (!d) return fallback();
+      const snap = await Promise.race([
+        d.ref(`${P}rank/${game}/${m.pid}`).get(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 3000)),
+      ]);
+      const rec = (snap && snap.val()) || {};
       const tier = {}, addT = src => { for (const [id, x] of Object.entries((src && src.t) || {})) { const o = tier[id] || (tier[id] = { n: 0, w: 0, l: 0, d: 0, s: 0 }); for (const k of ["n", "w", "l", "d", "s"]) o[k] += num(x[k]); } };
       for (const k of ["f", "a", "h"]) addT((rec.m || {})[k]);
       for (const b of Object.values(rec.base || {})) addT(b);
       const out = { all: totalOf(rec, ""), f: totalOf(rec, "f"), a: totalOf(rec, "a"), tier, rec };
+      for (const it of readQ()) if (it.P === P && it.game === game && it.pid === m.pid) applyItemToOut(out, it);
+      writeLocalMine(game, m.pid, out);
       mineCache[game].v = out; return out;
-    })().catch(e => { delete mineCache[game]; console.warn("[rank] mine", e); return null; }));
+    })().catch(e => {
+      const m = me(), loc = m && readLocalMine(game, m.pid);
+      if (loc && mineCache[game]) { mineCache[game].v = loc; return loc; }
+      delete mineCache[game]; console.warn("[rank] mine", e); return null;
+    }));
   }
   const wl = x => (x && (x.w || x.l || x.d) ? `${x.w}승 ${x.l}패${x.d ? ` ${x.d}무` : ""}` : "");
   function line(game, tier) { const c = mineCache[game] && mineCache[game].v; if (!c) return ""; return wl(tier == null ? c.all : c.tier[tier]); }
@@ -238,5 +324,5 @@
     draw();
   }
 
-  window.GRank = { result, migrateLocal: migrateWhenReady, migrateTiers: tiersWhenReady, mine, line, open, mount, NAMES };
+  window.GRank = { result, flush, migrateLocal: migrateWhenReady, migrateTiers: tiersWhenReady, mine, line, open, mount, NAMES };
 })();

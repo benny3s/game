@@ -746,5 +746,65 @@ U.main(async T => {
     await C.close();
   }
 
+  // ── ⑰ 11-10 베니 님 (지민 님 비행기 오프라인 문의): 비행기 모드(오프라인)에서도 바로 열리고 · 기록(판 수·별·배지·오늘의 퍼즐)이 폰에 쌓였다가 · 온라인 복귀 때 서버로 자동 동기화
+  {
+    const O = await T.open('nyang/');
+    await U.waitFor(O, A.ready);
+    await O.evaluate(() => {
+      localStorage.setItem('game.me', JSON.stringify({ pid: 'pOff', name: '지밍비' }));
+      for (const k of ['rank.q.v1', 'rank.mine.nyang.pOff', 'rank.mine.test/nyang.pOff', 'nyang.recPend', 'nyang.myRec', 'nyang.stageStars', 'nyang.day', 'nyang.bestT', 'nyang.gm']) localStorage.removeItem(k);
+      localStorage.setItem('nyang.soloMode2', '"map"');
+    });
+    await O.reload({ waitUntil: 'load' }); await U.waitFor(O, A.ready);
+    await O.evaluate(() => { Object.defineProperty(navigator, 'onLine', { value: false, configurable: true }); });
+    const prog0 = await O.evaluate(() => document.getElementById('soloProg').textContent.replace(/\s+/g, ' ').trim());
+    T.ok(/0판 깼어요/.test(prog0), '⑰ 오프라인에서도 혼자 화면 위 진행 줄이 멈추지 않고 바로 표시됨: ' + prog0);
+    // 오프라인에서 1단계 깨기
+    await O.click('#startBtn');
+    await U.waitFor(O, () => window.__ny.G && !document.getElementById('play').hidden);
+    await solve(O);
+    T.ok(!!(await U.waitFor(O, () => !document.getElementById('resBox').hidden && /1단계 성공/.test(document.getElementById('resTitle').textContent), null, 4000)), '⑰ 오프라인에서 1단계 성공 창');
+    await T.sleep(1350);   // checkBadges 타이머(1200ms) 대기
+    const offState = await O.evaluate(async () => {
+      const m = await GRank.mine('nyang');
+      const q = JSON.parse(localStorage.getItem('rank.q.v1') || '[]');
+      const pend = JSON.parse(localStorage.getItem('nyang.recPend') || 'null');
+      const myRec = JSON.parse(localStorage.getItem('nyang.myRec') || '{}');
+      const st = JSON.parse(localStorage.getItem('nyang.stageStars') || '{}');
+      return { mineN: m && m.all && m.all.n, qLen: q.length, pendSv: pend && pend.sv, hasFirstAch: !!(myRec.ach && myRec.ach.first), st1: st[1], prog: document.getElementById('soloProg').textContent.replace(/\s+/g, ' ').trim() };
+    });
+    T.ok(offState.mineN === 1 && /1판 깼어요/.test(offState.prog), '⑰ 오프라인에서 판을 깨면 공용 랭킹 내 판 수 · 화면 숫자가 즉시 +1 반영됨: ' + JSON.stringify(offState));
+    T.ok(offState.qLen === 1 && offState.pendSv === 1 && offState.st1 >= 1 && offState.hasFirstAch, '⑰ 오프라인 큐(rank.q.v1 · nyang.recPend)와 로컬 배지·단계 별이 저장됨: ' + JSON.stringify(offState));
+    // 온라인 복귀 → 자동 동기화 (GRank.flush + syncLocalToServer)
+    const synced = await O.evaluate(async () => {
+      const writes = {};
+      const mkRef = path => ({
+        child: p => mkRef(path ? path + '/' + p : p),
+        set: v => { writes[path] = v; return Promise.resolve(); },
+        transaction: fn => { writes[path] = fn(writes[path]); return Promise.resolve({ committed: true }); },
+        get: () => Promise.resolve({ val: () => null }),
+      });
+      const fakeDb = { ref: p => mkRef(p) };
+      Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+      window.__rankTestDb = fakeDb;
+      Arena.db = () => fakeDb;
+      await GRank.flush();
+      __ny.syncLocalToServer({});
+      delete window.__rankTestDb;
+      return {
+        qAfter: JSON.parse(localStorage.getItem('rank.q.v1') || '[]').length,
+        pendAfter: JSON.parse(localStorage.getItem('nyang.recPend') || 'null'),
+        writes: Object.keys(writes),
+        svVal: writes['nyang/rec/pOff/sv'],
+        st1Val: writes['nyang/rec/pOff/st/s1'],
+        achFirst: !!writes['nyang/rec/pOff/ach/first'],
+        rankN: writes['rank/nyang/pOff/m/a'] && writes['rank/nyang/pOff/m/a'].n,
+      };
+    });
+    T.ok(synced.qAfter === 0 && synced.pendAfter === null && synced.svVal === 1 && synced.st1Val >= 1 && synced.achFirst && synced.rankN === 1, '⑰ 온라인 복귀 시 대기 큐가 비워지고 서버(rank · nyang/rec)로 자동 동기화됨: ' + JSON.stringify(synced));
+    await O.evaluate(() => { for (const k of ['game.me', 'rank.q.v1', 'rank.mine.nyang.pOff', 'rank.mine.test/nyang.pOff', 'nyang.recPend', 'nyang.myRec', 'nyang.stageStars', 'nyang.bestT', 'nyang.solved', 'nyang.avg', 'nyang.today', 'nyang.gm']) localStorage.removeItem(k); });
+    await O.close();
+  }
+
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');
 }, 'nyang ui');
