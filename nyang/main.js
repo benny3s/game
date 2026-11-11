@@ -172,14 +172,16 @@
     return { k: r * n + c, r, c, el, fx: (x - (br.left + gp + c * pitch)) / cs, fy: (ty - (br.top + gp + r * pitch)) / cs };
   }
   const inB = (f, m) => f > m && f < 1 - m;
+  const evT = e => { const now = performance.now(), s = e && e.timeStamp; return s > 0 && s <= now + 5 && now - s < 2000 ? s : now; };   // 손가락이 닿은 때 (값이 이상한 브라우저는 지금 시각)
   function boardPick(x, y, isTouch, inner) { const p = boardAt(x, y, isTouch); return p && (!inner || (inB(p.fx, .2) && inB(p.fy, .2))) ? p.el : null; }
   $("board").addEventListener("pointerdown", e => {
     if (!G || G.over || (ctx && ctx.spec)) return;
     if (drag && !e.isPrimary) return;                                           // 누르고 있는 손가락 말고 다른 손가락(손바닥)
-    let el = boardPick(e.clientX, e.clientY, e.pointerType === "touch", false); if (!el) return;
+    const p0 = boardAt(e.clientX, e.clientY, e.pointerType === "touch"); if (!p0) return;
+    let el = p0.el;
     e.preventDefault();
     let k = +el.dataset.k;
-    const t = performance.now(), cs = el.getBoundingClientRect().width || 32, dt = t - lastTap.t;
+    const t = evT(e), cs = el.getBoundingClientRect().width || 32, dt = t - lastTap.t;
     // 끌다가 손가락이 잠깐 떨어졌다 바로(0.25초 안) 뗀 자리 근처에 다시 닿으면: 새로 누른 게 아니라 끌기를 이어 감
     //   (안 그러면 방금 친 ✕가 지워지고, 이어서 끄는 동안 ✕를 지우는 쪽으로 뒤집힘)
     if (dragLast && t - dragLast.t < 250 && Math.hypot(e.clientX - dragLast.x, e.clientY - dragLast.y) < cs * .7) {
@@ -195,7 +197,11 @@
     if (k !== lastTap.k && adj && dt < 340 && dist < (fitGp || 4) + Math.min(9, cs * .24) && !G.cats.has(lastTap.k) && !G.bad.has(lastTap.k)) {
       k = lastTap.k; el = $("board").children[k] || el;
     }
-    if (lastTap.k === k && dt < 400 && dist < Math.max(14, cs * .45)) {         // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이
+    // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이. 11-12 지민 님 아이폰 '두 번 눌러도 ✕ 가 풀렸다 됐다만 함':
+    //   ① 예전엔 두 번째가 첫 번째에서 14px(칸 0.45) 넘게 떨어지면 따로 누른 것으로 봄 → 엄지로 빠르게 두 번이면 자주 넘음.
+    //      이제 같은 칸 안쪽(가장자리 18% 뺀 곳)에 닿으면 거리와 상관없이 두 번으로 침. 맨 가장자리(옆 칸을 누르려던 것)만 거리로 가름 (11-08)
+    //   ② 시간은 폰이 처리한 때가 아니라 손가락이 닿은 때로 잼 (evT) — 폰이 잠깐 바쁘면 0.4초를 넘기던 것
+    if (lastTap.k === k && dt < 400 && (dist < Math.max(14, cs * .45) || (p0.k === k && inB(p0.fx, .18) && inB(p0.fy, .18)))) {
       const prevX = lastTap.prevX;
       lastTap = { k: -1, t: 0 }; drag = null;
       if (G.xs.has(k) !== prevX) G.toggleX(k);
@@ -254,7 +260,7 @@
   });
   const dragEnd = e => {
     if (!drag || e.pointerId !== drag.id) return;
-    dragLast = drag.hops ? { t: performance.now(), k: drag.last, on: drag.on, seen: drag.seen, ax: drag.ax, x: drag.px, y: drag.py } : null;
+    dragLast = drag.hops ? { t: evT(e), k: drag.last, on: drag.on, seen: drag.seen, ax: drag.ax, x: drag.px, y: drag.py } : null;
     drag = null;
   };
   window.addEventListener("pointerup", dragEnd);

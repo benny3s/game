@@ -120,6 +120,8 @@ U.main(async T => {
     return bad;
   });
   T.ok(covered.length === 0, '① 판 위를 가리는 것 없음 (' + [...new Set(covered)].join() + ')');
+  // 첫 판은 판 크기 맞춤이 한 박자 늦을 때가 있음 (300px → 화면 폭) → 판 자리가 멈춘 뒤에 좌표를 잼 (11-12 가끔 실패하던 까닭)
+  { let last = '', same = 0; for (let i = 0; i < 40 && same < 4; i++) { const r = await p.evaluate(() => { const b = document.getElementById('board').getBoundingClientRect(); return [b.left, b.top, b.width].map(Math.round).join(); }); same = r === last ? same + 1 : 0; last = r; await T.sleep(100); } }
   const pos = await p.evaluate(() => {
     const G = window.__ny.G; let k = -1, x = -1, y = -1;
     for (let i = 0; i < G.n * G.n; i++) { if (G.isAns(i)) { if (k < 0) k = i; } else if (x < 0) x = i; else if (y < 0) y = i; }
@@ -218,6 +220,38 @@ U.main(async T => {
       const d7 = await xs();
       T.ok(d7.up === '1010', '① 끌고 나서 바로 옆 칸 톡은 ✕ 켜고 끔 그대로 (' + JSON.stringify(d7) + ')');
       await wipe();
+      // ── 11-12 지민 님 아이폰 '두 번 눌러도 ✕ 가 풀렸다 됐다만 하고 🐱 가 안 될 때가 있음' (옛 코드로 ⓗⓘ 실패 확인)
+      {
+        const snap = () => p.evaluate(() => { const G = window.__ny.G; return { xs: [...G.xs], cats: [...G.cats], bad: [...G.bad], m: G.mistakes }; });
+        const back = s => p.evaluate(s => { const G = window.__ny.G; G.xs.clear(); s.xs.forEach(k => G.xs.add(k)); G.cats.clear(); s.cats.forEach(k => G.cats.add(k)); G.bad.clear(); s.bad.forEach(k => G.bad.add(k)); G.mistakes = s.m; G.over = false; G.won = false; }, s);
+        const s0 = await snap();
+        const tgt = await p.evaluate(() => { const G = window.__ny.G, n = G.n; for (let r = 0; r < n; r++) { const k = r * n + G.ans[r]; if (!G.cats.has(k) && !G.xs.has(k)) { const b = document.getElementById('board').children[k].getBoundingClientRect(); return { k, R: { l: b.left, t: b.top, w: b.width, h: b.height } }; } } return null; });
+        const isCat = () => p.evaluate(k => window.__ny.G.cats.has(k), tgt.k);
+        // ⓗ 두 번째 톡이 같은 칸 안이지만 첫 번째와 좀 떨어진 자리 (엄지로 빠르게 두 번 = 자리가 조금씩 다름)
+        await pe('pointerdown', at(tgt.R, .25, .3)); await pe('pointerup', at(tgt.R, .25, .3));
+        await pe('pointerdown', at(tgt.R, .75, .7)); await pe('pointerup', at(tgt.R, .75, .7));
+        T.ok(await isCat(), '① 같은 칸 안에서 자리가 좀 달라도 두 번 톡 = 🐱');
+        await back(s0); await T.sleep(450);
+        // ⓘ 손가락은 0.4초 안에 두 번 닿았는데 폰이 바빠 두 번째를 늦게 처리함 (닿은 때 기준으로 재야 함)
+        await p.evaluate(o => {
+          const el = document.elementFromPoint(o.x, o.y), mk = type => new PointerEvent(type, { bubbles: true, cancelable: true, clientX: o.x, clientY: o.y, pointerType: 'touch', pointerId: 7, isPrimary: true });
+          el.dispatchEvent(mk('pointerdown')); window.dispatchEvent(mk('pointerup'));
+          const e2 = mk('pointerdown'), until = performance.now() + 430; while (performance.now() < until) { /* 폰이 바쁜 동안 */ }
+          el.dispatchEvent(e2); window.dispatchEvent(mk('pointerup'));
+        }, at(tgt.R, .5));
+        T.ok(await isCat(), '① 폰이 바빠 두 번째 톡을 늦게 처리해도 닿은 때가 0.4초 안이면 🐱');
+        await back(s0); await T.sleep(450);
+        // ⓙ 지킬 것: 같은 칸이라도 두 번째가 맨 가장자리(옆 칸을 누르려던 것)면 🐱 아님 · 0.4초 넘게 띄운 두 번은 ✕ 켜고 끔
+        await pe('pointerdown', at(tgt.R, .2)); await pe('pointerup', at(tgt.R, .2));
+        await pe('pointerdown', at(tgt.R, .95)); await pe('pointerup', at(tgt.R, .95));
+        const e1 = await isCat();
+        await back(s0); await T.sleep(450);
+        await pe('pointerdown', at(tgt.R, .5)); await pe('pointerup', at(tgt.R, .5)); await T.sleep(480);
+        await pe('pointerdown', at(tgt.R, .5)); await pe('pointerup', at(tgt.R, .5));
+        const e2 = await p.evaluate(k => ({ cat: window.__ny.G.cats.has(k), x: window.__ny.G.xs.has(k) }), tgt.k);
+        T.ok(!e1 && !e2.cat && !e2.x, '① 맨 가장자리 두 번째 톡 · 천천히 두 번은 🐱 아님 (' + JSON.stringify({ e1, e2 }) + ')');
+        await back(s0); await T.sleep(450);
+      }
       // ⓔ 끌기가 끝난 뒤 한참(0.45초) 지나 누른 것은 새로 누른 것 = 켜고 끔 그대로
       await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[1], .5)); await pe('pointerup', at(row.R[1], .5));
       await T.sleep(450);
