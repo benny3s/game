@@ -84,10 +84,12 @@
     b.style.gridTemplateColumns = `repeat(${G.n},minmax(0,1fr))`;
     b.style.gridTemplateRows = `repeat(${G.n},minmax(0,1fr))`;   // 칸이 늘 정사각형 (고양이가 든 줄만 커지지 않게)
     b.innerHTML = cellsHtml();
+    drag = dragLast = null; lastTap = { k: -1, t: 0 };   // 옛 판의 끌기 · 두 번 톡 상태를 새 판에 들고 가지 않음
     paint();
   }
   function paint() {
-    const look = new Set(hint && hintStage >= 1 ? hint.look : []), tgt = new Set(hint && hintStage >= 2 ? hint.target : []);
+    const look = new Set(hint && hintStage >= 1 ? (hintStage >= 2 && hint.look2 ? hint.look2 : hint.look) : []), tgt = new Set(hint && hintStage >= 2 ? hint.target : []);
+    const ghost = hint && hintStage >= 2 && hint.ghost ? hint.ghost : [];                 // 가정해 보기: 놓게 되는 칸에 ①②③
     for (const el of $("board").children) {
       const k = +el.dataset.k;
       const cat = G.cats.has(k), bad = G.bad.has(k), x = G.xs.has(k);
@@ -97,6 +99,8 @@
       el.classList.toggle("bad", bad);
       el.classList.toggle("look", look.has(k) && !tgt.has(k));
       el.classList.toggle("tgt", tgt.has(k));
+      const gi = ghost.indexOf(k), gv = gi >= 0 ? "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳"[gi] || "" : "";
+      if ((el.dataset.g || "") !== gv) { if (gv) el.dataset.g = gv; else delete el.dataset.g; }
     }
     $("fish").innerHTML = Array.from({ length: G.maxMistakes }, (_, i) => `<span class="${i < G.mistakes ? "gone" : ""}">🐟</span>`).join("");
     $("hintBadge").hidden = !G.hints; $("hintBadge").textContent = G.hints;
@@ -152,8 +156,9 @@
   //   1) elementFromPoint 대신 #board 사각형 대비 상대좌표로 판정 → 3~4px 틈(gap)·둥근 모서리 무반응 구간 제거 & WebKit 뷰포트 오차 방지
   //   2) 손가락 터치(touch)는 손톱 아래 살이 닿고 칸 아래 3px 입체 그림자가 있어 시선보다 아래(+Y)로 찍힘 → 약 3px 위쪽으로 보정
   //   3) 경계선 근처에서 빠르게(0.32초 안) 두 번 톡톡 누를 때 두 번째 탭이 1~2px 옆 칸으로 넘어가도 아주 가까우면(8.5px·칸 0.25 안) 첫 칸 🐱 로 연결
-  let lastTap = { k: -1, t: 0 }, drag = null;
-  function boardPick(x, y, isTouch, inner) {
+  let lastTap = { k: -1, t: 0 }, drag = null, dragLast = null;
+  // 화면 좌표 → 칸 { k, r, c, el, fx, fy }. fx·fy = 그 칸 안에서의 위치 (0~1, 틈에 닿으면 0 아래나 1 위)
+  function boardAt(x, y, isTouch) {
     if (!G) return null;
     const b = $("board"), br = b.getBoundingClientRect(), n = G.n;
     if (!br.width || x < br.left || x > br.right || y < br.top || y > br.bottom) return null;
@@ -162,13 +167,12 @@
     const ty = isTouch ? Math.max(br.top + gp * .5 + 1, y - dy) : y;
     const uc = (x - br.left - gp * .5) / pitch, ur = (ty - br.top - gp * .5) / pitch;
     const c = Math.max(0, Math.min(n - 1, Math.floor(uc))), r = Math.max(0, Math.min(n - 1, Math.floor(ur)));
-    if (inner) {
-      const cellL = br.left + gp + c * pitch, cellT = br.top + gp + r * pitch, m = cs * .2;
-      if (x <= cellL + m || x >= cellL + cs - m || ty <= cellT + m || ty >= cellT + cs - m) return null;
-    }
     const el = b.children[r * n + c];
-    return el && +el.dataset.k === r * n + c ? el : null;
+    if (!el || +el.dataset.k !== r * n + c) return null;
+    return { k: r * n + c, r, c, el, fx: (x - (br.left + gp + c * pitch)) / cs, fy: (ty - (br.top + gp + r * pitch)) / cs };
   }
+  const inB = (f, m) => f > m && f < 1 - m;
+  function boardPick(x, y, isTouch, inner) { const p = boardAt(x, y, isTouch); return p && (!inner || (inB(p.fx, .2) && inB(p.fy, .2))) ? p.el : null; }
   $("board").addEventListener("pointerdown", e => {
     if (!G || G.over || (ctx && ctx.spec)) return;
     if (drag && !e.isPrimary) return;                                           // 누르고 있는 손가락 말고 다른 손가락(손바닥)
@@ -176,6 +180,16 @@
     e.preventDefault();
     let k = +el.dataset.k;
     const t = performance.now(), cs = el.getBoundingClientRect().width || 32, dt = t - lastTap.t;
+    // 끌다가 손가락이 잠깐 떨어졌다 바로(0.25초 안) 뗀 자리 근처에 다시 닿으면: 새로 누른 게 아니라 끌기를 이어 감
+    //   (안 그러면 방금 친 ✕가 지워지고, 이어서 끄는 동안 ✕를 지우는 쪽으로 뒤집힘)
+    if (dragLast && t - dragLast.t < 250 && Math.hypot(e.clientX - dragLast.x, e.clientY - dragLast.y) < cs * .7) {
+      const d0 = dragLast, prevX = G.xs.has(k); dragLast = null;
+      drag = { id: e.pointerId, on: d0.on, seen: d0.seen, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, cs, moved: true, last: k, ax: d0.ax, hops: 0, vx: 0, vy: 0 };
+      if (!drag.seen.has(k)) { drag.seen.add(k); G.setX(k, drag.on); if (G.xs.has(k) !== prevX) S(drag.on ? "x" : "unx"); }
+      lastTap = { k, t, prevX, x: e.clientX, y: e.clientY };                    // 그 자리를 바로 한 번 더 누르면 🐱 는 그대로
+      afterMove("x", k); return;
+    }
+    dragLast = null;
     const dist = lastTap.k >= 0 ? Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) : 1e9;
     const adj = lastTap.k >= 0 && Math.abs(Math.floor(lastTap.k / G.n) - Math.floor(k / G.n)) <= 1 && Math.abs(lastTap.k % G.n - k % G.n) <= 1;
     if (k !== lastTap.k && adj && dt < 340 && dist < (fitGp || 4) + Math.min(9, cs * .24) && !G.cats.has(lastTap.k) && !G.bad.has(lastTap.k)) {
@@ -190,19 +204,59 @@
     const prevX = G.xs.has(k);
     if (G.toggleX(k)) S(G.xs.has(k) ? "x" : "unx");
     lastTap = { k, t, prevX, x: e.clientX, y: e.clientY };
-    drag = { id: e.pointerId, on: G.xs.has(k), seen: new Set([k]), x: e.clientX, y: e.clientY, cs, moved: false };
+    drag = { id: e.pointerId, on: G.xs.has(k), seen: new Set([k]), x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, cs, moved: false, last: k, ax: null, hops: 0, vx: 0, vy: 0 };
     afterMove("x", k);
   });
-  window.addEventListener("pointermove", e => {
-    if (!drag || !G || G.over || e.pointerId !== drag.id) return;
-    if (!drag.moved) { if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < drag.cs * .5) return; drag.moved = true; }
-    const el = boardPick(e.clientX, e.clientY, e.pointerType === "touch", true); if (!el) return;
-    const k = +el.dataset.k; if (drag.seen.has(k)) return;
+  // 끌기 한 점 (11-12 베니 님 '✕ 치려고 쭉 끌면 종종 끊겨서 표시됨'). 예전엔 손가락이 칸 가운데(60%)에 찍힌 순간만 ✕ 를 쳐서
+  //   빠르게 끌면 칸을 건너뛰고, 줄 가장자리로 살짝 흘러가면 그 구간이 통째로 빠졌음. 지금은
+  //   1) 앞 점과 지금 점 사이를 칸 0.3 간격으로 채워서 봄 → 빠르게 끌어도 안 빠짐
+  //   2) 가로·세로로 끄는 중이면 옆줄 가장자리(30%)에 걸쳐도 끌던 줄에 침. 옆줄 안쪽까지 들어와야 줄을 바꿈
+  //   3) 끄는 방향으로는 그대로 칸 안쪽(가운데 60%)에 들어와야 침 — 톡 하다 옆 칸으로 살짝 밀린 것과 가름 (11-08)
+  function dragStep(x, y, isTouch) {
+    const p = boardAt(x, y, isTouch); if (!p) return false;
+    const n = G.n, lr = Math.floor(drag.last / n), lc = drag.last % n;
+    let k = p.k;
+    const flat = Math.abs(drag.vy) < Math.abs(drag.vx) * .7, steep = Math.abs(drag.vx) < Math.abs(drag.vy) * .7;   // 지금 손가락이 가는 쪽 (가로 · 세로)
+    if (drag.ax === "h") {
+      if (!inB(p.fx, .2)) return false;
+      if (Math.abs(p.r - lr) === 1 && (p.r > lr ? p.fy < .3 : p.fy > .7)) { if (!flat) return false; k = lr * n + p.c; }   // 옆줄의 이쪽 가장자리: 가로로 가는 중이면 끌던 줄, 꺾는 중이면 더 들어올 때까지 기다림
+    } else if (drag.ax === "v") {
+      if (!inB(p.fy, .2)) return false;
+      if (Math.abs(p.c - lc) === 1 && (p.c > lc ? p.fx < .3 : p.fx > .7)) { if (!steep) return false; k = p.r * n + lc; }
+    }
+    else if (!inB(p.fx, .2) || !inB(p.fy, .2)) return false;
+    if (k === drag.last) return false;
+    const r = Math.floor(k / n), c = k % n;
+    drag.ax = r === lr ? "h" : c === lc ? "v" : null; drag.last = k; drag.hops++;
+    if (drag.seen.has(k)) return false;
     drag.seen.add(k); lastTap = { k: -1, t: 0 };
     const was = G.xs.has(k); G.setX(k, drag.on); if (G.xs.has(k) !== was) S(drag.on ? "x" : "unx");
-    afterMove("x", k);
+    return true;
+  }
+  window.addEventListener("pointermove", e => {
+    if (!drag || !G || G.over || e.pointerId !== drag.id) return;
+    const isT = e.pointerType === "touch";
+    let evs = [e]; try { const ce = e.getCoalescedEvents && e.getCoalescedEvents(); if (ce && ce.length) evs = ce; } catch (err) {}   // 브라우저가 한 번에 묶어 준 중간 점들
+    let hit = -1;
+    for (const ev of evs) {
+      const x = ev.clientX, y = ev.clientY;
+      if (!drag.moved) {
+        const dx = x - drag.x, dy = y - drag.y;
+        if (Math.hypot(dx, dy) < drag.cs * .5) continue;
+        drag.moved = true; drag.ax = Math.abs(dx) >= Math.abs(dy) * 1.5 ? "h" : Math.abs(dy) >= Math.abs(dx) * 1.5 ? "v" : null;
+      }
+      drag.vx = drag.vx * .5 + (x - drag.px) * .5; drag.vy = drag.vy * .5 + (y - drag.py) * .5;
+      const steps = Math.max(1, Math.ceil(Math.hypot(x - drag.px, y - drag.py) / (drag.cs * .3)));
+      for (let i = 1; i <= steps; i++) if (dragStep(drag.px + (x - drag.px) * i / steps, drag.py + (y - drag.py) * i / steps, isT)) hit = drag.last;
+      drag.px = x; drag.py = y;
+    }
+    if (hit >= 0) afterMove("x", hit);
   });
-  const dragEnd = e => { if (drag && e.pointerId === drag.id) drag = null; };
+  const dragEnd = e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    dragLast = drag.hops ? { t: performance.now(), k: drag.last, on: drag.on, seen: drag.seen, ax: drag.ax, x: drag.px, y: drag.py } : null;
+    drag = null;
+  };
   window.addEventListener("pointerup", dragEnd);
   window.addEventListener("pointercancel", dragEnd);
   // 아이폰: 칸을 두 번 누르는 것이 화면 확대로 먹히지 않게 (판은 pointerdown 으로 받으니 click 은 안 씀)
@@ -231,7 +285,7 @@
     hint = NY.nextHint(G); hintKey = stateKey();
     if (!hint) { toast("지금은 줄 힌트가 없어요"); return; }
     hintStage = 1; useHint(); S("hint");
-    $("hintText").textContent = hint.kind === "wrongX" ? "반짝이는 칸을 다시 보세요. 뭔가 이상해요." : hint.kind === "clean" ? "반짝이는 고양이 주변을 보세요. 정리할 칸이 남았어요." : "반짝이는 곳을 보세요. 여기서 알 수 있는 게 있어요.";
+    $("hintText").textContent = hint.ask || "반짝이는 곳을 보세요. 여기서 알 수 있는 게 있어요.";   // 1단계: 답 대신 스스로 찾아보게 하는 물음
     $("hintMore").hidden = false; $("hintApply").hidden = true; hintLayout(true);
     paint();
   };
@@ -643,6 +697,8 @@
   }
 
   // ══ 도전 과제 배지 ══
+  const EXTRA_KINDS = /[?&]kinds=1(&|$)/.test(location.search);                          // 반반 · 산책 (11-12 화면에서 뺌, 아래 bbKind 설명)
+  const achList = have => ACHS.filter(a => EXTRA_KINDS || (a[0] !== "bb1" && a[0] !== "zz1") || (have && have[a[0]]));   // 반반 · 산책 배지는 이미 딴 사람에게만 보임
   const ACHS = [
     ["first", "🐾", "첫 판", "아무 판이나 하나 깨기", s => s.sv >= 1],
     ["sv10", "🧩", "10판", "10판 깨기", s => s.sv >= 10],
@@ -681,7 +737,7 @@
   }
   function showBadges() {
     const have = (myRec() || {}).ach || {};
-    result(`🏅 배지 ${Object.keys(have).length}/${ACHS.length}`, `<div class="badges">${ACHS.map(a => `<div class="${have[a[0]] ? "on" : ""}"><span>${have[a[0]] ? a[1] : "🔒"}</span><b>${a[2]}</b><i>${a[3]}</i></div>`).join("")}</div>`, [["닫기", () => {}, "primary"]]);
+    result(`🏅 배지 ${Object.keys(have).length}/${achList(have).length}`, `<div class="badges">${achList(have).map(a => `<div class="${have[a[0]] ? "on" : ""}"><span>${have[a[0]] ? a[1] : "🔒"}</span><b>${a[2]}</b><i>${a[3]}</i></div>`).join("")}</div>`, [["닫기", () => {}, "primary"]]);
   }
 
   // ══ 혼자 하기: 난이도만 고르면 그 난이도 문제 중 랜덤 (안 푼 문제 먼저, 최근 10판은 피함) ══
@@ -696,7 +752,7 @@
     const cheer = !sv ? "첫 판을 깨 보세요!" : "";
     // 11-08 '화면이 너무 복잡' — 배지는 위 줄 작은 단추로 (모은 배지 그림은 배지 창에서)
     el.innerHTML = `<div class="pc-top"><span class="lv">${lv[1]}</span><div class="pc-mid"><b class="round">${sv.toLocaleString()}판 깼어요</b><span class="small">${lv[2]}${nx ? ` · ${nx[1]} ${nx[2]}까지 ${nx[0] - sv}판` : " · 최고 칭호!"}</span></div><button class="btn mint" id="shareBtn">📤 자랑</button></div>
-      <div class="pc-barrow"><div class="pc-bar"><i style="width:${pct}%"></i></div><button class="pc-badges" id="badgeBtn" aria-label="배지">🏅 배지 ${Object.keys((myRec() || {}).ach || {}).length}/${ACHS.length}</button></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}${famHtml()}`;
+      <div class="pc-barrow"><div class="pc-bar"><i style="width:${pct}%"></i></div><button class="pc-badges" id="badgeBtn" aria-label="배지">🏅 배지 ${Object.keys((myRec() || {}).ach || {}).length}/${achList((myRec() || {}).ach).length}</button></div>${cheer ? `<div class="small pc-cheer">${cheer}</div>` : ""}${famHtml()}`;
     $("shareBtn").onclick = () => shareMe(sv, lv);
     $("badgeBtn").onclick = showBadges;
   }
@@ -758,7 +814,7 @@
     drawDayDot();
     const pick = soloMode === "map" || soloMode === "day", bbOn = soloMode === "one" && bbKind === "b", zzOn = soloMode === "one" && bbKind === "z";
     $("tiers").hidden = pick; $("stageBox").hidden = soloMode !== "map"; $("dayBox").hidden = soloMode !== "day"; $("howto").hidden = pick || bbOn || zzOn || ta; $("howtoB").hidden = !bbOn; $("howtoZ").hidden = !zzOn;
-    $("kindSeg").hidden = soloMode !== "one";
+    $("kindSeg").hidden = soloMode !== "one" || !EXTRA_KINDS;
     if (soloMode === "one") segBtns($("kindSeg"), [["q", "🐱 냥도쿠"], ["b", "🌗 반반"], ["z", "🐾 산책"]], bbKind, v => { bbKind = v; store.set("kind", v); drawTiers(); });
     drawKindDay(soloMode === "one" ? bbKind : null);
     $("taBoard").hidden = !ta; if (ta) drawTABoard();
@@ -780,7 +836,9 @@
   // ══ 🌗 치즈냥·까망냥 반반 (11-06 — 벤치마킹: LinkedIn Tango · 지민 님 새 퍼즐, 엔진 banban.js · 판 화면 banban-ui.js) ══
   //   한 판(난이도 넷) · 오늘의 반반(📅 오늘 아래, nyang/rec/{pid}/bday). 별 = ⭐ 깸 · +⭐ 힌트 없이 · +⭐ 목표 시간 안 (물고기·실패 없음)
   const BB_DESC = { easy: "6×6 · 가볍게", normal: "6×6 · 처음 칸 적게", hard: "8×8 · 줄 전체 따지기", master: "8×8 · 표시 적게" };
-  let bbKind = store.get("kind", "q");
+  // 11-12 베니 님 '다른 게임 합쳐 놓은 건 분리하든 빼든': 반반 · 산책은 한 달 동안 모두 합쳐 5판(지민 님 0판) → 냥도쿠 화면에서 뺌.
+  //   코드 · 기록 · 배지는 그대로 두고 고르는 줄만 숨김. 주소 끝에 ?kinds=1 을 붙이면 다시 보임 (따로 게임으로 낼 때 쓸 수 있게)
+  let bbKind = EXTRA_KINDS ? store.get("kind", "q") : "q";
   function playBB(tier, daily, ex) {
     if (!window.NYB || !window.NYBUI) return toast("반반을 못 불러왔어요. 새로 고침해 주세요");
     const seed = ex ? ex.seed : daily ? daily.bseed : NY.rseed(), pz = NYB.make(seed, tier), T = TIERS.find(t => t.id === tier);
@@ -992,7 +1050,7 @@
   if ($("offBtn")) $("offBtn").onclick = () => openOfflineModal();
 
   // ══ ✈️ 비행기 · 오프라인 완전 다운로드 (6,090단계 + 실행 파일 캐시 + 홈 화면 앱 이어주기) ══
-  const OFFLINE_VER = 3, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
+  const OFFLINE_VER = 4, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
   const OFFLINE_FILES = [
     "./", "./index.html", "./manifest.json", "./icon-192.png", "./icon.svg",
     "./style.css", "./core.js", "./banban.js", "./banban-ui.js", "./zip.js", "./zip-ui.js",

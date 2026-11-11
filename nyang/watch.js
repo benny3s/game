@@ -14,7 +14,7 @@
       if (h.act === "cat") g.place(h.target[0]);
       else for (const k of h.target) g.setX(k, h.act === "x");
       steps++;
-      yield { cats: new Set(g.cats), xs: new Set(g.xs), focus: h.target, look: h.look, say: h.why, steps, n: g.n, done: g.won };
+      yield { cats: new Set(g.cats), xs: new Set(g.xs), focus: h.target, look: h.look, say: h.say || h.why, steps, n: g.n, done: g.won };
     }
   }
   const SPEEDS = [["느리게", 1], ["보통", 3], ["빠르게", 10]];

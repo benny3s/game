@@ -169,6 +169,64 @@ U.main(async T => {
   await pe('pointerup', { ...at(two.D, .5), id: 8, prim: false }); await pe('pointerup', at(two.A2, .5));
   const s3 = await st();
   T.ok(!s3.cx && !s3.dx && !s3.a2x, '① 누르는 동안 다른 손가락이 닿은 칸은 그대로 (' + JSON.stringify(s3) + ')');
+  // ── 11-12 베니 님 '✕ 치려고 쭉 끌면 종종 끊겨서 표시됨' (옛 코드로 ⓐⓑⓒ 실패 확인)
+  await T.sleep(450);
+  {
+    const row = await p.evaluate(() => {   // 옆으로 빈칸 4개가 이어지고 바로 아랫줄 4칸도 빈 곳
+      const G = window.__ny.G, n = G.n, free = k => !G.cats.has(k) && !G.bad.has(k) && !G.xs.has(k);
+      const rc = k => { const r = document.getElementById('board').children[k].getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; };
+      for (let r = 0; r < n - 1; r++) for (let c = 0; c + 3 < n; c++) { const ks = [0, 1, 2, 3].map(i => r * n + c + i); if (ks.every(free) && ks.every(k => free(k + n))) return { ks, below: ks.map(k => k + n), R: ks.map(rc), B: ks.map(k => rc(k + n)) }; }
+      return null;
+    });
+    T.ok(!!row, '① 끌기 시험용 빈 줄 찾음');
+    if (row) {
+      const xs = () => p.evaluate(o => { const G = window.__ny.G; return { up: o.ks.map(k => +G.xs.has(k)).join(''), dn: o.below.map(k => +G.xs.has(k)).join('') }; }, row);
+      const wipe = async () => { await p.evaluate(o => { const G = window.__ny.G; for (const k of [...o.ks, ...o.below]) G.xs.delete(k); }, row); await T.sleep(450); };
+      // ⓐ 빠르게 끌기: 점이 첫 칸과 끝 칸에만 찍혀도 사이 칸이 빠지지 않음
+      await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[3], .5)); await pe('pointerup', at(row.R[3], .5));
+      const d1 = await xs();
+      T.ok(d1.up === '1111' && d1.dn === '0000', '① 빠르게 끌어도 사이 칸이 빠지지 않음 (' + JSON.stringify(d1) + ')');
+      await wipe();
+      // ⓑ 줄 아래쪽 가장자리 · 틈 · 아랫줄 위쪽 가장자리를 스치며 끌어도 끌던 줄에 그대로
+      await pe('pointerdown', at(row.R[0], .5));
+      for (const [i, fx, fy] of [[0, .8, .7], [1, .5, .95], [2, .3, 1.3], [2, .7, 1.3], [3, .5, .9]]) await pe('pointermove', at(row.R[i], fx, fy));
+      await pe('pointerup', at(row.R[3], .5, .9));
+      const d2 = await xs();
+      T.ok(d2.up === '1111' && d2.dn === '0000', '① 줄 가장자리로 흘러가며 끌어도 그 줄에 이어서 ✕ (' + JSON.stringify(d2) + ')');
+      await wipe();
+      // ⓒ 끌다가 손가락이 잠깐 떨어졌다 다시 닿아도 이어서 ✕ (지워지거나 지우기로 뒤집히지 않음)
+      await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[1], .5)); await pe('pointerup', at(row.R[1], .5));
+      await pe('pointerdown', at(row.R[1], .6)); await pe('pointermove', at(row.R[2], .5)); await pe('pointermove', at(row.R[3], .5)); await pe('pointerup', at(row.R[3], .5));
+      const d3 = await xs();
+      T.ok(d3.up === '1111' && d3.dn === '0000', '① 끌다 손가락이 잠깐 떨어져도 이어서 ✕ (' + JSON.stringify(d3) + ')');
+      await wipe();
+      // ⓓ 아랫줄 가운데까지 내려가면 그 줄로 넘어감 (꺾어 끌기는 그대로)
+      await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[1], .5)); await pe('pointermove', at(row.B[1], .5)); await pe('pointermove', at(row.B[2], .5)); await pe('pointerup', at(row.B[2], .5));
+      const d4 = await xs();
+      T.ok(d4.up === '1100' && d4.dn === '0110', '① 꺾어서 아랫줄로 끌면 그 줄에 ✕ (' + JSON.stringify(d4) + ')');
+      await wipe();
+      // ⓕ 가로로 끌다 대각선으로 꺾어 내려가도 안 지나간 칸(꺾은 곳 옆 칸)은 그대로 (교차 검토에서 찾음)
+      await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[1], .5));
+      for (const f of [.25, .5, .75]) await pe('pointermove', { x: row.R[1].l + row.R[1].w * .5 + (row.B[2].l - row.R[1].l) * f, y: row.R[1].t + row.R[1].h * .5 + (row.B[2].t - row.R[1].t) * f });
+      await pe('pointermove', at(row.B[2], .5)); await pe('pointerup', at(row.B[2], .5));
+      const d6 = await xs();
+      T.ok(d6.up === '1100' && d6.dn === '0010', '① 가로로 끌다 대각선으로 꺾어도 안 지나간 칸은 그대로 (' + JSON.stringify(d6) + ')');
+      await wipe();
+      // ⓖ 끌고 나서 바로(0.25초 안) 옆 칸을 톡 하면 평소대로 켜고 끔 (이어 가기는 뗀 자리 근처만)
+      await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[1], .5)); await pe('pointermove', at(row.R[2], .5)); await pe('pointerup', at(row.R[2], .5));
+      await pe('pointerdown', at(row.R[1], .5)); await pe('pointerup', at(row.R[1], .5));
+      const d7 = await xs();
+      T.ok(d7.up === '1010', '① 끌고 나서 바로 옆 칸 톡은 ✕ 켜고 끔 그대로 (' + JSON.stringify(d7) + ')');
+      await wipe();
+      // ⓔ 끌기가 끝난 뒤 한참(0.45초) 지나 누른 것은 새로 누른 것 = 켜고 끔 그대로
+      await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[1], .5)); await pe('pointerup', at(row.R[1], .5));
+      await T.sleep(450);
+      await pe('pointerdown', at(row.R[1], .5)); await pe('pointerup', at(row.R[1], .5));
+      const d5 = await xs();
+      T.ok(d5.up === '1000', '① 끌기 끝나고 한참 뒤 누르면 ✕ 켜고 끔 그대로 (' + JSON.stringify(d5) + ')');
+      await wipe();
+    }
+  }
   // ── 11-11 지민 님 아이폰 '실제로 누르는 곳과 다른 데가 클릭되는 느낌': 틈새 무반응 제거 · 아래 입체 그림자 터치 보정 · 경계 더블탭 자석 · 사파리 스크롤 초기화
   await T.sleep(450);
   { // 1) 칸 사이 틈(gap)에 닿아도 가장 가까운 칸으로 잡힘 (씹히지 않음)
@@ -566,7 +624,7 @@ U.main(async T => {
 
   // ── ⑪ 🌗 치즈냥·까망냥 반반 (11-06 베니 님 '다 진행' — 벤치마킹 1순위 새 퍼즐: LinkedIn Tango 같은 규칙)
   {
-    const B = await T.open('nyang/');
+    const B = await T.open('nyang/', 'kinds=1');   // 11-12 반반 · 산책은 화면에서 뺌 → ?kinds=1 로만
     await U.waitFor(B, A.ready);
     await B.evaluate(() => { for (const k of ['nyang.bday', 'nyang.bdayTry', 'nyang.bbBest']) localStorage.removeItem(k); localStorage.setItem('nyang.kind', '"q"'); document.querySelector('#soloMode [data-v="one"]').click(); });
     const k0 = await B.evaluate(() => ({ seg: [...document.querySelectorAll('#kindSeg .btn')].map(b => b.textContent.trim()), vis: !document.getElementById('kindSeg').hidden }));
@@ -657,7 +715,7 @@ U.main(async T => {
 
   // ── ⑬ 11-06 베니 님 '퍼즐 같은 거' → 🐾 냥산책 (LinkedIn Zip 같은 한붓그리기: 1 → 2 → … 순서대로 모든 칸 한 번씩, 끌어서 그림)
   {
-    const Z = await T.open('nyang/');
+    const Z = await T.open('nyang/', 'kinds=1');
     await U.waitFor(Z, A.ready);
     await Z.evaluate(() => { for (const k of ['nyang.zday', 'nyang.zdayTry', 'nyang.zzBest']) localStorage.removeItem(k); document.querySelector('#soloMode [data-v="one"]').click(); });
     const segs = await Z.evaluate(() => [...document.querySelectorAll('#kindSeg .btn')].map(b => b.textContent.trim()));
@@ -802,6 +860,63 @@ U.main(async T => {
     const g = await U.waitFor(C, () => window.__ny.G && !document.getElementById('play').hidden && document.getElementById('stLabel').textContent, null, 8000);
     T.ok(g && /1091/.test(g), '⑯ 1091단계를 누르면 새 묶음을 받아 판이 열림: ' + g);
     T.ok(await C.evaluate(() => { const s = __ny.stageInfo(1091); return __ny.G.n === __ny.bankAt('master', s.idx).n; }), '⑯ 열린 판 = 새 묶음의 그 번호 판');
+    // ── ⑱ 11-12 베니 님 '힌트가 정답을 아는 AI 가 설명하는 느낌, 눈높이에 안 맞음'
+    //    1단계 = 무엇을 볼지 묻는 말, 2단계 = 판에 표시된 것(반짝 · 주황 테두리)으로 까닭 (좌표 안 씀), 가정해 보기 = 놓게 되는 칸에 ①②③
+    {
+      const txt = () => C.evaluate(() => document.getElementById('hintText').textContent);
+      const press = id => C.evaluate(id => document.getElementById(id).click(), id);
+      await press('hintBtn');
+      const a1 = await txt();
+      T.ok(/반짝이는/.test(a1) && !/알 수 있는 게 있어요/.test(a1), '⑱ 힌트 1단계는 무엇을 볼지 짚어 줌: ' + a1);
+      await press('hintMore');
+      const a2 = await txt(), tg = await C.evaluate(() => document.querySelectorAll('#board .c.tgt').length);
+      T.ok(/주황 테두리|①/.test(a2) && tg >= 1 && !/번째 줄 \d+번째 칸/.test(a2), '⑱ 2단계 까닭은 판에 표시된 것으로 (좌표 안 씀): ' + a2.slice(0, 80));
+      await press('hintClose');
+      // 힌트대로 풀어 가다 '가정해 보기'가 나오는 곳에서 멈춤 (이 판에 없으면 다음 단계 판으로)
+      const walk = () => C.evaluate(() => {
+        const G = __ny.G, NY = __ny.NY;
+        for (let i = 0; i < 600 && !G.over; i++) {
+          const h = NY.nextHint(G); if (!h) return null;
+          if (h.kind === 'suppose') return { n: h.ghost.length, k: h.target[0], xs: G.xs.size };
+          if (h.act === 'cat') { if (G.cats.size >= G.n - 1) return null; G.place(h.target[0]); } else for (const k of h.target) G.setX(k, h.act === 'x');
+        }
+        return null;
+      });
+      let sup = await walk();
+      for (let st = 1092; st <= 1099 && !sup; st++) {
+        await C.evaluate(st => { const o = {}; for (let s = 1085; s < st; s++) o[s] = 3; localStorage.setItem('nyang.stageStars', JSON.stringify(o)); }, st);
+        await C.reload({ waitUntil: 'load' }); await U.waitFor(C, A.ready);
+        await C.evaluate(st => __ny.playStage(st), st);
+        await U.waitFor(C, () => window.__ny.G && !document.getElementById('play').hidden && document.getElementById('stLabel').textContent, null, 8000);
+        sup = await walk();
+      }
+      T.ok(!!sup && sup.n >= 2, '⑱ 가정해 보기가 나오는 판을 찾음 ' + JSON.stringify(sup));
+      if (sup) {
+        await press('hintBtn');
+        const s1 = await txt();
+        await press('hintMore');
+        const s2 = await txt();
+        const v = await C.evaluate(k => ({ g: [...document.querySelectorAll('#board .c[data-g]')].map(e => e.dataset.g).sort().join(''), tgt: [...document.querySelectorAll('#board .c.tgt')].map(e => +e.dataset.k), first: document.getElementById('board').children[k].dataset.g, look: document.querySelectorAll('#board .c.look').length }), sup.k);
+        T.ok(/상상/.test(s1) && /①/.test(s2) && /②/.test(s2) && /놓을 칸이 하나도 없어요/.test(s2), '⑱ 가정해 보기: 어디에 놓게 되고 어디가 막히는지 차례로 말함: ' + s2.slice(0, 90));
+        T.ok(v.g.length === sup.n && v.first === '①' && v.tgt.length === 1 && v.tgt[0] === sup.k && v.look >= 1, '⑱ 놓게 되는 칸에 ①②③ · 막히는 곳 반짝 ' + JSON.stringify(v));
+        await press('hintApply');
+        const af = await C.evaluate(k => ({ x: __ny.G.xs.has(k), g: document.querySelectorAll('#board .c[data-g]').length, box: document.getElementById('hintBox').hidden }), sup.k);
+        T.ok(af.x && af.g === 0 && af.box, '⑱ 적용하면 그 칸에 ✕, 번호는 사라짐 ' + JSON.stringify(af));
+      }
+    }
+    // ── ⑲ 11-12 베니 님 '다른 게임 합쳐 놓은 건 분리하든 빼든' → 반반 · 산책은 냥도쿠 화면에서 뺌 (전에 반반을 골라 둔 폰도 냥도쿠로)
+    {
+      const X = await T.open('nyang/');
+      await U.waitFor(X, A.ready);
+      await X.evaluate(() => { localStorage.setItem('nyang.kind', '"b"'); localStorage.setItem('nyang.soloMode2', '"one"'); });
+      await X.reload({ waitUntil: 'load' }); await U.waitFor(X, A.ready);
+      const k = await X.evaluate(() => ({ seg: document.getElementById('kindSeg').hidden, hb: document.getElementById('howtoB').hidden, hq: document.getElementById('howto').hidden, day: document.getElementById('kindDay').hidden, home: document.getElementById('home').innerText }));
+      T.ok(k.seg && k.hb && !k.hq && k.day && !/반반|산책/.test(k.home.replace(/\s+/g, ' ')), '⑲ 🧩 한 판에 반반 · 산책 고르는 줄 없음 ' + JSON.stringify({ seg: k.seg, hb: k.hb, hq: k.hq, day: k.day }));
+      await X.evaluate(() => document.getElementById('startBtn').click());
+      T.ok(!!(await U.waitFor(X, () => window.__ny.G && !document.getElementById('play').hidden && !(document.getElementById('bplay') && !document.getElementById('bplay').hidden), null, 6000)), '⑲ 시작하면 냥도쿠 판 (반반 판 아님)');
+      await X.evaluate(() => { for (const k of ['nyang.kind', 'nyang.soloMode2', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); });
+      await X.close();
+    }
     await C.evaluate(() => { for (const k of ['nyang.stageStars', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); });
     await C.close();
   }

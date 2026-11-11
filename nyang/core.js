@@ -100,78 +100,126 @@ const NY = (() => {
     for (let c = 0; c < n; c++) if (!doneCol.has(c)) out.push({ type: "col", id: c, cells: [...Array(n).keys()].map(r => r * n + c).filter(k => cand[k]), all: [...Array(n).keys()].map(r => r * n + c) });
     return out;
   }
-  const gname = (gp) => gp.type === "reg" ? `${colorName(gp.id)} 묶음` : gp.type === "row" ? `${ord(gp.id)} 가로줄` : `${ord(gp.id)} 세로줄`;
+  const lineName = (ax, i) => ax === 0 ? `위에서 ${ord(i)} 가로줄` : `왼쪽에서 ${ord(i)} 세로줄`;
+  const gname = (gp) => gp.type === "reg" ? `${colorName(gp.id)} 묶음` : lineName(gp.type === "row" ? 0 : 1, gp.id);
   const catsRowOf = g => { const a = Array(g.n).fill(-1); for (const k of g.cats) { const [r, c] = g.rc(k); a[r] = c; } return a; };
+  const NUM = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
 
-  // 가정해 보기: 이 칸에 놓고 '하나 남음'만 계속 따라가면 어떤 묶음·줄이 비는가
-  function contradicts(g, cand0, catsRow0, k) {
-    const n = g.n, cand = Uint8Array.from(cand0), cr = catsRow0.slice();
+  // 가정해 보기: 이 칸에 놓고 '빈칸이 하나만 남은 곳'만 계속 따라가면 어떤 묶음·줄이 비는가
+  //   → null(안 막힘) | { steps: [{ k, gp }](따라 놓게 되는 칸과 그 까닭), dead: 놓을 칸이 없어지는 묶음·줄 }
+  function supposeTrace(g, cand0, catsRow0, k) {
+    const n = g.n, cand = Uint8Array.from(cand0), cr = catsRow0.slice(), steps = [];
     const put = q => { const [r, c] = g.rc(q); cr[r] = c; cand[q] = 0; for (let i = 0; i < n * n; i++) { const [a, b] = g.rc(i); if (a === r || b === c || g.reg[a][b] === g.reg[r][c] || (Math.abs(a - r) <= 1 && Math.abs(b - c) <= 1)) cand[i] = 0; } };
     put(k);
     for (let guard = 0; guard < n * 2; guard++) {
-      if (cr.every(v => v >= 0)) return false;
+      if (cr.every(v => v >= 0)) return null;
       const gs = groups(g, cand, cr);
-      if (gs.some(x => x.cells.length === 0)) return true;
+      const dead = gs.find(x => x.cells.length === 0);
+      if (dead) return { steps, dead };
       const one = gs.find(x => x.cells.length === 1);
-      if (!one) return false;
-      put(one.cells[0]);
+      if (!one) return null;
+      steps.push({ k: one.cells[0], gp: one }); put(one.cells[0]);
     }
-    return false;
+    return null;
   }
 
-  /* 다음 힌트 하나: { kind, look:[칸들](1단계: 어디를 볼지), why:"문장"(2단계), target:[칸들], act:"x"|"cat"|"unx" }
-     못 찾으면 null */
+  /* 다음 힌트 하나. 못 찾으면 null
+       { kind, act:"x"|"cat"|"unx", target:[바꿀 칸](주황 테두리),
+         look:[칸](1단계: 어디를 볼지 반짝), ask:"스스로 찾아보게 하는 물음"(1단계),
+         look2:[칸](2단계: 까닭이 되는 칸 반짝), why:"까닭"(2단계), ghost:[칸](2단계: ①②③ 번호), say:"짧은 말"(AI 구경) }
+     11-12 베니 님 '힌트가 정답을 아는 AI 가 설명하는 느낌, 눈높이에 안 맞음' → 까닭은 판에 보이는 것(✕ 없는 빈칸 · 반짝이는 칸 · 주황 테두리 · 번호)만으로 말하고,
+       '따라가다 보면 막힌다'는 어디에 놓게 되고 어디가 막히는지 번호로 보여 줌. 쉬운 생각부터: 하나 남음 → 한 줄에 모임 → 놓으면 바로 막힘 → 여러 묶음 → 가정해 보기(가장 짧은 것) */
   function nextHint(g) {
-    const n = g.n;
-    for (const k of g.xs) if (g.isAns(k)) return { kind: "wrongX", look: [k], target: [k], act: "unx", why: `${cellName(g, k)}의 X는 잘못됐어요. 이 칸은 고양이 자리일 수 있어요 — X를 지울게요.` };
+    const n = g.n, all = [...Array(n * n).keys()];
+    for (const k of g.xs) if (g.isAns(k)) return { kind: "wrongX", look: [k], target: [k], act: "unx",
+      ask: "반짝이는 ✕를 다시 보세요. 이 칸은 아직 막으면 안 돼요.",
+      why: "이 칸은 고양이가 올 수 있는 자리예요. 여기를 막아 두면 나중에 놓을 곳이 모자라요. ✕를 지울게요.",
+      say: `${cellName(g, k)}의 ✕는 잘못됐어요. 지울게요.` };
     const cand = knowledge(g), cr = catsRowOf(g);
-    // 고양이 주변 정리 (자동 X를 안 쓸 때)
+    // 고양이 주변 정리 (자동 ✕를 안 쓸 때)
     for (const k of g.cats) {
       const miss = g.blockedBy(k).filter(b => !g.cats.has(b) && !g.bad.has(b) && !g.xs.has(b));
-      if (miss.length) return { kind: "clean", look: [k], target: miss, act: "x", why: `${cellName(g, k)}의 고양이와 같은 가로줄·세로줄·색 묶음, 그리고 바로 옆(대각선 포함) 칸에는 고양이를 놓을 수 없어요. 그 칸들을 X로 표시해요.` };
+      if (miss.length) return { kind: "clean", look: [k], target: miss, act: "x",
+        ask: "반짝이는 고양이 둘레를 보세요. ✕를 칠 칸이 남았어요.",
+        why: "고양이가 놓이면 같은 가로줄·세로줄·같은 색 묶음, 그리고 바로 옆 칸(대각선 포함)에는 다른 고양이가 못 와요. 그런 칸(주황 테두리)에 ✕를 쳐요.",
+        say: `${cellName(g, k)} 고양이와 같은 줄·묶음·바로 옆 칸은 ✕.` };
     }
     const gs = groups(g, cand, cr);
     // 하나 남음
-    for (const gp of gs) if (gp.cells.length === 1) return { kind: "single", look: gp.all, target: gp.cells, act: "cat", why: `${gname(gp)}에 고양이를 놓을 수 있는 칸이 하나만 남았어요 → ${cellName(g, gp.cells[0])}.` };
-    // 한 줄에 갇힘
+    for (const gp of gs) if (gp.cells.length === 1) return { kind: "single", look: gp.all, target: gp.cells, act: "cat",
+      ask: `반짝이는 ${gname(gp)}을 보세요. ✕가 없는 빈칸이 몇 개 남았나요?`,
+      why: `${gname(gp)}에는 고양이가 꼭 한 마리 있어야 해요. 그런데 빈칸이 하나뿐이에요. 그 칸(주황 테두리)이 고양이 자리예요.`,
+      say: `${gname(gp)}에 빈칸이 하나만 남았어요 → ${cellName(g, gp.cells[0])}에 고양이.` };
+    // 한 묶음의 빈칸이 한 줄에 모임
     for (const gp of gs) {
       if (gp.type !== "reg" || !gp.cells.length) continue;
-      for (const [ax, label] of [[0, "가로줄"], [1, "세로줄"]]) {
+      for (const ax of [0, 1]) {
         const lines = new Set(gp.cells.map(k => g.rc(k)[ax]));
         if (lines.size !== 1) continue;
-        const line = [...lines][0];
-        const kill = [...Array(n * n).keys()].filter(k => cand[k] && g.rc(k)[ax] === line && g.regionOf(k) !== gp.id);
-        if (kill.length) return { kind: "confine", look: gp.all, target: kill, act: "x", why: `${gname(gp)}의 남은 칸이 모두 ${ord(line)} ${label}에 있어요. 그 줄의 고양이는 이 묶음 차지 → 같은 줄의 다른 색 칸은 X.` };
+        const line = [...lines][0], ln = lineName(ax, line), cn = colorName(gp.id);
+        const kill = all.filter(k => cand[k] && g.rc(k)[ax] === line && g.regionOf(k) !== gp.id);
+        if (kill.length) return { kind: "confine", look: gp.all, look2: gp.cells, target: kill, act: "x",
+          ask: `반짝이는 ${cn} 묶음을 보세요. 빈칸이 어느 줄에 모여 있나요?`,
+          why: `${cn} 묶음의 빈칸(반짝이는 칸)이 모두 ${ln}에 있어요. 어디에 놓든 이 줄의 고양이는 ${cn} 묶음 차지예요. 한 줄에 한 마리뿐이니, 이 줄의 다른 색 빈칸(주황 테두리)은 ✕.`,
+          say: `${cn} 묶음의 빈칸이 모두 ${ln}에 있어요 → 그 줄의 다른 색 칸은 ✕.` };
       }
     }
+    // 한 줄의 빈칸이 한 묶음에 모임
     for (const gp of gs) {
       if (gp.type === "reg" || !gp.cells.length) continue;
       const regs = new Set(gp.cells.map(k => g.regionOf(k)));
       if (regs.size !== 1) continue;
-      const q = [...regs][0];
-      const kill = [...Array(n * n).keys()].filter(k => cand[k] && g.regionOf(k) === q && !gp.cells.includes(k));
-      if (kill.length) return { kind: "confine2", look: gp.all, target: kill, act: "x", why: `${gname(gp)}의 남은 칸이 모두 ${colorName(q)} 묶음이에요. ${colorName(q)} 묶음의 고양이는 이 줄에 있어야 하니 → 그 묶음의 다른 칸은 X.` };
+      const q = [...regs][0], cn = colorName(q);
+      const kill = all.filter(k => cand[k] && g.regionOf(k) === q && !gp.cells.includes(k));
+      if (kill.length) return { kind: "confine2", look: gp.all, look2: gp.cells, target: kill, act: "x",
+        ask: `반짝이는 ${gname(gp)}을 보세요. 빈칸이 무슨 색 묶음에 있나요?`,
+        why: `${gname(gp)}의 빈칸(반짝이는 칸)이 전부 ${cn} 묶음 칸이에요. 이 줄의 고양이는 ${cn} 묶음 안에 놓이게 돼요. 묶음에도 한 마리뿐이니, ${cn} 묶음의 다른 빈칸(주황 테두리)은 ✕.`,
+        say: `${gname(gp)}의 빈칸이 모두 ${cn} 묶음이에요 → 그 묶음의 다른 칸은 ✕.` };
+    }
+    // 가정해 보기 후보: 모든 빈칸을 놓아 보고 가장 짧게 막히는 것 (0 = 놓자마자 어떤 묶음·줄이 통째로 막힘)
+    let sup = null;
+    for (const k of all) {
+      if (!cand[k]) continue;
+      const t = supposeTrace(g, cand, cr, k);
+      if (t && (!sup || t.steps.length < sup.steps.length)) { sup = { k, steps: t.steps, dead: t.dead }; if (!t.steps.length) break; }
+    }
+    if (sup && !sup.steps.length) {
+      const dn = gname(sup.dead), dc = sup.dead.all.filter(k => cand[k]);
+      return { kind: "block", look: sup.dead.all, look2: dc, target: [sup.k], act: "x",
+        ask: `반짝이는 ${dn}을 보세요. 빈칸이 얼마 없어요. 근처 어느 칸에 고양이를 놓으면 여기가 전부 막힐까요?`,
+        why: `주황 테두리 칸에 고양이를 놓으면, 그 고양이와 같은 줄·같은 색 묶음이거나 바로 옆이라서 ${dn}의 빈칸(반짝이는 칸)이 전부 막혀요. ${dn}에도 고양이가 꼭 있어야 하니 이 칸은 ✕.`,
+        say: `${cellName(g, sup.k)}에 놓으면 ${dn}의 빈칸이 전부 막혀요 → 이 칸은 ✕.` };
     }
     // 여러 묶음이 여러 줄에 갇힘 (2~3개)
     const regs = gs.filter(x => x.type === "reg" && x.cells.length);
     const combos = (arr, k, s = 0, cur = [], out = []) => { if (cur.length === k) { out.push(cur.slice()); return out; } for (let i = s; i < arr.length; i++) { cur.push(arr[i]); combos(arr, k, i + 1, cur, out); cur.pop(); } return out; };
     for (const kk of [2, 3]) {
       for (const cb of combos(regs, kk)) {
-        for (const [ax, label] of [[0, "가로줄"], [1, "세로줄"]]) {
+        for (const ax of [0, 1]) {
           const lines = new Set(cb.flatMap(x => x.cells.map(k => g.rc(k)[ax])));
           if (lines.size !== kk) continue;
           const ids = new Set(cb.map(x => x.id));
-          const kill = [...Array(n * n).keys()].filter(k => cand[k] && lines.has(g.rc(k)[ax]) && !ids.has(g.regionOf(k)));
+          const kill = all.filter(k => cand[k] && lines.has(g.rc(k)[ax]) && !ids.has(g.regionOf(k)));
           if (kill.length) {
-            const ln = [...lines].sort((a, b) => a - b).map(v => v + 1).join("·");
-            return { kind: "kgroup", look: cb.flatMap(x => x.all), target: kill, act: "x", why: `${cb.map(x => colorName(x.id)).join("·")} 묶음 ${kk}개가 ${ln}번째 ${label} ${kk}줄 안에만 들어갈 수 있어요. 그 ${kk}줄의 고양이는 이 묶음들 차지 → 그 줄들의 다른 칸은 X.` };
+            const ln = `${ax === 0 ? "위에서" : "왼쪽에서"} ${[...lines].sort((a, b) => a - b).map(v => v + 1).join("·")}번째 ${ax === 0 ? "가로줄" : "세로줄"}`, cn = cb.map(x => colorName(x.id)).join("·");
+            return { kind: "kgroup", look: cb.flatMap(x => x.all), look2: cb.flatMap(x => x.cells), target: kill, act: "x",
+              ask: `반짝이는 색 묶음 ${kk}개를 보세요. 빈칸이 몇 줄에 걸쳐 있나요?`,
+              why: `${cn} 묶음의 빈칸(반짝이는 칸)은 전부 ${ln} 안에 있어요. 이 ${kk}줄에 들어갈 고양이는 ${kk}마리인데, 이 묶음 ${kk}개가 한 마리씩 다 차지해요. 그래서 이 ${kk}줄의 다른 색 빈칸(주황 테두리)은 ✕.`,
+              say: `${cn} 묶음 ${kk}개가 ${ln} ${kk}줄 안에만 들어가요 → 그 줄들의 다른 색 칸은 ✕.` };
           }
         }
       }
     }
-    // 가정해 보기 (칸이 적은 묶음·줄부터)
-    for (const gp of gs.slice().sort((a, b) => a.cells.length - b.cells.length)) {
-      for (const k of gp.cells) if (contradicts(g, cand, cr, k)) return { kind: "suppose", look: gp.all, target: [k], act: "x", why: `${cellName(g, k)}에 고양이가 있다고 해 보면, 그다음 '하나만 남은' 자리들을 따라가다 어떤 묶음이나 줄에 놓을 칸이 없어져요. 그래서 이 칸은 X.` };
+    // 가정해 보기: 놓으면 '빈칸이 하나만 남는 곳'이 차례로 생기다가 어딘가 막힘 — 놓게 되는 칸을 ①②③ 으로 보여 줌
+    if (sup) {
+      const st = sup.steps, dn = gname(sup.dead);
+      const mid = st.length <= 3
+        ? st.map((s, i) => i ? `그다음 ${gname(s.gp)}에는 ${NUM[i + 1]} 칸만 남아요.` : `그러면 ${gname(s.gp)}에는 ② 칸만 남아서 거기에 놓아야 해요.`).join(" ")
+        : `그러면 빈칸이 하나만 남는 곳이 차례로 생겨서 ${st.map((s, i) => NUM[i + 1] || "…").join(" → ")} 순서로 놓게 돼요.`;
+      return { kind: "suppose", look: [sup.k], look2: sup.dead.all, target: [sup.k], act: "x", ghost: [sup.k, ...st.map(s => s.k)],
+        ask: "반짝이는 칸에 고양이를 놓는다고 상상해 보세요. 그다음 어디에 놓게 되고, 어디가 막힐까요?",
+        why: `① 칸에 고양이를 놓는다고 해 볼게요. ${mid} 그러고 나면 ${dn}(반짝이는 곳)에 놓을 칸이 하나도 없어요. 그래서 ① 칸에는 못 놓아요 → ✕.`,
+        say: `${cellName(g, sup.k)}에 놓아 보면 ${st.length}번 따라 놓은 뒤 ${dn}에 놓을 칸이 없어져요 → 이 칸은 ✕.` };
     }
     return null;
   }
