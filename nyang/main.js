@@ -343,7 +343,8 @@
     drawBoard(); show("play"); fitKey = "";
     $("stLabel").textContent = c.label;
     $("hintBtn").disabled = c.hintRule === "off";
-    $("restart").hidden = c.kind === "vs" || !!c.ta;
+    $("restart").hidden = c.kind === "vs";                                    // 11-12 혼자 타임어택에도: 시간 · 개수까지 처음부터 (지민 님 타임어택 30% 가 그만두고 다시 하기 — 예전엔 ‹ 두 번 → 첫 화면 → 시작)
+    $("restart").lastElementChild.textContent = c.ta ? "다시 시작" : "처음부터";
     $("opp").hidden = c.kind !== "vs";
     startTimer(c.startAt);
     if (c.kind === "vs") restoreMine();                                      // 다시 들어온 사람: 빈 판을 올리기 전에 내 진행부터 되살림
@@ -360,7 +361,8 @@
     const T = TIERS.find(t => t.id === ta.tier), list = bank[ta.tier];
     const idx = ta.kind === "vs" ? ta.seq[ta.i % ta.seq.length] : pickRandom(ta.tier);
     ta.pi = ta.i;                                                            // 관전하는 친구가 같은 문제를 그리도록
-    const label = () => `⏱ ${T.label} · ${ta.solved}개`;
+    // 혼자 타임어택은 이번 주 친구 1등 기록을 옆에 (넘어야 할 숫자를 판 위에서 바로 봄). 넘으면 🥇
+    const label = () => `⏱ ${T.label} · ${ta.solved}개` + (ta.kind === "solo" && ta.goal ? (ta.solved > ta.goal ? " · 🥇 새 1등!" : ` · 1등 ${ta.goal}개`) : "");
     startPuzzle(NY.variant(list[idx], ta.kind === "vs" ? (ta.vs || 0) + ta.i + 1 : NY.rseed()), {   // 대결은 모두 같은 모양
       kind: ta.kind, tier: ta.tier, idx, ta, hintRule: ta.hintRule, label: label(),
       onProgress: ta.kind === "vs" ? sendProg : null,
@@ -409,6 +411,7 @@
   function playTA(tier) {
     Arena.init().then(() => { const lg = logInit(); if (lg && !lg.sid) lg.start({ kind: "혼자", hostName: myName() }, Arena.uid); if (lg) lg.matchStart({ mode: "ta", tier, mins: TA_SOLO_MIN }); }).catch(() => {});
     TA = { kind: "solo", tier, endAt: Date.now() + TA_SOLO_MIN * 60000, clock: () => Date.now(), solved: 0, failed: 0, i: 0, hintRule: "penalty", over: false };
+    try { const top = taRows(tier)[0]; TA.goal = top ? top.v : 0; } catch (e) { TA.goal = 0; }
     S("start"); nextTA();
   }
   function endTA(ta) {
@@ -1013,8 +1016,16 @@
     else if (ctx.ta) endTA(ctx.ta);
     else { G.over = true; G.gaveUp = true; ctx.finalSecs = (now() - ctx.startAt) / 1000; progress(); paint(); toast("이번 판은 포기했어요"); }
   };
+  let reAt = -1e9;
   $("restart").onclick = () => {
     if (!G || ctx.kind !== "solo") { toast("대결 중에는 처음부터 할 수 없어요"); return; }
+    if (ctx.ta) {                                                             // 타임어택: 실수로 누르지 않게 2초 안에 두 번
+      const ta = ctx.ta; if (ta.over) return;
+      if (performance.now() - reAt > 2000) { reAt = performance.now(); toast("한 번 더 누르면 타임어택을 처음부터 다시 해요"); return; }
+      reAt = -1e9; ta.over = true;
+      if (glog) glog.matchEnd({ won: false, gaveUp: true, restart: true, solved: ta.solved, secs: Math.round(TA_SOLO_MIN * 60 - (ta.endAt - Date.now()) / 1000) });
+      playTA(ta.tier); return;
+    }
     if (!G.over && glog) glog.matchEnd({ won: false, restart: true, secs: Math.round(G.secs) });
     if (ctx.daily) playDaily(ctx.daily.archive ? ctx.daily.key : null); else playSolo(ctx.tier, ctx.idx, ctx.vs, ctx.stage);
   };  function result(title, body, btns) {

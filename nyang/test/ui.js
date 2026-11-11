@@ -872,6 +872,20 @@ U.main(async T => {
     await K.evaluate(() => { document.querySelector('#soloMode [data-v="ta"]').click(); document.querySelector('#tiers [data-t="master"]').click(); });
     await K.click('#startBtn');
     await U.waitFor(K, () => window.__ny.TA && window.__ny.G && !document.getElementById('play').hidden, null, 4000);
+    // ── ⑳ 11-12 지민 님 기록: 요즘 타임어택만 함 · 30% 를 중간에 그만두고 다시 함 → 판 위에 이번 주 1등 기록, ↺ 로 바로 다시 시작
+    {
+      const hud = () => K.evaluate(() => ({ lbl: document.getElementById('stLabel').textContent, re: !document.getElementById('restart').hidden && document.getElementById('restart').textContent.replace(/\s+/g, ' ').trim(), left: Math.round((__ny.TA.endAt - Date.now()) / 1000), solved: __ny.TA.solved }));
+      const h0 = await hud();
+      T.ok(/1등 7개/.test(h0.lbl) && /다시 시작/.test(h0.re || ''), '⑳ 타임어택 판 위에 이번 주 1등 기록 · ↺ 다시 시작 단추: ' + JSON.stringify(h0));
+      await K.evaluate(() => { __ny.TA.solved = 3; __ny.TA.endAt -= 60000; });
+      const ta0 = await K.evaluate(() => { window.__ta0 = __ny.TA; document.getElementById('restart').click(); return { same: __ny.TA === window.__ta0, over: __ny.TA.over }; });
+      T.ok(ta0.same && !ta0.over, '⑳ 다시 시작은 한 번 눌러선 안 됨 (실수 막이)');
+      await K.evaluate(() => document.getElementById('restart').click());
+      await U.waitFor(K, () => window.__ny.TA && window.__ny.TA !== window.__ta0 && window.__ny.G && !window.__ny.G.over, null, 4000);
+      const h1 = await hud();
+      const old = await K.evaluate(() => ({ over: window.__ta0.over, res: document.getElementById('resBox').hidden }));
+      T.ok(h1.solved === 0 && h1.left > 170 && old.over && old.res, '⑳ 두 번 누르면 시간 · 개수 처음부터 (결과창 없이 바로): ' + JSON.stringify(h1));
+    }
     await K.evaluate(() => { __ny.TA.solved = 8; __ny.TA.endAt = Date.now() - 1; });
     const r1 = await U.waitFor(K, () => !document.getElementById('resBox').hidden && /시간 끝/.test(document.getElementById('resTitle').textContent) && document.getElementById('resRank').textContent.replace(/\s+/g, ' '), null, 5000);
     T.ok(r1 && /이번 주 1등/.test(r1) && /2등 멋쟁이규호 7개/.test(r1), '⑮ 타임어택 결과창: 이번 주 친구 순위 · 나 1등: ' + r1);
