@@ -34,11 +34,15 @@
     $("zUndo").onclick = () => { if (over || !path.length) return; path.pop(); snd("unx"); paint(); };
     $("zClear").onclick = () => { if (over) return; path = []; paint(); };
     const el = $("zboard");
-    // 끌 때는 칸 안쪽(가장자리 20% 뺌)에 들어간 칸만 — 아이폰에서 손가락이 옆 칸 가장자리를 스치면 길이 붙거나 지워지던 것 (11-08 지민 님)
+    // 끌 때는 칸 안쪽(가장자리 20% 뺌)에 들어간 칸만 — 아이폰에서 손가락이 옆 칸 가장자리를 스치면 길이 붙거나 지워지던 것 (11-08 · 11-11 지민 님)
     const cellAt = (e, inner) => {
-      const t = document.elementFromPoint(e.clientX, e.clientY), c = t && t.closest && t.closest(".zc"); if (!c || !el.contains(c)) return -1;
-      if (inner) { const r = c.getBoundingClientRect(), mx = r.width * .2, my = r.height * .2; if (e.clientX <= r.left + mx || e.clientX >= r.right - mx || e.clientY <= r.top + my || e.clientY >= r.bottom - my) return -1; }
-      return +c.dataset.k;
+      const br = el.getBoundingClientRect();
+      if (!br.width || !P || e.clientX < br.left || e.clientX > br.right || e.clientY < br.top || e.clientY > br.bottom) return -1;
+      const bw = el.clientLeft || 0, w = (br.width - bw * 2) / P.N, h = (br.height - bw * 2) / P.N;
+      const x = e.clientX - br.left - bw, y = (e.pointerType === "touch" ? Math.max(2, e.clientY - br.top - bw - Math.min(3, h * .08)) : e.clientY - br.top - bw);
+      const c = Math.max(0, Math.min(P.N - 1, Math.floor(x / w))), r = Math.max(0, Math.min(P.N - 1, Math.floor(y / h)));
+      if (inner) { const mx = w * .2, my = h * .2, lx = x - c * w, ly = y - r * h; if (lx <= mx || lx >= w - mx || ly <= my || ly >= h - my) return -1; }
+      return r * P.N + c;
     };
     el.addEventListener("pointerdown", e => { if (over || (drag && !e.isPrimary)) return; e.preventDefault(); drag = true; dragId = e.pointerId; try { el.setPointerCapture(e.pointerId); } catch (x) {} const k = cellAt(e); if (k >= 0) step(k, true); });
     el.addEventListener("pointermove", e => { if (!drag || over || e.pointerId !== dragId) return; const k = cellAt(e, true); if (k >= 0) step(k, false); });
@@ -49,8 +53,10 @@
   function start(o) {
     ensure();
     opt = o; P = o.pz; path = []; hints = 0; over = false; hint = null; drag = false;
+    if (window.scrollY || window.scrollX) window.scrollTo(0, 0); document.documentElement.scrollTop = document.body.scrollTop = 0;
     for (const id of ["home", "play", "bplay"]) if ($(id)) $(id).hidden = true;
     $("zplay").hidden = false; document.body.classList.add("playing");
+    if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
     $("zLabel").textContent = o.label || "🐾 냥산책"; $("zHint").hidden = true;
     build(); paint();
     t0 = performance.now(); clearInterval(timerT);

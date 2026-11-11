@@ -39,8 +39,10 @@
   function start(o) {
     ensure();
     opt = o; P = o.pz; cells = Array.from(P.given); undo = []; hints = 0; over = false; hint = null;
+    if (window.scrollY || window.scrollX) window.scrollTo(0, 0); document.documentElement.scrollTop = document.body.scrollTop = 0;
     for (const id of ["home", "play", "zplay"]) if ($(id)) $(id).hidden = true;
     $("bplay").hidden = false; document.body.classList.add("playing");
+    if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
     $("bLabel").textContent = o.label || "🌗 반반"; $("bHint").hidden = true;
     build(); paint();
     t0 = performance.now(); clearInterval(timerT);

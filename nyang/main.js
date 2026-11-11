@@ -36,10 +36,18 @@
   const logInit = () => { if (!glog && Arena.db()) glog = GLOG(() => Arena.db(), "nyang"); return glog; };
 
   // ── 화면 바꾸기
-  const show = id => { for (const s of ["home", "play", "bplay", "zplay"]) if ($(s)) $(s).hidden = s !== id; document.body.classList.toggle("playing", id === "play"); if (id === "play") requestAnimationFrame(() => fitBoard(true)); };
+  // 11-11 지민 님 아이폰 터치 어긋남: #home 을 아래로 스크롤해 [시작!] 을 누른 뒤 position:fixed(.play) + overflow:hidden 으로 바뀔 때
+  //   scrollY 가 남아 있으면 iOS 사파리(WebKit)에서 화면에 보이는 판과 터치 판정 좌표가 위아래로 밀림 → playing 전환 전후로 스크롤 0 고정
+  const resetScroll = () => { if (window.scrollY || window.scrollX) window.scrollTo(0, 0); document.documentElement.scrollTop = document.body.scrollTop = 0; };
+  const show = id => {
+    if (id !== "home") resetScroll();
+    for (const s of ["home", "play", "bplay", "zplay"]) if ($(s)) $(s).hidden = s !== id;
+    document.body.classList.toggle("playing", id === "play");
+    if (id === "play") { resetScroll(); requestAnimationFrame(() => { resetScroll(); fitBoard(true); }); }
+  };
   // 판 크기 = 남은 공간(가로·세로 중 작은 쪽) — 휴대폰에서 위아래가 잘리지 않게
   // 휴대폰 주소창이 나타났다 사라지며 높이가 조금씩 바뀔 때마다 판이 출렁이지 않게: 판이 바뀌었거나, 너비가 바뀌었거나, 높이가 크게(80px+) 바뀔 때만 다시 맞춤
-  let fitKey = "", fitW = 0, fitH = 0;
+  let fitKey = "", fitW = 0, fitH = 0, fitGp = 6;
   function fitBoard(force) {
     const w = $("boardwrap"), b = $("board");
     if (!w || $("play").hidden) return;
@@ -48,7 +56,7 @@
     fitKey = key; fitW = cw; fitH = ch;
     const s = Math.floor(Math.min(cw, ch, 600));
     b.style.setProperty("--bs", s + "px");
-    if (G) b.style.setProperty("--gp", Math.max(2, Math.round(s / G.n * 0.07)) + "px");   // 칸 사이 간격도 판 크기에 맞게
+    if (G) { fitGp = Math.max(2, Math.round(s / G.n * 0.07)); b.style.setProperty("--gp", fitGp + "px"); }   // 칸 사이 간격도 판 크기에 맞게
   }
   addEventListener("resize", fitBoard);
   if (window.visualViewport) visualViewport.addEventListener("resize", fitBoard);
@@ -140,23 +148,40 @@
     if (res === "fail") { const g0 = G, c0 = ctx; setTimeout(() => { if (G === g0) c0.onEnd(false); }, 350); }
   }
   // 누르기: 한 번 = ✕ 켜고 끔, 0.4초 안에 같은 칸 같은 자리 두 번 = 🐱 (앱과 같게). 누른 채 끌면 같은 방향으로 ✕ 칠하기
-  // 11-08 지민 님 아이폰 '옆 칸이 눌림 · 두 번 안 눌렀는데 🐱': 옆 칸을 누르려다 앞 칸 가장자리에 닿으면 두 번으로 잡히고,
-  //   톡 누를 때 손가락이 살짝 밀리면 끌기로 잡혀 옆 칸까지 ✕ → 두 번은 처음 누른 자리 가까이(칸 0.45)만, 끌기는 칸 반 넘게 움직인 뒤
-  //   칸 안쪽(가장자리 20% 뺌)에 들어간 칸만, 판을 누르고 있는 동안 다른 손가락은 무시
+  // 11-08 지민 님 아이폰 '옆 칸이 눌림 · 두 번 안 눌렀는데 🐱' + 11-11 '실제로 누르는 곳과 다른 데가 눌림':
+  //   1) elementFromPoint 대신 #board 사각형 대비 상대좌표로 판정 → 3~4px 틈(gap)·둥근 모서리 무반응 구간 제거 & WebKit 뷰포트 오차 방지
+  //   2) 손가락 터치(touch)는 손톱 아래 살이 닿고 칸 아래 3px 입체 그림자가 있어 시선보다 아래(+Y)로 찍힘 → 약 3px 위쪽으로 보정
+  //   3) 경계선 근처에서 빠르게(0.32초 안) 두 번 톡톡 누를 때 두 번째 탭이 1~2px 옆 칸으로 넘어가도 아주 가까우면(8.5px·칸 0.25 안) 첫 칸 🐱 로 연결
   let lastTap = { k: -1, t: 0 }, drag = null;
-  const cellAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest("#board .c"); };
-  const innerCellAt = (x, y) => {
-    const el = cellAt(x, y); if (!el) return null;
-    const r = el.getBoundingClientRect(), mx = r.width * .2, my = r.height * .2;
-    return x > r.left + mx && x < r.right - mx && y > r.top + my && y < r.bottom - my ? el : null;
-  };
+  function boardPick(x, y, isTouch, inner) {
+    if (!G) return null;
+    const b = $("board"), br = b.getBoundingClientRect(), n = G.n;
+    if (!br.width || x < br.left || x > br.right || y < br.top || y > br.bottom) return null;
+    const gp = fitGp || 6, pitch = (br.width - gp) / n, cs = pitch - gp;
+    const dy = Math.min(3, cs * .085, gp * .5 + 1.2);
+    const ty = isTouch ? Math.max(br.top + gp * .5 + 1, y - dy) : y;
+    const uc = (x - br.left - gp * .5) / pitch, ur = (ty - br.top - gp * .5) / pitch;
+    const c = Math.max(0, Math.min(n - 1, Math.floor(uc))), r = Math.max(0, Math.min(n - 1, Math.floor(ur)));
+    if (inner) {
+      const cellL = br.left + gp + c * pitch, cellT = br.top + gp + r * pitch, m = cs * .2;
+      if (x <= cellL + m || x >= cellL + cs - m || ty <= cellT + m || ty >= cellT + cs - m) return null;
+    }
+    const el = b.children[r * n + c];
+    return el && +el.dataset.k === r * n + c ? el : null;
+  }
   $("board").addEventListener("pointerdown", e => {
     if (!G || G.over || (ctx && ctx.spec)) return;
     if (drag && !e.isPrimary) return;                                           // 누르고 있는 손가락 말고 다른 손가락(손바닥)
-    const el = cellAt(e.clientX, e.clientY); if (!el) return;
+    let el = boardPick(e.clientX, e.clientY, e.pointerType === "touch", false); if (!el) return;
     e.preventDefault();
-    const k = +el.dataset.k, t = performance.now(), cs = el.getBoundingClientRect().width;
-    if (lastTap.k === k && t - lastTap.t < 400 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < Math.max(14, cs * .45)) {   // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이
+    let k = +el.dataset.k;
+    const t = performance.now(), cs = el.getBoundingClientRect().width || 32, dt = t - lastTap.t;
+    const dist = lastTap.k >= 0 ? Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) : 1e9;
+    const adj = lastTap.k >= 0 && Math.abs(Math.floor(lastTap.k / G.n) - Math.floor(k / G.n)) <= 1 && Math.abs(lastTap.k % G.n - k % G.n) <= 1;
+    if (k !== lastTap.k && adj && dt < 340 && dist < (fitGp || 4) + Math.min(9, cs * .24) && !G.cats.has(lastTap.k) && !G.bad.has(lastTap.k)) {
+      k = lastTap.k; el = $("board").children[k] || el;
+    }
+    if (lastTap.k === k && dt < 400 && dist < Math.max(14, cs * .45)) {         // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이
       const prevX = lastTap.prevX;
       lastTap = { k: -1, t: 0 }; drag = null;
       if (G.xs.has(k) !== prevX) G.toggleX(k);
@@ -171,7 +196,7 @@
   window.addEventListener("pointermove", e => {
     if (!drag || !G || G.over || e.pointerId !== drag.id) return;
     if (!drag.moved) { if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < drag.cs * .5) return; drag.moved = true; }
-    const el = innerCellAt(e.clientX, e.clientY); if (!el) return;
+    const el = boardPick(e.clientX, e.clientY, e.pointerType === "touch", true); if (!el) return;
     const k = +el.dataset.k; if (drag.seen.has(k)) return;
     drag.seen.add(k); lastTap = { k: -1, t: 0 };
     const was = G.xs.has(k); G.setX(k, drag.on); if (G.xs.has(k) !== was) S(drag.on ? "x" : "unx");
@@ -967,7 +992,7 @@
   if ($("offBtn")) $("offBtn").onclick = () => openOfflineModal();
 
   // ══ ✈️ 비행기 · 오프라인 완전 다운로드 (6,090단계 + 실행 파일 캐시 + 홈 화면 앱 이어주기) ══
-  const OFFLINE_CACHE = "benny-arcade-v2";
+  const OFFLINE_VER = 3, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
   const OFFLINE_FILES = [
     "./", "./index.html", "./manifest.json", "./icon-192.png", "./icon.svg",
     "./style.css", "./core.js", "./banban.js", "./banban-ui.js", "./zip.js", "./zip-ui.js",
@@ -984,7 +1009,7 @@
   function updateOffBtn() {
     const b = $("offBtn"); if (!b) return;
     const r = store.get("offlineReady", null);
-    b.textContent = r && r.v === 2 ? "✈️ 준비됨 ✓" : "✈️ 비행기용";
+    b.textContent = r && r.v === OFFLINE_VER ? "✈️ 준비됨 ✓" : "✈️ 비행기용";
   }
   function syncShareHash(force) {
     try {
@@ -1034,7 +1059,7 @@
         loadGM().catch(() => {}),
       ]);
     }
-    const ready = { v: 2, at: Date.now(), files: okCount, total, stages: 6090 };
+    const ready = { v: OFFLINE_VER, at: Date.now(), files: okCount, total, stages: 6090 };
     if (okCount >= total - 3) store.set("offlineReady", ready);
     syncShareHash(true);
     updateOffBtn();
@@ -1734,8 +1759,11 @@
       const s = stageInfo(maxStage() + 1);
       if (s.chunk > 0) loadChunks(s.tier, s.chunk);
       if (maxStage() >= 800) loadChunks("master", s.chunk + 1);
-      if (isStandalone() && !store.get("offlineReady", null)) {
+      const offR = store.get("offlineReady", null);
+      if (isStandalone() && !offR) {
         prepareOffline().then(r => { if (r.ok) toast("✈️ 홈 화면 앱 오프라인 준비 완료! (6,090단계)", 3200); }).catch(() => {});
+      } else if (offR && offR.v < OFFLINE_VER && isOn() && !/[?&](mock|guest)\b/.test(location.search)) {
+        prepareOffline().catch(() => {});   // 캐시 버전이 올라갔으면 온라인일 때 조용히 최신 파일로 다시 채움
       }
     }).catch(() => {});
   }).catch(e => { $("tiers").textContent = "퍼즐을 못 불러왔어요: " + e.message; });

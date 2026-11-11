@@ -169,6 +169,66 @@ U.main(async T => {
   await pe('pointerup', { ...at(two.D, .5), id: 8, prim: false }); await pe('pointerup', at(two.A2, .5));
   const s3 = await st();
   T.ok(!s3.cx && !s3.dx && !s3.a2x, '① 누르는 동안 다른 손가락이 닿은 칸은 그대로 (' + JSON.stringify(s3) + ')');
+  // ── 11-11 지민 님 아이폰 '실제로 누르는 곳과 다른 데가 클릭되는 느낌': 틈새 무반응 제거 · 아래 입체 그림자 터치 보정 · 경계 더블탭 자석 · 사파리 스크롤 초기화
+  await T.sleep(450);
+  { // 1) 칸 사이 틈(gap)에 닿아도 가장 가까운 칸으로 잡힘 (씹히지 않음)
+    const gpPt = { x: two.A2.l + two.A2.w + 0.8, y: two.A2.t + two.A2.h * .5 };
+    await pe('pointerdown', gpPt); await pe('pointerup', gpPt);
+    const sg = await st();
+    T.ok(sg.a2x && !sg.b2x, '① 칸 사이 틈(gap)을 눌러도 안 씹히고 가까운 칸에 ✕ (' + JSON.stringify(sg) + ')');
+    await T.sleep(450);
+    await pe('pointerdown', at(two.A2, .5)); await pe('pointerup', at(two.A2, .5));   // 원복
+  }
+  await T.sleep(450);
+  { // 2) 윗칸 아랫부분(3px 입체 그림자 바로 아래 틈)을 손가락으로 누르면 아랫줄로 안 밀리고 윗칸이 눌림
+    const vPair = await p.evaluate(() => {
+      const G = window.__ny.G, n = G.n, free = k => !G.isAns(k) && !G.cats.has(k) && !G.bad.has(k) && !G.xs.has(k);
+      for (let k = 0; k < n * (n - 1); k++) if (free(k) && free(k + n)) {
+        const r = document.getElementById('board').children[k].getBoundingClientRect();
+        return { topK: k, botK: k + n, x: r.left + r.width * .5, y: r.bottom + 1.5 };
+      }
+      return null;
+    });
+    if (vPair) {
+      await pe('pointerdown', { x: vPair.x, y: vPair.y }); await pe('pointerup', { x: vPair.x, y: vPair.y });
+      const sv = await p.evaluate(o => ({ top: window.__ny.G.xs.has(o.topK), bot: window.__ny.G.xs.has(o.botK) }), vPair);
+      T.ok(sv.top && !sv.bot, '① 손가락 터치 중심이 칸 아랫변 살짝 아래에 찍혀도 시선이 겨냥한 윗칸이 눌림 (' + JSON.stringify(sv) + ')');
+      await T.sleep(450);
+      await pe('pointerdown', { x: vPair.x, y: vPair.y }); await pe('pointerup', { x: vPair.x, y: vPair.y });
+    }
+  }
+  await T.sleep(450);
+  { // 3) 정답 칸 경계 근처를 빠르게 두 번 톡톡 누를 때 두 번째 손가락이 옆 칸으로 1~2px 넘어가도 첫 칸에 🐱 (옆 칸에 ✕ 안 찍힘)
+    const bCat = await p.evaluate(() => {
+      const G = window.__ny.G, n = G.n;
+      for (let r = 0; r < n; r++) {
+        const k = r * n + G.ans[r];
+        if (!G.cats.has(k) && G.ans[r] < n - 1 && !G.xs.has(k + 1) && !G.cats.has(k + 1)) {
+          const A = document.getElementById('board').children[k].getBoundingClientRect(), B = document.getElementById('board').children[k + 1].getBoundingClientRect();
+          return { k, nb: k + 1, p1: { x: A.right - 2, y: A.top + A.height * .5 }, p2: { x: B.left + 1.5, y: B.top + B.height * .5 } };
+        }
+      }
+      return null;
+    });
+    if (bCat) {
+      await pe('pointerdown', bCat.p1); await pe('pointerup', bCat.p1);
+      await pe('pointerdown', bCat.p2); await pe('pointerup', bCat.p2);
+      const sb = await p.evaluate(o => ({ cat: window.__ny.G.cats.has(o.k), nbX: window.__ny.G.xs.has(o.nb) }), bCat);
+      T.ok(sb.cat && !sb.nbX, '① 경계 근처 빠른 두 번 탭이 옆 칸으로 살짝 넘어가도 첫 칸 🐱 · 옆 칸 ✕ 없음 (' + JSON.stringify(sb) + ')');
+    }
+  }
+  { // 4) #home 을 스크롤한 채 [시작!] 을 눌러 .play 로 들어갈 때 scrollY 가 즉시 0 으로 초기화됨 (iOS 사파리 뷰포트 밀림 방지)
+    const scReset = await p.evaluate(() => {
+      document.getElementById('giveUp').click(); document.getElementById('giveUp').click();
+      document.body.style.minHeight = '2400px'; window.scrollTo(0, 320);
+      const before = window.scrollY;
+      document.getElementById('startBtn').click();
+      const after = window.scrollY;
+      document.body.style.minHeight = '';
+      return { before, after, playing: !document.getElementById('play').hidden };
+    });
+    T.ok(scReset.before > 100 && scReset.after === 0 && scReset.playing, '① 스크롤된 첫 화면에서 판으로 들어갈 때 scrollY=0 즉시 초기화 (' + JSON.stringify(scReset) + ')');
+  }
   // 판 밖 단추도 터치로 그대로 눌림
   const auto0 = await p.evaluate(() => document.getElementById('autoX').getAttribute('aria-pressed'));
   const ax = await p.evaluate(() => { const r = document.getElementById('autoX').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
