@@ -356,10 +356,15 @@
   // TA = { kind, tier, endAt, clock, solved, failed, i(몇 번째 문제), seq(대결: 모두 같은 순서), hintRule, over }
   let TA = null;
   const TA_SOLO_MIN = 3;
+  // 11-12 혼자 타임어택은 판 크기 차례를 모두 같게: 그 난이도에 있는 크기를 작은 것부터 되풀이 (고수 9 → 10 → 11 → 9 …).
+  //   전엔 무작위라 작은 판이 많이 걸린 판이 운으로 이겼고 (지민 님 중간값 9칸 31초 · 11칸 45초), 쉬운 판이 나올 때까지 다시 시작하는 일도 많았음.
+  //   크기 목록은 0번 묶음 기준 (뒤 묶음엔 큰 판이 없음). 다시 시작하면 제일 작은 판부터
+  const taSizes = tier => bank && bank[tier] ? [...new Set(bank[tier].slice(0, CHUNK).map(p => p.n))].sort((a, b) => a - b) : [];
+  const taSize = (tier, i) => { const s = taSizes(tier); return s.length ? s[i % s.length] : 0; };
   function nextTA() {
     const ta = TA; if (!ta || ta.over) return;
     const T = TIERS.find(t => t.id === ta.tier), list = bank[ta.tier];
-    const idx = ta.kind === "vs" ? ta.seq[ta.i % ta.seq.length] : pickRandom(ta.tier);
+    const idx = ta.kind === "vs" ? ta.seq[ta.i % ta.seq.length] : pickRandom(ta.tier, taSize(ta.tier, ta.i));
     ta.pi = ta.i;                                                            // 관전하는 친구가 같은 문제를 그리도록
     // 혼자 타임어택은 이번 주 친구 1등 기록을 옆에 (넘어야 할 숫자를 판 위에서 바로 봄). 넘으면 🥇
     const label = () => `⏱ ${T.label} · ${ta.solved}개` + (ta.kind === "solo" && ta.goal ? (ta.solved > ta.goal ? " · 🥇 새 1등!" : ` · 1등 ${ta.goal}개`) : "");
@@ -830,7 +835,7 @@
     drawRankStrip();
     if (soloMode === "map") { $("soloDesc").hidden = true; drawStages(); return; }
     if (soloMode === "day") { $("soloDesc").hidden = true; drawDay(); return; }
-    $("soloDesc").textContent = ta ? `${TA_SOLO_MIN}분 동안 몇 개 풀 수 있을까요? 다 풀거나 🐟를 다 잃으면 바로 다음 문제. 힌트는 한 번에 -${PENALTY}초` : "";
+    taDesc();
     $("soloDesc").hidden = !ta;
     const bb = bbOn ? store.get("bbBest", {}) : zzOn ? store.get("zzBest", {}) : null;
     $("tiers").innerHTML = TIERS.map(t => {
@@ -838,7 +843,12 @@
       const top = ta && rkData ? taRows(t.id)[0] : null;   // 이번 주 친구 1등 (어느 난이도에서 겨루는지 보이게)
       return `<button class="tier t-${t.id}" data-t="${t.id}" aria-pressed="${t.id === soloTier}"><span class="em">${t.em}</span><b>${t.label}</b><span>${bbOn ? BB_DESC[t.id] : zzOn ? ZZ_DESC[t.id] : t.desc}</span>${rec ? `<span>${rec}</span>` : ""}${top ? `<span class="tw">🥇 이번 주 ${esc(top.name)} ${top.v}개</span>` : ""}</button>`;
     }).join("");
-    for (const b of $("tiers").children) b.onclick = () => { soloTier = b.dataset.t; store.set("soloTier", soloTier); for (const o of $("tiers").children) o.setAttribute("aria-pressed", o === b); if (soloMode === "ta") drawTABoard(); };
+    for (const b of $("tiers").children) b.onclick = () => { soloTier = b.dataset.t; store.set("soloTier", soloTier); for (const o of $("tiers").children) o.setAttribute("aria-pressed", o === b); if (soloMode === "ta") { drawTABoard(); taDesc(); } };
+  }
+  function taDesc() {   // 타임어택 설명 (고른 난이도의 판 크기 차례까지). 판 묶음이 아직 안 왔으면 오면 다시 씀
+    const ta = soloMode === "ta", sz = ta ? taSizes(soloTier) : [];
+    if (ta && !bank) bankP.then(taDesc).catch(() => {});
+    $("soloDesc").textContent = ta ? `${TA_SOLO_MIN}분 동안 몇 개 풀 수 있을까요? ${sz.length > 1 ? `판은 ${sz.join(" → ")}칸 차례로 되풀이 (누구나 같은 차례). ` : ""}다 풀거나 🐟를 다 잃으면 바로 다음 문제. 힌트는 한 번에 -${PENALTY}초` : "";
   }
   $("startBtn").onclick = () => { if (!bank) return; if (soloMode === "map") playStage(maxStage() + 1); else if (soloMode === "day") playDaily(); else if (soloMode === "ta") playTA(soloTier); else if (bbKind === "b") playBB(soloTier); else if (bbKind === "z") playZZ(soloTier); else playSolo(soloTier); };
 
@@ -917,11 +927,13 @@
       daily ? [["닫기", goHome, "primary"]] : [["한 판 더", () => playZZ(tier), "primary"], ["난이도 고르기", goHome]]);
     setTimeout(checkBadges, 1200);
   }
-  function pickRandom(tier) {
+  function pickRandom(tier, size) {   // size 를 주면 그 크기 판에서만 (타임어택). 그 크기의 안 푼 판이 떨어지면 푼 판에서 (모양은 매번 바뀜)
     const n = bank[tier].length, sv = new Set(solved()[tier] || []), recent = new Set(store.get("recent_" + tier, []));
-    let pool = [...Array(n).keys()].filter(i => !sv.has(i) && !recent.has(i));
-    if (!pool.length) pool = [...Array(n).keys()].filter(i => !recent.has(i));
-    if (!pool.length) pool = [...Array(n).keys()];
+    let all = [...Array(n).keys()];
+    if (size) { const f = all.filter(i => bank[tier][i].n === size); if (f.length) all = f; }
+    let pool = all.filter(i => !sv.has(i) && !recent.has(i));
+    if (!pool.length) pool = all.filter(i => !recent.has(i));
+    if (!pool.length) pool = all;
     const i = pool[Math.floor(Math.random() * pool.length)];
     if (pool.length < 100) bankIdxP.then(() => loadChunks(tier, Math.floor(n / CHUNK)));   // 안 푼 판이 얼마 안 남으면 다음 묶음을 미리 받아 둠
     store.set("recent_" + tier, [i, ...recent].slice(0, Math.min(60, n - 1)));   // 최근 60판은 다시 안 나옴

@@ -885,6 +885,20 @@ U.main(async T => {
       const h1 = await hud();
       const old = await K.evaluate(() => ({ over: window.__ta0.over, res: document.getElementById('resBox').hidden }));
       T.ok(h1.solved === 0 && h1.left > 170 && old.over && old.res, '⑳ 두 번 누르면 시간 · 개수 처음부터 (결과창 없이 바로): ' + JSON.stringify(h1));
+      // ── ㉑ 11-12 베니 님 '바꿔 줘': 판 크기가 무작위(9·10·11칸)라 작은 판이 많이 걸리면 운으로 이김 → 순서를 모두 같게 (9 → 10 → 11 되풀이)
+      const desc = await K.evaluate(() => document.getElementById('soloDesc').textContent);
+      const ns = [];
+      for (let j = 0; j < 4; j++) {
+        await U.waitFor(K, j => window.__ny.TA.i === j && window.__ny.G && !window.__ny.G.over && document.getElementById('board').children.length === window.__ny.G.n ** 2, j, 5000, 50);
+        ns.push(await K.evaluate(() => __ny.G.n));
+        if (j < 3) await solve(K);
+      }
+      T.ok(ns.join() === '9,10,11,9', '㉑ 혼자 타임어택 판 크기는 9 → 10 → 11 차례로 되풀이: ' + ns.join(' → '));
+      T.ok(/9 → 10 → 11칸/.test(desc), '㉑ 시작 전 설명에 판 크기 차례: ' + desc);
+      await K.evaluate(() => { window.__ta1 = __ny.TA; document.getElementById('restart').click(); document.getElementById('restart').click(); });
+      await U.waitFor(K, () => window.__ny.TA !== window.__ta1 && window.__ny.G && !window.__ny.G.over, null, 4000);
+      const n0 = await K.evaluate(() => [__ny.TA.i, __ny.G.n]);
+      T.ok(n0.join() === '0,9', '㉑ 다시 시작하면 9칸부터: ' + n0.join());
     }
     await K.evaluate(() => { __ny.TA.solved = 8; __ny.TA.endAt = Date.now() - 1; });
     const r1 = await U.waitFor(K, () => !document.getElementById('resBox').hidden && /시간 끝/.test(document.getElementById('resTitle').textContent) && document.getElementById('resRank').textContent.replace(/\s+/g, ' '), null, 5000);
