@@ -251,6 +251,22 @@ U.main(async T => {
         const e2 = await p.evaluate(k => ({ cat: window.__ny.G.cats.has(k), x: window.__ny.G.xs.has(k) }), tgt.k);
         T.ok(!e1 && !e2.cat && !e2.x, '① 맨 가장자리 두 번째 톡 · 천천히 두 번은 🐱 아님 (' + JSON.stringify({ e1, e2 }) + ')');
         await back(s0); await T.sleep(450);
+        // ⓚ 11-13 지민 님 '또 고양이 안 되고 ✕ · ✕ 해제, 자주': 터치 시계가 앱 시계보다 앞서 가는 폰 (홈 화면 앱이 자다 깬 뒤) + 폰이 바빠 두 번째를 늦게 처리
+        //    gap = 손가락이 닿은 간격, busy = 두 번째를 처리할 때까지 폰이 바빴던 시간, ahead = 터치 시계가 앞선 만큼
+        const skew = (o, gap, busy, ahead) => p.evaluate(([o, gap, busy, ahead]) => {
+          const el = document.elementFromPoint(o.x, o.y), t0 = performance.now() + ahead;
+          const mk = (type, ts) => { const e = new PointerEvent(type, { bubbles: true, cancelable: true, clientX: o.x, clientY: o.y, pointerType: 'touch', pointerId: 7, isPrimary: true }); Object.defineProperty(e, 'timeStamp', { value: ts }); return e; };
+          el.dispatchEvent(mk('pointerdown', t0)); window.dispatchEvent(mk('pointerup', t0 + 60));
+          const until = performance.now() + busy; while (performance.now() < until) { /* 폰이 바쁜 동안 */ }
+          el.dispatchEvent(mk('pointerdown', t0 + gap)); window.dispatchEvent(mk('pointerup', t0 + gap + 60));
+        }, [o, gap, busy, ahead]);
+        await skew(at(tgt.R, .5), 250, 430, 3600000);
+        T.ok(await isCat(), '① 터치 시계가 앞서 가는 폰에서도 닿은 간격(0.25초)으로 재서 두 번 톡 = 🐱 (처리는 0.43초 뒤)');
+        await back(s0); await T.sleep(450);
+        await skew(at(tgt.R, .5), 480, 0, 3600000);
+        const k2 = await p.evaluate(k => ({ cat: window.__ny.G.cats.has(k), x: window.__ny.G.xs.has(k) }), tgt.k);
+        T.ok(!k2.cat && !k2.x, '① 그런 폰에서도 0.4초 넘게 띄운 두 번은 🐱 아님 (' + JSON.stringify(k2) + ')');
+        await back(s0); await T.sleep(450);
       }
       // ⓔ 끌기가 끝난 뒤 한참(0.45초) 지나 누른 것은 새로 누른 것 = 켜고 끔 그대로
       await pe('pointerdown', at(row.R[0], .5)); await pe('pointermove', at(row.R[1], .5)); await pe('pointerup', at(row.R[1], .5));
@@ -1063,6 +1079,106 @@ U.main(async T => {
     T.ok(restored.me && restored.me.name === '지밍비' && restored.pass && restored.pass.pwa === 1 && restored.st[1] >= 1, '⑰ 홈 화면 앱(#s=...)으로 열면 프로필·허용 권한·단계가 자동 복원됨: ' + JSON.stringify(restored));
     await O.evaluate(() => { for (const k of ['game.me', 'game.gate.pass.v1', 'nyang.stageStars', 'nyang.skin', 'nyang.offlineReady']) localStorage.removeItem(k); });
     await O.close();
+  }
+
+  // ── ㉒ 11-13 베니 님 '검토를 시켜도 막상 하면 오류가 많았다' → 🐞 이상해요: 실제 폰에서 '눌렀는데 뜻대로 안 됨'을 모음
+  //    판 아래 단추(글자 없이 한 번) · 의심 신호 세기(flip · miss · gap · undrag · slip) · 판 기록 한 줄에 같이 · 결과창 물음(하루 한 번)
+  {
+    const Y = await T.open('nyang/');
+    await U.waitFor(Y, A.ready);
+    await Y.evaluate(() => {   // 시험 화면엔 DB 가 없어 기록을 안 남김 → 어디에 무엇을 쓰는지 보려고 가짜 DB
+      window.__w = [];
+      const node = path => ({ key: path.split('/').pop(), get parent() { return node(path.split('/').slice(0, -1).join('/')); }, child: c => node(path + '/' + c),
+        set: v => (__w.push(['set', path, v]), Promise.resolve()), update: v => (__w.push(['update', path, v]), Promise.resolve()),
+        push(v) { const nd = node(path + '/-p' + __w.length); if (v !== undefined) __w.push(['push', path, v]); return nd; } });
+      const db = () => ({ ref: p => node(p) }); db.ServerValue = { TIMESTAMP: 'TS' };
+      if (!window.firebase) window.firebase = { database: db };
+      Arena.db = db;
+      for (const k of ['nyang.oddAsk', 'nyang.oddSent']) localStorage.removeItem(k);
+    });
+    const begin = async () => {
+      await Y.evaluate(() => { document.querySelector('#soloMode [data-v="one"]').click(); document.querySelector('#tiers [data-t="easy"]').click(); document.getElementById('startBtn').click(); });
+      await U.waitFor(Y, () => window.__ny.G && !window.__ny.G.over && !document.getElementById('play').hidden && document.getElementById('board').children.length === window.__ny.G.n ** 2, null, 6000);
+      let last = '', same = 0; for (let i = 0; i < 40 && same < 4; i++) { const r = await Y.evaluate(() => { const b = document.getElementById('board').getBoundingClientRect(); return b.width + ',' + b.top; }); same = r === last ? same + 1 : 0; last = r; await T.sleep(50); }
+    };
+    const pe = (type, k, id) => Y.evaluate(([type, k, id]) => {
+      const r = document.getElementById('board').children[k].getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+      (type === 'pointerdown' ? document.elementFromPoint(x, y) : window).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, pointerType: 'touch', pointerId: id || 7, isPrimary: true }));
+    }, [type, k, id]);
+    const swipe = async ks => { await pe('pointerdown', ks[0]); for (const k of ks.slice(1)) await pe('pointermove', k); await pe('pointerup', ks[ks.length - 1]); };
+    const st = () => Y.evaluate(() => ({ cnt: { ...__ny.ODD.cnt }, inp: { ...__ny.ODD.inp }, snap: __ny.ODD.snap && __ny.ODD.snap.why, xs: [...__ny.G.xs], m: __ny.G.mistakes }));
+    const freeW = skip => Y.evaluate(skip => { const G = __ny.G; for (let k = G.n * G.n - 1; k >= 0; k--) if (!G.isAns(k) && !G.cats.has(k) && !G.bad.has(k) && !G.xs.has(k) && !skip.includes(k)) return k; return -1; }, skip);
+    await begin();
+    const n = await Y.evaluate(() => __ny.G.n);
+    // 판 아래 단추: 보이고, 좁은 폰에서도 단추 줄이 화면을 안 넘음
+    const dk = await Y.evaluate(() => { const b = document.getElementById('oddBtn'), d = document.getElementById('dock'); return { vis: __qa.vis(b), txt: b.textContent.replace(/\s+/g, ' ').trim(), fit: [...d.children].filter(e => !e.hidden).every(e => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + .5; }), n: [...d.children].filter(e => !e.hidden).length, w: innerWidth }; });
+    T.ok(dk.vis && /이상해요/.test(dk.txt) && dk.fit && dk.n === 6, '㉒ 판 아래 🐞 이상해요 단추 (단추 6개가 화면 폭 안): ' + JSON.stringify(dk));
+    // undrag: 끌어서 ✕ 친 줄을 바로 반대로 다시 끎
+    await swipe([0, 1, 2]);
+    const s1 = await st();
+    await swipe([0, 1, 2]);
+    const s2 = await st();
+    T.ok([0, 1, 2].every(k => s1.xs.includes(k)) && s1.inp.drag === 1 && !s1.cnt.undrag && s2.xs.length === 0 && s2.cnt.undrag === 1 && s2.snap === 'sig:undrag', '㉒ 끌어서 친 ✕ 를 2.5초 안에 반대로 끌면 undrag 1: ' + JSON.stringify([s1.cnt, s2.cnt, s2.inp]));
+    // gap: 끌고 지나간 칸들 사이에 빠진 칸을 바로 따로 눌러 채움 (지금 끌기는 안 빠지니, 빠진 끌기는 값으로 넣고 채우는 톡은 진짜로)
+    await Y.evaluate(n => __ny.ODD.drag({ on: true, seen: new Set([n, n + 2]), last: n + 2 }), n);
+    await tap(Y, n + 1);
+    const s3 = await st();
+    T.ok(s3.cnt.gap === 1 && s3.cnt.undrag === 1 && s3.xs.includes(n + 1), '㉒ 끈 칸들 사이 빠진 칸을 2초 안에 눌러 채우면 gap 1: ' + JSON.stringify(s3.cnt));
+    await tap(Y, 2 * n);   // 끈 줄과 상관없는 칸은 gap 아님
+    T.ok((await st()).cnt.gap === 1, '㉒ 끈 줄 밖의 칸을 누른 것은 gap 아님');
+    // 단추 한 번 → 직전 입력 + 판 모양
+    const b1 = await Y.evaluate(() => { document.getElementById('oddBtn').click(); const L = __ny.ODD.last, tr = L && JSON.parse(L.tr); return L && { why: L.why, n: L.n, reg: L.reg.length, box: L.box.split(',').length, ty: [...new Set(tr.map(e => e[1]))].sort().join(' '), neg: tr.every(e => e[0] <= 0 && e[0] > -20000), msg: __ny.ODD.msg(L), odd: __w.filter(w => w[0] === 'push' && /^logs\/nyang\/[\d-]+\/[\w]+\/odd$/.test(w[1]) && w[2].why !== 'auto').map(w => w[2].why + '/' + w[2].t), auto: __w.filter(w => w[0] === 'push' && /\/odd$/.test(w[1]) && w[2].why === 'auto').map(w => w[2].sig).join(), toast: (document.querySelector('.toast') || {}).textContent }; });
+    T.ok(b1 && b1.why === 'btn' && b1.reg === b1.n * b1.n && b1.box === 4 && b1.neg && ['!gap', '!undrag', 'd', 'm', 'p', 'u', 'x+'].every(t => b1.ty.split(' ').includes(t)), '㉒ 🐞 한 번 누르면 직전 20초 입력(닿음 · 지나감 · 뗌 · 결과 · 신호) + 판 모양을 묶음: ' + JSON.stringify({ ty: b1 && b1.ty, n: b1 && b1.n }));
+    T.ok(b1.odd.join() === 'btn/TS' && /보냈어요/.test(b1.toast || ''), '㉒ 기록(logs/nyang/날짜/세션/odd)에 남기고 알림: ' + JSON.stringify([b1.odd, b1.toast]));
+    T.ok(b1.auto === 'sig:undrag,sig:gap', '㉒ 신호가 날 때마다 그때의 입력 기록이 저절로 남음 (알림 없음): ' + b1.auto);
+    T.ok(/^\[이상해요\] 초급 \d칸 한 판 · 신호 undrag1 gap1 · v\d+ · 기록 [\d-]+\/\w+\n/.test(b1.msg) && /✕켬\(2,2\)/.test(b1.msg) && b1.msg.length <= 500, '㉒ 베니 님 폰 알림 한 줄 (500자 안): ' + b1.msg.replace(/\n/g, ' ⏎ ').slice(0, 150));
+    const b2 = await Y.evaluate(() => { document.getElementById('oddBtn').click(); return { odd: __w.filter(w => w[0] === 'push' && /\/odd$/.test(w[1]) && w[2].why !== 'auto').length, toast: (document.querySelector('.toast') || {}).textContent }; });
+    T.ok(b2.odd === 1 && /방금 보냈어요/.test(b2.toast || ''), '㉒ 15초 안에 또 누르면 한 번만 보냄: ' + JSON.stringify(b2));
+    // flip: 같은 칸 ✕ 를 세 번 켰다 껐다
+    const F = await freeW([]);
+    await tap(Y, F); await T.sleep(450); await tap(Y, F);
+    const f2 = await st();
+    await T.sleep(450); await tap(Y, F);
+    const f3 = await st();
+    T.ok(!f2.cnt.flip && f3.cnt.flip === 1 && f3.snap === 'sig:flip', '㉒ 같은 칸 ✕ 를 2.5초 안에 세 번 켰다 껐다 하면 flip 1 (두 번은 아님): ' + JSON.stringify(f3.cnt));
+    // miss: 두 번 톡이 안 먹혀 다시 함 (한 번 · 쉬고 · 두 번) / 평소 두 번 톡은 아님
+    const ans = await ansOf(Y);
+    await cat(Y, ans[0]);
+    const m0 = await st();
+    await tap(Y, ans[1]); await T.sleep(450); await cat(Y, ans[1]);
+    const m1 = await st();
+    T.ok(!m0.cnt.miss && m1.cnt.miss === 1 && m1.inp.dbl === 2, '㉒ 따로 한 번 누른 직후(0.45초) 두 번 톡으로 고양이면 miss 1 (평소 두 번 톡은 아님): ' + JSON.stringify(m1.cnt));
+    await tap(Y, ans[2]); await T.sleep(1000); await cat(Y, ans[2]);   // ✕ 를 쳐 두고 1초 뒤 생각을 바꿔 고양이 = 신호 아님
+    T.ok((await st()).cnt.miss === 1, '㉒ ✕ 치고 1초 뒤 마음을 바꿔 고양이를 놓은 것은 miss 아님');
+    // slip: ✕ 가 있던 칸에 고양이가 놓여 실수
+    const W = await freeW([F]);
+    await tap(Y, W); await T.sleep(1700); await cat(Y, W);
+    const p1 = await st();
+    T.ok(p1.cnt.slip === 1 && p1.m === m1.m + 1 && p1.cnt.miss === 1 && p1.inp.bad === 1 && p1.inp.dbl === 4, '㉒ ✕ 가 있던 칸에 두 번 톡이 먹혀 실수가 되면 slip 1: ' + JSON.stringify(p1.cnt));
+    // 판이 끝나면 기록 한 줄에 신호 · 입력 수, 결과창에 물음 (하루 한 번)
+    await solve(Y);
+    await U.waitFor(Y, () => !document.getElementById('resBox').hidden, null, 6000);
+    const e1 = await Y.evaluate(() => { const u = __w.filter(w => w[0] === 'update' && /\/matches\//.test(w[1])).pop(), a = document.getElementById('oddAsk'); return { m: u && u[2], ask: a && a.textContent.replace(/\s+/g, ' ').trim(), day: localStorage.getItem('nyang.oddAsk'), today: JSON.stringify(__ny.kstDay()) }; });
+    T.ok(e1.m && e1.m.won === true && e1.m.sus && e1.m.sus.flip === 1 && e1.m.sus.gap === 1 && e1.m.sus.undrag === 1 && e1.m.sus.miss === 1 && e1.m.sus.slip === 1 && e1.m.inp.tap >= 6 && e1.m.inp.dbl >= n && e1.m.inp.drag === 3, '㉒ 판 기록 한 줄에 의심 신호(sus) · 입력 수(inp): ' + JSON.stringify(e1.m && [e1.m.sus, e1.m.inp]));
+    T.ok(/뜻대로 안 된 적이 있었나요\?.*네, 있었어요.*아니요/.test(e1.ask || '') && e1.day === e1.today, '㉒ 신호가 있었던 판의 결과창에 물음: ' + e1.ask);
+    const y1 = await Y.evaluate(() => { document.querySelector('#oddAsk [data-a="y"]').click(); const L = __ny.ODD.last; return { why: L.why, sig: L.sig, gone: !document.getElementById('oddAsk'), odd: __w.filter(w => w[0] === 'push' && /\/odd$/.test(w[1]) && w[2].why !== 'auto').map(w => w[2].why).join(), toast: (document.querySelector('.toast') || {}).textContent }; });
+    T.ok(y1.why === 'ask-yes' && /^sig:/.test(y1.sig) && y1.gone && y1.odd === 'btn,ask-yes' && /보냈어요/.test(y1.toast || ''), '㉒ [네] 를 누르면 그 신호 때의 입력 기록을 보냄: ' + JSON.stringify(y1));
+    // 같은 날 다음 판: 신호가 있어도 다시 안 물음 · 신호 수는 새 판에서 0부터
+    await Y.evaluate(() => document.querySelector('#resBtns .btn').click());
+    await U.waitFor(Y, () => !document.getElementById('home').hidden || (window.__ny.G && !window.__ny.G.over), null, 4000);
+    if (await Y.evaluate(() => !document.getElementById('home').hidden)) await begin();
+    else await U.waitFor(Y, () => window.__ny.G && !window.__ny.G.over && document.getElementById('board').children.length === window.__ny.G.n ** 2 && !document.getElementById('play').hidden, null, 6000);
+    await T.sleep(300);
+    const z0 = await st();
+    const F2 = await freeW([]);
+    await tap(Y, F2); await T.sleep(450); await tap(Y, F2); await T.sleep(450); await tap(Y, F2);
+    const z1 = await st();
+    await solve(Y);
+    await U.waitFor(Y, () => !document.getElementById('resBox').hidden, null, 6000);
+    const e2 = await Y.evaluate(() => ({ ask: !!document.getElementById('oddAsk'), m: (__w.filter(w => w[0] === 'update' && /\/matches\//.test(w[1])).pop() || [])[2] }));
+    T.ok(!Object.keys(z0.cnt).length && z1.cnt.flip === 1 && !e2.ask && e2.m.sus && e2.m.sus.flip === 1 && !e2.m.sus.gap, '㉒ 같은 날엔 다시 안 물음 · 신호는 판마다 따로 셈: ' + JSON.stringify([z1.cnt, e2.ask, e2.m && e2.m.sus]));
+    await Y.evaluate(() => { for (const k of ['nyang.oddAsk', 'nyang.oddSent', 'nyang.avg', 'nyang.today', 'nyang.solved', 'nyang.bestT']) localStorage.removeItem(k); });
+    await Y.close();
   }
 
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');

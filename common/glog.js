@@ -26,6 +26,8 @@ window.GLOG = (getDb, game) => {
     matchUpdate(m) { if (match) safe(match.update({ ...m, updated: TS() })); },
     matchEnd(m) { if (match) { safe(match.update({ ...m, end: TS() })); match = null; } },
     get inMatch() { return !!match; },
+    // 🐞 이상해요 (11-13): 눌렀는데 뜻대로 안 됐을 때의 입력 기록. 세션 주인은 odd/, 친구는 자기가 쓸 수 있는 net/{uid}/odd/
+    odd(uid, o) { if (ok() && (isOwner || uid)) safe((isOwner ? base.child("odd") : base.child(`net/${uid}/odd`)).push({ ...o, t: TS() })); },
     net(uid, n) { if (ok()) safe(base.child(`net/${uid}`).update({ ...n, updated: TS() })); },
     chat(m) {                                                                        // 방장만 남김 (같은 메시지 두 번 안 남게)
       if (!ok() || !isOwner || !m || !m.m) return;

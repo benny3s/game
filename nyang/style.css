@@ -372,3 +372,8 @@ table.rank td.n{text-align:right;font-variant-numeric:tabular-nums}
 .tb-top .seg{gap:4px}
 .tb-top .seg .btn{padding:5px 10px;font-size:12.5px;min-height:0}
 .tier .tw{color:#c2622f;font-weight:700}
+/* 🐞 이상해요 (11-13): 아래 단추가 6개가 되어 좁은 폰(360px)에서 넘치지 않게 · 결과창의 '뜻대로 안 된 적이 있었나요?' */
+@media (max-width:420px){.dock{gap:5px}.dock button{min-width:46px}.dock button .ic{width:44px;height:44px;font-size:19px}}
+.oddask{display:grid;gap:6px;justify-items:center;margin-top:4px;padding:10px;border:1px dashed var(--line);border-radius:12px;font-size:14px;color:var(--soft)}
+.oddask .row{gap:6px}
+.oddask .btn{padding:6px 12px;font-size:13.5px;min-height:0}

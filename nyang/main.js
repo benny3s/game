@@ -33,7 +33,15 @@
 
   // ── 기록 (관리자만 읽음)
   let glog = null;
-  const logInit = () => { if (!glog && Arena.db()) glog = GLOG(() => Arena.db(), "nyang"); return glog; };
+  const logInit = () => {
+    if (!glog && Arena.db()) {
+      glog = GLOG(() => Arena.db(), "nyang");
+      const ms = glog.matchStart.bind(glog), me = glog.matchEnd.bind(glog);     // 🐞 판 기록 한 줄에 의심 신호(sus) · 입력 수(inp)를 같이 남김 (아래 ODD)
+      glog.matchStart = m => { ODD.reset(); ms(m); };
+      glog.matchEnd = m => me({ ...ODD.take(), ...m });
+    }
+    return glog;
+  };
 
   // ── 화면 바꾸기
   // 11-11 지민 님 아이폰 터치 어긋남: #home 을 아래로 스크롤해 [시작!] 을 누른 뒤 position:fixed(.play) + overflow:hidden 으로 바뀔 때
@@ -84,6 +92,7 @@
     b.style.gridTemplateColumns = `repeat(${G.n},minmax(0,1fr))`;
     b.style.gridTemplateRows = `repeat(${G.n},minmax(0,1fr))`;   // 칸이 늘 정사각형 (고양이가 든 줄만 커지지 않게)
     b.innerHTML = cellsHtml();
+    ODD.board(G.n);
     drag = dragLast = null; lastTap = { k: -1, t: 0 };   // 옛 판의 끌기 · 두 번 톡 상태를 새 판에 들고 가지 않음
     paint();
   }
@@ -156,6 +165,108 @@
   //   1) elementFromPoint 대신 #board 사각형 대비 상대좌표로 판정 → 3~4px 틈(gap)·둥근 모서리 무반응 구간 제거 & WebKit 뷰포트 오차 방지
   //   2) 손가락 터치(touch)는 손톱 아래 살이 닿고 칸 아래 3px 입체 그림자가 있어 시선보다 아래(+Y)로 찍힘 → 약 3px 위쪽으로 보정
   //   3) 경계선 근처에서 빠르게(0.32초 안) 두 번 톡톡 누를 때 두 번째 탭이 1~2px 옆 칸으로 넘어가도 아주 가까우면(8.5px·칸 0.25 안) 첫 칸 🐱 로 연결
+  // ── 🐞 이상해요 (11-13 베니 님 '검토를 시켜도 막상 하면 오류가 많았다') — 실제 폰에서 '눌렀는데 뜻대로 안 됨'을 모음
+  //   ① 최근 입력을 작은 고리(400개 · 20초)로 들고 있음: 닿은 자리 d · 지나간 점 p · 뗀 자리 u,
+  //      그 결과 = ✕ 켬 x+ · 끔 x- · 고양이 c · 실수 b · 끌어서 친 칸 m · 끌기 이어 감 re · 옆 칸을 앞 칸으로 침 sn · 새 판 new · 신호 !이름
+  //   ② 버그일 때 잘 나오는 모양을 조용히 셈 → 판 기록 한 줄의 sus (입력 수는 inp). 정정 하나하나를 오류로 보지 않고 기기 · 버전별 비율로 봄
+  //        flip   같은 칸 ✕ 를 2.5초 안에 세 번 켰다 껐다 (두 번 톡이 안 먹힘)
+  //        miss   같은 칸을 따로 누른 직후(0.8초 안) 다시 두 번 톡, 또는 1.5초 안에 따로 세 번 넘게 누른 끝에 고양이 (두 번 톡을 다시 함)
+  //        gap    끌고 지나간 칸들 사이에 빠진 칸을 2초 안에 따로 눌러 채움 (끌기 끊김)
+  //        undrag 끌어서 친 것을 2.5초 안에 반대로 다시 끎 (다른 줄에 쳐짐)
+  //        slip   ✕ 가 있던 칸에 고양이가 놓여 실수가 됨 (✕ 를 지우려던 것이 두 번 톡으로 먹힘)
+  //   ③ 판 아래 🐞 이상해요 = 글자 없이 한 번 → 직전 20초 입력 + 판 모양을 기록(logs/…/odd)에 남기고 베니 님께 알림(game_reports, 하루 3번까지)
+  //      신호가 날 때마다 그때의 입력 기록은 기록(logs/…/odd, why "auto")에 저절로 남음 (알림 없음, 화면 한 번 여는 동안 6개까지)
+  //   ④ 신호가 있었던 판의 결과창에 '뜻대로 안 된 적이 있었나요?' — 하루 한 번만. 네 = 그 신호 때의 입력 기록을 보냄
+  const ODD = (() => {
+    const RING = 400, KEEP = 20000, ring = [];
+    const VER = ((((document.currentScript || {}).src || "").match(/[?&]v=(\d+)/) || [])[1]) || "";
+    let cnt = {}, inp = {}, snap = null, taps = [], lastDrag = null, lastPath = null, sentN = 0;
+    const now = () => Math.round(performance.now());
+    const rec = (ty, k, x) => { ring.push(x === undefined ? [now(), ty, k] : [now(), ty, k, x]); if (ring.length > RING) ring.shift(); };
+    const add = (o, k) => { o[k] = (o[k] || 0) + 1; };
+    function pack(why) {
+      if (!G) return null;
+      const t = now(), b = $("board").getBoundingClientRect(), r1 = v => Math.round(v * 10) / 10;
+      return {
+        why, at: Date.now(), ver: VER, kind: ctx ? (ctx.ta ? "ta" : ctx.daily ? "day" : ctx.kind || "") : "", tier: (ctx && ctx.tier) || "", idx: ctx && ctx.idx != null ? ctx.idx : -1,
+        n: G.n, reg: G.reg.map(r => r.map(v => v.toString(36)).join("")).join(""), ans: G.ans.join(","), cats: [...G.cats].join(","), xs: [...G.xs].join(","), bad: [...G.bad].join(","),
+        box: [r1(b.left), r1(b.top), r1(b.width), fitGp || 0].join(","), vp: [innerWidth, innerHeight, window.devicePixelRatio || 1].join(","), ua: navigator.userAgent.slice(0, 120),
+        sus: { ...cnt }, inp: { ...inp },
+        tr: JSON.stringify(ring.filter(e => t - e[0] < KEEP).map(e => [e[0] - t, ...e.slice(1)])),   // 시각은 '보낸 때보다 몇 ms 전'
+      };
+    }
+    // 신호가 나면 그때의 입력 기록을 기록(logs)에 저절로 남김 — 알림은 안 감, 화면 한 번 여는 동안 6개까지 (실제 폰에서 무슨 일이 있었는지 보려고)
+    let autoN = 0;
+    function sig(name, k) {
+      add(cnt, name); rec("!" + name, k); snap = pack("sig:" + name);
+      if (snap && autoN < 6) { autoN++; const pk = { ...snap, sig: snap.why, why: "auto" }; setTimeout(() => { try { const lg = logInit(); if (lg && lg.sid && lg.odd) lg.odd(Arena.uid, pk); } catch (e) {} }, 0); }
+    }
+    // 베니 님 폰 알림에 바로 읽히는 한 줄 (500자 안): 어떤 판 · 신호 · 기록 자리 · 직전 입력 몇 개
+    function msg(pk) {
+      const T = TIERS.find(t => t.id === pk.tier), W = { "x+": "✕켬", "x-": "✕끔", c: "🐱", b: "🐱실수", m: "끌어✕", re: "이어끌기", sn: "앞칸으로" };
+      const sus = Object.entries(pk.sus || {}).map(([k, v]) => k + v).join(" ");
+      let head = `[이상해요${pk.why === "btn" ? "" : " · 물음에 네"}] ${T ? T.label : ""} ${pk.n}칸 ${{ ta: "타임어택", day: "오늘의 퍼즐", vs: "대결", solo: "한 판" }[pk.kind] || pk.kind}${sus ? " · 신호 " + sus : ""} · v${pk.ver} · 기록 ${(glog && glog.sid) || "없음"}\n`;
+      const ev = JSON.parse(pk.tr).filter(e => W[e[1]] || e[1][0] === "!").map(e => `${(e[0] / 1000).toFixed(1)} ${W[e[1]] || e[1]}${e[2] >= 0 ? `(${Math.floor(e[2] / pk.n) + 1},${e[2] % pk.n + 1})` : ""}`);
+      let tail = ""; for (let i = ev.length - 1; i >= 0 && head.length + tail.length + ev[i].length + 3 < 500; i--) tail = ev[i] + (tail ? " | " + tail : "");
+      return head + tail;
+    }
+    const api = {
+      rec, msg,
+      get snap() { return snap; }, get cnt() { return cnt; }, get inp() { return inp; }, last: null,
+      down(p0, e) { rec("d", p0.k, [Math.round(e.clientX), Math.round(e.clientY), e.pointerType === "touch" ? 1 : 0, Math.round((e.timeStamp || 0) - performance.now())]); lastPath = [e.clientX, e.clientY]; },   // 끝 값 = 터치 시계가 앱 시계보다 앞선 ms
+      move(x, y, cs) { if (!lastPath || Math.hypot(x - lastPath[0], y - lastPath[1]) >= cs * .34) { rec("p", -1, [Math.round(x), Math.round(y)]); lastPath = [x, y]; } },
+      up(e) { rec("u", -1, [Math.round(e.clientX), Math.round(e.clientY)]); },
+      hit(k, on) { rec("m", k, on ? 1 : 0); },                                   // 끌어서 친 칸
+      tap(k, on) {                                                                // 한 번 눌러 ✕ 켬 · 끔
+        add(inp, "tap"); rec(on ? "x+" : "x-", k);
+        const t = now();
+        taps = taps.filter(a => a.k === k && t - a.t < 2500); taps.push({ k, t });
+        if (taps.length === 3) sig("flip", k);
+        const d = lastDrag;
+        if (d && t - d.t < 2000 && on === d.on && !d.seen.has(k)) {
+          const n = G.n, r = Math.floor(k / n), c = k % n, has = (rr, cc) => rr >= 0 && rr < n && cc >= 0 && cc < n && d.seen.has(rr * n + cc);
+          if ((has(r, c - 1) && has(r, c + 1)) || (has(r - 1, c) && has(r + 1, c))) { sig("gap", k); lastDrag = null; }
+        }
+      },
+      dbl(k, prevX, res) {                                                        // 두 번 톡 → 고양이 (res: ok · win · miss · fail)
+        const bad = res === "miss" || res === "fail", t = now();
+        add(inp, "dbl"); if (bad) add(inp, "bad");
+        rec(bad ? "b" : "c", k);
+        // 평소 두 번 톡은 따로 누른 것이 1번(첫 톡). 2번이면 그 둘이 0.8초 안일 때만 (아슬하게 두 번으로 안 쳐진 것) —
+        //   ✕ 를 쳐 두고 1초쯤 뒤 생각을 바꿔 고양이를 놓는 것은 신호가 아님. 3번 넘으면 그대로 신호
+        const s = taps.filter(a => a.k === k && t - a.t < 1500);
+        if (s.length >= 3 || (s.length === 2 && s[1].t - s[0].t < 800)) sig("miss", k);
+        if (bad && prevX) sig("slip", k);
+        taps = [];
+      },
+      drag(d) {                                                                   // 끌기가 끝남 (칸을 한 번이라도 넘어간 것만)
+        add(inp, "drag");
+        const t = now(), p = lastDrag;
+        if (p && p.seen !== d.seen && t - p.t < 2500 && p.on !== d.on && [...d.seen].filter(k => p.seen.has(k)).length >= 2) sig("undrag", d.last);
+        lastDrag = { t, on: d.on, seen: d.seen };
+      },
+      board(n) { taps = []; lastDrag = null; rec("new", -1, n); },                // 새 판: 칸 번호가 달라지니 이어 보지 않음
+      reset() { cnt = {}; inp = {}; snap = null; taps = []; lastDrag = null; },   // 기록 한 줄(판 · 타임어택 한 번)이 시작될 때
+      take() { const o = {}; if (Object.keys(cnt).length) o.sus = cnt; if (Object.keys(inp).length) o.inp = inp; cnt = {}; inp = {}; return o; },   // 기록 한 줄이 끝날 때 (snap 은 결과창 물음까지 둠)
+      asked() { snap = null; },
+      note(why, pk) { try { const lg = logInit(); if (lg && lg.sid && lg.odd) lg.odd(Arena.uid, { why, at: Date.now(), ver: VER, sig: (pk && pk.why) || "", sus: (pk && pk.sus) || {} }); } catch (e) {} },
+      send(why, pk) {
+        pk = pk || pack(why); if (!pk) return null;
+        pk = { ...pk, sig: pk.why, why }; this.last = pk; sentN++;
+        try { const lg = logInit(); if (lg && lg.sid && lg.odd && sentN <= 12) lg.odd(Arena.uid, pk); } catch (e) {}
+        try {
+          const day = kstDay(), q = store.get("oddSent", {}), nq = q.d === day ? q.n : 0;
+          if (nq < 3 && window.Cozy && Cozy.sendReport) { store.set("oddSent", { d: day, n: nq + 1 }); Cozy.sendReport("report", msg(pk)); }
+        } catch (e) {}
+        return pk;
+      },
+    };
+    // 기록은 덤이라, 여기서 무슨 일이 나도 터치 처리(✕ · 고양이 · 끌기)는 끊기지 않게 예외를 삼킴
+    for (const k of ["rec", "down", "move", "up", "hit", "tap", "dbl", "drag", "board", "reset", "take", "asked", "note", "send"]) {
+      const f = api[k]; api[k] = (...a) => { try { return f.apply(api, a); } catch (e) { return k === "take" ? {} : null; } };
+    }
+    return api;
+  })();
   let lastTap = { k: -1, t: 0 }, drag = null, dragLast = null;
   // 화면 좌표 → 칸 { k, r, c, el, fx, fy }. fx·fy = 그 칸 안에서의 위치 (0~1, 틈에 닿으면 0 아래나 1 위)
   function boardAt(x, y, isTouch) {
@@ -172,7 +283,11 @@
     return { k: r * n + c, r, c, el, fx: (x - (br.left + gp + c * pitch)) / cs, fy: (ty - (br.top + gp + r * pitch)) / cs };
   }
   const inB = (f, m) => f > m && f < 1 - m;
-  const evT = e => { const now = performance.now(), s = e && e.timeStamp; return s > 0 && s <= now + 5 && now - s < 2000 ? s : now; };   // 손가락이 닿은 때 (값이 이상한 브라우저는 지금 시각)
+  // 손가락이 닿은 때 = 터치 시계(event.timeStamp). 톡 사이 시간은 이 값끼리의 차이로만 잼.
+  //   11-13 지민 님 '또 고양이 안 되고 ✕ · ✕ 해제, 자주': 11-12 엔 이 값이 앱 시계(performance.now)와 5ms 넘게 어긋나면 버리고 처리한 때로 쟀음.
+  //   그런데 홈 화면 앱이 자다 깨면 터치 시계만 앞서 가서(앱 시계는 자는 동안 멈춤) 그 폰에선 늘 처리한 때로 재게 됨 → 폰이 바쁘면 0.4초를 넘김.
+  //   두 시계를 견주지 않으면 어긋나 있어도 차이는 맞음. 값이 없는 브라우저만 지금 시각 (아래에서 차이가 0보다 작으면 두 번으로 안 침)
+  const evT = e => { const s = e && e.timeStamp; return s > 0 ? s : performance.now(); };
   function boardPick(x, y, isTouch, inner) { const p = boardAt(x, y, isTouch); return p && (!inner || (inB(p.fx, .2) && inB(p.fy, .2))) ? p.el : null; }
   $("board").addEventListener("pointerdown", e => {
     if (!G || G.over || (ctx && ctx.spec)) return;
@@ -180,36 +295,41 @@
     const p0 = boardAt(e.clientX, e.clientY, e.pointerType === "touch"); if (!p0) return;
     let el = p0.el;
     e.preventDefault();
+    ODD.down(p0, e);
     let k = +el.dataset.k;
-    const t = evT(e), cs = el.getBoundingClientRect().width || 32, dt = t - lastTap.t;
+    const t = evT(e), tn = performance.now(), cs = el.getBoundingClientRect().width || 32;
+    let dt = t - lastTap.t;
+    if (tn - (lastTap.tn || 0) - dt > 1000) dt = tn - (lastTap.tn || 0);          // 터치 시계가 멈춰 있는 브라우저 대비: 처리한 간격보다 1초 넘게 짧게 나오면 안 믿음
     // 끌다가 손가락이 잠깐 떨어졌다 바로(0.25초 안) 뗀 자리 근처에 다시 닿으면: 새로 누른 게 아니라 끌기를 이어 감
     //   (안 그러면 방금 친 ✕가 지워지고, 이어서 끄는 동안 ✕를 지우는 쪽으로 뒤집힘)
-    if (dragLast && t - dragLast.t < 250 && Math.hypot(e.clientX - dragLast.x, e.clientY - dragLast.y) < cs * .7) {
+    if (dragLast && t >= dragLast.t && t - dragLast.t < 250 && Math.hypot(e.clientX - dragLast.x, e.clientY - dragLast.y) < cs * .7) {
       const d0 = dragLast, prevX = G.xs.has(k); dragLast = null;
       drag = { id: e.pointerId, on: d0.on, seen: d0.seen, x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, cs, moved: true, last: k, ax: d0.ax, hops: 0, vx: 0, vy: 0 };
-      if (!drag.seen.has(k)) { drag.seen.add(k); G.setX(k, drag.on); if (G.xs.has(k) !== prevX) S(drag.on ? "x" : "unx"); }
-      lastTap = { k, t, prevX, x: e.clientX, y: e.clientY };                    // 그 자리를 바로 한 번 더 누르면 🐱 는 그대로
+      ODD.rec("re", k);
+      if (!drag.seen.has(k)) { drag.seen.add(k); G.setX(k, drag.on); if (G.xs.has(k) !== prevX) S(drag.on ? "x" : "unx"); ODD.hit(k, drag.on); }
+      lastTap = { k, t, tn, prevX, x: e.clientX, y: e.clientY };                // 그 자리를 바로 한 번 더 누르면 🐱 는 그대로
       afterMove("x", k); return;
     }
     dragLast = null;
     const dist = lastTap.k >= 0 ? Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) : 1e9;
     const adj = lastTap.k >= 0 && Math.abs(Math.floor(lastTap.k / G.n) - Math.floor(k / G.n)) <= 1 && Math.abs(lastTap.k % G.n - k % G.n) <= 1;
-    if (k !== lastTap.k && adj && dt < 340 && dist < (fitGp || 4) + Math.min(9, cs * .24) && !G.cats.has(lastTap.k) && !G.bad.has(lastTap.k)) {
-      k = lastTap.k; el = $("board").children[k] || el;
+    if (k !== lastTap.k && adj && dt >= 0 && dt < 340 && dist < (fitGp || 4) + Math.min(9, cs * .24) && !G.cats.has(lastTap.k) && !G.bad.has(lastTap.k)) {
+      k = lastTap.k; el = $("board").children[k] || el; ODD.rec("sn", k);
     }
     // 두 번 → 앞에서 바꾼 ✕를 되돌리고 고양이. 11-12 지민 님 아이폰 '두 번 눌러도 ✕ 가 풀렸다 됐다만 함':
     //   ① 예전엔 두 번째가 첫 번째에서 14px(칸 0.45) 넘게 떨어지면 따로 누른 것으로 봄 → 엄지로 빠르게 두 번이면 자주 넘음.
     //      이제 같은 칸 안쪽(가장자리 18% 뺀 곳)에 닿으면 거리와 상관없이 두 번으로 침. 맨 가장자리(옆 칸을 누르려던 것)만 거리로 가름 (11-08)
     //   ② 시간은 폰이 처리한 때가 아니라 손가락이 닿은 때로 잼 (evT) — 폰이 잠깐 바쁘면 0.4초를 넘기던 것
-    if (lastTap.k === k && dt < 400 && (dist < Math.max(14, cs * .45) || (p0.k === k && inB(p0.fx, .18) && inB(p0.fy, .18)))) {
+    if (lastTap.k === k && dt >= 0 && dt < 400 && (dist < Math.max(14, cs * .45) || (p0.k === k && inB(p0.fx, .18) && inB(p0.fy, .18)))) {
       const prevX = lastTap.prevX;
       lastTap = { k: -1, t: 0 }; drag = null;
       if (G.xs.has(k) !== prevX) G.toggleX(k);
-      afterMove(G.place(k), k); return;
+      const res = G.place(k); ODD.dbl(k, prevX, res);
+      afterMove(res, k); return;
     }
     const prevX = G.xs.has(k);
-    if (G.toggleX(k)) S(G.xs.has(k) ? "x" : "unx");
-    lastTap = { k, t, prevX, x: e.clientX, y: e.clientY };
+    if (G.toggleX(k)) { S(G.xs.has(k) ? "x" : "unx"); ODD.tap(k, G.xs.has(k)); } else ODD.rec("t0", k);
+    lastTap = { k, t, tn, prevX, x: e.clientX, y: e.clientY };
     drag = { id: e.pointerId, on: G.xs.has(k), seen: new Set([k]), x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, cs, moved: false, last: k, ax: null, hops: 0, vx: 0, vy: 0 };
     afterMove("x", k);
   });
@@ -237,6 +357,7 @@
     if (drag.seen.has(k)) return false;
     drag.seen.add(k); lastTap = { k: -1, t: 0 };
     const was = G.xs.has(k); G.setX(k, drag.on); if (G.xs.has(k) !== was) S(drag.on ? "x" : "unx");
+    ODD.hit(k, drag.on);
     return true;
   }
   window.addEventListener("pointermove", e => {
@@ -246,6 +367,7 @@
     let hit = -1;
     for (const ev of evs) {
       const x = ev.clientX, y = ev.clientY;
+      ODD.move(x, y, drag.cs);
       if (!drag.moved) {
         const dx = x - drag.x, dy = y - drag.y;
         if (Math.hypot(dx, dy) < drag.cs * .5) continue;
@@ -260,6 +382,7 @@
   });
   const dragEnd = e => {
     if (!drag || e.pointerId !== drag.id) return;
+    ODD.up(e); if (drag.hops) ODD.drag(drag);
     dragLast = drag.hops ? { t: evT(e), k: drag.last, on: drag.on, seen: drag.seen, ax: drag.ax, x: drag.px, y: drag.py } : null;
     drag = null;
   };
@@ -267,6 +390,8 @@
   window.addEventListener("pointercancel", dragEnd);
   // 아이폰: 칸을 두 번 누르는 것이 화면 확대로 먹히지 않게 (판은 pointerdown 으로 받으니 click 은 안 씀)
   $("board").addEventListener("touchend", e => e.preventDefault(), { passive: false });
+  $("board").addEventListener("touchstart", e => ODD.rec("ts", -1, e.touches ? e.touches.length : 0), { passive: true });   // 🐞 닿았는데 pointerdown 이 안 온 경우를 가리려고
+  window.addEventListener("pointercancel", e => ODD.rec("pc", -1, e.pointerId));
 
   function setAutoX(v) { autoX = v; store.set("autoX", v); $("autoX").setAttribute("aria-pressed", v); if (G) G.autoX = v; }
   $("autoX").onclick = () => setAutoX(!autoX);
@@ -336,7 +461,8 @@
   function startPuzzle(p, c) {
     ctx = c; closeHint(); $("resPeek").hidden = true;
     $("spyBox").hidden = true; spyU = null;
-    $("chatBtn").hidden = c.kind !== "vs";
+    $("chatBtn").hidden = c.kind !== "vs"; $("oddBtn").hidden = !!c.spec;
+    if (!c.ta || !c.ta.i) ODD.reset();                                        // 🐞 신호는 판마다 (타임어택은 한 번마다) 0부터 — 기록(DB)이 없는 화면에서도 앞 판 것이 넘어오지 않게
     TA = c.ta || null; combo = 0; lastOkAt = 0; mood = null;
     G = new NY.Game(p, { autoX });
     if (c.coop) { G.maxMistakes = COOP_FISH; myOps = {}; coopLast = ""; coopInfo = null; }
@@ -1040,8 +1166,30 @@
     }
     if (!G.over && glog) glog.matchEnd({ won: false, restart: true, secs: Math.round(G.secs) });
     if (ctx.daily) playDaily(ctx.daily.archive ? ctx.daily.key : null); else playSolo(ctx.tier, ctx.idx, ctx.vs, ctx.stage);
-  };  function result(title, body, btns) {
+  };  // 🐞 신호가 있었던 판의 결과창에만, 하루 한 번: 뜻대로 안 된 적이 있었는지 물음 (네 = 그 신호 때의 입력 기록을 보냄)
+  function oddAsk() {
+    const pk = ODD.snap; if (!pk || (ctx && ctx.spec) || store.get("oddAsk", "") === kstDay()) return;
+    store.set("oddAsk", kstDay()); ODD.asked();
+    const el = document.createElement("div"); el.className = "oddask"; el.id = "oddAsk";
+    el.innerHTML = `<span>방금 누른 게 뜻대로 안 된 적이 있었나요?</span><span class="row"><button class="btn" data-a="y">네, 있었어요</button><button class="btn ghost" data-a="n">아니요</button></span>`;
+    el.onclick = e => {
+      const a = e.target && e.target.dataset && e.target.dataset.a; if (!a) return;
+      if (a === "y") { ODD.send("ask-yes", pk); toast("고마워요! 그때 누른 기록을 보냈어요", 2200); } else ODD.note("ask-no", pk);
+      el.remove();
+    };
+    $("resBody").appendChild(el);
+  }
+  let oddAt = -1e9;
+  $("oddBtn").onclick = () => {                                               // 판 아래 🐞 이상해요: 글자 없이 한 번 (15초에 한 번)
+    if (!G || (ctx && ctx.spec)) return;
+    if (performance.now() - oddAt < 15000) { toast("방금 보냈어요. 고마워요!"); return; }
+    oddAt = performance.now();
+    ODD.send("btn");
+    toast("🐞 방금 누른 기록을 보냈어요. 고마워요!", 2200);
+  };
+  function result(title, body, btns) {
     $("resTitle").textContent = title; $("resBody").innerHTML = body;
+    oddAsk();
     $("resBtns").innerHTML = "";
     for (const b of btns.filter(Boolean)) { const el = document.createElement("button"); el.className = "btn " + (b[2] || ""); el.textContent = b[0]; el.onclick = () => { $("resBox").hidden = true; b[1](); syncPeek(); }; $("resBtns").appendChild(el); }
     $("resBox").hidden = false; syncPeek();
@@ -1079,7 +1227,7 @@
   if ($("offBtn")) $("offBtn").onclick = () => openOfflineModal();
 
   // ══ ✈️ 비행기 · 오프라인 완전 다운로드 (6,090단계 + 실행 파일 캐시 + 홈 화면 앱 이어주기) ══
-  const OFFLINE_VER = 4, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
+  const OFFLINE_VER = 5, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
   const OFFLINE_FILES = [
     "./", "./index.html", "./manifest.json", "./icon-192.png", "./icon.svg",
     "./style.css", "./core.js", "./banban.js", "./banban-ui.js", "./zip.js", "./zip-ui.js",
@@ -1854,7 +2002,7 @@
       }
     }).catch(() => {});
   }).catch(e => { $("tiers").textContent = "퍼즐을 못 불러왔어요: " + e.message; });
-  window.__ny = { get G() { return G; }, get TA() { return TA; }, get meta() { return meta; }, get prog() { return prog; }, get myRound() { return myRound; }, NY,   // 점검용
+  window.__ny = { ODD, get G() { return G; }, get TA() { return TA; }, get meta() { return meta; }, get prog() { return prog; }, get myRound() { return myRound; }, NY,   // 점검용
     dailyInfo, kstDay, dayBoard, dayTops, streakOf, bestStreak, setRk: d => { rkData = d; if (soloMode === "day") drawDay(); if (d) { drawRankStrip(); if (soloMode === "ta") drawTABoard(); } },
     setFam: d => { fam = d; famAt = Date.now(); return drawSoloProg(); }, openCalendar, myDays, syncLocalToServer, prepareOffline, openOfflineModal, syncShareHash,
     stageInfo, playStage, loadChunks, bankIdxP, get bankIdx() { return bankIdx; }, weekKey, bankAt: (t, i) => bank[t][i] };
