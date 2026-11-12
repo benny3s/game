@@ -29,8 +29,7 @@ module.exports = {
     const $ = id => document.getElementById(id);
     window.__qaN = 0; window.__qaHint = 0; window.__qaWrong = 0; window.__qaLeft = 0; window.__qaSeed = 2463534242;
     // 자동 ✕ 는 '한 판' 에서만 켬 (나머지는 끔) — 켜고 끄는 단추도 같이 시험
-    const want = mode === 'solo', on = $('autoX').getAttribute('aria-pressed') === 'true';
-    if (want !== on) $('autoX').click();
+    // 11-13 부터 자동 ✕ 는 늘 켬 (단추 없음)
   },
   reproHint: (mode, seed) => ({
     stage: '혼자 탭 → 🗺 단계 → [시작!] → 정답 칸마다 두 번 톡(🐱)',

@@ -73,7 +73,7 @@
   let G = null;                 // 지금 판 (NY.Game)
   let ctx = null;               // { kind: "solo"|"vs", tier, idx, onEnd }
   let hint = null, hintStage = 0, hintKey = "";
-  let autoX = store.get("autoX", false);
+  const autoX = true;   // 11-13 베니 님 '자동으로 ✕ 쳐지게 하자': 고양이를 놓으면 둘레 · 같은 줄 · 같은 묶음에 늘 저절로 ✕ (켜고 끄는 단추 없앰, 예전 설정값 nyang.autoX 는 안 봄)
   // ✕는 글자 대신 그림으로 (아이폰에서 ✕ 글자가 가늘고 작게 나와서) — 칸 크기에 맞춰 늘 같은 굵기
   const XSVG = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.2 2.2L7.8 7.8M7.8 2.2L2.2 7.8"/></svg>';
 
@@ -393,11 +393,7 @@
   $("board").addEventListener("touchstart", e => ODD.rec("ts", -1, e.touches ? e.touches.length : 0), { passive: true });   // 🐞 닿았는데 pointerdown 이 안 온 경우를 가리려고
   window.addEventListener("pointercancel", e => ODD.rec("pc", -1, e.pointerId));
 
-  function setAutoX(v) { autoX = v; store.set("autoX", v); $("autoX").setAttribute("aria-pressed", v); if (G) G.autoX = v; }
-  $("autoX").onclick = () => setAutoX(!autoX);
-  const drawSnd = () => { const on = !window.NYSND || NYSND.on; $("sndBtn").innerHTML = `<span class="ic">${on ? "🔊" : "🔇"}</span><span>소리 ${on ? "켬" : "끔"}</span>`; };
-  $("sndBtn").onclick = () => { if (window.NYSND) NYSND.set(!NYSND.on); drawSnd(); };
-  drawSnd();
+  // 11-13 베니 님: 🪄 자동 ✕ 단추(늘 켬) · 🔊 소리 단추(폰 음소거 · 볼륨으로) 는 없앰
   $("clearX").onclick = () => { if (!G || G.over) return; G.xs.clear(); closeHint(); paint(); progress(); };
 
   // ── 단계별 힌트: 1) 어디를 볼지 반짝 2) 이유 + 바꿀 칸 표시 3) 적용
@@ -1096,7 +1092,7 @@
           if (gift) setTimeout(() => S("badge"), 900);
           setTimeout(checkBadges, 1200);
         } else {
-          result("😿 물고기를 다 잃었어요", `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리 찾았어요.</p><p class="small" style="margin:0">💡 힌트나 🪄 자동 ✕를 써 보세요.</p>`,
+          result("😿 물고기를 다 잃었어요", `<p style="margin:0">고양이 ${G.cats.size}/${G.n}마리 찾았어요.</p><p class="small" style="margin:0">💡 힌트를 써 보세요.</p>`,
             stage ? [["다시 도전", () => playStage(stage), "primary"], ["지도", goHome]]
                   : [["다시 도전", () => playSolo(tier, i, vs), "primary"], ["다른 문제", () => playSolo(tier)], ["난이도 고르기", goHome]]);
         }
@@ -1220,14 +1216,14 @@
   $("tabSolo").onclick = () => tab("solo");
   $("tabWatch").onclick = () => tab("watch");
   $("tabFriend").onclick = () => openFriend();
-  $("helpBtn").onclick = () => Cozy.howto("nyang", "냥도쿠 하는 법", [...$("howto").children].map(li => li.textContent).concat(["💡 힌트는 어디를 볼지 → 이유 → 적용 순서로 알려 줘요", "🪄 자동 ✕ 를 켜면 고양이 둘레를 저절로 ✕ 해 줘요"]), { force: true });
+  $("helpBtn").onclick = () => Cozy.howto("nyang", "냥도쿠 하는 법", [...$("howto").children].map(li => li.textContent).concat(["💡 힌트는 어디를 볼지 → 이유 → 적용 순서로 알려 줘요", "고양이를 놓으면 둘레 · 같은 줄 · 같은 색 묶음에 저절로 ✕ 가 쳐져요"]), { force: true });
   $("rankBtn").onclick = () => { $("rankBox").hidden = false; drawRank(); };
   $("rankClose").onclick = () => { $("rankBox").hidden = true; };
   $("gRankBtn").onclick = () => { if (window.GRank) Arena.init().then(() => GRank.open("nyang")).catch(() => {}); };   // 🏆 전체 게임 공용 랭킹
   if ($("offBtn")) $("offBtn").onclick = () => openOfflineModal();
 
   // ══ ✈️ 비행기 · 오프라인 완전 다운로드 (6,090단계 + 실행 파일 캐시 + 홈 화면 앱 이어주기) ══
-  const OFFLINE_VER = 5, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
+  const OFFLINE_VER = 6, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
   const OFFLINE_FILES = [
     "./", "./index.html", "./manifest.json", "./icon-192.png", "./icon.svg",
     "./style.css", "./core.js", "./banban.js", "./banban-ui.js", "./zip.js", "./zip-ui.js",
@@ -1980,7 +1976,6 @@
   }
 
   // ── 시작
-  setAutoX(autoX);
   updateOffBtn();
   if (typeof addEventListener === "function") addEventListener("online", () => {
     if (window.GRank && GRank.flush) GRank.flush();

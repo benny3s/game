@@ -2,7 +2,7 @@
    아이폰은 처음 손가락을 댈 때 소리 장치를 깨워야 해서, 첫 터치에서 unlock */
 (() => {
   let ac = null, master = null;
-  let on = (() => { try { return localStorage.getItem("nyang.sound") !== "0"; } catch (e) { return true; } })();
+  let on = true;   // 11-13 베니 님: 소리 단추를 없앰 → 끄기 · 크기는 폰 음소거 · 볼륨으로 (예전에 꺼 둔 값 nyang.sound 는 안 봄)
   function ctx() {
     if (!ac) {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
@@ -71,7 +71,7 @@
   let lastAt = {};
   window.NYSND = {
     get on() { return on; },
-    set(v) { on = !!v; try { localStorage.setItem("nyang.sound", on ? "1" : "0"); } catch (e) {} if (on) this.play("cat"); },
+    set(v) { on = !!v; },   // 시험 · 점검용 (저장 안 함)
     play(name, opt) {
       if (!on || !SOUNDS[name]) return;
       const a = ctx(); if (!a) return;

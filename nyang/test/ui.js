@@ -120,6 +120,8 @@ U.main(async T => {
     return bad;
   });
   T.ok(covered.length === 0, '① 판 위를 가리는 것 없음 (' + [...new Set(covered)].join() + ')');
+  // 이 판(①)은 손가락 동작만 봄 → 고양이를 놓을 때 저절로 쳐지는 ✕ (11-13 부터 늘 켬) 는 이 판에서만 끔. 저절로 치는 것은 ㉓ 에서 따로 봄
+  await p.evaluate(() => { window.__ny.G.autoX = false; });
   // 첫 판은 판 크기 맞춤이 한 박자 늦을 때가 있음 (300px → 화면 폭) → 판 자리가 멈춘 뒤에 좌표를 잼 (11-12 가끔 실패하던 까닭)
   { let last = '', same = 0; for (let i = 0; i < 40 && same < 4; i++) { const r = await p.evaluate(() => { const b = document.getElementById('board').getBoundingClientRect(); return [b.left, b.top, b.width].map(Math.round).join(); }); same = r === last ? same + 1 : 0; last = r; await T.sleep(100); } }
   const pos = await p.evaluate(() => {
@@ -338,10 +340,9 @@ U.main(async T => {
     T.ok(scReset.before > 100 && scReset.after === 0 && scReset.playing, '① 스크롤된 첫 화면에서 판으로 들어갈 때 scrollY=0 즉시 초기화 (' + JSON.stringify(scReset) + ')');
   }
   // 판 밖 단추도 터치로 그대로 눌림
-  const auto0 = await p.evaluate(() => document.getElementById('autoX').getAttribute('aria-pressed'));
-  const ax = await p.evaluate(() => { const r = document.getElementById('autoX').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  const ax = await p.evaluate(() => { document.getElementById('hintBox').hidden = true; const r = document.getElementById('hintBtn').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   await p.touchscreen.tap(ax.x, ax.y);
-  T.ok(!!(await U.waitFor(p, v => document.getElementById('autoX').getAttribute('aria-pressed') !== v, auto0, 2000, 40)), '① 판 밖 단추는 터치로 그대로 눌림');
+  T.ok(!!(await U.waitFor(p, () => !document.getElementById('hintBox').hidden, null, 2000, 40)), '① 판 밖 단추(💡 힌트)는 터치로 그대로 눌림');
   await p.close();
 
   // ── ④ 이 기기 기록 그대로: localStorage 키·값을 그대로 읽고, 같은 키에 씀 (와이프 폰의 단계·별·고양이·기록)
@@ -353,13 +354,12 @@ U.main(async T => {
   await U.waitFor(d, A.ready);
   const ls = await d.evaluate(() => { const $ = id => document.getElementById(id); return {
     stars: /모은 별 ⭐ 6개/.test($('stageBox').textContent), cur: !!document.querySelector('#stageBox [data-k="11"].cur'), lock: !!document.querySelector('#stageBox [data-k="12"].lock'),
-    skinOn: (document.querySelector('.skins button.on') || {}).textContent, autoX: $('autoX').getAttribute('aria-pressed'), sound: window.NYSND && NYSND.on,
+    skinOn: (document.querySelector('.skins button.on') || {}).textContent, noBtn: !$('autoX') && !$('sndBtn'), sound: window.NYSND && NYSND.on,
     onemode: $('tiers').hidden };
   });
   T.ok(ls.stars && ls.cur && ls.lock, '④ 단계·별 그대로 (' + JSON.stringify(ls) + ')');
   T.ok(ls.skinOn === '🐈', '④ 고른 고양이 그대로 (' + ls.skinOn + ')');
-  T.ok(ls.autoX === 'true', '④ 자동 ✕ 설정 그대로');
-  T.ok(ls.sound === false, '④ 소리 끔 그대로');
+  T.ok(ls.noBtn && ls.sound === true, '④ 11-13 🪄 자동 ✕ · 🔊 소리 단추 없음 — 게임 안에서 소리를 꺼 두었던 폰도 소리는 켬 (폰 음소거 · 볼륨으로): ' + JSON.stringify([ls.noBtn, ls.sound]));
   T.ok(ls.onemode, '④ 지난번 고른 방식(단계 지도) 그대로');
   const rec = await d.evaluate(async () => { const $ = id => document.getElementById(id); const pick = v => [...$('soloMode').children].find(b => b.dataset.v === v).click(); pick('one'); const a = $('tiers').querySelector('.t-easy').textContent; pick('ta'); const b = $('tiers').querySelector('.t-easy').textContent; pick('map'); return { a, b }; });
   T.ok(/0:12\.3/.test(rec.a), '④ 한 판 최고 시간 그대로 (' + rec.a + ')');
@@ -1100,6 +1100,7 @@ U.main(async T => {
       await Y.evaluate(() => { document.querySelector('#soloMode [data-v="one"]').click(); document.querySelector('#tiers [data-t="easy"]').click(); document.getElementById('startBtn').click(); });
       await U.waitFor(Y, () => window.__ny.G && !window.__ny.G.over && !document.getElementById('play').hidden && document.getElementById('board').children.length === window.__ny.G.n ** 2, null, 6000);
       let last = '', same = 0; for (let i = 0; i < 40 && same < 4; i++) { const r = await Y.evaluate(() => { const b = document.getElementById('board').getBoundingClientRect(); return b.width + ',' + b.top; }); same = r === last ? same + 1 : 0; last = r; await T.sleep(50); }
+      await Y.evaluate(() => { __ny.G.autoX = false; });   // 신호 시험은 빈칸이 넉넉해야 해서 이 판들만 저절로 치는 ✕ 를 끔 (저절로 치는 것은 ㉓)
     };
     const pe = (type, k, id) => Y.evaluate(([type, k, id]) => {
       const r = document.getElementById('board').children[k].getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -1112,7 +1113,7 @@ U.main(async T => {
     const n = await Y.evaluate(() => __ny.G.n);
     // 판 아래 단추: 보이고, 좁은 폰에서도 단추 줄이 화면을 안 넘음
     const dk = await Y.evaluate(() => { const b = document.getElementById('oddBtn'), d = document.getElementById('dock'); return { vis: __qa.vis(b), txt: b.textContent.replace(/\s+/g, ' ').trim(), fit: [...d.children].filter(e => !e.hidden).every(e => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth + .5; }), n: [...d.children].filter(e => !e.hidden).length, w: innerWidth }; });
-    T.ok(dk.vis && /이상해요/.test(dk.txt) && dk.fit && dk.n === 6, '㉒ 판 아래 🐞 이상해요 단추 (단추 6개가 화면 폭 안): ' + JSON.stringify(dk));
+    T.ok(dk.vis && /이상해요/.test(dk.txt) && dk.fit && dk.n === 4, '㉒ 판 아래 🐞 이상해요 단추 (힌트 · ✕ 지우기 · 처음부터 · 이상해요 4개가 화면 폭 안): ' + JSON.stringify(dk));
     // undrag: 끌어서 ✕ 친 줄을 바로 반대로 다시 끎
     await swipe([0, 1, 2]);
     const s1 = await st();
@@ -1169,6 +1170,7 @@ U.main(async T => {
     if (await Y.evaluate(() => !document.getElementById('home').hidden)) await begin();
     else await U.waitFor(Y, () => window.__ny.G && !window.__ny.G.over && document.getElementById('board').children.length === window.__ny.G.n ** 2 && !document.getElementById('play').hidden, null, 6000);
     await T.sleep(300);
+    await Y.evaluate(() => { __ny.G.autoX = false; });
     const z0 = await st();
     const F2 = await freeW([]);
     await tap(Y, F2); await T.sleep(450); await tap(Y, F2); await T.sleep(450); await tap(Y, F2);
@@ -1179,6 +1181,25 @@ U.main(async T => {
     T.ok(!Object.keys(z0.cnt).length && z1.cnt.flip === 1 && !e2.ask && e2.m.sus && e2.m.sus.flip === 1 && !e2.m.sus.gap, '㉒ 같은 날엔 다시 안 물음 · 신호는 판마다 따로 셈: ' + JSON.stringify([z1.cnt, e2.ask, e2.m && e2.m.sus]));
     await Y.evaluate(() => { for (const k of ['nyang.oddAsk', 'nyang.oddSent', 'nyang.avg', 'nyang.today', 'nyang.solved', 'nyang.bestT']) localStorage.removeItem(k); });
     await Y.close();
+  }
+
+  // ── ㉓ 11-13 베니 님 '소리 버튼 필요해? 음소거랑 볼륨으로 하면 되지 · 자동으로 ✕ 쳐지게 하자 그것도'
+  //    아래 단추 = 힌트 · ✕ 지우기 · 처음부터 · 이상해요. 예전에 자동 ✕ 를 꺼 둔 폰도 고양이를 놓으면 둘레 · 같은 줄 · 같은 묶음에 저절로 ✕
+  {
+    const V = await T.open('nyang/');
+    await U.waitFor(V, A.ready);
+    await V.evaluate(() => { localStorage.setItem('nyang.autoX', 'false'); localStorage.setItem('nyang.sound', '0'); });
+    await V.reload({ waitUntil: 'load' }); await U.waitFor(V, A.ready);
+    await V.evaluate(() => { document.querySelector('#soloMode [data-v="one"]').click(); document.querySelector('#tiers [data-t="easy"]').click(); document.getElementById('startBtn').click(); });
+    await U.waitFor(V, () => window.__ny.G && !window.__ny.G.over && !document.getElementById('play').hidden && document.getElementById('board').children.length === window.__ny.G.n ** 2, null, 6000);
+    const v0 = await V.evaluate(() => ({ dock: [...document.getElementById('dock').children].filter(e => !e.hidden).map(e => e.id).join(), xs: __ny.G.xs.size, snd: window.NYSND && NYSND.on }));
+    T.ok(v0.dock === 'hintBtn,clearX,restart,oddBtn' && v0.xs === 0 && v0.snd === true, '㉓ 아래 단추는 힌트 · ✕ 지우기 · 처음부터 · 이상해요 (자동 ✕ · 소리 단추 없음, 소리는 켬): ' + JSON.stringify(v0));
+    const a0 = (await ansOf(V))[0];
+    await cat(V, a0);
+    const v1 = await V.evaluate(k => { const G = __ny.G, bl = G.blockedBy(k); return { cat: G.cats.has(k), all: bl.every(b => G.xs.has(b)), n: bl.length, xs: G.xs.size, shown: bl.every(b => document.getElementById('board').children[b].classList.contains('x') || /✕|×/.test(document.getElementById('board').children[b].textContent) || G.xs.has(b)) }; }, a0);
+    T.ok(v1.cat && v1.all && v1.n > 0 && v1.xs === v1.n, '㉓ 고양이를 놓으면 둘레 · 같은 줄 · 같은 묶음에 저절로 ✕ (꺼 두었던 폰도): ' + JSON.stringify(v1));
+    await V.evaluate(() => { for (const k of ['nyang.autoX', 'nyang.sound', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); });
+    await V.close();
   }
 
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');
