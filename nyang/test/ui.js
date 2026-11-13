@@ -225,7 +225,7 @@ U.main(async T => {
       // ── 11-12 지민 님 아이폰 '두 번 눌러도 ✕ 가 풀렸다 됐다만 하고 🐱 가 안 될 때가 있음' (옛 코드로 ⓗⓘ 실패 확인)
       {
         const snap = () => p.evaluate(() => { const G = window.__ny.G; return { xs: [...G.xs], cats: [...G.cats], bad: [...G.bad], m: G.mistakes }; });
-        const back = s => p.evaluate(s => { const G = window.__ny.G; G.xs.clear(); s.xs.forEach(k => G.xs.add(k)); G.cats.clear(); s.cats.forEach(k => G.cats.add(k)); G.bad.clear(); s.bad.forEach(k => G.bad.add(k)); G.mistakes = s.m; G.over = false; G.won = false; }, s);
+        const back = s => p.evaluate(s => { const G = window.__ny.G; G.xs.clear(); s.xs.forEach(k => G.xs.add(k)); G.cats.clear(); s.cats.forEach(k => G.cats.add(k)); G.bad.clear(); s.bad.forEach(k => G.bad.add(k)); G.mistakes = s.m; G.over = false; G.won = false; localStorage.removeItem('nyang.dblWin'); }, s);   // 판만 되돌림 — 그 사이 넉넉해진 두 번 톡 시간(㉔)도 기본으로
         const s0 = await snap();
         const tgt = await p.evaluate(() => { const G = window.__ny.G, n = G.n; for (let r = 0; r < n; r++) { const k = r * n + G.ans[r]; if (!G.cats.has(k) && !G.xs.has(k)) { const b = document.getElementById('board').children[k].getBoundingClientRect(); return { k, R: { l: b.left, t: b.top, w: b.width, h: b.height } }; } } return null; });
         const isCat = () => p.evaluate(k => window.__ny.G.cats.has(k), tgt.k);
@@ -1151,6 +1151,7 @@ U.main(async T => {
     T.ok(!m0.cnt.miss && m1.cnt.miss === 1 && m1.inp.dbl === 2, '㉒ 따로 한 번 누른 직후(0.45초) 두 번 톡으로 고양이면 miss 1 (평소 두 번 톡은 아님): ' + JSON.stringify(m1.cnt));
     await tap(Y, ans[2]); await T.sleep(1000); await cat(Y, ans[2]);   // ✕ 를 쳐 두고 1초 뒤 생각을 바꿔 고양이 = 신호 아님
     T.ok((await st()).cnt.miss === 1, '㉒ ✕ 치고 1초 뒤 마음을 바꿔 고양이를 놓은 것은 miss 아님');
+    await Y.evaluate(() => localStorage.removeItem('nyang.dblWin'));   // 위 miss 로 이 폰의 두 번 톡 시간이 넉넉해짐(㉔) — 아래 0.45초 톡 시험은 기본 0.4초로
     // slip: ✕ 가 있던 칸에 고양이가 놓여 실수
     const W = await freeW([F]);
     await tap(Y, W); await T.sleep(1700); await cat(Y, W);
@@ -1200,6 +1201,40 @@ U.main(async T => {
     T.ok(v1.cat && v1.all && v1.n > 0 && v1.xs === v1.n, '㉓ 고양이를 놓으면 둘레 · 같은 줄 · 같은 묶음에 저절로 ✕ (꺼 두었던 폰도): ' + JSON.stringify(v1));
     await V.evaluate(() => { for (const k of ['nyang.autoX', 'nyang.sound', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); });
     await V.close();
+  }
+
+  // ── ㉔ 11-13 베니 님 '두 번 눌렀는데 ✕ 로만 되고, 다시 두 번 누르면 ✕ 가 취소' → 개선
+  //    두 번 톡이 0.4초를 살짝 넘는 사람: 빈칸에 ✕ 켜고 끔(0.4~0.75초) 직후 다시 두 번 톡으로 고양이를 놓으면 '두 번 톡이 안 먹힌 것' 으로 보고
+  //    이 폰의 두 번 톡 시간을 그 간격만큼 넉넉하게 (최대 0.6초). 빈칸에서 시작한 두 번만 넓힘 — ✕ 가 있던 칸(지우려던 톡)은 0.4초 그대로
+  {
+    const W = await T.open('nyang/');
+    await U.waitFor(W, A.ready);
+    await W.evaluate(() => { localStorage.removeItem('nyang.dblWin'); localStorage.removeItem('nyang.dblWinTold'); document.querySelector('#soloMode [data-v="one"]').click(); document.querySelector('#tiers [data-t="easy"]').click(); document.getElementById('startBtn').click(); });
+    await U.waitFor(W, () => window.__ny.G && !window.__ny.G.over && !document.getElementById('play').hidden && document.getElementById('board').children.length === window.__ny.G.n ** 2, null, 6000);
+    await T.sleep(300);
+    const sv = k => W.evaluate(k => ({ cat: __ny.G.cats.has(k), x: __ny.G.xs.has(k), m: __ny.G.mistakes, win: JSON.parse(localStorage.getItem('nyang.dblWin') || 'null') }), k);
+    const [a0, a1] = await ansOf(W);
+    await tap(W, a0); await T.sleep(480); await tap(W, a0);                 // 0.48초 두 번 → 아직은 ✕ 켜고 끔
+    const w0 = await sv(a0);
+    await T.sleep(900); await cat(W, a0);                                    // 안 먹힌 것을 보고 잠깐 뒤 다시 두 번 톡
+    const w1 = await sv(a0);
+    T.ok(!w0.cat && !w0.x && w1.cat && w1.win >= 480 && w1.win <= 600, '㉔ 0.48초 두 번이 ✕ 켜고 끔이 된 뒤 바로 두 번 톡으로 고양이 → 이 폰은 두 번 톡 시간을 넉넉하게: ' + JSON.stringify([w0, w1]));
+    await T.sleep(450);
+    await tap(W, a1); await T.sleep(480); await tap(W, a1);
+    const w2 = await sv(a1);
+    T.ok(w2.cat && w2.m === 0, '㉔ 그 뒤로는 0.48초 두 번도 고양이: ' + JSON.stringify(w2));
+    // 지킬 것: ✕ 가 있던 칸을 지웠다 다시 켠 것(0.48초)은 고양이 아님 (틀린 칸이면 🐟 를 잃음) · 0.7초 띄운 두 번도 고양이 아님
+    await T.sleep(450);
+    const [f1, f2] = await wrongOf(W);
+    await W.evaluate(k => { __ny.G.setX(k, true); }, f1);
+    await tap(W, f1); await T.sleep(480); await tap(W, f1);
+    const w3 = await sv(f1);
+    await T.sleep(450);
+    await tap(W, f2); await T.sleep(700); await tap(W, f2);
+    const w4 = await sv(f2);
+    T.ok(!w3.cat && w3.x && !w4.cat && !w4.x && w4.m === 0, '㉔ ✕ 를 지웠다 다시 켠 것 · 0.7초 띄운 두 번은 고양이 아님 (🐟 그대로): ' + JSON.stringify([w3, w4]));
+    await W.evaluate(() => { for (const k of ['nyang.dblWin', 'nyang.dblWinTold', 'nyang.avg', 'nyang.today']) localStorage.removeItem(k); });
+    await W.close();
   }
 
   T.ok(T.errors.length === 0, '콘솔·페이지 오류 없음 (' + T.errors.slice(0, 4).join(' | ') + ')');

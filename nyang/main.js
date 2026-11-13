@@ -93,7 +93,7 @@
     b.style.gridTemplateRows = `repeat(${G.n},minmax(0,1fr))`;   // 칸이 늘 정사각형 (고양이가 든 줄만 커지지 않게)
     b.innerHTML = cellsHtml();
     ODD.board(G.n);
-    drag = dragLast = null; lastTap = { k: -1, t: 0 };   // 옛 판의 끌기 · 두 번 톡 상태를 새 판에 들고 가지 않음
+    drag = dragLast = dblMiss = null; lastTap = { k: -1, t: 0 };   // 옛 판의 끌기 · 두 번 톡 상태를 새 판에 들고 가지 않음
     paint();
   }
   function paint() {
@@ -267,7 +267,18 @@
     }
     return api;
   })();
-  let lastTap = { k: -1, t: 0 }, drag = null, dragLast = null;
+  let lastTap = { k: -1, t: 0 }, drag = null, dragLast = null, dblMiss = null;
+  // 두 번 톡 시간 (11-13 베니 님 '두 번 눌렀는데 ✕ 로만 되고, 다시 두 번 누르면 ✕ 가 취소'): 기본 0.4초.
+  //   빈칸에 ✕ 켜고 끔(0.4~0.75초) 바로 뒤(3초 안) 같은 칸에 두 번 톡으로 고양이를 놓으면 = 두 번 톡이 안 먹혀 다시 한 것
+  //   → 이 폰은 그 간격 + 0.06초까지 두 번으로 침 (최대 0.6초, 폰에 저장). 빈칸에서 시작한 두 번만 넓힘 — ✕ 가 있던 칸을 지우려던 톡은 0.4초 그대로
+  const DBL = 400, DBL_MAX = 600;
+  const dblWin = () => { const w = +store.get("dblWin", DBL); return w > DBL ? Math.min(DBL_MAX, w) : DBL; };
+  function dblLearn(g) {
+    const w = Math.min(DBL_MAX, Math.max(dblWin(), Math.round(g + 60)));
+    if (w <= dblWin()) return;
+    store.set("dblWin", w); ODD.rec("lw", -1, w);
+    if (!store.get("dblWinTold", false)) { store.set("dblWinTold", true); toast("👆 두 번 누르는 간격을 조금 넉넉하게 맞췄어요", 2600); }
+  }
   // 화면 좌표 → 칸 { k, r, c, el, fx, fy }. fx·fy = 그 칸 안에서의 위치 (0~1, 틈에 닿으면 0 아래나 1 위)
   function boardAt(x, y, isTouch) {
     if (!G) return null;
@@ -320,14 +331,20 @@
     //   ① 예전엔 두 번째가 첫 번째에서 14px(칸 0.45) 넘게 떨어지면 따로 누른 것으로 봄 → 엄지로 빠르게 두 번이면 자주 넘음.
     //      이제 같은 칸 안쪽(가장자리 18% 뺀 곳)에 닿으면 거리와 상관없이 두 번으로 침. 맨 가장자리(옆 칸을 누르려던 것)만 거리로 가름 (11-08)
     //   ② 시간은 폰이 처리한 때가 아니라 손가락이 닿은 때로 잼 (evT) — 폰이 잠깐 바쁘면 0.4초를 넘기던 것
-    if (lastTap.k === k && dt >= 0 && dt < 400 && (dist < Math.max(14, cs * .45) || (p0.k === k && inB(p0.fx, .18) && inB(p0.fy, .18)))) {
+    if (lastTap.k === k && dt >= 0 && dt < (lastTap.prevX ? DBL : dblWin()) && (dist < Math.max(14, cs * .45) || (p0.k === k && inB(p0.fx, .18) && inB(p0.fy, .18)))) {
       const prevX = lastTap.prevX;
       lastTap = { k: -1, t: 0 }; drag = null;
       if (G.xs.has(k) !== prevX) G.toggleX(k);
       const res = G.place(k); ODD.dbl(k, prevX, res);
+      if (dblMiss && dblMiss.k === k && tn - dblMiss.tn < 3000) dblLearn(dblMiss.g);
+      dblMiss = null;
       afterMove(res, k); return;
     }
     const prevX = G.xs.has(k);
+    // 빈칸에 켠 ✕ 를 0.4~0.75초 뒤 같은 칸에서 끔 → 두 번 톡이 안 먹힌 것일 수 있음 (바로 두 번 톡으로 고양이를 놓으면 위에서 배움)
+    //   다시 하는 두 번 톡의 첫 톡이 이 기억을 지우지 않게, 다른 칸을 누르거나 3초가 지났을 때만 지움 (교차 검토 Opus 5.5)
+    if (lastTap.k === k && lastTap.prevX === false && prevX && dt >= dblWin() && dt < 750) dblMiss = { k, g: dt, tn };
+    else if (dblMiss && (dblMiss.k !== k || tn - dblMiss.tn >= 3000)) dblMiss = null;
     if (G.toggleX(k)) { S(G.xs.has(k) ? "x" : "unx"); ODD.tap(k, G.xs.has(k)); } else ODD.rec("t0", k);
     lastTap = { k, t, tn, prevX, x: e.clientX, y: e.clientY };
     drag = { id: e.pointerId, on: G.xs.has(k), seen: new Set([k]), x: e.clientX, y: e.clientY, px: e.clientX, py: e.clientY, cs, moved: false, last: k, ax: null, hops: 0, vx: 0, vy: 0 };
