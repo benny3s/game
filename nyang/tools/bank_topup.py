@@ -19,6 +19,7 @@ TG_SEND = r"C:\Users\1\Claude-Benny\secretary\telegram\tg_send.py"
 HUB = r"C:\Users\1\Claude-Benny\agent-hub\hub.py"
 NOWIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 CHUNK, BASE, HEAD, TARGET = 1000, {"master": 90}, 1500, 3000   # 남은 판이 HEAD 단계보다 적으면 TARGET 단계가 되게 채움
+MAX_NEED, SLACK = 3, 50   # 하루 최대 3묶음 · 깬 단계 수보다 SLACK 넘게 큰 단계 번호는 가짜로 봄 (11-13 보안)
 PLAN = {"master": [(9, 500), (10, 500)]}                          # 묶음 하나 = 9×9 500 + 10×10 500 (11×11 은 한 판 13초라 뺌)
 L, DIG = "ABCDEFGHIJKLMNOP", "0123456789AB"
 sys.path.insert(0, str(GEN))
@@ -67,11 +68,17 @@ def top_stage():
         subprocess.run([FIREBASE, "database:get", "/nyang/rec", "--project", "benny-meeting", "-o", str(out)], cwd=d, capture_output=True, timeout=180, creationflags=NOWIN)
         rec = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
     if not isinstance(rec, dict): raise RuntimeError("nyang/rec 를 못 읽음 (firebase 로그인 · 인터넷)")
-    best = 0
+    # 단계는 차례로만 열림 (main.js maxStage()+1) → 깬 단계 수보다 훨씬 큰 번호는 손으로 쓴 가짜 기록. 그 사람은 깬 수까지만 셈 (11-13 보안)
+    best = fake = 0
     for v in rec.values():
-        for k in ((v or {}).get("st") or {}):
-            if str(k).startswith("s") and str(k)[1:].isdigit(): best = max(best, int(str(k)[1:]))
-    return best
+        st = v.get("st") if isinstance(v, dict) else None
+        if not isinstance(st, dict): continue
+        ks = [int(str(k)[1:]) for k in st if str(k).startswith("s") and str(k)[1:].isdigit()]
+        if not ks: continue
+        hi = max(ks)
+        if hi > len(ks) + SLACK: fake += 1; hi = len(ks) + SLACK
+        best = max(best, hi)
+    return best, fake
 
 
 def make_chunk(tier, c, used, procs):
@@ -99,15 +106,16 @@ def main():
     tier, K = "master", int(idx["tiers"].get("master", 0))
     cap = BASE[tier] + CHUNK * (1 + K)                       # 이 단계까지는 처음 보는 판
     add = arg("--add", 0)
-    try: top = top_stage()
+    try: top, fake = top_stage()
     except Exception as e:
         if not add: beat(False, f"단계 못 읽음: {e}"); say(f"🐱 냥도쿠 판 묶음 점검: 단계 기록을 못 읽었어요 ({e})"); return 1
-        top = 0
+        top, fake = 0, 0
     left = cap - top
-    print(f"고수 묶음 {1 + K}개 → {cap}단계까지 · 제일 앞선 단계 {top} · 남은 {left}단계")
+    odd = f" · 이상한 기록 {fake}명 (뺌)" if fake else ""
+    print(f"고수 묶음 {1 + K}개 → {cap}단계까지 · 제일 앞선 단계 {top} · 남은 {left}단계{odd}")
     if "--check" in ARGS: return 0
-    need = add or (math.ceil((TARGET - left) / CHUNK) if left < HEAD else 0)
-    if not need: beat(True, f"고수 {cap}단계까지 · 앞선 단계 {top} · 남은 {left}"); return 0
+    need = add or min(MAX_NEED, math.ceil((TARGET - left) / CHUNK) if left < HEAD else 0)   # 한 번에 MAX_NEED 묶음까지만 (기록이 이상해도 끝없이 돌지 않게)
+    if not need: beat(True, f"고수 {cap}단계까지 · 앞선 단계 {top} · 남은 {left}{odd}"); return 0
     used = set()
     for f in [NY / "puzzles.json", *BANK.glob("*.json")]:
         if f.name == "index.json": continue

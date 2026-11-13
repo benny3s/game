@@ -85,7 +85,7 @@ const FB = { apiKey: "AIzaSyCSueePQfiHaRxUSZxoropiFjiq9arAaTs", authDomain: "ben
   databaseURL: "https://benny-meeting-default-rtdb.asia-southeast1.firebasedatabase.app" };
 const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FB);
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));   // 기록은 아무 기기나 쓸 수 있으니 화면에 넣는 값은 전부 esc (11-13 보안)
 const tm = t => t ? new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "-";
 const dur = (a, b) => a && b ? Math.round((b - a) / 1000) + "초" : "-";
 let data = {};
@@ -167,7 +167,7 @@ async function loadGame() {
   try { data = (await app.database().ref("logs/" + $("game").value).get()).val() || {}; }
   catch (e) { $("msg").textContent = "읽기 실패: " + e.message; return; }
   const dates = Object.keys(data).sort().reverse();
-  $("date").innerHTML = dates.map(d => `<option>${d}</option>`).join("") || "<option value=''>기록 없음</option>";
+  $("date").innerHTML = dates.map(d => `<option value="${esc(d)}">${esc(d)}</option>`).join("") || "<option value=''>기록 없음</option>";
   render();
 }
 function render() {
@@ -177,14 +177,14 @@ function render() {
   $("list").innerHTML = ss.map(([sid, s]) => {
     const info = s.info || {}, ps = s.players || {}, ms = Object.values(s.matches || {}), net = s.net || {}, chat = Object.values(s.chat || {});
     matches += ms.length; Object.values(ps).forEach(p => people.add(p.name)); Object.values(net).forEach(n => { nets++; if (n.conn === "Firebase") relay++; });
-    const pRows = Object.entries(ps).map(([uid, p]) => `<tr><td>${esc(p.name)}</td><td>${esc(p.role || "")}${p.team != null ? " · 팀" + (p.team + 1) : ""}</td><td>${tm(p.joined)}</td><td>${tm(p.left)}</td></tr>`).join("");
+    const pRows = Object.entries(ps).map(([uid, p]) => `<tr><td>${esc(p.name)}</td><td>${esc(p.role || "")}${p.team != null ? " · 팀" + esc(Number(p.team) + 1) : ""}</td><td>${tm(p.joined)}</td><td>${tm(p.left)}</td></tr>`).join("");
     const mRows = ms.sort((a, b) => (a.start || 0) - (b.start || 0)).map((m, i) => {
       const res = m.final || m.results || [];
-      const top = Array.isArray(res) ? res.slice().sort((a, b) => (b.len ?? 0) - (a.len ?? 0)).slice(0, 4).map(r => `${esc(r.n || r.name)} ${r.len ?? ""}${r.kills != null ? "·잡" + r.kills : ""}`).join(" / ") : "";
-      const sc = m.winner ? `${esc(m.winner)} 승 · 남은 유닛 ${m.left1 ?? "-"}:${m.left2 ?? "-"} · ${m.secs ?? "-"}초` : "";
+      const top = Array.isArray(res) ? res.slice().sort((a, b) => (b.len ?? 0) - (a.len ?? 0)).slice(0, 4).map(r => `${esc(r.n || r.name)} ${esc(r.len ?? "")}${r.kills != null ? "·잡" + esc(r.kills) : ""}`).join(" / ") : "";
+      const sc = m.winner ? `${esc(m.winner)} 승 · 남은 유닛 ${esc(m.left1 ?? "-")}:${esc(m.left2 ?? "-")} · ${esc(m.secs ?? "-")}초` : "";
       return `<tr><td>${i + 1}</td><td>${tm(m.start)}</td><td>${dur(m.start, m.end || m.updated)}${m.aborted ? " (중단)" : ""}</td><td>${esc(m.mode || m.scn || m.cfg || "")}${m.ai ? " · AI " + esc(m.ai) : ""}</td><td>${esc(m.players || m.people || [m.team1, m.team2].filter(Boolean).join(" vs "))}</td><td>${sc || top}</td></tr>`;
     }).join("");
-    const nRows = Object.entries(net).map(([uid, n]) => `<tr><td>${esc(n.name)}</td><td>${esc(n.role)}</td><td class="${n.conn === "Firebase" ? "bad" : "ok"}">${esc(n.conn || (n.role === "방장" ? `친구 ${n.friends ?? 0} (직접 ${n.direct ?? 0})` : "-"))}</td><td class="n">${n.ping ?? "-"}</td><td class="n">${n.pingMax ?? "-"}</td><td class="n">${n.gap ?? "-"}${n.jitter != null ? " ±" + n.jitter : ""}</td><td class="n">${n.react ?? "-"}</td><td class="n ${n.reconnects ? "bad" : ""}">${n.reconnects ?? 0}</td><td>${tm(n.updated)}</td></tr>`).join("");
+    const nRows = Object.entries(net).map(([uid, n]) => `<tr><td>${esc(n.name)}</td><td>${esc(n.role)}</td><td class="${n.conn === "Firebase" ? "bad" : "ok"}">${esc(n.conn || (n.role === "방장" ? `친구 ${n.friends ?? 0} (직접 ${n.direct ?? 0})` : "-"))}</td><td class="n">${esc(n.ping ?? "-")}</td><td class="n">${esc(n.pingMax ?? "-")}</td><td class="n">${esc(n.gap ?? "-")}${n.jitter != null ? " ±" + esc(n.jitter) : ""}</td><td class="n">${esc(n.react ?? "-")}</td><td class="n ${n.reconnects ? "bad" : ""}">${esc(n.reconnects ?? 0)}</td><td>${tm(n.updated)}</td></tr>`).join("");
     const cRows = chat.sort((a, b) => (a.t || 0) - (b.t || 0)).map(c => `<div><span class="small">${tm(c.t)}</span> <b>${esc(c.n)}</b>: ${esc(c.m)}</div>`).join("");
     return `<div class="card sess"><h3>${esc(info.kind || "")} · 방 ${esc(info.room || "?")} · 방장 ${esc(info.hostName || "")} <span class="small">${tm(info.created)} ~ ${tm(info.closed || info.updated)}</span></h3>
       ${pRows ? `<h4>참가자</h4><div class="tw"><table><tr><th>이름</th><th>역할</th><th>들어옴</th><th>나감</th></tr>${pRows}</table></div>` : ""}
@@ -204,7 +204,8 @@ $("csv").onclick = () => {
     for (const m of Object.values(s.matches || {})) if (m.winner) rows.push(["판", sid, room, tm(m.start), `${m.team1 || ""} vs ${m.team2 || ""}`, m.scn || "", m.winner, m.left1 ?? "", m.left2 ?? "", m.secs ?? "", ""]);
     for (const n of Object.values(s.net || {})) rows.push(["연결", sid, room, tm(n.updated), n.name || "", n.role || "", n.conn || "", n.ping ?? "", n.gap ?? "", n.react ?? "", n.reconnects ?? 0]);
   }
-  const csv = "﻿" + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+  const cell = v => { let t = String(v); if (/^[=+\-@\t\r]/.test(t) && !/^-?\d+(\.\d+)?$/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };   // 엑셀 수식 주입 막기 (11-13)
+  const csv = "﻿" + rows.map(r => r.map(cell).join(",")).join("\r\n");
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = `게임기록_${$("game").value}_${d}.csv`; a.click();
 };
 // 표 → 폰에서는 줄마다 카드: 칸 이름(맨 윗줄)을 칸마다 data-l 로 붙임 (표가 그려질 때마다 저절로 · 모양만 바꿈)

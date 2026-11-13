@@ -847,7 +847,7 @@ const Gate = (() => {
   const wantKey = w => (w === "today" ? "day" : REQ_DUR.some(d => d[0] === w) ? w : "always");
   function pendingReqs(val) {
     return Object.entries(val || {})
-      .map(([uid, r]) => Object.assign({ uid }, r))
+      .map(([uid, r]) => Object.assign({}, r, { uid }))
       .filter(r => r && r.status === "pending" && now() - (r.t || 0) < 7 * DAY)   // 일주일 넘은 요청은 안 보임 (비서와 같은 기준)
       .sort((a, b) => (b.t || 0) - (a.t || 0));
   }
@@ -912,7 +912,7 @@ const Gate = (() => {
     let val = {};
     const draw = () => {
       const now = Date.now(), d0 = new Date(); d0.setHours(0, 0, 0, 0);
-      const raw = Object.entries(val || {}).map(([uid, p]) => Object.assign({ uid }, p)).filter(p => p && p.t);
+      const raw = Object.entries(val || {}).map(([uid, p]) => Object.assign({}, p, { uid })).filter(p => p && p.t);
       // 같은 이름(같은 사람)은 한 칸으로 — 폰·PC·다른 브라우저여도 (손님은 이름이 없어 기기마다)
       const RANK = { admin: 3, allowed: 2, bridge: 1, guest: 0 }, by = new Map();
       for (const p of raw) {
@@ -1059,7 +1059,7 @@ const Gate = (() => {
     const onDev = snap => {
       const val = snap.val() || {};
       const devs = Object.entries(val)
-        .map(([uid, d]) => Object.assign({ uid }, d))
+        .map(([uid, d]) => Object.assign({}, d, { uid }))
         .sort((a, b) => (b.lastSeen || b.t || 0) - (a.lastSeen || a.t || 0));
       const cntEl = adminEl.querySelector("#bgDevCount");
       const listEl = adminEl.querySelector("#bgDevList");

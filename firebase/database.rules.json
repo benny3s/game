@@ -17,7 +17,12 @@
       "rec": {
         ".read": "auth != null",
         "$pid": {
-          ".write": "auth != null && ((newData.exists() && root.child('gp/players/' + $pid).exists()) || auth.token.admin === 1)"
+          ".write": "auth != null && ((newData.exists() && root.child('gp/players/' + $pid).exists()) || auth.token.admin === 1)",
+          "st": {
+            "$k": {
+              ".validate": "$k.matches(/^s[0-9]{1,6}$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 3"
+            }
+          }
         }
       }
     },
@@ -496,8 +501,11 @@
     "logs": {
       ".read": "auth != null && auth.token.admin === 1",
       "$game": {
+        ".validate": "$game.matches(/^[a-z0-9_-]{2,24}$/)",
         "$date": {
+          ".validate": "$date.matches(/^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/)",
           "$sid": {
+            ".validate": "$sid.matches(/^[0-9]{6}_[A-Za-z0-9]{0,12}$/)",
             ".write": "auth != null && (!data.exists() ? newData.child('info/host').val() === auth.uid : data.child('info/host').val() === auth.uid)",
             "net": {
               "$uid": {
