@@ -109,8 +109,10 @@ U.main(async T => {
     colCards: document.querySelectorAll('#grid .col-card').length,
     overflow: document.documentElement.scrollWidth <= window.innerWidth + 1,
     hasGenius: !!document.querySelector('#grid a[href="genius/"]'),
+    hasBrain: !!document.querySelector('#grid a[href="brain/"]'),
+    hasEscape: !!document.querySelector('#grid a[href="escape/"]'),
   }));
-  T.ok(pInfo.cards === 7 && pInfo.colCards === 4 && pInfo.hasGenius, `포털 기본 모음 7카드 구성 (${JSON.stringify(pInfo)})`);
+  T.ok(pInfo.cards === 9 && pInfo.colCards === 4 && pInfo.hasGenius && pInfo.hasBrain && pInfo.hasEscape, `포털 기본 모음 9카드 구성 (${JSON.stringify(pInfo)})`);
   T.ok(pInfo.overflow, '포털 모바일 가로 넘침 없음');
 
   await pPortal.click('#grid .col-card[data-col="col_action"] .cap-art');

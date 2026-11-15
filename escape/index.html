@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f131d">
+<title>비밀 서재 탈출 — 1인 방탈출 EP.01</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
+<script src="../common/fit.js?v=1"></script>
+<script src="../common/backnav.js?v=3"></script>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body class="dark">
+<div class="wrap">
+  <header class="top">
+    <h1><span class="glogo" aria-hidden="true">🗝️</span>비밀 서재 탈출</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section id="home" class="card">
+    <div class="ep-hero">
+      <img src="assets/wall_north.jpg" alt="시계공의 비밀 서재" class="ep-thumb">
+      <div class="ep-badge">EP.01 · 1인 방탈출 파일럿</div>
+    </div>
+    <h2 class="ep-title">사라진 시계공의 비밀 서재</h2>
+    <p class="ep-desc">굳게 잠긴 어둑한 서재 안, 할아버지가 남긴 시계와 고서적, 숨겨진 금고의 비밀을 풀어 묵직한 오크 문 너머로 탈출하세요.</p>
+    <div class="ep-meta">
+      <span>🎯 1인 솔로</span>
+      <span>⏱ 약 15분</span>
+      <span>🧩 자물쇠 · 아이템 조합 · UV</span>
+    </div>
+
+    <div id="saveBanner" class="ep-save" hidden></div>
+
+    <div class="ep-cta">
+      <button class="btn ghost" id="helpBtn">🎬 1분 규칙 설명</button>
+      <button class="btn primary big" id="startBtn">서재 들어가기!</button>
+    </div>
+
+    <div class="row center minor">
+      <button class="btn ghost" id="resetBtn" hidden>↺ 처음부터 다시</button>
+      <button class="btn ghost" id="gRankBtn">🏆 탈출 기록</button>
+    </div>
+  </section>
+</div>
+
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid">
+      <span class="lbl" id="playTitle">남쪽 · 시계공의 책상</span>
+      <span class="t" id="playSub">00:00 · 힌트 0회</span>
+    </div>
+    <div class="compass" id="compass">
+      <button type="button" data-w="N" title="북쪽">N</button>
+      <button type="button" data-w="E" title="동쪽">E</button>
+      <button type="button" data-w="S" title="남쪽">S</button>
+      <button type="button" data-w="W" title="서쪽">W</button>
+    </div>
+    <button class="pill" id="sndBtn" aria-label="소리">🔊</button>
+  </div>
+
+  <main class="esc-main">
+    <div class="esc-viewport" id="viewport">
+      <img id="roomImg" alt="서재 벽면">
+      <div id="visualOverlays" class="esc-ov-layer"></div>
+      <div id="hotspots" class="esc-hotspots"></div>
+      <button type="button" class="esc-nav left" id="turnLeftBtn" aria-label="왼쪽 보기">◀</button>
+      <button type="button" class="esc-nav right" id="turnRightBtn" aria-label="오른쪽 보기">▶</button>
+    </div>
+
+    <div class="esc-msg" id="msgBox">서재 안은 고요하다. 책상 위부터 자세히 살펴보자.</div>
+  </main>
+
+  <div id="coachSlot" class="coach-slot"></div>
+
+  <div class="esc-inv-bar">
+    <div class="esc-inv-tools">
+      <button type="button" class="esc-tool-btn" id="combineBtn" aria-pressed="false">🔗 합치기</button>
+      <button type="button" class="esc-tool-btn" id="inspectItemBtn" disabled>ℹ 정보</button>
+      <button type="button" class="esc-tool-btn" id="coachBtn">🧑‍🏫 힌트</button>
+      <button type="button" class="esc-tool-btn" id="helpPlayBtn">🎬 안내</button>
+    </div>
+    <div class="esc-inv-list" id="invList"></div>
+  </div>
+</section>
+
+<!-- 확대 퍼즐 모달 -->
+<div class="overlay" id="zoomModal" hidden>
+  <div class="modal esc-zoom-card" role="dialog" aria-modal="true" aria-labelledby="zoomTitle">
+    <div class="esc-zoom-hd">
+      <h3 id="zoomTitle">자세히 보기</h3>
+      <button type="button" class="esc-x" id="zoomCloseBtn" aria-label="닫기">✕</button>
+    </div>
+    <div id="zoomBody" class="esc-zoom-body"></div>
+  </div>
+</div>
+
+<script src="../common/glog.js?v=8"></script>
+<script src="../common/cozy.js?v=14"></script>
+<script src="../common/me.js?v=19"></script>
+<script src="../common/rank.js?v=14"></script>
+<script src="../common/coach.js?v=4"></script>
+<script src="../common/tutorial.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="tutorial.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

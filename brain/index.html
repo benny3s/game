@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f131d">
+<title>베니 두뇌 랩 — 멘사 · 논리 퍼즐 모음</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
+<script src="../common/fit.js?v=1"></script>
+<script src="../common/backnav.js?v=3"></script>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body class="dark">
+<div class="wrap">
+  <header class="top">
+    <h1><span class="glogo" aria-hidden="true">🧠</span>베니 두뇌 랩</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section id="home" class="card">
+    <p class="b-subtitle">멘사 행렬 · 수리 패턴 · 조건 추리 · 작업 기억 (100점 성장 평가)</p>
+
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+    </div>
+
+    <div id="soloBox" class="box">
+      <div class="b-mode-row" id="soloModeRow" role="radiogroup" aria-label="플레이 방식">
+        <button type="button" class="b-mode-card" data-smode="exam" aria-pressed="true">
+          <b>📊 100점 종합 평가</b>
+          <small>4대 영역 8문제 · 성장 이력 저장</small>
+        </button>
+        <button type="button" class="b-mode-card" data-smode="practice" aria-pressed="false">
+          <b>🎯 영역별 자유 연습</b>
+          <small>원하는 카테고리 무제한 풀이</small>
+        </button>
+      </div>
+
+      <div id="catWrap" hidden>
+        <div class="b-cats" id="catCards" role="radiogroup" aria-label="퍼즐 카테고리">
+          <button type="button" class="b-cat" data-cat="mix" aria-pressed="true"><span>🎲</span><b>전체 랜덤</b></button>
+          <button type="button" class="b-cat" data-cat="shape" aria-pressed="false"><span>🔷</span><b>도형·공간</b></button>
+          <button type="button" class="b-cat" data-cat="num" aria-pressed="false"><span>🔢</span><b>수·패턴</b></button>
+          <button type="button" class="b-cat" data-cat="logic" aria-pressed="false"><span>🕵️</span><b>추리·논리</b></button>
+          <button type="button" class="b-cat" data-cat="mem" aria-pressed="false"><span>🧠</span><b>기억·집중</b></button>
+        </div>
+      </div>
+
+      <div class="tiers three" id="tiers"></div>
+
+      <div class="b-summary-pill" id="homeHistPill">
+        <span>📈 아직 종합 평가 기록이 없어요</span>
+        <button type="button" class="b-mini-btn" id="histQuickBtn">이력 보기</button>
+      </div>
+    </div>
+
+    <div class="b-cta">
+      <button class="btn ghost" id="helpBtn">🎬 1분 규칙 설명</button>
+      <button class="btn primary big" id="startBtn">평가 시작!</button>
+    </div>
+
+    <div class="row center minor">
+      <button class="btn ghost" id="histBtn">📈 성장 이력</button>
+      <button class="btn ghost" id="gRankBtn">🏆 랭킹</button>
+    </div>
+    <p class="b-disclaimer">※ 실제 의학·멘사 IQ 검사가 아닌 베니 아케이드 논리·사고력 종합 평가(100점 만점)입니다.</p>
+  </section>
+</div>
+
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid">
+      <span class="lbl" id="playTitle">100점 종합 평가</span>
+      <span class="t" id="playSub">1 / 8 문제</span>
+    </div>
+    <button class="pill" id="sndBtn" aria-label="소리">🔊</button>
+  </div>
+
+  <div class="scores" id="scoreBar"></div>
+
+  <main class="stage" id="stage"></main>
+
+  <div id="coachSlot" class="coach-slot"></div>
+
+  <div class="dock" id="dock">
+    <button id="coachBtn"><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
+    <button id="helpPlayBtn"><span class="ic">🎬</span><span>규칙 설명</span></button>
+    <button id="histPlayBtn"><span class="ic">📈</span><span>성장 이력</span></button>
+    <button id="againBtn"><span class="ic">↺</span><span>새 판</span></button>
+  </div>
+</section>
+
+<!-- 성장 이력 & 결과 모달 -->
+<div class="overlay" id="histModal" hidden>
+  <div class="modal b-hist-modal" role="dialog" aria-modal="true" aria-labelledby="histTitle">
+    <div class="b-hist-hd">
+      <h2 id="histTitle">📈 두뇌 성장 이력 (100점 만점)</h2>
+      <button type="button" class="b-x" id="histCloseBtn" aria-label="닫기">✕</button>
+    </div>
+    <div id="histBody" class="b-hist-body"></div>
+  </div>
+</div>
+
+<script src="../common/glog.js?v=8"></script>
+<script src="../common/cozy.js?v=14"></script>
+<script src="../common/me.js?v=19"></script>
+<script src="../common/rank.js?v=14"></script>
+<script src="../common/arena-mock.js?v=9"></script>
+<script src="../common/arena.js?v=15"></script>
+<script src="../common/arena-ui.js?v=18"></script>
+<script src="../common/coach.js?v=4"></script>
+<script src="../common/tutorial.js?v=1"></script>
+<script src="core.js?v=1"></script>
+<script src="tutorial.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>

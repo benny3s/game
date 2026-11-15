@@ -1,0 +1,209 @@
+:root {
+  --bg: #0c0e13;
+  --panel: #16181f;
+  --card: #1b1d24;
+  --ink: #f3efe6;
+  --soft: #a89f91;
+  --line: rgba(251, 191, 36, 0.22);
+  --accent: #f59e0b;
+  --gold: #fbbf24;
+  --coach: #fbbf24;
+}
+
+.ep-hero { position: relative; border-radius: 14px; overflow: hidden; margin-bottom: 10px; border: 1px solid var(--line); }
+.ep-thumb { width: 100%; height: 155px; object-fit: cover; display: block; }
+.ep-badge {
+  position: absolute; top: 8px; left: 8px; padding: 4px 10px; border-radius: 99px;
+  background: rgba(12,14,19,0.82); border: 1px solid var(--gold); color: var(--gold); font-size: 11.5px; font-weight: 800;
+}
+.ep-title { margin: 0 0 6px; font: 900 19px var(--round, inherit); color: #fef3c7; }
+.ep-desc { margin: 0 0 10px; font-size: 13px; color: #d6cfc3; line-height: 1.5; }
+.ep-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; color: var(--soft); }
+.ep-meta span { padding: 4px 9px; border-radius: 99px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); }
+.ep-save {
+  margin-bottom: 10px; padding: 8px 11px; border-radius: 10px; font-size: 12.5px;
+  background: rgba(245,158,11,0.12); border: 1px solid rgba(245,158,11,0.4); color: #fde68a;
+}
+.ep-cta { display: grid; grid-template-columns: auto 1fr; gap: 8px; }
+
+/* ── 플레이 화면 ── */
+.play {
+  position: fixed; inset: 0; display: grid; grid-template-rows: auto 1fr auto auto;
+  background: var(--bg); color: var(--ink); z-index: 20; overflow: hidden;
+}
+.play[hidden] { display: none !important; }
+
+.compass { display: flex; gap: 3px; }
+.compass button {
+  width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.05); color: var(--soft); font: 800 11px sans-serif; cursor: pointer; padding: 0;
+}
+.compass button.on { background: var(--gold); color: #1c1917; border-color: var(--gold); }
+
+.esc-main {
+  min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: 6px;
+  padding: 6px 8px; place-items: center; overflow: hidden;
+}
+
+.esc-viewport {
+  position: relative; width: 100%; max-width: 720px; max-height: 100%;
+  aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
+  border: 1.5px solid rgba(245,158,11,0.35); background: #07080b;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.65); user-select: none; -webkit-user-select: none;
+}
+.esc-viewport img { width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; }
+.esc-ov-layer, .esc-hotspots { position: absolute; inset: 0; }
+.esc-ov-layer { pointer-events: none; }
+
+.esc-spot {
+  position: absolute; background: transparent; border: 0; padding: 0; cursor: pointer;
+  border-radius: 8px; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  min-width: 36px; min-height: 36px;
+}
+.esc-spot:focus-visible { outline: 2px solid var(--gold); }
+.esc-spot.glint::after {
+  content: "✨"; position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 18px; filter: drop-shadow(0 0 6px #fde68a); animation: glintPulse 1.8s infinite;
+}
+@keyframes glintPulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.95); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+.esc-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 54px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.22);
+  background: rgba(10,12,18,0.65); color: #fef3c7; font-size: 16px; font-weight: 900;
+  cursor: pointer; z-index: 4; display: grid; place-items: center;
+}
+.esc-nav.left { left: 6px; }
+.esc-nav.right { right: 6px; }
+.esc-nav:active { background: rgba(245,158,11,0.35); }
+
+/* 방 위 시각 오버레이 (UV 형광 글씨, 열린 금고, 시계 03:45) */
+.ov-uv-slate {
+  position: absolute; left: 71.5%; top: 18.5%; width: 19%; height: 31%;
+  display: grid; place-items: center; text-align: center;
+  color: #e879f9; text-shadow: 0 0 8px #a855f7, 0 0 18px #c084fc;
+  font: 900 clamp(11px, 2.6vw, 18px)/1.35 sans-serif;
+  background: radial-gradient(circle, rgba(168,85,247,0.26), transparent 72%);
+  border-radius: 6px;
+}
+.ov-safe-behind {
+  position: absolute; left: 34%; top: 9%; width: 32%; height: 35%;
+  background: linear-gradient(145deg, #1f2937, #0f172a);
+  border: 3px solid #64748b; border-radius: 8px;
+  display: grid; place-items: center; color: #fbbf24; font-size: clamp(13px, 3vw, 22px); font-weight: 900;
+  box-shadow: inset 0 0 22px rgba(0,0,0,0.8);
+}
+.ov-clock-badge {
+  position: absolute; left: 16.5%; top: 26%; width: 12%; padding: 2px 0; text-align: center;
+  background: rgba(15,23,42,0.88); border: 1px solid #fbbf24; border-radius: 6px;
+  color: #fef3c7; font: 900 clamp(10px, 2.2vw, 14px) monospace;
+}
+.ov-door-status {
+  position: absolute; left: 60%; top: 37%; transform: translate(-50%, -50%);
+  display: flex; gap: 6px; padding: 4px 8px; border-radius: 99px;
+  background: rgba(10,12,18,0.8); border: 1px solid var(--gold); font-size: 13px;
+}
+
+.esc-msg {
+  width: min(720px, 100%); padding: 8px 12px; border-radius: 10px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12);
+  font-size: 13px; line-height: 1.4; color: #fef3c7; text-align: center;
+}
+
+.coach-slot:empty { display: none; }
+.coach-slot { padding: 0 8px 4px; }
+.coach-slot .cpn { position: static; width: min(720px, 100%); max-height: 22vh; margin: 0 auto; }
+
+/* 하단 인벤토리 바 */
+.esc-inv-bar {
+  background: #14161c; border-top: 1px solid var(--line);
+  padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 6px;
+}
+.esc-inv-tools {
+  display: flex; gap: 6px; justify-content: center; flex-wrap: wrap;
+}
+.esc-tool-btn {
+  padding: 5px 10px; border-radius: 99px; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06); color: var(--ink); font: 700 12px inherit; cursor: pointer;
+}
+.esc-tool-btn[aria-pressed="true"] {
+  border-color: #c084fc; background: rgba(192,132,252,0.22); color: #f3e8ff;
+}
+.esc-tool-btn:disabled { opacity: 0.4; cursor: default; }
+
+.esc-inv-list {
+  display: flex; gap: 7px; overflow-x: auto; padding: 2px; min-height: 54px; align-items: center;
+  justify-content: flex-start;
+}
+.esc-inv-empty { width: 100%; text-align: center; font-size: 12px; color: var(--soft); }
+.esc-slot {
+  flex: none; min-width: 72px; padding: 6px 8px; border-radius: 10px;
+  border: 1.5px solid rgba(255,255,255,0.15); background: #1e212b;
+  color: var(--ink); display: grid; place-items: center; gap: 2px; cursor: pointer;
+}
+.esc-slot .ic { font-size: 20px; line-height: 1; }
+.esc-slot .nm { font-size: 10.5px; white-space: nowrap; color: #e2e8f0; }
+.esc-slot.sel { border-color: var(--gold); background: rgba(251,191,36,0.18); box-shadow: 0 0 0 1px var(--gold); }
+.esc-slot.comb { border-color: #c084fc; background: rgba(192,132,252,0.22); box-shadow: 0 0 0 1px #c084fc; }
+
+/* 확대 퍼즐 모달 */
+.esc-zoom-card { width: min(420px, 94vw); max-height: 86dvh; overflow: auto; display: grid; gap: 12px; }
+.esc-zoom-hd { display: flex; justify-content: space-between; align-items: center; }
+.esc-zoom-hd h3 { margin: 0; font-size: 17px; color: #fef3c7; }
+.esc-x {
+  width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06); color: var(--ink); font-size: 15px; cursor: pointer;
+}
+.esc-zoom-body { display: grid; gap: 12px; }
+
+.ez-parchment {
+  padding: 16px; border-radius: 10px; background: linear-gradient(160deg, #f3e5c8, #dfd0af);
+  color: #2c1d0e; border: 2px solid #9c7442; line-height: 1.65; font-size: 14px;
+}
+.ez-books { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.ez-book {
+  height: 112px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.22);
+  color: #fff; font: 900 14px var(--round, inherit); cursor: pointer;
+  display: grid; place-items: center; text-shadow: 0 1px 3px rgba(0,0,0,0.6); transition: transform .1s;
+}
+.ez-book.pushed { transform: translateY(6px); opacity: 0.65; border-color: #fbbf24; }
+.ez-book.red { background: linear-gradient(180deg, #b91c1c, #7f1d1d); }
+.ez-book.gold { background: linear-gradient(180deg, #d97706, #92400e); }
+.ez-book.green { background: linear-gradient(180deg, #15803d, #14532d); }
+.ez-book.blue { background: linear-gradient(180deg, #1d4ed8, #1e3a8a); }
+
+.ez-dials { display: flex; justify-content: center; gap: 10px; }
+.ez-dial {
+  display: grid; gap: 4px; place-items: center; padding: 8px; border-radius: 10px;
+  background: #0f172a; border: 1.5px solid #475569; min-width: 58px;
+}
+.ez-dial button {
+  width: 40px; height: 32px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.08); color: #f8fafc; cursor: pointer; font-weight: 800;
+  touch-action: manipulation;
+}
+.ez-dial .val { font: 900 24px monospace; color: var(--gold); padding: 2px 0; }
+
+.ez-slate {
+  padding: 26px 14px; border-radius: 12px; text-align: center;
+  background: #0f1419; border: 2px solid #334155; min-height: 120px; display: grid; place-items: center;
+}
+.ez-slate.uv {
+  background: radial-gradient(circle, rgba(168,85,247,0.32), #0f1419 72%);
+  border-color: #a855f7;
+}
+.ez-uv-txt {
+  font: 900 26px/1.4 sans-serif; color: #f0abfc;
+  text-shadow: 0 0 12px #c084fc, 0 0 24px #a855f7; letter-spacing: 3px;
+}
+
+.ez-door-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ez-dslot {
+  padding: 14px 10px; border-radius: 12px; border: 1.5px dashed #64748b; background: #141a24;
+  color: var(--ink); display: grid; place-items: center; gap: 4px; cursor: pointer; font-size: 13px;
+}
+.ez-dslot.done { border-style: solid; border-color: #34d399; background: rgba(52,211,153,0.14); color: #d1fae5; }
