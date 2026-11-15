@@ -696,6 +696,22 @@ button { font: inherit; cursor: pointer; }
   .search-box input { width: 160px; }
   .search-box input:focus { width: 190px; }
 }
+.capsule.col-card { cursor: pointer; position: relative; }
+.cap-folder-tag {
+  position: absolute; bottom: 6px; right: 6px;
+  background: rgba(15, 23, 34, 0.88); border: 1px solid rgba(102, 192, 244, 0.45);
+  color: var(--steam-blue); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px;
+}
+.col-links { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.col-pill {
+  font-size: 11px; font-weight: 600; color: #dbeafe; text-decoration: none;
+  background: rgba(102, 192, 244, 0.12); border: 1px solid rgba(102, 192, 244, 0.25);
+  border-radius: 6px; padding: 2px 6px; transition: background 0.14s;
+}
+.col-pill:hover { background: rgba(102, 192, 244, 0.28); color: #fff; }
+.modal-card.col-modal { max-width: 720px; width: min(94vw, 720px); max-height: 86vh; overflow-y: auto; }
+.col-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; margin-top: 10px; }
+@media (max-width: 440px) { .col-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } }
 </style>
 <style>/* 아이폰 확대 막기 (게임은 common/cozy 에) */html{-webkit-text-size-adjust:100%}body,body *{touch-action:manipulation}@supports (-webkit-touch-callout:none){input,select,textarea{font-size:max(16px,1em)!important}}</style>
 <script>try{for(const ev of ["gesturestart","gesturechange","gestureend"])document.addEventListener(ev,e=>e.preventDefault(),{passive:false});document.addEventListener("touchmove",e=>{if(e.touches.length>1||(e.scale&&e.scale!==1))e.preventDefault()},{passive:false});document.addEventListener("dblclick",e=>e.preventDefault(),{passive:false})}catch(e){}</script>
@@ -771,13 +787,14 @@ button { font: inherit; cursor: pointer; }
 
   <div class="toolbar">
     <div class="cat-tabs" id="catTabs">
-      <button class="cat-btn active" data-cat="all">전체</button>
-      <button class="cat-btn" data-cat="board">🀄 전통 · 보드</button>
-      <button class="cat-btn" data-cat="action">⚡ 액션 · 아케이드</button>
-      <button class="cat-btn" data-cat="puzzle">🧩 두뇌 · 퍼즐</button>
-      <button class="cat-btn" data-cat="friend">👥 친구랑 멀티</button>
-      <button class="cat-btn" data-cat="party">🎉 파티</button>
-      <button class="cat-btn" data-cat="ai">🧠 신경망 · 강화학습 AI</button>
+      <button class="cat-btn active" data-cat="groups">📂 모음 (추천)</button>
+      <button class="cat-btn" data-cat="all">🎮 전체</button>
+      <button class="cat-btn" data-cat="trad">♟️ 전통 · 전략</button>
+      <button class="cat-btn" data-cat="card">♠️ 카드 · 베팅</button>
+      <button class="cat-btn" data-cat="boardparty">🎲 보드 · 파티</button>
+      <button class="cat-btn" data-cat="action">⚡ 액션 · 스포츠</button>
+      <button class="cat-btn" data-cat="brain">🧠 두뇌 · 지니어스</button>
+      <button class="cat-btn" data-cat="friend">👥 친구랑</button>
     </div>
   </div>
 
@@ -824,13 +841,27 @@ button { font: inherit; cursor: pointer; }
   </div>
 </div>
 
+<!-- 모음 폴더 열기 모달 -->
+<div class="modal-bg" id="colModal" hidden>
+  <div class="modal-card col-modal" role="dialog" aria-modal="true" aria-labelledby="colTitle">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <h3 id="colTitle" style="margin:0">모음</h3>
+        <p id="colSub" style="margin:3px 0 0;color:var(--muted);font-size:13px"></p>
+      </div>
+      <button class="nav-pill" id="colCloseBtn" type="button">닫기 ✕</button>
+    </div>
+    <div class="col-grid" id="colGrid"></div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="common/gate.js?v=23"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=19"></script>
-<script src="common/rank.js?v=13"></script>
+<script src="common/rank.js?v=14"></script>
 <script src="common/arena-mock.js?v=9"></script>
 <script src="common/arena.js?v=15"></script>
 <script src="common/bank.js?v=14"></script>
@@ -1254,6 +1285,66 @@ button { font: inherit; cursor: pointer; }
     <text x="96" y="27" font-family="sans-serif" font-size="20" font-weight="900" fill="#fff" text-anchor="middle">원카드!</text>
   </g>
 </svg>`;
+      case "genius":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="gnBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#141a2b"/><stop offset="1" stop-color="#2a1f3d"/></linearGradient></defs>
+          <rect width="400" height="200" fill="url(#gnBg)"/>
+          <circle cx="200" cy="96" r="80" fill="#f59e0b" opacity=".12"/>
+          <g transform="translate(46,42) rotate(-7)">
+            <rect width="62" height="86" rx="10" fill="#0d111a" stroke="#f5b301" stroke-width="2.5"/>
+            <text x="31" y="55" font-family="sans-serif" font-size="34" font-weight="900" fill="#f8fafc" text-anchor="middle">8</text>
+          </g>
+          <g transform="translate(96,52) rotate(5)">
+            <rect width="62" height="86" rx="10" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
+            <text x="31" y="55" font-family="sans-serif" font-size="34" font-weight="900" fill="#0f172a" text-anchor="middle">7</text>
+          </g>
+          <g transform="translate(174,40)">
+            <rect width="84" height="84" rx="14" fill="#1e293b" stroke="#38bdf8" stroke-width="2.5"/>
+            <polygon points="42,14 68,66 16,66" fill="#ef4444" stroke="#0f172a" stroke-width="3"/>
+          </g>
+          <g transform="translate(274,46) rotate(6)">
+            <rect width="74" height="94" rx="12" fill="#115e59" stroke="#5eead4" stroke-width="2.5"/>
+            <text x="37" y="42" font-size="22" text-anchor="middle">👑</text>
+            <text x="37" y="74" font-family="sans-serif" font-size="22" font-weight="900" fill="#f0fdfa" text-anchor="middle">왕</text>
+          </g>
+          <text x="200" y="176" font-family="sans-serif" font-size="14" font-weight="800" fill="#fbbf24" text-anchor="middle">흑과 백 · 결! 합! · 십이장기</text>
+        </svg>`;
+      case "col_trad":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#1f1812"/>
+          <rect x="44" y="34" width="140" height="132" rx="10" fill="#c79557" stroke="#f5deb3" stroke-width="2"/>
+          <line x1="68" y1="54" x2="160" y2="54" stroke="#5c3d1e" stroke-width="2"/><line x1="68" y1="84" x2="160" y2="84" stroke="#5c3d1e" stroke-width="2"/><line x1="68" y1="114" x2="160" y2="114" stroke="#5c3d1e" stroke-width="2"/><line x1="68" y1="144" x2="160" y2="144" stroke="#5c3d1e" stroke-width="2"/>
+          <line x1="68" y1="54" x2="68" y2="144" stroke="#5c3d1e" stroke-width="2"/><line x1="98" y1="54" x2="98" y2="144" stroke="#5c3d1e" stroke-width="2"/><line x1="128" y1="54" x2="128" y2="144" stroke="#5c3d1e" stroke-width="2"/><line x1="158" y1="54" x2="158" y2="144" stroke="#5c3d1e" stroke-width="2"/>
+          <circle cx="98" cy="84" r="11" fill="#111827"/><circle cx="128" cy="114" r="11" fill="#f8fafc"/>
+          <circle cx="158" cy="84" r="11" fill="#111827"/><circle cx="98" cy="114" r="11" fill="#f8fafc"/>
+          <text x="278" y="96" font-size="56" text-anchor="middle">♟️</text>
+          <text x="278" y="144" font-family="sans-serif" font-size="18" font-weight="800" fill="#fde68a" text-anchor="middle">바둑 · 오목 · 체스 · 장기</text>
+        </svg>`;
+      case "col_card":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#12211b"/>
+          <g transform="translate(88,36) rotate(-10)"><rect width="68" height="100" rx="10" fill="#fff" stroke="#cbd5e1"/><text x="34" y="62" font-size="38" fill="#111" text-anchor="middle">♠</text></g>
+          <g transform="translate(166,30)"><rect width="68" height="100" rx="10" fill="#dc2626" stroke="#fecaca"/><text x="34" y="62" font-size="34" fill="#fff" text-anchor="middle">🎴</text></g>
+          <g transform="translate(244,38) rotate(10)"><rect width="68" height="100" rx="10" fill="#fff" stroke="#cbd5e1"/><text x="34" y="62" font-size="38" fill="#dc2626" text-anchor="middle">♥</text></g>
+          <text x="200" y="172" font-family="sans-serif" font-size="16" font-weight="800" fill="#a7f3d0" text-anchor="middle">홀덤 · 정통 섯다 · 원카드</text>
+        </svg>`;
+      case "col_board":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#1d1832"/>
+          <text x="115" y="102" font-size="48" text-anchor="middle">🎲</text>
+          <text x="200" y="102" font-size="48" text-anchor="middle">🎨</text>
+          <text x="285" y="102" font-size="48" text-anchor="middle">🪄</text>
+          <text x="200" y="164" font-family="sans-serif" font-size="16" font-weight="800" fill="#ddd6fe" text-anchor="middle">윷놀이 · 큐브 · 캐치 · 그림전달</text>
+        </svg>`;
+      case "col_action":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <rect width="400" height="200" fill="#0d2233"/>
+          <text x="95" y="102" font-size="46" text-anchor="middle">🏐</text>
+          <text x="165" y="102" font-size="46" text-anchor="middle">🐍</text>
+          <text x="235" y="102" font-size="46" text-anchor="middle">🗺️</text>
+          <text x="305" y="102" font-size="46" text-anchor="middle">🎱</text>
+          <text x="200" y="164" font-family="sans-serif" font-size="16" font-weight="800" fill="#bae6fd" text-anchor="middle">배구 · 지렁이 · 땅따먹기 · 당구</text>
+        </svg>`;
       default:
         return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
           <rect width="400" height="200" fill="#18122b"/>
@@ -1296,11 +1387,26 @@ button { font: inherit; cursor: pointer; }
   let games = [];
   let isAdmin = false;
   let canHost = false;
-  let activeCat = "all";
+  let activeCat = "groups";
   let viewMode = "grid"; // "grid" | "lib"
   let searchQ = "";
   let featuredId = "gostop";
   let selectedLibId = "gostop";
+
+  // 명확한 5개 군집 정의 (기존 폴더 경로는 절대 변경하지 않고 포털에서 깔끔하게 묶음)
+  const GROUP_OF = {
+    baduk: "trad", omok: "trad", chess: "trad", janggi: "trad",
+    gostop: "card", poker: "card", seotda: "card", onecard: "card",
+    yut: "boardparty", cube: "boardparty", catch: "boardparty", draw: "boardparty",
+    volley: "action", land: "action", snake: "action", billiards: "action", sc: "action",
+    nyang: "brain", genius: "brain",
+  };
+  const COLLECTIONS = [
+    { id: "col_trad", group: "trad", name: "전통 전략 모음", emoji: "♟️", sub: "바둑 · 오목 · 체스 · 장기", players: "1~2명 · 👀구경" },
+    { id: "col_card", group: "card", name: "카드 · 베팅 모음", emoji: "♠️", sub: "홀덤 · 정통 섯다 · 원카드", players: "1~6명 · 👀구경" },
+    { id: "col_board", group: "boardparty", name: "보드 · 파티 모음", emoji: "🎲", sub: "윷놀이 · 베니큐브 · 베니캐치 · 그림전달", players: "1~8명" },
+    { id: "col_action", group: "action", name: "액션 · 스포츠 모음", emoji: "⚡", sub: "냥냥 배구 · 땅따먹기 · 지렁이 · 당구", players: "1~2명 · 실시간" },
+  ];
 
   async function checkPermissions() {
     try {
@@ -1600,12 +1706,13 @@ button { font: inherit; cursor: pointer; }
 
   function filteredGames() {
     return games.filter(g => {
-      if (activeCat === "board" && g.category !== "board") return false;
-      if (activeCat === "action" && g.category !== "action") return false;
-      if (activeCat === "puzzle" && g.category !== "puzzle" && g.id !== "cube") return false;
+      const grp = GROUP_OF[g.id] || g.category;
+      if (activeCat === "trad" && grp !== "trad") return false;
+      if (activeCat === "card" && grp !== "card") return false;
+      if (activeCat === "boardparty" && grp !== "boardparty") return false;
+      if (activeCat === "action" && grp !== "action") return false;
+      if (activeCat === "brain" && grp !== "brain") return false;
       if (activeCat === "friend" && !(g.tags || []).includes("친구랑")) return false;
-      if (activeCat === "party" && g.category !== "party") return false;
-      if (activeCat === "ai" && !(g.tags || []).some(t => t.includes("AI"))) return false;
       if (searchQ) {
         const hay = `${g.name} ${g.subtitle || ""} ${g.desc} ${(g.tags || []).join(" ")} ${g.aiTech || ""}`.toLowerCase();
         if (!hay.includes(searchQ)) return false;
@@ -1614,26 +1721,73 @@ button { font: inherit; cursor: pointer; }
     });
   }
 
+  function gameCardHtml(g) {
+    const stat = readStat(g.id);
+    return `
+      <a class="capsule" href="${g.url}">
+        <span class="cap-art">${capsuleSvg(g.id)}<span class="cap-badge">${g.players || "1~2명"}</span></span>
+        <span class="cap-body">
+          <b class="cap-title${g.name.length >= 9 ? " long" : ""}"><span>${g.emoji || "🎮"}</span><span>${g.name}</span></b>
+          <span class="cap-sub">${g.subtitle || ""}</span>
+          <span class="cap-stat" data-stat="${g.id}">${stat}</span>
+        </span>
+      </a>`;
+  }
+
+  function openCollection(col) {
+    const items = games.filter(g => {
+      if (col.group === "card") return ["poker", "seotda", "onecard"].includes(g.id);
+      return GROUP_OF[g.id] === col.group;
+    });
+    $("colTitle").textContent = `${col.emoji} ${col.name}`;
+    $("colSub").textContent = `${items.length}개의 게임이 들어 있어요`;
+    $("colGrid").innerHTML = items.map(gameCardHtml).join("");
+    $("colModal").hidden = false;
+    loadStatsSoon();
+  }
+
   function renderCatalog() {
-    const list = filteredGames();
     const grid = $("grid");
+    if (activeCat === "groups" && !searchQ) {
+      const byId = Object.fromEntries(games.map(g => [g.id, g]));
+      const standalone = ["nyang", "gostop", "genius"].map(id => byId[id]).filter(Boolean);
+      const colHtml = COLLECTIONS.map(col => {
+        const items = games.filter(g => col.group === "card" ? ["poker", "seotda", "onecard"].includes(g.id) : GROUP_OF[g.id] === col.group);
+        if (!items.length) return "";
+        const pills = items.map(g => `<a class="col-pill" href="${g.url}">${g.emoji || ""} ${g.name.replace(" · 맞고", "").replace("대결", "").trim()}</a>`).join("");
+        return `
+          <article class="capsule col-card" data-col="${col.id}" tabindex="0" role="button" aria-label="${col.name} 열기">
+            <span class="cap-art">${capsuleSvg(col.id)}<span class="cap-badge">${col.players}</span><span class="cap-folder-tag">📂 ${items.length}개 모음 ›</span></span>
+            <span class="cap-body">
+              <b class="cap-title"><span>${col.emoji}</span><span>${col.name}</span></b>
+              <span class="cap-sub">${col.sub}</span>
+              <div class="col-links">${pills}</div>
+            </span>
+          </article>`;
+      }).join("");
+      grid.innerHTML = standalone.map(gameCardHtml).join("") + colHtml;
+      grid.querySelectorAll(".col-card").forEach(el => {
+        const col = COLLECTIONS.find(c => c.id === el.dataset.col);
+        el.addEventListener("click", e => {
+          if (e.target.closest("a.col-pill")) return;
+          if (col) openCollection(col);
+        });
+        el.addEventListener("keydown", e => {
+          if ((e.key === "Enter" || e.key === " ") && !e.target.closest("a.col-pill")) {
+            e.preventDefault();
+            if (col) openCollection(col);
+          }
+        });
+      });
+      return;
+    }
+
+    const list = filteredGames();
     if (!list.length) {
       grid.innerHTML = `<p style="color:var(--muted);grid-column:1/-1;text-align:center;padding:32px">조건에 맞는 게임이 없습니다.</p>`;
       return;
     }
-    // 작은 카드: 그림 · 이름 · 인원 · 한 줄 소개. 누르면 게임으로 (혼자 · 한 기기 · 친구랑은 게임 안에서 고름)
-    grid.innerHTML = list.map(g => {
-      const stat = readStat(g.id);
-      return `
-        <a class="capsule" href="${g.url}">
-          <span class="cap-art">${capsuleSvg(g.id)}<span class="cap-badge">${g.players || "1~2명"}</span></span>
-          <span class="cap-body">
-            <b class="cap-title${g.name.length >= 9 ? " long" : ""}"><span>${g.emoji || "🎮"}</span><span>${g.name}</span></b>
-            <span class="cap-sub">${g.subtitle || ""}</span>
-            <span class="cap-stat" data-stat="${g.id}">${stat}</span>
-          </span>
-        </a>`;
-    }).join("");
+    grid.innerHTML = list.map(gameCardHtml).join("");
   }
 
   // 탭/검색/뷰 전환 이벤트
@@ -1674,6 +1828,8 @@ button { font: inherit; cursor: pointer; }
     $("hostModal").hidden = false;
   };
   $("hostCloseBtn").onclick = () => { $("hostModal").hidden = true; };
+  if ($("colCloseBtn")) $("colCloseBtn").onclick = () => { $("colModal").hidden = true; };
+  if ($("colModal")) $("colModal").onclick = e => { if (e.target === $("colModal")) $("colModal").hidden = true; };
   $("bankBtn").onclick = () => { if (window.Bank) Bank.panel({}); };
   $("rankBtn").onclick = () => { if (window.GRank) GRank.open(selectedLibId || featuredId); };
   // 🏆 이 기기에만 있던 예전 기록을 프로필 랭킹으로 한 번 올림 (게임을 안 열어 봐도) — 게임 안에서도 같은 걸 함(먼저 한 쪽만 올라감)

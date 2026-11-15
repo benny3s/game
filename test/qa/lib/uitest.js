@@ -15,6 +15,8 @@ const PW = process.env.APPDATA + '/npm/node_modules/@playwright/mcp/node_modules
 const CHROME = [
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1247/chrome-headless-shell-win64/chrome-headless-shell.exe',
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe',
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 

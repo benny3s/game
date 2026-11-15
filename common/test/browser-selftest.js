@@ -10,6 +10,8 @@ const PW = process.env.APPDATA + '/npm/node_modules/@playwright/mcp/node_modules
 const CHROME = [
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1247/chrome-headless-shell-win64/chrome-headless-shell.exe',
   process.env.LOCALAPPDATA + '/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-win64/chrome-headless-shell.exe',
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const PROD = 'https://benny3s.github.io', LOCAL = 'http://127.0.0.1:9';
 const FAKE = fs.readFileSync(path.join(__dirname, 'fakefb.js'), 'utf8');

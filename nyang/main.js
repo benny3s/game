@@ -1233,21 +1233,30 @@
   $("tabSolo").onclick = () => tab("solo");
   $("tabWatch").onclick = () => tab("watch");
   $("tabFriend").onclick = () => openFriend();
-  $("helpBtn").onclick = () => Cozy.howto("nyang", "냥도쿠 하는 법", [...$("howto").children].map(li => li.textContent).concat(["💡 힌트는 어디를 볼지 → 이유 → 적용 순서로 알려 줘요", "고양이를 놓으면 둘레 · 같은 줄 · 같은 색 묶음에 저절로 ✕ 가 쳐져요"]), { force: true });
+  $("helpBtn").onclick = () => {
+    if (window.NyangTutorial) {
+      NyangTutorial.open(soloMode === "one" ? bbKind : "q", {
+        onStart: () => $("startBtn").click(),
+        onWatch: () => tab("watch"),
+      });
+    } else {
+      Cozy.howto("nyang", "냥도쿠 하는 법", [...$("howto").children].map(li => li.textContent).concat(["💡 힌트는 어디를 볼지 → 이유 → 적용 순서로 알려 줘요", "고양이를 놓으면 둘레 · 같은 줄 · 같은 색 묶음에 저절로 ✕ 가 쳐져요"]), { force: true });
+    }
+  };
   $("rankBtn").onclick = () => { $("rankBox").hidden = false; drawRank(); };
   $("rankClose").onclick = () => { $("rankBox").hidden = true; };
   $("gRankBtn").onclick = () => { if (window.GRank) Arena.init().then(() => GRank.open("nyang")).catch(() => {}); };   // 🏆 전체 게임 공용 랭킹
   if ($("offBtn")) $("offBtn").onclick = () => openOfflineModal();
 
   // ══ ✈️ 비행기 · 오프라인 완전 다운로드 (6,090단계 + 실행 파일 캐시 + 홈 화면 앱 이어주기) ══
-  const OFFLINE_VER = 6, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
+  const OFFLINE_VER = 7, OFFLINE_CACHE = "benny-arcade-v" + OFFLINE_VER;
   const OFFLINE_FILES = [
     "./", "./index.html", "./manifest.json", "./icon-192.png", "./icon.svg",
     "./style.css", "./core.js", "./banban.js", "./banban-ui.js", "./zip.js", "./zip-ui.js",
-    "./sound.js", "./main.js", "./watch.js", "./puzzles.json",
+    "./sound.js", "./tutorial.js", "./main.js", "./watch.js", "./puzzles.json",
     "./bank/index.json", "./bank/master-1.json", "./bank/master-2.json", "./bank/master-3.json", "./bank/master-4.json", "./bank/master-5.json",
     "../", "../index.html", "../games.json",
-    "../common/cozy.css", "../common/cozy.js", "../common/fit.js", "../common/backnav.js",
+    "../common/cozy.css", "../common/cozy.js", "../common/tutorial.js", "../common/fit.js", "../common/backnav.js",
     "../common/glog.js", "../common/me.js", "../common/gate.js", "../common/rank.js",
     "../common/arena-mock.js", "../common/arena.js", "../common/arena-ui.js",
   ];
