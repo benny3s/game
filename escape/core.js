@@ -37,12 +37,19 @@
         silverPicked: false,
         diaryRead: false,
         drawerOpen: false,
+        magnetPicked: false,
+        uvOffPicked: false,
         shelfOpen: false,
+        pendulumPicked: false,
+        batteryPicked: false,
         clockFixed: false,
+        threadPicked: false,
         boxOpen: false,
+        driverPicked: false,
         uvClueSeen: false,
         frameOpen: false,
         safeOpen: false,
+        sealPicked: false,
         grateFished: false,
         doorKeyDone: false,
         doorSealDone: false,
@@ -134,27 +141,32 @@
         st.zoom = "diary";
         return stepResult(st, true, "시계공 할아버지의 일지를 펼쳐 보았다.", "paper");
       case "drawer":
-        if (f.drawerOpen) return stepResult(st, true, "이미 열어 본 서랍. 안은 비어 있다.", "tap");
+        if (f.drawerOpen) {
+          if (!f.magnetPicked || !f.uvOffPicked) {
+            st.zoom = "drawer";
+            return stepResult(st, true, "열려 있는 서랍 안을 들여다보았다.", "tap");
+          }
+          return stepResult(st, true, "이미 모두 챙겨 비어 있는 서랍이다.", "tap");
+        }
         if (st.selected !== "silver_key") {
           return stepResult(st, false, "오른쪽 서랍이 단단히 잠겨 있다. 작고 가는 열쇠 구멍이 보인다.", "lock");
         }
         f.drawerOpen = true;
         remInv(st, "silver_key");
-        addInv(st, "magnet");
-        addInv(st, "uv_off");
-        return stepResult(st, true, "🔓 은열쇠로 서랍을 열었다! 안에서 '강력 자석'과 '빈 UV 손전등'을 얻었다.", "unlock", { acquired: ["magnet", "uv_off"] });
+        st.zoom = "drawer";
+        return stepResult(st, true, "🔓 은열쇠를 돌리자 잠금이 풀리며 서랍이 부드럽게 열렸다! 안에 물건들이 놓여 있다.", "wood_open");
       case "box":
-        if (f.boxOpen) return stepResult(st, true, "이미 열려 있는 4자리 다이얼 상자. 드라이버를 꺼냈던 곳이다.", "tap");
+        if (f.boxOpen && f.driverPicked) return stepResult(st, true, "이미 열려 있는 4자리 다이얼 상자. 안은 비어 있다.", "tap");
         st.zoom = "box";
-        return stepResult(st, true, "나무 상자에 4자리 숫자 다이얼 자물쇠가 걸려 있다.", "tap");
+        return stepResult(st, true, f.boxOpen ? "열려 있는 나무 상자 안에 일자 드라이버가 놓여 있다." : "나무 상자에 4자리 숫자 다이얼 자물쇠가 걸려 있다.", "tap");
 
       // ── 동쪽 (책장 · 슬레이트) ──
       case "bookshelf":
-        if (f.shelfOpen) {
+        if (f.shelfOpen && f.pendulumPicked && f.batteryPicked) {
           return stepResult(st, true, "비밀 칸이 열려 있는 고서적 책장이다. 안에는 더 이상 아무것도 없다.", "tap");
         }
         st.zoom = "bookshelf";
-        return stepResult(st, true, "가죽 양장본들이 꽂혀 있는 고서적 책장이다. 몇 권의 책등이 유난히 닳아 있다.", "tap");
+        return stepResult(st, true, f.shelfOpen ? "책장 뒤 비밀 공간 안을 들여다보았다." : "가죽 양장본들이 꽂혀 있는 고서적 책장이다. 몇 권의 책등이 유난히 닳아 있다.", "tap");
       case "candle":
         return stepResult(st, true, "반쯤 탄 양초가 놓인 촛대. 벽 위 어두운 석판 바로 아래에 놓여 있다.", "tap");
       case "slate":
@@ -174,13 +186,14 @@
       case "clock":
         if (f.clockFixed) {
           st.zoom = "clock";
-          return stepResult(st, true, "괘종시계가 03:45를 가리킨 채 느리게 째깍이고 있다.", "clock");
+          return stepResult(st, true, f.threadPicked
+            ? "괘종시계가 03:45를 가리킨 채 느리게 째깍이고 있다."
+            : "괘종시계가 03:45를 가리키고 있고, 아래 진자함 안에 명주실이 놓여 있다.", "clock");
         }
         if (st.selected === "pendulum") {
           f.clockFixed = true;
           remInv(st, "pendulum");
-          addInv(st, "thread");
-          return stepResult(st, true, "🕰️ 황금 시계추를 걸자 괘종시계가 3시 45분에서 종을 울리고, 하단 함에서 '명주실'이 떨어졌다!", "clock", { acquired: ["thread"] });
+          return stepResult(st, true, "🕰️ 황금 시계추를 걸자 시계가 03:45를 가리키며 종을 울리고, 아래쪽 진자함이 달칵 열렸다!", "clock");
         }
         return stepResult(st, false, "커다란 호두나무 괘종시계다. 유리문 안쪽 시계추 고리가 비어 시곗바늘이 멈춰 서 있다.", "lock");
       case "door":
@@ -192,14 +205,16 @@
           if (st.selected === "driver") {
             f.frameOpen = true;
             remInv(st, "driver");
-            st.zoom = "safe";
-            return stepResult(st, true, "🪛 드라이버로 액자 네 귀퉁이 나사를 풀자 액자 뒤에 숨겨진 벽 금고가 나타났다!", "unlock");
+            st.zoom = null;
+            return stepResult(st, true, "🪛 네 귀퉁이 나사를 풀어 액자를 떼어 내자, 벽 뒤에 숨겨진 강철 금고가 드러났다!", "unscrew");
           }
           return stepResult(st, false, "벽에 아주 단단히 고정된 금테 액자. 네 모서리에 작은 일자 나사가 박혀 있다.", "lock");
         }
-        if (f.safeOpen) return stepResult(st, true, "이미 열려 있는 벽 금고. 황동 인장 메달을 꺼냈던 곳이다.", "tap");
+        if (f.safeOpen && f.sealPicked) return stepResult(st, true, "이미 열려 있는 벽 금고. 안은 비어 있다.", "tap");
         st.zoom = "safe";
-        return stepResult(st, true, "기호(☾ · ★ · ☀) 3자리 다이얼이 달린 숨은 벽 금고다.", "tap");
+        return stepResult(st, true, f.safeOpen
+          ? "열려 있는 금고 안쪽에 황동 인장 메달이 빛나고 있다."
+          : "기호(☾ · ★ · ☀) 3자리 다이얼이 달린 숨은 벽 금고다.", "tap");
 
       case "grate":
         if (f.grateFished) return stepResult(st, true, "깊은 환풍구 아래. 이미 마스터 키를 건져 올렸다.", "tap");
@@ -216,6 +231,29 @@
     }
   }
 
+  // 열려 있는 보관함/금고/시계 안에서 물건 집기 (1단계씩 장면 확인 후 획득)
+  const CONTAINER_ITEMS = {
+    magnet:   { reqFlag: "drawerOpen", pickedFlag: "magnetPicked",   msg: "🧲 서랍 안에서 '강력 자석'을 집어 들었다!" },
+    uv_off:   { reqFlag: "drawerOpen", pickedFlag: "uvOffPicked",    msg: "🔦 서랍 안에서 '빈 UV 손전등'을 집어 들었다!" },
+    pendulum: { reqFlag: "shelfOpen",  pickedFlag: "pendulumPicked", msg: "🕰️ 비밀 공간에서 '황금 시계추'를 집어 들었다!" },
+    battery:  { reqFlag: "shelfOpen",  pickedFlag: "batteryPicked",  msg: "🔋 비밀 공간에서 '수은 건전지'를 집어 들었다!" },
+    thread:   { reqFlag: "clockFixed", pickedFlag: "threadPicked",   msg: "🧵 시계 아래 진자함에서 '명주실'을 집어 들었다!" },
+    driver:   { reqFlag: "boxOpen",    pickedFlag: "driverPicked",   msg: "🪛 열린 나무 상자에서 '일자 드라이버'를 집어 들었다!" },
+    seal:     { reqFlag: "safeOpen",   pickedFlag: "sealPicked",     msg: "🪙 금고 안에서 '황동 인장 메달'을 손에 넣었다!" },
+  };
+
+  function takeItem(state, itemId) {
+    const meta = CONTAINER_ITEMS[itemId];
+    const st = clone(state);
+    if (!meta) return stepResult(st, false, "집을 수 있는 물건이 아닙니다.", "err");
+    if (!st.flags[meta.reqFlag]) return stepResult(st, false, "아직 열리지 않았습니다.", "lock");
+    if (st.flags[meta.pickedFlag]) return stepResult(st, true, "이미 챙긴 물건입니다.", "tap");
+    st.flags[meta.pickedFlag] = true;
+    addInv(st, itemId);
+    st.moves++;
+    return stepResult(st, true, meta.msg, "pickup", { acquired: [itemId] });
+  }
+
   function pressBook(state, color) {
     const st = clone(state);
     if (st.flags.shelfOpen) return stepResult(st, true, "이미 책장의 비밀 칸이 열려 있습니다.", "tap");
@@ -230,10 +268,8 @@
     st.moves++;
     if (st.bookSeq.length === BOOK_TARGET.length) {
       st.flags.shelfOpen = true;
-      addInv(st, "pendulum");
-      addInv(st, "battery");
-      st.zoom = null;
-      return stepResult(st, true, "🔓 철컥! 책장 뒷판이 열리며 '황금 시계추'와 '수은 건전지'를 발견했다!", "unlock", { acquired: ["pendulum", "battery"] });
+      st.zoom = "bookshelf";
+      return stepResult(st, true, "🔓 철컥! 책장 뒷판이 열리며 숨은 비밀 공간에 시계추와 건전지가 나타났다!", "wood_open");
     }
     return stepResult(st, true, `${BOOK_NAMES[color]} 책이 안쪽으로 딸깍 들어갔다 (${st.bookSeq.length}/4).`, "click");
   }
@@ -245,9 +281,8 @@
     if (st.flags.boxOpen) return stepResult(st, true, "이미 상자가 열려 있습니다.", "tap");
     if (norm === "0345") {
       st.flags.boxOpen = true;
-      addInv(st, "driver");
-      st.zoom = null;
-      return stepResult(st, true, "🔓 0345! 나무 상자가 열리며 '일자 드라이버'를 얻었다!", "unlock", { acquired: ["driver"] });
+      st.zoom = "box";
+      return stepResult(st, true, "🔓 0345! 철컥 걸쇠가 풀리며 나무 상자 뚜껑이 열렸다! 안에 일자 드라이버가 보인다.", "unlock");
     }
     return stepResult(st, false, "걸쇠가 잠긴 채 열리지 않는다.", "err");
   }
@@ -259,9 +294,8 @@
     if (st.flags.safeOpen) return stepResult(st, true, "이미 금고가 열려 있습니다.", "tap");
     if (norm === "379") {
       st.flags.safeOpen = true;
-      addInv(st, "seal");
-      st.zoom = null;
-      return stepResult(st, true, "🔓 ☾3 ★7 ☀9! 육중한 금고가 열리고 안에서 '황동 인장 메달'을 손에 넣었다!", "unlock", { acquired: ["seal"] });
+      st.zoom = "safe";
+      return stepResult(st, true, "🔓 ☾3 ★7 ☀9! 육중한 금고 문이 열리며 안에 황동 인장 메달이 보인다!", "safe_open");
     }
     return stepResult(st, false, "육중한 금고 손잡이가 잠긴 채 꿈쩍도 하지 않는다.", "err");
   }
@@ -316,8 +350,8 @@
         { id: "lamp",       label: "스탠드 조명",     x: 24, y: 29, w: 13, h: 25, done: false },
         { id: "wall_clock", label: "장식용 벽시계",   x: 57, y: 8,  w: 12, h: 28, done: false },
         { id: "diary",      label: "시계공의 일지",   x: 32, y: 44, w: 20, h: 12, done: f.diaryRead },
-        { id: "box",        label: "4자리 다이얼 상자", x: 60, y: 39, w: 16, h: 16, done: f.boxOpen },
-        { id: "drawer",     label: "잠긴 서랍",       x: 62, y: 56, w: 16, h: 32, done: f.drawerOpen },
+        { id: "box",        label: f.boxOpen && !f.driverPicked ? "드라이버가 든 열린 상자" : "4자리 다이얼 상자", x: 60, y: 39, w: 16, h: 16, done: f.boxOpen && f.driverPicked },
+        { id: "drawer",     label: f.drawerOpen && (!f.magnetPicked || !f.uvOffPicked) ? "물건이 든 열린 서랍" : "잠긴 서랍", x: 62, y: 56, w: 16, h: 32, done: f.drawerOpen && f.magnetPicked && f.uvOffPicked },
       ];
       if (!f.silverPicked) {
         spots.push({ id: "silver_spot", label: "작은 은열쇠", x: 52, y: 45, w: 7.5, h: 11, done: false, glint: true });
@@ -326,19 +360,19 @@
     }
     if (wall === "E") {
       return [
-        { id: "bookshelf", label: "고서적 책장", x: 20, y: 11, w: 34, h: 80, done: f.shelfOpen },
+        { id: "bookshelf", label: f.shelfOpen && (!f.pendulumPicked || !f.batteryPicked) ? "열린 책장 비밀 공간" : "고서적 책장", x: 20, y: 11, w: 34, h: 80, done: f.shelfOpen && f.pendulumPicked && f.batteryPicked },
         { id: "slate",     label: f.uvClueSeen ? "형광 기호 석판" : "어두운 석판", x: 70, y: 15, w: 22, h: 37, done: f.uvClueSeen },
         { id: "candle",    label: "촛대 테이블", x: 71, y: 52, w: 11, h: 15, done: false },
       ];
     }
     if (wall === "N") {
       return [
-        { id: "clock", label: f.clockFixed ? "시계 (03:45)" : "멈춘 괘종시계", x: 13, y: 12, w: 19, h: 80, done: f.clockFixed },
+        { id: "clock", label: f.clockFixed ? (f.threadPicked ? "시계 (03:45)" : "진자함이 열린 시계 (03:45)") : "멈춘 괘종시계", x: 13, y: 12, w: 19, h: 80, done: f.clockFixed && f.threadPicked },
         { id: "door",  label: "출구 문", x: 53, y: 11, w: 34, h: 82, done: f.escaped },
       ];
     }
     return [
-      { id: "frame", label: f.frameOpen ? "숨겨진 벽 금고" : "고정된 금테 액자", x: 31, y: 6, w: 38, h: 41, done: f.safeOpen },
+      { id: "frame", label: f.safeOpen ? (f.sealPicked ? "열려 있는 빈 금고" : "메달이 든 열린 금고") : f.frameOpen ? "숨겨진 벽 금고" : "고정된 금테 액자", x: 31, y: 6, w: 38, h: 41, done: f.safeOpen && f.sealPicked },
       { id: "grate", label: f.grateFished ? "바닥 환풍구" : "깊은 바닥 환풍구", x: 4, y: 74, w: 19, h: 19, done: f.grateFished },
     ];
   }
@@ -365,11 +399,25 @@
         "하단 가방에서 🗝️ [작은 은열쇠]를 눌러 선택 테두리를 켠 뒤, 책상 오른쪽 아래 서랍을 누르세요.",
       ][L - 1];
     }
+    if (!f.magnetPicked || !f.uvOffPicked) {
+      return [
+        "서랍은 열렸지만 안에 놓인 물건을 아직 안 챙겼어요.",
+        "열린 서랍 확대 화면에서 아직 남아 있는 물건(자석·UV 손전등)을 눌러 보세요.",
+        "남쪽 오른쪽 서랍을 열어 안에 있는 🧲 [강력 자석]과 🔦 [빈 UV 손전등]을 눌러 가방에 챙기세요.",
+      ][L - 1];
+    }
     if (!f.shelfOpen) {
       return [
         "책상 위 일지에 적힌 시와 동쪽 책장의 책들을 연결해 보세요.",
         "일지 속 '불꽃(빨강) → 황금 → 에메랄드(초록) → 밤하늘(파랑)' 순서대로 동쪽 책장의 색깔 책을 눌러야 합니다.",
         "동쪽(E) 책장을 열어 [🔴 빨강 → 🟡 금색 → 🟢 초록 → 🔵 파랑] 순서로 클릭하세요.",
+      ][L - 1];
+    }
+    if (!f.pendulumPicked || !f.batteryPicked) {
+      return [
+        "책장 비밀 공간이 열렸어요. 안에 놓인 물건을 꺼내야 합니다.",
+        "열린 책장 확대 화면에서 시계추와 건전지를 눌러 챙겨 보세요.",
+        "동쪽 책장 비밀 공간 안에 있는 🕰️ [황금 시계추]와 🔋 [수은 건전지]를 클릭해 챙기세요.",
       ][L - 1];
     }
     if (!inv.includes("uv_on") && !f.uvClueSeen) {
@@ -393,11 +441,25 @@
         "북쪽(N) 벽으로 돌린 뒤 🕰️ [황금 시계추]를 선택하고 왼쪽 [괘종시계]를 누르세요.",
       ][L - 1];
     }
+    if (!f.threadPicked) {
+      return [
+        "시계가 움직이며 아래 진자함이 열렸어요. 시계를 가까이서 확인해 보세요.",
+        "북쪽 괘종시계를 눌러 03:45 시각도 보고, 아래 진자함에 떨어진 물건도 챙기세요.",
+        "북쪽(N) [괘종시계]를 눌러 확대 화면을 연 뒤 아래 진자함의 🧵 [명주실]을 눌러 챙기세요.",
+      ][L - 1];
+    }
     if (!f.boxOpen) {
       return [
         "시계가 멈춘 시각을 유심히 기억해서 남쪽 책상 위 자물쇠에 맞춰 보세요.",
         "괘종시계가 가리킨 네 자리 숫자(3시 45분)를 남쪽 나무 상자에 입력해 보세요.",
         "남쪽(S) 책상 오른쪽 위 [4자리 다이얼 상자]를 열어 숫자 `0345`를 입력하고 여세요.",
+      ][L - 1];
+    }
+    if (!f.driverPicked) {
+      return [
+        "나무 상자가 열렸어요! 안에 들어 있는 공구를 꺼내세요.",
+        "열린 상자 화면에서 공구를 눌러 가방으로 챙기세요.",
+        "남쪽 [나무 상자]를 열어 안에 놓인 🪛 [일자 드라이버]를 눌러 챙기세요.",
       ][L - 1];
     }
     if (!f.frameOpen) {
@@ -411,7 +473,14 @@
       return [
         "액자 뒤 숨은 금고에는 세 가지 기호 숫자가 필요합니다. 아까 UV 빛으로 찾은 석판을 기억하세요.",
         "동쪽 어두운 석판에 떠올랐던 ☾ · ★ · ☀ 숫자를 차례로 맞춰 보세요.",
-        "서쪽 금고를 눌러 ☾=3, ★=7, ☀=9 → `379`를 입력해 여세요.",
+        "서쪽 벽에 드러난 금고를 눌러 ☾=3, ★=7, ☀=9 → `379`를 입력해 여세요.",
+      ][L - 1];
+    }
+    if (!f.sealPicked) {
+      return [
+        "육중한 금고 문이 열렸어요! 안쪽에 빛나는 메달을 꺼내세요.",
+        "열린 벽 금고 안쪽에 놓여 있는 황동 인장 메달을 눌러 챙기세요.",
+        "서쪽 열린 [벽 금고]를 열어 🪙 [황동 인장 메달]을 클릭해 챙기세요.",
       ][L - 1];
     }
     if (!f.grateFished && !inv.includes("magnet_line")) {
@@ -447,16 +516,30 @@
     run(inspectSpot(st, "silver_spot"), "pick_silver_key");
     run(selectItem(st, "silver_key"), "sel_silver");
     run(inspectSpot(st, "drawer"), "open_drawer");
+    run(takeItem(st, "magnet"), "take_magnet");
+    run(takeItem(st, "uv_off"), "take_uv_off");
+    run(closeZoom(st), "close_drawer");
     run(inspectSpot(st, "diary"), "read_diary");
     for (const c of BOOK_TARGET) run(pressBook(st, c), `book_${c}`);
+    run(takeItem(st, "pendulum"), "take_pendulum");
+    run(takeItem(st, "battery"), "take_battery");
+    run(closeZoom(st), "close_bookshelf");
     run(combineItems(st, "uv_off", "battery"), "combine_uv");
     run(inspectSpot(st, "slate"), "uv_slate");
     run(selectItem(st, "pendulum"), "sel_pendulum");
     run(inspectSpot(st, "clock"), "fix_clock");
+    run(inspectSpot(st, "clock"), "open_clock");
+    run(takeItem(st, "thread"), "take_thread");
+    run(closeZoom(st), "close_clock");
     run(submitBoxCode(st, "0345"), "open_box");
+    run(takeItem(st, "driver"), "take_driver");
+    run(closeZoom(st), "close_box");
     run(selectItem(st, "driver"), "sel_driver");
     run(inspectSpot(st, "frame"), "unscrew_frame");
+    run(inspectSpot(st, "frame"), "open_safe_zoom");
     run(submitSafeCode(st, "379"), "open_safe");
+    run(takeItem(st, "seal"), "take_seal");
+    run(closeZoom(st), "close_safe");
     run(combineItems(st, "magnet", "thread"), "combine_fishing");
     run(inspectSpot(st, "grate"), "fish_master_key");
     run(selectItem(st, "master_key"), "sel_master_key");
@@ -469,7 +552,7 @@
 
   return {
     WALLS, WALL_NAMES, BOOK_TARGET, BOOK_NAMES, ITEMS,
-    initialState, turnWall, selectItem, combineItems, inspectSpot,
+    initialState, turnWall, selectItem, combineItems, takeItem, inspectSpot,
     pressBook, submitBoxCode, submitSafeCode, useOnDoor, closeZoom,
     getHotspots, getHint, validateSolvable,
   };

@@ -49,10 +49,14 @@ U.main(async T => {
   await p.click("#zoomCloseBtn");
   await p.click('.esc-slot[data-item="silver_key"]');
   await p.click('.esc-spot[data-spot="drawer"]');
-  await wait(p, () => __escape.state().flags.drawerOpen);
-  T.ok(await p.evaluate(() => __escape.state().inv.includes("magnet") && __escape.state().inv.includes("uv_off")), "서랍 열고 자석 + 빈 UV 손전등 획득");
+  await wait(p, () => __escape.state().flags.drawerOpen && !document.getElementById("closeupView").hidden);
+  T.ok(await p.evaluate(() => !__escape.state().inv.includes("magnet") && !!document.querySelector('[data-take="magnet"]')), "서랍 열면 열린 서랍 안에 자석·UV 손전등이 놓여 있음");
+  await p.click('[data-take="magnet"]');
+  await p.click('[data-take="uv_off"]');
+  await wait(p, () => __escape.state().inv.includes("magnet") && __escape.state().inv.includes("uv_off"));
+  await p.click("#zoomCloseBtn");
 
-  // 4) 동쪽 이동: 맨손으로 석판 눌러도 팝업/줌 안 뜸 → 책장 4색 책 순서 맞추기 → UV 합치기 → 어두운 석판 UV 비추기
+  // 4) 동쪽 이동: 맨손으로 석판 눌러도 팝업/줌 안 뜸 → 책장 4색 책 순서 맞추기 → 비밀공간에서 시계추·건전지 직접 줍기 → UV 합치기 → 어두운 석판 UV 비추기
   await p.click('#compass button[data-w="E"]');
   await wait(p, () => __escape.state().wall === "E");
   await p.click('.esc-spot[data-spot="slate"]');
@@ -64,10 +68,14 @@ U.main(async T => {
   for (const col of ["red", "gold", "green", "blue"]) {
     await p.click(`.ez-spine[data-bk="${col}"]`);
   }
-  await wait(p, () => __escape.state().flags.shelfOpen && document.getElementById("closeupView").hidden);
+  await wait(p, () => __escape.state().flags.shelfOpen && !!document.querySelector('[data-take="pendulum"]'));
+  await p.click('[data-take="pendulum"]');
+  await p.click('[data-take="battery"]');
+  await wait(p, () => __escape.state().inv.includes("pendulum") && __escape.state().inv.includes("battery"));
+  await p.click("#zoomCloseBtn");
   await p.click('.esc-spot[data-spot="bookshelf"]');
   await T.sleep(100);
-  T.ok(await p.evaluate(() => document.getElementById("closeupView").hidden && __escape.state().inv.includes("pendulum") && __escape.state().inv.includes("battery")), "이미 열린 책장 재클릭 시 버튼 팝업 안 뜸 + 시계추·건전지 획득");
+  T.ok(await p.evaluate(() => document.getElementById("closeupView").hidden), "모두 챙긴 열린 책장 재클릭 시 팝업 안 뜸");
 
   // 인벤토리 합치기: 빈 UV 손전등 + 건전지 → 켜진 UV 손전등 → 석판에 비추기 (벽면 직접 발광)
   await p.click("#combineBtn");
@@ -78,7 +86,7 @@ U.main(async T => {
   await wait(p, () => __escape.state().flags.uvClueSeen);
   T.ok(await p.evaluate(() => !!document.querySelector(".ov-uv-slate") && document.getElementById("closeupView").hidden), "동쪽 석판 위 형광 단서 ☾3 ★7 ☀9 벽면 직접 출현 (팝업 방해 없음)");
 
-  // 5) 북쪽 이동: 맨손 시계 클릭 시 줌 안 뜸 → 시계추 장착 → 03:45 확인 + 명주실 획득
+  // 5) 북쪽 이동: 맨손 시계 클릭 시 줌 안 뜸 → 시계추 장착(벽만 바뀜) → 시계 확대에서 03:45 확인 + 아래 진자함 명주실 챙기기
   await p.click('#compass button[data-w="N"]');
   await wait(p, () => __escape.state().wall === "N");
   await p.click('.esc-spot[data-spot="clock"]');
@@ -87,16 +95,18 @@ U.main(async T => {
   await p.click('.esc-slot[data-item="pendulum"]');
   await p.click('.esc-spot[data-spot="clock"]');
   await wait(p, () => __escape.state().flags.clockFixed);
-  T.ok(await p.evaluate(() => __escape.state().inv.includes("thread") && document.getElementById("roomImg").getAttribute("src").includes("wall_north_fixed.jpg") && !document.querySelector(".ov-clock-badge")), "괘종시계 복구 후 실제 시계 일러스트 전환 + 명주실 획득");
+  T.ok(await p.evaluate(() => !__escape.state().inv.includes("thread") && document.getElementById("roomImg").getAttribute("src").includes("wall_north_fixed.jpg") && document.getElementById("closeupView").hidden), "괘종시계 복구 후 실제 시계 일러스트 전환 (팝업 점프 없음)");
   await p.click('.esc-spot[data-spot="clock"]');
   await wait(p, () => !document.getElementById("closeupView").hidden);
   T.ok(await p.evaluate(() => {
     const z = document.getElementById("zoomBody");
-    return !!z.querySelector('img[src*="zoom_clock.jpg"]') && !z.querySelector("svg");
-  }), "수리된 괘종시계 클릭 시 SVG 대신 실제 시계 확대 일러스트 표시");
+    return !!z.querySelector('img[src*="zoom_clock.jpg"]') && !!z.querySelector('[data-take="thread"]') && !z.querySelector("svg");
+  }), "수리된 괘종시계 클릭 시 실제 시계 확대 + 아래 진자함 명주실 표시");
+  await p.click('[data-take="thread"]');
+  await wait(p, () => __escape.state().inv.includes("thread"));
   await p.click("#zoomCloseBtn");
 
-  // 6) 남쪽 이동: 오답 입력 시 스포일러 힌트 노출 안 됨 확인 → 4자리 다이얼 상자 0345 입력 → 드라이버 획득
+  // 6) 남쪽 이동: 오답 입력 시 스포일러 힌트 노출 안 됨 확인 → 4자리 다이얼 상자 0345 입력 → 열린 상자에서 드라이버 직접 챙기기
   await p.click('#compass button[data-w="S"]');
   await p.click('.esc-spot[data-spot="box"]');
   await wait(p, () => !document.getElementById("closeupView").hidden);
@@ -111,21 +121,29 @@ U.main(async T => {
   for (let i = 0; i < 4; i++) await p.click('[data-du="2"]');
   for (let i = 0; i < 5; i++) await p.click('[data-du="3"]');
   await p.click("#boxSubmitBtn");
-  await wait(p, () => __escape.state().flags.boxOpen);
-  T.ok(await p.evaluate(() => __escape.state().inv.includes("driver")), "0345 상자 열림 → 드라이버 획득");
+  await wait(p, () => __escape.state().flags.boxOpen && !!document.querySelector('[data-take="driver"]'));
+  T.ok(await p.evaluate(() => !__escape.state().inv.includes("driver")), "상자 열면 열린 상자 안에 드라이버가 놓여 있음");
+  await p.click('[data-take="driver"]');
+  await wait(p, () => __escape.state().inv.includes("driver"));
+  await p.click("#zoomCloseBtn");
 
-  // 7) 서쪽 이동: 액자 나사 풀기 → 숨겨진 벽 금고 실사 전환 확인 → 금고 379 열기 → 자석+실 조합 → 환풍구 마스터키 낚시
+  // 7) 서쪽 이동: 액자 나사 풀기(액자만 사라지고 벽 금고만 노출!) → 금고 눌러 379 열기 → 열린 금고 안에서 메달 직접 챙기기 → 자석+실 조합 → 환풍구 마스터키 낚시
   await p.click('#compass button[data-w="W"]');
   await p.click('.esc-slot[data-item="driver"]');
   await p.click('.esc-spot[data-spot="frame"]');
-  await wait(p, () => __escape.state().flags.frameOpen && !document.getElementById("closeupView").hidden);
-  T.ok(await p.evaluate(() => document.getElementById("roomImg").getAttribute("src").includes("wall_west_safe.jpg") && !document.querySelector(".ov-safe-behind")), "액자 해제 후 가짜 SVG 대신 실제 벽 금고 이미지로 전환");
+  await wait(p, () => __escape.state().flags.frameOpen);
+  T.ok(await p.evaluate(() => document.getElementById("roomImg").getAttribute("src").includes("wall_west_safe.jpg") && document.getElementById("closeupView").hidden && !document.querySelector(".ov-safe-behind")), "액자 해제 시 금고 줌으로 건너뛰지 않고 벽 금고만 드러남");
+  await p.click('.esc-spot[data-spot="frame"]');
+  await wait(p, () => !document.getElementById("closeupView").hidden && !!document.getElementById("safeSubmitBtn"));
   for (let i = 0; i < 3; i++) await p.click('[data-su="0"]');
   for (let i = 0; i < 7; i++) await p.click('[data-su="1"]');
   for (let i = 0; i < 9; i++) await p.click('[data-su="2"]');
   await p.click("#safeSubmitBtn");
-  await wait(p, () => __escape.state().flags.safeOpen);
-  T.ok(await p.evaluate(() => document.getElementById("roomImg").getAttribute("src").includes("wall_west_safe_open.jpg")), "금고 해제 후 열린 빈 금고 일러스트 전환");
+  await wait(p, () => __escape.state().flags.safeOpen && !!document.querySelector('[data-take="seal"]'));
+  T.ok(await p.evaluate(() => document.getElementById("roomImg").getAttribute("src").includes("wall_west_safe_open.jpg") && !__escape.state().inv.includes("seal")), "금고 해제 시 열린 금고 안에 황동 인장 메달이 놓여 있음");
+  await p.click('[data-take="seal"]');
+  await wait(p, () => __escape.state().inv.includes("seal"));
+  await p.click("#zoomCloseBtn");
 
   await p.click("#combineBtn");
   await p.click('.esc-slot[data-item="magnet"]');
