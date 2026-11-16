@@ -165,20 +165,26 @@
         : G.coachBW(st, viewSeat);
       html = `<p><b>상대 흐름:</b> ${c.oppFlow}</p><p><b>내 최선:</b> ${c.myFlow}</p><p class="coach-why">💡 ${c.reason}</p>`;
     } else if (st.kind === "gh") {
-      const c = (playMode === "friend" && !isHost)
-        ? {
-            oppFlow: `발견된 합 ${st.found.length}개 · 남은 합 ${Math.max(0, (st.totalHaps || 0) - st.found.length)}개`,
-            myFlow: (st.totalHaps || 0) <= st.found.length ? "지금 '결! (+3점)' 타이밍!" : "모양·도형색·배경색이 전부 같거나 전부 다른 3장을 찾아요.",
-            reason: "친구들과 같은 보드를 실시간으로 겨루고 있어요!",
-          }
-        : G.coachGH(st);
+      let c;
+      if (playMode === "friend") {
+        const rem = Math.max(0, (st.totalHaps ?? st.haps?.length ?? 0) - st.found.length);
+        c = {
+          oppFlow: `발견된 합 ${st.found.length}개 · 남은 합 ${rem}개`,
+          myFlow: rem === 0 ? "지금 바로 '결! (+3점)' 타이밍!" : "모양·도형색·배경색 3가지가 모두 같거나 모두 다른 3장을 찾아요.",
+          reason: "친구 대결에서는 공정한 승부를 위해 정답 위치·속성 힌트를 숨기고 있어요.",
+        };
+      } else {
+        c = G.coachGH(st);
+      }
       html = `<p><b>판 현황:</b> ${c.oppFlow}</p><p><b>공략법:</b> ${c.myFlow}</p><p class="coach-why">💡 ${c.reason}</p>`;
       if (c.sampleTriple && playMode !== "friend") {
         html += `<div style="margin-top:6px"><button type="button" class="btn" id="coachShowCell" style="padding:5px 10px;font-size:12px">✨ 첫 번째 카드 위치 힌트</button></div>`;
       }
     } else if (st.kind === "12") {
       const c = G.coach12(st, viewSeat);
-      html = `<p><b>상대 위협:</b> ${c.oppFlow}</p><p><b>추천 수:</b> ${c.myFlow}</p><p class="coach-why">💡 ${c.reason}</p>`;
+      const waitOpp = st.winner === null && st.turn !== viewSeat;
+      const lbl = waitOpp ? "다음 내 수 대비" : "추천 수";
+      html = `<p><b>상대 위협:</b> ${c.oppFlow}</p><p><b>${lbl}:</b> ${c.myFlow}</p><p class="coach-why">💡 ${waitOpp ? "상대 응수가 끝나면 아래 수순을 노려 보세요. " + c.reason : c.reason}</p>`;
     }
     coach.set(html);
     const hintBtn = document.getElementById("coachShowCell");
@@ -261,7 +267,9 @@
       }
       const myC = h ? (viewSeat === 0 ? h.c0 : h.c1) : "none";
       const opC = h ? (viewSeat === 0 ? h.c1 : h.c0) : "none";
-      return `<div class="bw-rd ${cur ? "cur" : ""}"><span style="color:var(--g-muted)">${r + 1}</span><span class="bw-dot ${opC}" title="상대 색"></span><span class="bw-dot ${myC}" title="내 색"></span><span class="bw-res ${cls}">${mark}</span></div>`;
+      const myNum = h && h.myTile != null ? h.myTile : "";
+      const opNum = pub.winner !== null && h && h.oppTile != null ? h.oppTile : "";
+      return `<div class="bw-rd ${cur ? "cur" : ""}"><span style="color:var(--g-muted)">${r + 1}</span><span class="bw-dot ${opC}${opNum !== "" ? " num" : ""}" title="${opNum !== "" ? `상대: ${opNum}` : "상대 색"}">${opNum}</span><span class="bw-dot ${myC}${myNum !== "" ? " num" : ""}" title="${myNum !== "" ? `나: ${myNum}` : "내 색"}">${myNum}</span><span class="bw-res ${cls}">${mark}</span></div>`;
     }).join("");
 
     const oppLeadShown = !pub.isLeader && pub.leadColor;
@@ -291,18 +299,34 @@
         ? `<div class="bw-card ${pub.leadColor}">제출</div>`
         : `<div class="bw-card empty">선택</div>`;
 
+    const evalMap = c && Array.isArray(c.evals) ? Object.fromEntries(c.evals.map(e => [e.tile, e])) : null;
     const handHtml = Array.from({ length: 9 }, (_, n) => {
       const has = pub.myHand.includes(n);
       const col = G.bwColor(n);
       const sel = bwSelectedTile === n ? " sel" : "";
       const rec = c && c.bestTile === n ? " coach-rec" : "";
-      return `<button type="button" class="bw-tile ${col}${sel}${rec}" data-tile="${n}" ${!has || !isHumanTurn || bwBusy ? "disabled" : ""}>${n}</button>`;
+      const ev = has && pub.winner === null && evalMap ? evalMap[n] : null;
+      const probHtml = ev ? `<span class="bw-prob">${Math.round(ev.winRate * 100)}%</span>` : "";
+      return `<button type="button" class="bw-tile ${col}${sel}${rec}" data-tile="${n}" ${!has || !isHumanTurn || bwBusy ? "disabled" : ""}>${n}${probHtml}</button>`;
     }).join("");
+
+    let oppSubHtml = "";
+    if (pub.winner !== null) {
+      oppSubHtml = `<div class="bw-cands">🔍 경기 종료! 위 기록표에서 상대가 냈던 숫자를 복기해 보세요.</div>`;
+    } else if (c && c.inf) {
+      const bTxt = c.inf.bCands.length ? c.inf.bCands.join("·") : "없음";
+      const wTxt = c.inf.wCands.length ? c.inf.wCands.join("·") : "없음";
+      const leadTxt = !pub.isLeader && pub.leadColor && c.inf.leadCands.length
+        ? ` · <b>낸 ${pub.leadColor === "B" ? "⬛" : "⬜"} 후보 [${c.inf.leadCands.join("·")}]</b>`
+        : "";
+      oppSubHtml = `<div class="bw-cands">추론 후보: ⬛ [${bTxt}] · ⬜ [${wTxt}]${leadTxt}</div>`;
+    }
 
     stage.innerHTML = `
       <div>
         <div class="bw-hist">${histHtml}</div>
         <div class="bw-opp-info" style="margin-top:6px">상대 남은 패: ⬛흑(짝) ${pub.oppRemain.B}장 · ⬜백(홀) ${pub.oppRemain.W}장</div>
+        ${oppSubHtml}
       </div>
       <div class="bw-arena">
         <div class="bw-slot"><span class="lbl">상대</span>${oppCard}</div>

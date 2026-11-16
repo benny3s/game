@@ -58,9 +58,21 @@ test("흑과 백: 과거 라운드 베이지안 추론 & 가성비/필승 추천
   const pub = G.bwPublicView(st, 0);
   const inf = G.inferOppBW(pub);
   assert.deepStrictEqual(inf.leadCands, [0, 2], "과거 흑 3패 소모 시 남은 흑 후보 [0,2]로 정확히 소거");
+  assert(pub.history.every(h => h.oppTile === null), "대국 진행 중엔 oppTile 비공개 유지");
   const c = G.coachBW(st, 0);
   // 내 손패 남은 [0,1,4,6,7,8] 중 [4]이면 [0,2] 상대로 100% 필승하면서 6,7,8 아낌!
   assert.strictEqual(c.bestTile, 4, `후보 [0,2] 상대로 6,7,8 대신 100% 최소 필승패 [4] 추천 (실제 ${c.bestTile})`);
+  for (let seed = 1; seed <= 10; seed++) {
+    assert.strictEqual(G.aiPickBW(st, 0, "hard", G.makeRng(seed)), 4, "고수 AI도 100% 최소 필승패 [4]를 낭비 없이 선택");
+  }
+  // 4라운드 마무리 후 대국 완료까지 진행 → 종료 후 복기용 oppTile 공개 확인
+  assert(G.playBW(st, 0, 4).ok);
+  while (st.winner === null) {
+    const s = st.turn;
+    assert(G.playBW(st, s, st.hands[s][0]).ok);
+  }
+  const endPub = G.bwPublicView(st, 0);
+  assert(endPub.history.length > 0 && endPub.history.every(h => typeof h.oppTile === "number"), "대국 완전 종료 후 복기용 oppTile 공개");
 });
 
 test("결! 합!: 합 판정 + 중복/오답 -1 + 결 +3 완주", () => {

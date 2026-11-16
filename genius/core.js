@@ -65,7 +65,7 @@
       isLeader: st.leader === seat,
       leadColor: st.leadColor,
       oppRemain: { B: Math.max(0, oppB), W: Math.max(0, oppW), total: Math.max(0, oppB + oppW) },
-      // 공정 정보 분리: 상대 비밀 숫자는 빼고, 본인(seat)이 과거에 낸 숫자만 포함
+      // 공정 정보 분리: 진행 중에는 본인(seat) 숫자만 포함, 대국 종료 후에만 복기용 oppTile 공개
       history: st.history.map(h => ({
         round: h.round,
         leader: h.leader,
@@ -73,6 +73,7 @@
         c1: h.c1,
         winner: h.winner,
         myTile: seat === 0 ? h.t0 : h.t1,
+        oppTile: st.winner !== null ? (seat === 0 ? h.t1 : h.t0) : null,
       })),
       winner: st.winner,
     };
@@ -230,6 +231,42 @@
     });
   }
 
+  // 선공 전술 점수 (후공은 색을 본 뒤 흑·백 무관하게 최선 응수할 수 있음을 반영)
+  function scoreLeadBW(evals, inf, rem, desperate) {
+    const strongCards = evals.filter(e => e.tile >= 7).map(e => e.tile);
+    const minOpp = inf.allRem.length ? inf.allRem[0] : 0;
+    const totalW = Object.values(inf.remW || {}).reduce((s, w) => s + w, 0) || 1;
+    const lowDumpShare = inf.allRem.filter(v => v <= 2).reduce((s, v) => s + (inf.remW[v] || 0), 0) / totalW;
+
+    return evals.map(e => {
+      // 같은 색 중 내가 실제로 들고 있는 평균치로 상대의 색 기반 추측 폭 가늠
+      const colHand = evals.filter(x => x.color === e.color).map(x => x.tile);
+      const colMax = colHand.length ? Math.max(...colHand) : e.tile;
+      const oppBeatsAll = inf.allRem.filter(v => v > e.tile).length;
+
+      let s = e.ev * 100;
+      if (!desperate) {
+        // 선공에서 큰 패(7·8)를 냈는데 상대에게 버릴 저패(0~2)가 많으면 1점과 큰 패를 맞바꾸는 손해 발생
+        if (e.tile >= 7) {
+          s -= (rem >= 5 ? 24 : 12) + lowDumpShare * 14 + Math.max(0, e.tile - minOpp - 4) * 1.5;
+        } else if (e.tile >= 3 && e.tile <= 6) {
+          // 중패(3~6)는 상대 버림패를 잡아내면서도 큰 패(7·8)를 보존
+          s += 14 - Math.abs(e.tile - 4.5) * 1.5;
+        } else {
+          // 저패(0~2) 미끼: 내가 해당 색에서 7·8을 쥐고 있어 상대가 높은 색으로 착각할수록 블러핑 효율 상승
+          const colorBait = strongCards.length && colMax >= 7 ? 10 : (strongCards.length ? 5 : -5);
+          s += colorBait + e.tile * 2;
+        }
+      } else if (e.tile >= 6) {
+        s += 10;
+      }
+      // 후공은 다른 색으로도 받아칠 수 있으므로 전체 남은 후보(allRem) 기준 우위 반영
+      if (oppBeatsAll === 0 && inf.allRem.length) s += 16;
+      else if (oppBeatsAll <= 1 && inf.allRem.length >= 3) s += 8;
+      return { e, s };
+    }).sort((a, b) => b.s - a.s || a.e.tile - b.e.tile);
+  }
+
   function aiPickBW(st, seat, tier, rng) {
     const pub = bwPublicView(st, seat);
     const evals = evalBWFromPublic(pub);
@@ -243,38 +280,56 @@
     const opp = seat ^ 1;
     const rem = 9 - pub.round;
     const myS = pub.scores[seat], opS = pub.scores[opp];
-    const mustWinNow = opS + rem <= myS + 1 ? false : (opS - myS >= rem - 1);
+    const matchPoint = (myS + 1 > opS + (rem - 1));
+    const desperate = (opS - myS >= rem - 1 && rem <= 5);
 
-    // 점수 상황에 따른 효용 계산
+    if (tier === "hard") {
+      const inf = inferOppBW(pub);
+      const byEv = evals.slice().sort((a, b) => b.ev - a.ev || b.winRate - a.winRate || a.tile - b.tile);
+      const byWin = evals.slice().sort((a, b) => b.winRate - a.winRate || b.drawRate - a.drawRate || a.tile - b.tile);
+      const byLow = evals.slice().sort((a, b) => a.tile - b.tile);
+
+      if (!pub.isLeader && pub.leadColor) {
+        const sureWin = byLow.find(e => e.winRate >= 0.999);
+        if (sureWin) return sureWin.tile;
+        if (matchPoint || rem === 1) return byWin[0].tile;
+        if (desperate) return byEv[0].tile;
+        const topW = byWin[0].winRate;
+        if (topW >= 0.62) {
+          return evals.filter(e => e.winRate >= Math.max(0.62, topW - 0.12)).sort((a, b) => a.tile - b.tile)[0].tile;
+        }
+        if (byEv[0].ev < 0.43 && evals.length > 2) return byLow[0].tile;
+        return byEv[0].tile;
+      }
+
+      const oppMax = inf.allRem.length ? inf.allRem[inf.allRem.length - 1] : -1;
+      const sureLead = oppMax >= 0 ? byLow.find(e => e.tile > oppMax) : null;
+      if (sureLead) return sureLead.tile;
+      if (matchPoint || rem <= 2) return byWin[0].tile;
+
+      const ranked = scoreLeadBW(evals, inf, rem, desperate);
+      if (ranked.length >= 2 && Math.abs(ranked[0].s - ranked[1].s) < 4 && r() < 0.25) {
+        return ranked[1].e.tile;
+      }
+      return ranked[0].e.tile;
+    }
+
+    // normal 난이도: 베이지안 확률 + 적당한 인간적 변동성
+    const mustWinNow = opS + rem <= myS + 1 ? false : (opS - myS >= rem - 1);
     const scored = evals.map(e => {
       let u = e.ev * 100;
       if (!pub.isLeader && pub.leadColor) {
-        // 후공: 이길 수 있는 최소 숫자(경제적 승리) 또는 가망 없을 때 최저 버리기
         if (e.winRate >= 0.78) u += 32 - e.tile * 2.4;
         else if (e.winRate >= 0.52) u += 18 - e.tile * 1.4;
-        else if (e.winRate <= 0.22) u += 15 - e.tile * 2.8; // 질 거면 0,1 버리기
+        else if (e.winRate <= 0.22) u += 15 - e.tile * 2.8;
       } else {
-        // 선공: 강패(7,8)를 아끼며 중패/블러프 적당히 섞기
         if (mustWinNow) u += e.tile * 5;
-        else u += (e.tile >= 7 ? -6 : 4) + (r() - 0.5) * (tier === "normal" ? 26 : 12);
-        // 초반에는 중위 패(3,4,5)나 미끼(2,3) 선호
+        else u += (e.tile >= 7 ? -6 : 4) + (r() - 0.5) * 26;
         if (pub.round < 3 && (e.tile === 3 || e.tile === 4 || e.tile === 5)) u += 10;
       }
-      if (tier === "normal") u += (r() - 0.5) * 18;
+      u += (r() - 0.5) * 18;
       return { ...e, u };
     }).sort((a, b) => b.u - a.u);
-
-    if (tier === "hard") {
-      // 승부 쐐기(매치포인트): 최고 확실패 선택
-      if (myS - opS >= rem - 1 && myS >= opS) {
-        const safest = evals.slice().sort((a, b) => b.winRate - a.winRate || b.tile - a.tile)[0];
-        if (safest.winRate >= 0.75) return safest.tile;
-      }
-      // 상위 2개 중 확률적으로 약간 섞어 예측 불가능성 유지
-      if (scored.length >= 2 && Math.abs(scored[0].u - scored[1].u) < 6 && r() < 0.35) {
-        return scored[1].tile;
-      }
-    }
     return scored[0].tile;
   }
 
@@ -360,25 +415,10 @@
           : `1점만 추가하면 우승 확정이에요! [${best.tile}](승률 ${pct(best.winRate)}%)로 바로 끝낼 수 있어요.`;
       } else {
         const strongCards = evals.filter(e => e.tile >= 7).map(e => e.tile);
-        const scoredLead = evals.map(e => {
-          // 선공은 상대가 색을 보고 응수하므로, 초중반 7·8 소모를 줄이고 중패(3~6) 압박 또는 저패 미끼 가치 반영
-          let s = e.ev * 100;
-          if (!desperate) {
-            if (e.tile >= 7) s -= (rem >= 5 ? 24 : 12);
-            else if (e.tile >= 3 && e.tile <= 6) s += 14 - Math.abs(e.tile - 4.5) * 1.5;
-            else s += (strongCards.length ? 8 : -4) + e.tile * 2;
-          } else if (e.tile >= 6) {
-            s += 8;
-          }
-          // 상대 해당 색 남은 수가 많을수록 상대 선택지 폭이 넓어 위협 감소
-          const sameRem = e.color === "B" ? inf.bCands : inf.wCands;
-          const oppBeatsSame = sameRem.filter(v => v > e.tile).length;
-          if (oppBeatsSame === 0 && sameRem.length) s += 16;
-          return { e, s };
-        }).sort((a, b) => b.s - a.s);
+        const scoredLead = scoreLeadBW(evals, inf, rem, desperate);
         best = scoredLead[0].e;
         if (best.tile <= 2 && strongCards.length) {
-          modeHint = `선공은 상대가 색을 보고 대응해요. [${best.tile}] 미끼로 상대 중·강패를 빼내면서 핵심 패(${strongCards.join("·")})를 지키는 전략이 좋아요.`;
+          modeHint = `선공은 상대가 색을 보고 아무 색으로나 응수할 수 있어요. [${best.tile}] 미끼로 상대 중·강패를 빼내면서 핵심 패(${strongCards.join("·")})를 지키는 전략이 좋아요.`;
         } else if (best.tile >= 7) {
           modeHint = `점수 싸움상 선공에서도 강한 [${best.tile}](기대 승률 ${pct(best.ev)}%)로 정면 승부할 타이밍이에요.`;
         } else {
@@ -393,6 +433,12 @@
       myFlow: best ? `추천 수: ${best.color === "B" ? "⬛" : "⬜"} [${best.tile}]` : "패 선택 대기",
       reason: modeHint,
       evals,
+      inf: {
+        bCands: inf.bCands,
+        wCands: inf.wCands,
+        leadCands: inf.leadCands,
+        allRem: inf.allRem,
+      },
     };
   }
 

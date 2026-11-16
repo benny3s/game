@@ -35,6 +35,7 @@ U.main(async T => {
   await p.click('#coachBtn');
   await wait(p, () => document.querySelector('.cpn') && !document.querySelector('.cpn').hidden);
   T.ok(await p.evaluate(() => document.querySelector('.cpn-body').textContent.includes('추천 수')), '흑과 백 AI 선생님 코치 표시');
+  T.ok(await p.evaluate(() => !!document.querySelector('.bw-cands') && document.querySelectorAll('.bw-tile .bw-prob').length >= 1), '흑과 백 추론 후보 배지 및 타일 승률(%) 표시 확인');
 
   // 9라운드 완주 또는 수 진행
   for (let r = 0; r < 9; r++) {
