@@ -735,6 +735,7 @@ button { font: inherit; cursor: pointer; }
       <button class="host-badge" id="mstBtn" type="button" title="복기에서 모은 아쉬운 장면 다시 해 보기" hidden>📒 아쉬운 장면</button>
       <button class="host-badge active" id="bankBtn" type="button" title="은행 · 손익 · 정산" hidden>🏦 은행</button>
       <button class="host-badge active" id="rankBtn" type="button" title="게임별 랭킹 · 상대 전적 · 최근 7일">🏆 랭킹</button>
+      <button class="host-badge" id="profBtn" type="button" title="내 닉네임 · PIN 바꾸기">👤 내 프로필</button>
       <button class="host-badge" id="hostBtn" type="button">👑 출입·기기 관리</button>
     </div>
   </div>
@@ -858,7 +859,7 @@ button { font: inherit; cursor: pointer; }
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="common/gate.js?v=23"></script>
+<script src="common/gate.js?v=24"></script>
 <script src="common/mistakes.js?v=2"></script>
 <script src="common/me.js?v=19"></script>
 <script src="common/rank.js?v=14"></script>
@@ -1885,6 +1886,25 @@ button { font: inherit; cursor: pointer; }
   if ($("colModal")) $("colModal").onclick = e => { if (e.target === $("colModal")) $("colModal").hidden = true; };
   $("bankBtn").onclick = () => { if (window.Bank) Bank.panel({}); };
   $("rankBtn").onclick = () => { if (window.GRank) GRank.open(selectedLibId || featuredId); };
+  const drawProfBtn = () => {
+    const nm = window.GME && GME.me && GME.me.name;
+    $("profBtn").textContent = nm ? `👤 ${nm}` : "👤 내 프로필";
+  };
+  drawProfBtn();
+  if (window.GME && GME.onChange) GME.onChange(() => { drawProfBtn(); updateHostBadge(); });
+  $("profBtn").onclick = async () => {
+    try {
+      if (!window.GME) return;
+      let db = window.Arena && Arena.db && Arena.db();
+      if (!db && window.Arena && Arena.init) { await Arena.init(); db = Arena.db(); }
+      if (!db && window.firebase && firebase.apps && firebase.apps.length) db = firebase.database();
+      if (!db) throw new Error("연결 확인 중이에요. 잠시 뒤에 다시 눌러 주세요.");
+      const m = GME.me ? await GME.manage(db) : await GME.pick(db, { canClose: true });
+      if (m && m.name) { try { localStorage.setItem("game.arena.name", m.name); } catch (e) {} }
+      drawProfBtn();
+      updateHostBadge();
+    } catch (e) { alert(e.message || e); }
+  };
   // 🏆 이 기기에만 있던 예전 기록을 프로필 랭킹으로 한 번 올림 (게임을 안 열어 봐도) — 게임 안에서도 같은 걸 함(먼저 한 쪽만 올라감)
   if (window.GRank) {
     const J = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };

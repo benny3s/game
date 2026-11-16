@@ -466,9 +466,10 @@ const Gate = (() => {
     if (days == null) days = role === "temp24h" ? 1 : 0;
     days = [1, 7, 30].includes(Number(days)) ? Number(days) : 0;
     role = days ? "temp24h" : "friend";
+    const safeName = String(name || "친구").slice(0, 12);
     const expiresAt = days ? now() + days * DAY : 0;
     await db().ref("game_devices/" + targetUid).set({
-      name: String(name || "친구").slice(0, 12),
+      name: safeName,
       role,
       status: "active",
       expiresAt,
@@ -476,7 +477,7 @@ const Gate = (() => {
       t: TS(),
       lastSeen: TS(),
     });
-    await db().ref("game_requests/" + targetUid).update({ status: "approved", role, approvedAt: TS() });
+    await db().ref("game_requests/" + targetUid).update({ name: safeName, status: "approved", role, approvedAt: TS() }).catch(() => {});
   }
 
   async function rejectRequest(targetUid) {
@@ -604,6 +605,8 @@ const Gate = (() => {
       .bgate-visl { display: flex; flex-wrap: wrap; gap: 6px; }
       .bgate-vis { font-size: 12.5px; padding: 4px 9px; border-radius: 999px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09); color: #e2e8f0; }
       .bgate-vis.on { border-color: #10b981; background: rgba(16,185,129,0.12); }
+      button.bgate-vis { cursor: pointer; font-family: inherit; }
+      button.bgate-vis:hover { border-color: #66c0f4; background: rgba(102,192,244,0.15); }
       .bgate-vis small { color: #94a3b8; font-size: 11px; }
       .bgate-sec {
         background: rgba(12,19,29,0.75); border: 1px solid rgba(255,255,255,0.08);
@@ -903,7 +906,7 @@ const Gate = (() => {
   }
 
   // 아케이드 첫 화면 '👥 방문자' (관리자만): 지금 · 오늘 · 7일 수와 오늘 온 사람 → 📊 자세히(logs.html)
-  const GAME_KO = { portal: "첫 화면", gostop: "고스톱", seotda: "섯다", onecard: "원카드", poker: "홀덤", baduk: "바둑", omok: "오목", chess: "체스", janggi: "장기", yut: "윷놀이", billiards: "당구", volley: "냥냥 배구", land: "땅따먹기", nyang: "냥도쿠", snake: "지렁이", cube: "베니큐브", draw: "베니스트레이션", catch: "베니캐치", sc: "스타크래프트 도전" };
+  const GAME_KO = { portal: "첫 화면", gostop: "고스톱", seotda: "섯다", onecard: "원카드", poker: "홀덤", baduk: "바둑", omok: "오목", chess: "체스", janggi: "장기", yut: "윷놀이", billiards: "당구", volley: "냥냥 배구", land: "땅따먹기", nyang: "냥도쿠", snake: "지렁이", cube: "베니큐브", draw: "베니스트레이션", catch: "베니캐치", sc: "스타크래프트 도전", escape: "방탈출", brain: "두뇌 랩", genius: "지니어스" };
   async function mountVisitors(el) {
     injectStyle();
     await ensureFirebase();
@@ -917,19 +920,28 @@ const Gate = (() => {
       const RANK = { admin: 3, allowed: 2, bridge: 1, guest: 0 }, by = new Map();
       for (const p of raw) {
         const k = p.name && p.name !== "손님" ? "n:" + p.name : "u:" + p.uid, o = by.get(k);
-        if (!o) { by.set(k, Object.assign({}, p, { devs: [p.ua || "?"] })); continue; }
+        if (!o) { by.set(k, Object.assign({}, p, { devs: [p.ua || "?"], uids: [p.uid] })); continue; }
         o.devs.push(p.ua || "?");
+        o.uids.push(p.uid);
         if ((RANK[p.mode] || 0) > (RANK[o.mode] || 0)) o.mode = p.mode;
         if (p.t > o.t) { o.t = p.t; o.game = p.game; }
       }
       const all = [...by.values()];
       const live = all.filter(p => now - p.t < 6 * 60000), today = all.filter(p => p.t >= d0.getTime()), week = all.filter(p => now - p.t < 7 * DAY);
-      const rows = today.sort((a, b) => b.t - a.t).slice(0, 16).map(p =>
-        `<span class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" title="${esc(p.devs.join(" · "))}">${MODE[p.mode] || "👀"} ${p.name && p.name !== "손님" ? esc(p.name) : `손님${p.devs[0] !== "?" ? ` (${esc(p.devs[0])})` : ""}`} <small>${esc(GAME_KO[p.game] || p.game || "")} · ${fmtTimeAgo(p.t)}${p.devs.length > 1 ? ` · ${p.devs.length}기기` : ""}</small></span>`).join("");
+      const rows = today.sort((a, b) => b.t - a.t).slice(0, 16).map(p => {
+        const canQuick = (p.mode === "guest" || p.mode === "bridge");
+        const label = `${MODE[p.mode] || "👀"} ${p.name && p.name !== "손님" ? esc(p.name) : `손님${p.devs[0] !== "?" ? ` (${esc(p.devs[0])})` : ""}`} <small>${esc(GAME_KO[p.game] || p.game || "")} · ${fmtTimeAgo(p.t)}${p.devs.length > 1 ? ` · ${p.devs.length}기기` : ""}${canQuick ? " · +승인" : ""}</small>`;
+        return canQuick
+          ? `<button type="button" class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" data-visapp="${esc(p.uid)}" title="누르면 이 기기를 바로 허용할 수 있어요">${label}</button>`
+          : `<span class="bgate-vis${now - p.t < 6 * 60000 ? " on" : ""}" title="${esc(p.devs.join(" · "))}">${label}</span>`;
+      }).join("");
       el.hidden = false;
       el.innerHTML = `<div class="bgate-sec" style="margin:0"><h4><span>👥 방문자 · 🟢 지금 ${live.length} · 오늘 ${today.length} · 7일 ${week.length}</span><a href="logs.html" style="color:#93c5fd;font-size:12.5px;text-decoration:none">📊 자세히 ›</a></h4>
         <div class="bgate-visl">${rows || '<span class="bgate-meta">오늘은 아직 아무도 안 왔어요.</span>'}</div>
-        <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 회원 · 👀 손님 = 허용 안 된 기기 (게임은 잠겨 있고, 방 링크로 온 친구만 그 방에서 함) · 🟢 테두리 = 지금 · 같은 이름은 한 칸 (여러 기기면 'N기기') · 10-31부터 모음</div></div>`;
+        <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 · 👀 손님(+승인 누르면 바로 평생 허용 가능) · 🟢 테두리 = 지금</div></div>`;
+      el.querySelectorAll("[data-visapp]").forEach(b => {
+        b.onclick = () => { openAdminModal(); };
+      });
     };
     const fn = snap => { val = snap.val() || {}; draw(); };
     ref.on("value", fn, () => { el.hidden = true; });
@@ -1008,6 +1020,12 @@ const Gate = (() => {
           </div>
 
           <div class="bgate-sec">
+            <h4><span>👀 최근 방문 · 미승인 기기</span> <span class="bgate-meta" id="bgPresCount">불러오는 중...</span></h4>
+            <div class="bgate-meta" style="margin:-4px 0 8px">방 초대 링크로 같이 놀았지만 아직 승인 안 된 기기예요. 바로 평생 승인할 수 있어요.</div>
+            <div id="bgPresList"><div class="bgate-meta">불러오는 중...</div></div>
+          </div>
+
+          <div class="bgate-sec">
             <h4><span>📱 허용된 기기</span> <span class="bgate-meta" id="bgDevCount">0대</span></h4>
             <div id="bgDevList"><div class="bgate-meta">기기를 불러오는 중...</div></div>
           </div>
@@ -1027,7 +1045,7 @@ const Gate = (() => {
     adminEl.querySelector("#bgProfile").onclick = async () => {
       try {
         await ensureFirebase();
-        if (!window.GME && GATE_BASE) await loadScript(GATE_BASE + "me.js?v=14");
+        if (!window.GME && GATE_BASE) await loadScript(GATE_BASE + "me.js?v=19");
         if (!window.GME) throw new Error("프로필을 불러오지 못했어요");
         const m = GME.me ? await GME.manage(db()) : await GME.pick(db(), { canClose: true });
         if (m && m.name) { state.name = m.name; lsSet(NAME_KEY, m.name); notify(); }
@@ -1054,10 +1072,68 @@ const Gate = (() => {
     reqRef.on("value", onReq);
     adminSubs.push([reqRef, "value", onReq]);
 
+    // 허용된 기기 목록 + 최근 방문 미승인 기기 연동 구독
+    let devVal = {}, presVal = {};
+    const drawPres = () => {
+      const cntEl = adminEl.querySelector("#bgPresCount");
+      const listEl = adminEl.querySelector("#bgPresList");
+      if (!cntEl || !listEl) return;
+      const cutoff = now() - 7 * DAY;
+      const items = Object.entries(presVal || {})
+        .map(([uid, p]) => Object.assign({}, p, { uid }))
+        .filter(p => {
+          if (!p || !p.t || p.t < cutoff || p.mode === "admin") return false;
+          const d = devVal[p.uid];
+          const exp = d ? Number(d.expiresAt || 0) : 0;
+          const activeDev = d && d.status === "active" && (!exp || now() <= exp);
+          return !activeDev;
+        })
+        .sort((a, b) => (b.t || 0) - (a.t || 0))
+        .slice(0, 20);
+      cntEl.textContent = `${items.length}대`;
+      if (!items.length) {
+        listEl.innerHTML = `<div class="bgate-meta">최근 7일 안에 미승인 방문 기기가 없어요.</div>`;
+        return;
+      }
+      listEl.innerHTML = items.map(p => {
+        const nm = p.name && p.name !== "손님" ? p.name : "";
+        return `
+          <div class="bgate-row">
+            <div style="display:grid;gap:3px">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <input class="bgate-inp" data-vname="${esc(p.uid)}" maxlength="12" value="${esc(nm)}" placeholder="이름/별명" style="width:110px;padding:5px 8px;font-size:13px">
+                <span class="bgate-pill want">${esc(GAME_KO[p.game] || p.game || "방문")}</span>
+              </div>
+              <div class="bgate-meta">${esc(p.ua || "기기")} · ${fmtTimeAgo(p.t)}</div>
+            </div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap">
+              <button class="bgate-btn green sm" data-papp="${esc(p.uid)}" data-days="0" data-ua="${esc(p.ua || "")}">♾️ 평생 승인</button>
+              <button class="bgate-btn ghost sm" data-papp="${esc(p.uid)}" data-days="7" data-ua="${esc(p.ua || "")}">📅 1주</button>
+              <button class="bgate-btn ghost sm" data-papp="${esc(p.uid)}" data-days="1" data-ua="${esc(p.ua || "")}">⏳ 하루</button>
+            </div>
+          </div>`;
+      }).join("");
+      listEl.querySelectorAll("[data-papp]").forEach(b => {
+        b.onclick = async () => {
+          const { papp, days, ua } = b.dataset;
+          const inp = listEl.querySelector(`[data-vname="${CSS.escape(papp)}"]`);
+          const name = (inp && inp.value.trim()) || "친구";
+          b.disabled = true;
+          try { await approveRequest(papp, { days: Number(days), name, ua }); }
+          catch (e) { b.disabled = false; alert("승인하지 못했어요: " + (e.message || e)); }
+        };
+      });
+    };
+    const presRef = db().ref("game_presence");
+    const onPres = snap => { presVal = snap.val() || {}; drawPres(); };
+    presRef.on("value", onPres);
+    adminSubs.push([presRef, "value", onPres]);
+
     // 허용된 기기 목록 구독
     const devRef = db().ref("game_devices");
     const onDev = snap => {
-      const val = snap.val() || {};
+      const val = devVal = snap.val() || {};
+      drawPres();
       const devs = Object.entries(val)
         .map(([uid, d]) => Object.assign({}, d, { uid }))
         .sort((a, b) => (b.lastSeen || b.t || 0) - (a.lastSeen || a.t || 0));
