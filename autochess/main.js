@@ -1,5 +1,6 @@
-/* 베니체스 — 화면 (core.js · ai.js 위에 얹는 UI)
-   사람 = 0번 자리. 다른 자리는 AutoChessAI 스타일 봇. */
+/* 롤토체스 — 화면 (core.js · ai.js · set18.js 위에 얹는 UI)
+   사람 = 0번 자리. 다른 자리는 AutoChessAI 스타일 봇.
+   유닛 번호 u → TFT Set 18 챔피언: 같은 코스트 안에서 k번째 = set18.js 의 그 코스트 k번째 (엔진 · RL 관측은 그대로) */
 (function () {
   'use strict';
   const C = window.AutoChess, AI = window.AutoChessAI;
@@ -9,7 +10,24 @@
   const STYLE_KO = { econ: '저축형', fast8: '빠른 8', reroll: '리롤', greedy: '바로 씀', random: '무작위' };
   const MIX = ['econ', 'fast8', 'reroll', 'greedy', 'econ', 'fast8', 'reroll'];
 
-  const opt = { rules: 'A', opp: 'mix', hint: true };
+  const S18 = window.LoltoSet18;
+  const BY_COST = [null, [], [], [], [], []];
+  for (const x of S18.units) BY_COST[x.c].push(x);
+  function champ(u) {
+    const t = C.table(s.rules), c = t.cost[u];
+    return BY_COST[c][u - t.firstOf[c]] || { n: C.unitName(s.rules, u), c, t: [], i: '' };
+  }
+  // 보드 특성: 서로 다른 챔피언만 셈 (TFT 와 같음)
+  function traitsOf(board) {
+    const cnt = {}, seen = new Set();
+    for (const x of board) { if (seen.has(x.u)) continue; seen.add(x.u); for (const t of champ(x.u).t) cnt[t] = (cnt[t] || 0) + 1; }
+    return Object.keys(cnt).map(k => {
+      const T = S18.traits[k] || { b: [1], s: [1] };
+      let lv = -1; T.b.forEach((m, i) => { if (cnt[k] >= m) lv = i; });
+      return { k, n: cnt[k], lv, next: T.b.find(m => m > cnt[k]), style: lv >= 0 ? T.s[lv] : 0, icon: T.i, b: T.b };
+    }).sort((a, b) => (b.style - a.style) || (b.n - a.n));
+  }
+  const opt = { rules: 'B', opp: 'mix', hint: true };
   let s = null, seats = [], watch = false, busy = false, rand = Math.random, lastLog = 0;
   let stats = load();
 
@@ -96,8 +114,12 @@
   function chip(u, st, extra) {
     const c = C.costOf(s, u);
     const el = document.createElement('button');
+    const h = champ(u);
     el.className = 'unit c' + c + (st > 1 ? ' s' + st : '') + (extra || '');
-    el.innerHTML = `<b>${C.unitName(s.rules, u)}</b><small>${'★'.repeat(st)} · ${c}코</small>`;
+    el.innerHTML = (h.i ? `<img src="${S18.img + h.i}" alt="" loading="lazy">` : '') +
+      `<span class="cost">${c}</span>${st > 1 ? `<span class="star">${'★'.repeat(st)}</span>` : ''}` +
+      `<b>${h.n}</b><small>${h.t.join(' · ')}</small>`;
+    el.title = h.n + ' (' + c + '코스트) — ' + h.t.join(', ');
     return el;
   }
   function render() {
@@ -125,7 +147,7 @@
       if (u < 0) { const e = document.createElement('div'); e.className = 'unit empty'; shop.appendChild(e); return; }
       const e = chip(u, 1, C.completes(pl, u) ? ' merge' : '');
       e.disabled = !m[C.A_BUY + i];
-      e.title = '사기 (' + (i + 1) + ')';
+      e.title += ' · 사기 (' + (i + 1) + ')';
       e.onclick = () => act(C.A_BUY + i);
       shop.appendChild(e);
     });
@@ -136,10 +158,17 @@
     $('benchCnt').textContent = bench.length + '/' + R.bench;
     const bd = $('board'); bd.innerHTML = '';
     for (const x of board) { const e = chip(x.u, x.st); e.disabled = true; bd.appendChild(e); }
+    const tr = $('traits'); tr.innerHTML = '';
+    for (const t of traitsOf(board)) {
+      const li = document.createElement('li');
+      li.className = 'tr t' + t.style;
+      li.innerHTML = (t.icon ? `<img src="${S18.img + t.icon}" alt="">` : '') + `<b>${t.n}</b><span>${t.k}</span><small>${t.b.join(' / ')}</small>`;
+      tr.appendChild(li);
+    }
     const bn = $('bench'); bn.innerHTML = '';
     bench.forEach((x, j) => {
       const e = chip(x.u, x.st); e.disabled = !m[C.A_SELL + j];
-      e.title = '팔기 +' + C.sellValue(s, x);
+      e.title += ' · 팔기 +' + C.sellValue(s, x);
       e.onclick = () => act(C.A_SELL + j);
       bn.appendChild(e);
     });
@@ -159,7 +188,8 @@
     const h = $('hint');
     if (mine && opt.hint) {
       const a = AI.pick(C.clone(s), 'econ', () => 0.5);
-      h.hidden = false; h.textContent = '💡 저축형 봇이라면: ' + C.actionLabel(s, a);
+      h.hidden = false; const lab = a < C.A_ROLL && pl.shop[a] >= 0 ? '사기 ' + champ(pl.shop[a]).n : C.actionLabel(s, a);
+      h.textContent = '💡 저축형 봇이라면: ' + lab; h.hidden = false;
     } else h.hidden = true;
   }
   function nm(q) { return q === 0 && !watch ? '나' : NAMES[q]; }

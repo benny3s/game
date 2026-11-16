@@ -1,4 +1,4 @@
-/* 베니체스 자체 시험 — node game/autochess/test/selftest.js
+/* 롤토체스 자체 시험 — node game/autochess/test/selftest.js
    규칙 숫자(B = Set 18 표) · 수입/이자/연승 · 경험치 · 합치기 · 판매가 · 상점 확률 분포 · 풀 보존 ·
    결정성(같은 씨앗+같은 입력 = 같은 지문) · 보이는 정보만 · obs 길이/범위 · 무작위 판 · 봇 서열(econ > random) */
 'use strict';

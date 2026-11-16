@@ -1,4 +1,4 @@
-/* 베니체스 — cozy.css 위에 얹는 화면 전용 스타일 */
+/* 롤토체스 — cozy.css 위에 얹는 화면 전용 스타일 */
 #app { max-width: 1100px; margin: 0 auto; padding: 10px 12px 24px; }
 .top { display: flex; align-items: center; gap: 12px; }
 .top h1 { flex: 1; font-family: 'Jua', sans-serif; font-size: 1.5rem; margin: 6px 0; }
@@ -33,8 +33,21 @@ h3 { margin: 12px 0 6px; font-size: 1rem; }
 .unit { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   min-height: 56px; padding: 6px 4px; border-radius: 10px; border: 2px solid; background: rgba(127,127,127,.08);
   color: inherit; font: inherit; cursor: pointer; text-align: center; }
-.unit b { font-size: .88rem; line-height: 1.15; }
-.unit small { font-size: .7rem; opacity: .8; }
+.unit { overflow: hidden; padding: 0 0 4px; justify-content: flex-start; }
+.unit img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; }
+.unit b { font-size: .86rem; line-height: 1.15; margin-top: 3px; }
+.unit small { font-size: .66rem; opacity: .75; line-height: 1.2; padding: 0 3px; }
+.unit .cost { position: absolute; top: 3px; left: 3px; background: rgba(0,0,0,.65); color: #fff; font-size: .7rem; font-weight: 700; border-radius: 6px; padding: 0 5px; }
+.unit .star { position: absolute; top: 3px; right: 3px; color: #f5b301; text-shadow: 0 0 3px #000; font-size: .8rem; }
+.units.board .unit, .units.bench .unit { min-height: 0; }
+.traits { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.tr { display: flex; align-items: center; gap: 5px; padding: 3px 8px 3px 4px; border-radius: 8px; font-size: .78rem; background: rgba(127,127,127,.12); opacity: .6; }
+.tr img { width: 20px; height: 20px; filter: brightness(0) invert(.8); }
+.tr b { font-size: .85rem; } .tr small { opacity: .6; }
+.tr.t1 { background: #8a5a3c; color: #fff; opacity: 1; } .tr.t3 { background: #9aa4b1; color: #111; opacity: 1; }
+.tr.t4 { background: #b0602e; color: #fff; opacity: 1; } .tr.t5 { background: #d4a017; color: #111; opacity: 1; }
+.tr.t6 { background: linear-gradient(90deg,#7ee8fa,#c084fc,#f9a8d4); color: #111; opacity: 1; }
+.tr.t1 img, .tr.t4 img { filter: brightness(0) invert(1); } .tr.t3 img, .tr.t5 img, .tr.t6 img { filter: brightness(0); }
 .unit:disabled { cursor: default; opacity: .55; }
 .units.board .unit:disabled { opacity: 1; }
 .unit.empty { border-style: dashed; border-color: rgba(127,127,127,.3); }

@@ -1,4 +1,4 @@
-/* 베니체스 봇 — 경제 운영 스타일별 손으로 짠 정책 (학습 전 기준선 · 셀프플레이 상대)
+/* 롤토체스 봇 — 경제 운영 스타일별 손으로 짠 정책 (학습 전 기준선 · 셀프플레이 상대)
    pick(s, style, rand) → 지금 s.turn 자리의 행동 번호 하나
    스타일: econ(표준 이자 운영) · fast8(빠른 8레벨) · reroll(낮은 레벨 리롤) · greedy(보이는 대로 씀) · random
    Node · 브라우저 공용 (module.exports 또는 root.AutoChessAI) */

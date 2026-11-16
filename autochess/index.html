@@ -4,30 +4,30 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#1a1433">
-<title>베니체스</title>
+<title>롤토체스</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
 <link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body>
 <div id="app">
   <header class="top">
     <a href="../">게임 목록</a>
-    <h1>♟️ 베니체스</h1>
+    <h1>🐧 롤토체스</h1>
     <button class="iconbtn" id="rankBtn" aria-label="랭킹">🏆</button>
   </header>
 
   <!-- 메뉴 -->
   <section id="menu" class="panel">
-    <p class="lead">오토체스 <b>운영</b> 연습장. 전투는 보드 힘으로 확률 계산 — 언제 <b>레벨업 · 리롤 · 저축</b>할지만 겨룹니다.</p>
+    <p class="lead">TFT Set 18 챔피언 65명으로 하는 <b>운영</b> 연습장. 전투는 보드 힘으로 확률 계산 — 언제 <b>레벨업 · 리롤 · 저축</b>할지 겨룹니다.</p>
     <div class="row">
       <span class="lbl">규칙</span>
       <div class="seg" id="ruleSeg">
-        <button data-v="A" class="on">A 베니 오리지널 · 6명</button>
-        <button data-v="B">B TFT 경제 미러 · 8명</button>
+        <button data-v="B" class="on">랭크 (Set 18 숫자) · 8명</button>
+        <button data-v="A">빠른 판 · 6명</button>
       </div>
     </div>
     <div class="row">
@@ -59,7 +59,8 @@
         <li>같은 유닛 3개 = 2성, 2성 3개 = 3성. 유닛은 모두가 같은 <b>공유 풀</b>에서 나옵니다.</li>
         <li>보드 = 힘 센 순서로 레벨 수만큼 자동 배치. 나머지는 벤치(눌러서 팔기).</li>
         <li>회전목마 라운드엔 유닛+아이템, PvE 라운드엔 아이템(이기면 골드도).</li>
-        <li>규칙 B 숫자(확률·풀·XP·이자·연승)는 TFT Set 18 공개 수치. 이름·그림은 쓰지 않습니다.</li>
+        <li>랭크 규칙의 숫자(확률·풀·XP·이자·연승·판매가)는 TFT Set 18 공개 수치, 챔피언·특성·그림은 Set 18 실제 데이터(CommunityDragon).</li>
+        <li>특성은 보드에 표시만 합니다. 전투 힘에는 아직 안 들어갑니다.</li>
       </ul>
     </details>
   </section>
@@ -88,6 +89,7 @@
         </div>
         <h3>보드 <span id="boardCnt"></span></h3>
         <div class="units board" id="board"></div>
+        <ul class="traits" id="traits"></ul>
         <h3>벤치 <span id="benchCnt"></span> <small class="muted">눌러서 팔기</small></h3>
         <div class="units bench" id="bench"></div>
       </div>
@@ -116,8 +118,9 @@
 <script src="../common/cozy.js?v=13"></script>
 <script src="../common/me.js?v=17"></script>
 <script src="../common/rank.js?v=12"></script>
+<script src="set18.js?v=1"></script>
 <script src="core.js?v=1"></script>
 <script src="ai.js?v=1"></script>
-<script src="main.js?v=1"></script>
+<script src="main.js?v=2"></script>
 </body>
 </html>
