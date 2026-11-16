@@ -135,7 +135,12 @@
 .arn-vbub{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:66;width:min(92vw,400px);display:grid;gap:8px;pointer-events:auto}
 .arn-vbub[hidden]{display:none}
 .arn-vtoast{background:rgba(15,23,42,.95);color:#fff;border:1.5px solid rgba(251,191,36,.55);border-radius:16px;padding:11px 13px;display:grid;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,.55);animation:arn-bub .2s ease-out;font:14px/1.4 var(--text,system-ui,sans-serif)}
-.arn-vtoast .btns{display:flex;gap:6px;flex-wrap:wrap}`;
+.arn-vtoast .btns{display:flex;gap:6px;flex-wrap:wrap}
+.arn-vmicrow{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.1)}
+.arn-vmicrow[hidden]{display:none}
+.arn-vmicrow select{flex:1;min-width:0;border:1px solid rgba(255,255,255,.16);background:#0f172a;color:var(--ink,#f1f5f9);border-radius:8px;padding:5px 8px;font:600 12.5px var(--text,inherit);cursor:pointer}
+.arn-vmeter{width:56px;height:7px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;flex:none}
+.arn-vmeter i{display:block;height:100%;width:0%;background:linear-gradient(90deg,#34d399,#fbbf24);transition:width .1s}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
 
@@ -264,10 +269,16 @@
   function chatOff() { if (badge) badge.hidden = true; if (!chat) return; chat.tab.hidden = true; chat.pan.hidden = true; chat.bub.innerHTML = ""; }
 
   // ── 🎤 P2P/TURN 저지연 음성 대화 (2~8인 온디맨드 메시, 켜짐 알림 + 음성 요청/음소거) ─────────
+  const MIC_KEY = "arena.voice.micId.v1";
+  const VIRT_MIC_RE = /SYNCROOM|Virtual|VB-Audio|CABLE|Stereo Mix|Loopback|BlackHole|VoiceMeeter|Wave Link/i;
+  const savedMicId = () => { try { return localStorage.getItem(MIC_KEY) || ""; } catch (e) { return ""; } };
+  const saveMicId = id => { try { if (id) localStorage.setItem(MIC_KEY, id); } catch (e) {} };
   const vSt = {
     mic: 0,                  // 0=끔, 1=상시말하기, 2=듣기만, 3=무전기(누르고 말하기)
     pttDown: false,
     stream: null,            // MediaStream
+    micId: savedMicId(),     // 사용자가 선택한 마이크 deviceId
+    devices: [],             // AudioInputDevice 목록
     peers: new Map(),        // uid -> { pc, iceWait, audio, analyser, data }
     vols: new Map(),         // uid -> 0..100
     speaking: new Set(),     // 지금 말하는 중 uid
@@ -279,6 +290,90 @@
     actx: null, localAna: null, localData: null, vadT: null,
     tab: null, pttBtn: null, pan: null, bub: null,
   };
+  async function refreshVoiceDevices() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return [];
+      const list = await navigator.mediaDevices.enumerateDevices();
+      vSt.devices = list.filter(d => d.kind === "audioinput" && d.deviceId);
+    } catch (e) { vSt.devices = []; }
+    return vSt.devices;
+  }
+  async function acquireAudioStream(devId) {
+    const devPart = devId ? { deviceId: { exact: devId } } : {};
+    const attempts = [
+      { audio: { ...devPart, echoCancellation: true, noiseSuppression: true, autoGainControl: true } },
+      ...(devId ? [{ audio: { ...devPart } }] : []),
+      { audio: true },
+    ];
+    let lastErr;
+    for (const c of attempts) {
+      try { return await navigator.mediaDevices.getUserMedia(c); } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error("mic open failed");
+  }
+  function pickPreferredRealMic(devs) {
+    const labeled = devs.filter(d => d.label && d.deviceId !== "default" && d.deviceId !== "communications");
+    return labeled.find(d => !VIRT_MIC_RE.test(d.label)) || null;
+  }
+  async function openMicStream(explicitId) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const err = new Error("no mic api"); err.noApi = true; throw err;
+    }
+    const devs0 = await refreshVoiceDevices();
+    let wantId = explicitId || vSt.micId || "";
+    if (wantId && devs0.length && !devs0.some(d => d.deviceId === wantId)) wantId = "";
+    if (!wantId && devs0.length) {
+      const defDev = devs0.find(d => d.deviceId === "default") || devs0[0];
+      if (defDev && defDev.label && VIRT_MIC_RE.test(defDev.label)) {
+        const real = pickPreferredRealMic(devs0);
+        if (real) wantId = real.deviceId;
+      }
+    }
+    let stream = await acquireAudioStream(wantId);
+    const devs1 = await refreshVoiceDevices();
+    const tr = stream.getAudioTracks()[0];
+    const usedId = (tr && tr.getSettings && tr.getSettings().deviceId) || wantId;
+    if (!explicitId && tr && VIRT_MIC_RE.test(tr.label || "")) {
+      const real = pickPreferredRealMic(devs1);
+      if (real && real.deviceId !== usedId) {
+        try {
+          const realStream = await acquireAudioStream(real.deviceId);
+          stream.getTracks().forEach(t => t.stop());
+          stream = realStream;
+          saveMicId(real.deviceId);
+          vSt.micId = real.deviceId;
+          if (window.Cozy && Cozy.toast) Cozy.toast(`🎤 가상 장치 대신 '${real.label.slice(0, 24)}'로 연결했어요`, 2400);
+          return stream;
+        } catch (e) {}
+      }
+    }
+    const finalTr = stream.getAudioTracks()[0];
+    const finalId = (finalTr && finalTr.getSettings && finalTr.getSettings().deviceId) || usedId || "";
+    if (finalId) { vSt.micId = finalId; if (explicitId) saveMicId(finalId); }
+    return stream;
+  }
+  async function switchMicDevice(deviceId) {
+    if (!net || (vSt.mic !== 1 && vSt.mic !== 3)) return;
+    try {
+      const nextStream = await openMicStream(deviceId);
+      const oldStream = vSt.stream;
+      const newTr = nextStream.getAudioTracks()[0] || null;
+      if (newTr) newTr.enabled = (vSt.mic === 1 || (vSt.mic === 3 && vSt.pttDown));
+      vSt.stream = nextStream;
+      const aInfo = attachAnalyser(nextStream);
+      vSt.localAna = aInfo ? aInfo.ana : null;
+      vSt.localData = aInfo ? aInfo.data : null;
+      for (const [, vp] of vSt.peers) {
+        if (!vp.pc || !newTr) continue;
+        const sender = vp.pc.getSenders().find(s => s.track && s.track.kind === "audio");
+        if (sender) sender.replaceTrack(newTr).catch(() => {});
+      }
+      if (oldStream) oldStream.getTracks().forEach(t => t.stop());
+      renderVoicePan();
+    } catch (e) {
+      if (window.Cozy && Cozy.toast) Cozy.toast("선택한 마이크 장치를 열 수 없어요", 2200);
+    }
+  }
   function lowLatSdp(sdp) {
     try {
       return String(sdp || "").replace(/a=fmtp:(\d+) ([^\r\n]+)/g, (all, pt, pars) => {
@@ -316,7 +411,12 @@
       if (!net || !vSt.mic) return;
       const nextSpk = new Set();
       const myLive = (vSt.mic === 1 || (vSt.mic === 3 && vSt.pttDown));
-      if (myLive && vSt.localAna && sampleLevel(vSt.localAna, vSt.localData) > 12) nextSpk.add(net.uid);
+      const myLvl = myLive && vSt.localAna ? sampleLevel(vSt.localAna, vSt.localData) : 0;
+      if (myLvl > 12) nextSpk.add(net.uid);
+      if (vSt.pan && !vSt.pan.hidden) {
+        const bar = vSt.pan.querySelector("[data-vlevel]");
+        if (bar) bar.style.width = Math.min(100, Math.round(myLvl * 2.4)) + "%";
+      }
       for (const [uid, vp] of vSt.peers) {
         if (!vSt.muted.has(uid) && vp.ana && sampleLevel(vp.ana, vp.data) > 12) nextSpk.add(uid);
       }
@@ -353,6 +453,7 @@
       pan.className = "arn-vpan"; pan.hidden = true;
       pan.innerHTML = `<div class="hd"><span>🎤 음성 대화</span><button type="button" data-vx aria-label="닫기">✕</button></div>
         <div class="arn-vacts" data-vacts></div>
+        <div class="arn-vmicrow" data-vmicrow hidden></div>
         <div class="arn-soft" data-vtip style="font-size:12.5px"></div>
         <div class="arn-vlist" data-vlist></div>`;
       const bub = document.createElement("div");
@@ -383,6 +484,15 @@
         const vp = vSt.peers.get(uid);
         if (vp && vp.audio) vp.audio.volume = val / 100;
       });
+      pan.addEventListener("change", e => {
+        const sel = e.target.closest("[data-vmicdev]");
+        if (sel && sel.value) switchMicDevice(sel.value);
+      });
+      if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+        navigator.mediaDevices.addEventListener("devicechange", () => {
+          if (vSt.pan && !vSt.pan.hidden) refreshVoiceDevices().then(renderVoicePan);
+        });
+      }
       vSt.tab = tab; vSt.pttBtn = pttBtn; vSt.pan = pan; vSt.bub = bub;
     }
   }
@@ -494,6 +604,7 @@
   function renderVoicePan() {
     if (!vSt.pan || !net) return;
     const acts = vSt.pan.querySelector("[data-vacts]");
+    const micRow = vSt.pan.querySelector("[data-vmicrow]");
     const tip = vSt.pan.querySelector("[data-vtip]");
     const list = vSt.pan.querySelector("[data-vlist]");
     acts.innerHTML = `
@@ -501,6 +612,16 @@
       <button type="button" class="arn-vbtn${vSt.mic === 3 ? " on" : ""}" data-vmode="3">🎙️ 무전기</button>
       <button type="button" class="arn-vbtn${vSt.mic === 2 ? " ls" : ""}" data-vmode="2">🎧 듣기만</button>
       <button type="button" class="arn-vbtn${vSt.mic === 0 ? " on" : ""}" style="${vSt.mic === 0 ? "background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)" : ""}" data-vmode="0">🔕 끄기</button>`;
+    if (micRow) {
+      const showMicSel = (vSt.mic === 1 || vSt.mic === 3) && vSt.devices.length > 0;
+      micRow.hidden = !showMicSel;
+      if (showMicSel) {
+        const curTr = vSt.stream && vSt.stream.getAudioTracks()[0];
+        const curId = (curTr && curTr.getSettings && curTr.getSettings().deviceId) || vSt.micId || "";
+        const optsHtml = vSt.devices.map((d, i) => `<option value="${esc(d.deviceId)}"${d.deviceId === curId ? " selected" : ""}>${esc(d.label || `마이크 ${i + 1}`)}</option>`).join("");
+        micRow.innerHTML = `<span style="font-size:12px;color:var(--soft,#94a3b8);white-space:nowrap">🎙️ 마이크</span><select data-vmicdev aria-label="마이크 장치">${optsHtml}</select><div class="arn-vmeter" title="내 마이크 입력 크기"><i data-vlevel></i></div>`;
+      }
+    }
     const pl = net.players || {};
     const onCount = Object.values(pl).filter(p => p && p.mic > 0).length;
     tip.textContent = vSt.mic === 3
@@ -563,14 +684,18 @@
     if (next === 1 || next === 3) {
       if (!vSt.stream) {
         try {
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("no mic api");
-          vSt.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+          vSt.stream = await openMicStream();
           const aInfo = attachAnalyser(vSt.stream);
           if (aInfo) { vSt.localAna = aInfo.ana; vSt.localData = aInfo.data; }
         } catch (e) {
-          if (window.Cozy && Cozy.toast) Cozy.toast("마이크를 쓸 수 없어 '🎧 듣기만'으로 연결할게요", 2600);
+          const msg = e && e.noApi
+            ? "🔒 보안 주소(https)가 아니라서 마이크가 막혀 '🎧 듣기만'으로 연결할게요"
+            : "마이크를 열 수 없어 '🎧 듣기만'으로 연결할게요";
+          if (window.Cozy && Cozy.toast) Cozy.toast(msg, 2800);
           return setVoice(2);
         }
+      } else {
+        await refreshVoiceDevices();
       }
       vSt.pttDown = false;
       vSt.stream.getAudioTracks().forEach(t => { t.enabled = (next === 1); });
