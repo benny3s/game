@@ -87,4 +87,22 @@ test("4. 성장/감소 이력 요약 계산 검증", () => {
   assert.strictEqual(sm.domainDelta.num, -3);
 });
 
+test("5. 추리·논리(liar/zebra) 전제 명시, 한국어 조사, 가짜 보기 없음 검증", () => {
+  const badTexts = ["지민는", "서연는", "지민가", "서연가", "세 사람 중 없음"];
+  for (const tier of ["easy", "normal", "hard"]) {
+    for (let s = 0; s < 24; s++) {
+      const q = B.generateQuestion("logic", tier, 500 + s, s);
+      const blob = [q.title, q.promptHtml, ...(q.choices || []).map(c => c.label), ...(q.explain?.steps || []), q.explain?.hint1 || "", q.explain?.hint2 || ""].join(" ");
+      for (const bad of badTexts) {
+        assert(!blob.includes(bad), `오탈자/어색한 표현 [${bad}] 미포함 (${tier}/${s}): ${blob}`);
+      }
+      if (q.sub === "zebra") {
+        assert(q.promptHtml.includes('class="cond"'), `zebra 전제(.cond) 표시 필수 (${tier}/${s})`);
+        assert(q.promptHtml.includes("민수") && q.promptHtml.includes("서연"), "4인 전제 모두 명시");
+        assert.deepStrictEqual(q.choices.map(c => c.label).sort(), ["규호", "민수", "서연", "지민"], "보기 4개 모두 실제 인물");
+      }
+    }
+  }
+});
+
 console.log(`✅ All ${passed} BrainCore tests passed!`);

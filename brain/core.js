@@ -48,6 +48,17 @@
     return a;
   }
 
+  function hasBatchim(word) {
+    const s = String(word || "").trim();
+    if (!s) return false;
+    const ch = s.charCodeAt(s.length - 1);
+    return ch >= 0xAC00 && ch <= 0xD7A3 && (ch - 0xAC00) % 28 !== 0;
+  }
+  function josa(word, pair) {
+    const [a, b] = pair.split("/");
+    return hasBatchim(word) ? a : b;
+  }
+
   function distinctNumChoices(r, ans, stepHint = 2) {
     const set = new Set([ans]);
     const offsets = shuffled(r, [-4, -3, -2, -1, 1, 2, 3, 4, -stepHint, stepHint, stepHint * 2, -stepHint * 2, 5, -5, 6, -6, 8, -8, 10]);
@@ -188,7 +199,7 @@
 
     const ruleDesc = [
       shapeRule === "all_diff" ? "가로·세로줄마다 3가지 모양이 한 번씩 등장" : "각 가로줄마다 같은 모양 유지",
-      fillRule === "row_same" ? "줄별 채움(속참/테두리/빗금) 고정" : "채움 무늬가 칸마다 순환",
+      fillRule === "row_same" ? "가로줄별 채움(속참/테두리/빗금) 고정" : fillRule === "col_diff" ? "세로줄별 채움(속참/테두리/빗금) 고정" : "채움 무늬가 칸마다 순환",
       modeCount ? "오른쪽으로 갈수록 개수가 1→2→3개로 증가" : "",
       modeRot ? "오른쪽·아래로 갈수록 90°씩 시계 방향 회전" : "",
     ].filter(Boolean);
@@ -417,7 +428,7 @@
           speaker,
           targetIdx,
           type,
-          text: type === "is" ? `"범인은 <b>${names[targetIdx]}</b>예요."` : `"<b>${names[targetIdx]}</b>는 범인이 아니에요."`,
+          text: type === "is" ? `"범인은 <b>${names[targetIdx]}</b>예요."` : `"<b>${names[targetIdx]}</b>${josa(names[targetIdx], "은/는")} 범인이 아니에요."`,
         };
       });
 
@@ -453,7 +464,7 @@
             rule: "가정법 연역 추론",
             hint1: "각 사람을 한 명씩 '범인'이라고 가정했을 때 참/거짓 인원 조건이 맞는지 세어 보세요.",
             hint2: `범인이 ${ansName}일 때만 조건(${truthMode ? "참 1명" : "거짓 1명"})이 정확히 성립합니다.`,
-            steps: [`${ansName}가 범인이라고 가정하면 진술 진위가 [${truesList}]로 조건을 만족합니다.`, "다른 사람을 범인으로 두면 참/거짓 개수가 맞지 않아 모순입니다."],
+            steps: [`${ansName}${josa(ansName, "이/가")} 범인이라고 가정하면 진술 진위가 [${truesList}]로 조건을 만족합니다.`, "다른 사람을 범인으로 두면 참/거짓 개수가 맞지 않아 모순입니다."],
           },
         };
       }
@@ -461,68 +472,187 @@
     return genLogicZebra(r, tier);
   }
 
+  function permArr(arr) {
+    if (arr.length <= 1) return [arr.slice()];
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      const rest = arr.slice(0, i).concat(arr.slice(i + 1));
+      for (const p of permArr(rest)) out.push([arr[i], ...p]);
+    }
+    return out;
+  }
+
   function genLogicZebra(r, tier) {
-    const names = ["민수", "지민", "규호", "서연"];
-    const rooms = ["파랑 방", "초록 방", "노랑 방", "빨강 방"];
-    const pets = ["고양이", "강아지", "부엉이"];
+    const activeNames = ["민수", "지민", "규호", "서연"];
+    const activeRooms = ["파랑 방", "초록 방", "노랑 방", "빨강 방"];
+    const activePets = ["고양이", "강아지", "부엉이", "토끼"];
+    const roomPerms = permArr(activeRooms); // 24
+    const petPerms = tier === "easy" ? [activePets] : permArr(activePets); // easy: 2속성, normal/hard: 3속성
 
-    const perm3 = (arr) => [
-      [arr[0], arr[1], arr[2]], [arr[0], arr[2], arr[1]],
-      [arr[1], arr[0], arr[2]], [arr[1], arr[2], arr[0]],
-      [arr[2], arr[0], arr[1]], [arr[2], arr[1], arr[0]],
-    ];
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const solR = shuffled(r, activeRooms);
+      const solP = shuffled(r, activePets);
+      const targetIdx = randInt(r, 0, 3);
+      const askedRoom = solR[targetIdx];
+      const ansName = activeNames[targetIdx];
 
-    // 3명(민수·지민·규호) 배치 + 4번째 보기(서연=해당 없음) 포함 4지선다
-    const activeNames = names.slice(0, 3);
-    const activeRooms = rooms.slice(0, 3);
-    const solR = shuffled(r, activeRooms);
-    const solP = shuffled(r, pets);
-    const targetRoomIdx = randInt(r, 0, 2);
-    const askedRoom = solR[targetRoomIdx];
-    const pNon0 = (targetRoomIdx + 1) % 3;
-    const pNon1 = (targetRoomIdx + 2) % 3;
-    const rChoice0 = (targetRoomIdx + 1) % 3;
+      // 후보 단서 풀 생성 (정답 인물↔방 직접 스포일러는 제외)
+      const pool = [];
+      for (let i = 0; i < 4; i++) {
+        // 사람 ↔ 방 긍정(최대 일부), 부정
+        if (i !== targetIdx) {
+          pool.push({
+            kind: "pr_yes",
+            text: `<b>${activeNames[i]}</b>${josa(activeNames[i], "은/는")} <b>${solR[i]}</b>에 있습니다.`,
+            test: (R) => R[i] === solR[i],
+          });
+        }
+        for (let j = 0; j < 4; j++) {
+          if (solR[i] !== activeRooms[j]) {
+            pool.push({
+              kind: "pr_no",
+              text: `<b>${activeNames[i]}</b>${josa(activeNames[i], "은/는")} <b>${activeRooms[j]}</b>에 있지 않습니다.`,
+              test: (R) => R[i] !== activeRooms[j],
+            });
+          }
+        }
+        if (tier !== "easy") {
+          // 사람 ↔ 동물
+          pool.push({
+            kind: "pp_yes",
+            usesPet: true,
+            text: `<b>${activeNames[i]}</b>${josa(activeNames[i], "은/는")} <b>${solP[i]}</b>의 주인입니다.`,
+            test: (_R, P) => P[i] === solP[i],
+          });
+          // 방 ↔ 동물
+          pool.push({
+            kind: "rp_yes",
+            usesPet: true,
+            text: `<b>${solR[i]}</b>에 있는 사람은 <b>${solP[i]}</b>${josa(solP[i], "과/와")} 함께 있습니다.`,
+            test: (R, P) => R.some((rm, k) => rm === solR[i] && P[k] === solP[i]),
+          });
+          for (let j = 0; j < 4; j++) {
+            if (activeRooms[j] !== solR[i]) {
+              pool.push({
+                kind: "rp_no",
+                usesPet: true,
+                text: `<b>${solP[i]}</b>${josa(solP[i], "은/는")} <b>${activeRooms[j]}</b>에 있지 않습니다.`,
+                test: (R, P) => R.every((rm, k) => !(P[k] === solP[i] && rm === activeRooms[j])),
+              });
+            }
+          }
+        }
+      }
+
+      // 셔플 후 1) 긍정 사람↔방 단서는 최대 1개, 2) 유일해 달성까지 단서 수집
+      const picked = [];
+      let prYesCount = 0;
+      for (const c of shuffled(r, pool)) {
+        if (c.kind === "pr_yes" && prYesCount >= 1) continue;
+        // normal/hard는 연결 추리를 유도하기 위해 직접 방 긍정은 최소화
+        if (tier === "hard" && c.kind === "pr_yes") continue;
+        picked.push(c);
+        if (c.kind === "pr_yes") prYesCount++;
+      }
+
+      const checkUnique = (list) => {
+        const roomOnly = list.filter(c => !c.usesPet);
+        let count = 0;
+        for (const Rp of roomPerms) {
+          if (!roomOnly.every(c => c.test(Rp, activePets))) continue;
+          for (const Pp of petPerms) {
+            if (list.every(c => c.test(Rp, Pp))) {
+              count++;
+              if (count > 1) return false;
+            }
+          }
+        }
+        return count === 1;
+      };
+
+      // 앞쪽 일부에서 유일해가 되는 접두사를 찾고 불필요한 중복 조건을 1개씩 제거 (최소 단서 집합!)
+      let minimal = null;
+      const built = [];
+      for (const c of picked) {
+        built.push(c);
+        if (checkUnique(built)) {
+          minimal = built.slice();
+          break;
+        }
+      }
+      if (!minimal) continue;
+
+      for (let idx = minimal.length - 1; idx >= 0; idx--) {
+        const trial = minimal.filter((_, j) => j !== idx);
+        if (checkUnique(trial)) minimal = trial;
+      }
+
+      // normal/hard에서는 반려동물 조건이 실제로 답에 기여해야(더미 조건 금지!) 채택
+      if (tier !== "easy") {
+        const nonPet = minimal.filter(c => !c.usesPet);
+        const targetAmbiguousWithoutPet = new Set(
+          roomPerms.filter(Rp => nonPet.every(c => c.test(Rp, activePets))).map(Rp => Rp.indexOf(askedRoom))
+        ).size > 1;
+        if (!targetAmbiguousWithoutPet) continue;
+      }
+      if (minimal.length < 3 || minimal.length > 7) continue;
+
+      const finalClues = shuffled(r, minimal);
+      const premiseHtml = tier === "easy"
+        ? `🏠 <b>민수·지민·규호·서연</b> 네 사람이 <b>파랑·초록·노랑·빨강 방</b>에 각각 한 명씩 있습니다.`
+        : `🏠 <b>민수·지민·규호·서연</b>이 <b>파랑·초록·노랑·빨강 방</b>에 하나씩 있고, <b>고양이·강아지·부엉이·토끼</b>를 한 마리씩 데리고 있습니다.`;
+
+      const opts = shuffled(r, activeNames);
+      const fullPairs = activeNames.map((n, i) =>
+        tier === "easy" ? `${n}=${solR[i]}` : `${n}=${solR[i]}(${solP[i]})`
+      ).join(" · ");
+
+      return {
+        cat: "logic", sub: "zebra", tier, type: "choice",
+        title: `전제와 조건을 모두 만족할 때, '${askedRoom}'에 있는 사람은 누구인가요?`,
+        promptHtml: `<div class="br-logic-box"><p class="cond">${premiseHtml}</p>${finalClues.map((c, i) => `<div class="br-quote">${i + 1}. ${c.text}</div>`).join("")}</div>`,
+        choices: opts.map(nm => ({ label: nm })),
+        answer: opts.indexOf(ansName),
+        explain: {
+          rule: "조건표(아인슈타인) 연역",
+          hint1: tier === "easy"
+            ? "각 방에 들어갈 수 없는 사람을 하나씩 지워 보면서 소거해 보세요."
+            : "같은 동물이나 방으로 바로 이어지는 두 조건을 먼저 짝지어 보세요.",
+          hint2: tier === "easy"
+            ? `확정된 방과 소거 조건을 차례로 적용하면 '${askedRoom}'의 주인이 남습니다.`
+            : `'${askedRoom}'에 있는 동물('${solP[targetIdx]}')${josa(solP[targetIdx], "과/와")} 그 주인을 연결해 보세요.`,
+          steps: [
+            `전체 짝: ${fullPairs}`,
+            `따라서 '${askedRoom}'에 있는 사람은 ${ansName}입니다.`,
+          ],
+        },
+      };
+    }
+
+    // 극단적 시드 대비 안전 폴백 (전제 포함 유일해 고정 패턴)
+    const fallbackNames = shuffled(r, activeNames);
+    const fallbackRooms = shuffled(r, activeRooms);
+    const ansName = fallbackNames[3];
+    const askedRoom = fallbackRooms[3];
     const clues = [
-      { text: `<b>${solR[pNon0]}</b>에 있는 사람은 <b>${solP[pNon0]}</b>와 함께 있습니다.`, test: (R, P) => R.some((rm, i) => rm === solR[pNon0] && P[i] === solP[pNon0]) },
-      { text: `<b>${activeNames[pNon1]}</b>는 <b>${solP[pNon1]}</b>의 주인입니다.`, test: (_R, P) => P[pNon1] === solP[pNon1] },
-      { text: `<b>${activeNames[targetRoomIdx]}</b>는 <b>${solR[rChoice0]}</b>에 있지 않습니다.`, test: (R) => R[targetRoomIdx] !== solR[rChoice0] },
-      { text: `<b>${activeNames[pNon0]}</b>는 <b>${askedRoom}</b>에 있지 않습니다.`, test: (R) => R[pNon0] !== askedRoom },
+      `<b>${fallbackNames[0]}</b>${josa(fallbackNames[0], "은/는")} <b>${fallbackRooms[0]}</b>에 있습니다.`,
+      `<b>${fallbackNames[1]}</b>${josa(fallbackNames[1], "은/는")} <b>${fallbackRooms[1]}</b>에 있습니다.`,
+      `<b>${fallbackNames[2]}</b>${josa(fallbackNames[2], "은/는")} <b>${fallbackRooms[3]}</b>에 있지 않습니다.`,
     ];
-    if (tier !== "easy") {
-      const altClues = [
-        clues[0],
-        clues[1],
-        { text: `<b>${activeNames[pNon0]}</b>와 <b>${askedRoom}</b>에 있는 사람은 서로 다릅니다.`, test: (R) => R[pNon0] !== askedRoom },
-        { text: `<b>${solP[targetRoomIdx]}</b>는 <b>${solR[pNon1]}</b>에 있지 않습니다.`, test: (R, P) => R.every((rm, i) => !(P[i] === solP[targetRoomIdx] && rm === solR[pNon1])) },
-      ];
-      let cntAlt = 0;
-      for (const Rp of perm3(activeRooms)) for (const Pp of perm3(pets)) if (altClues.every(c => c.test(Rp, Pp))) cntAlt++;
-      if (cntAlt === 1) clues.splice(0, clues.length, ...altClues);
-    }
-
-    let sols = [];
-    for (const Rp of perm3(activeRooms)) for (const Pp of perm3(pets)) {
-      if (clues.every(c => c.test(Rp, Pp))) sols.push({ Rp, Pp });
-    }
-    if (sols.length !== 1) {
-      clues.push({ text: `<b>${activeNames[pNon1]}</b>는 <b>${solR[pNon1]}</b>에 있습니다.`, test: (R) => R[pNon1] === solR[pNon1] });
-    }
-
-    const ansName = activeNames[targetRoomIdx];
-    const opts = shuffled(r, [...activeNames, "세 사람 중 없음(서연)"]);
+    const opts = shuffled(r, activeNames);
     return {
       cat: "logic", sub: "zebra", tier, type: "choice",
-      title: `조건을 모두 만족할 때, '${askedRoom}'에 있는 사람은 누구인가요?`,
-      promptHtml: `<div class="br-logic-box">${clues.map((c, i) => `<div class="br-quote">${i + 1}. ${c.text}</div>`).join("")}</div>`,
+      title: `전제와 조건을 모두 만족할 때, '${askedRoom}'에 있는 사람은 누구인가요?`,
+      promptHtml: `<div class="br-logic-box"><p class="cond">🏠 <b>민수·지민·규호·서연</b> 네 사람이 <b>파랑·초록·노랑·빨강 방</b>에 각각 한 명씩 있습니다.</p>${clues.map((txt, i) => `<div class="br-quote">${i + 1}. ${txt}</div>`).join("")}</div>`,
       choices: opts.map(nm => ({ label: nm })),
       answer: opts.indexOf(ansName),
       explain: {
         rule: "조건표(아인슈타인) 연역",
-        hint1: "확정된 사람과 반려동물을 먼저 연결한 뒤, 들어갈 수 없는 방을 하나씩 지워 보세요.",
-        hint2: `${activeNames[pNon1]}는 ${solP[pNon1]}, ${solR[pNon0]}은 ${solP[pNon0]} 주인이므로 남는 연결을 찾으면 됩니다.`,
+        hint1: "이미 정해진 두 사람부터 자리를 채운 뒤 남은 두 방에 대입해 보세요.",
+        hint2: `${fallbackNames[2]}${josa(fallbackNames[2], "은/는")} '${fallbackRooms[3]}'이 아니므로 '${fallbackRooms[2]}'에 들어갑니다.`,
         steps: [
-          `전체 짝: ${activeNames.map((n, i) => `${n}=${solR[i]}(${solP[i]})`).join(" · ")}`,
-          `따라서 ${askedRoom}에 있는 사람은 ${ansName}입니다.`,
+          `전체 짝: ${fallbackNames.map((n, i) => `${n}=${fallbackRooms[i]}`).join(" · ")}`,
+          `따라서 '${askedRoom}'에 있는 사람은 ${ansName}입니다.`,
         ],
       },
     };
