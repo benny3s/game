@@ -1,0 +1,129 @@
+/* 베니 크아 — 다크 라운지 테마 & 15×13 반응형 무스크롤 경기장 (kua/style.css) */
+:root {
+  --k-accent: #38bdf8;
+  --k-gold: #fbbf24;
+  --k-card: #131c2e;
+  --k-line: rgba(148, 163, 184, 0.22);
+}
+
+.k-sub { margin: 0 0 10px; font-size: 13px; color: #94a3b8; text-align: center; }
+.k-sec-lbl { font-size: 12px; font-weight: 700; color: #cbd5e1; margin: 10px 0 6px; }
+
+.k-chars {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 6px;
+}
+.k-char-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 4px; border-radius: 10px; border: 1.5px solid var(--k-line);
+  background: rgba(15, 23, 42, 0.72); color: #e2e8f0; cursor: pointer; font: inherit; font-size: 12px;
+  transition: transform .12s, border-color .12s, background .12s;
+}
+.k-char-btn .dot {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.k-char-btn[aria-pressed="true"] {
+  border-color: var(--k-gold); background: rgba(251, 191, 36, 0.14); color: #fef08a;
+  transform: translateY(-1px);
+}
+
+.k-char-stat {
+  margin-top: 8px; padding: 8px 10px; border-radius: 10px;
+  background: rgba(15, 23, 42, 0.72); border: 1px solid var(--k-line);
+  font-size: 12px; line-height: 1.45; color: #cbd5e1;
+}
+.k-char-stat b { color: #fde68a; }
+
+.k-opt-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;
+}
+.k-lbl { min-width: 44px; font-size: 12px; font-weight: 700; color: #94a3b8; }
+
+.play {
+  max-width: 720px; margin: 0 auto; min-height: 100dvh;
+  display: flex; flex-direction: column; padding: 6px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  box-sizing: border-box; gap: 6px;
+}
+.play .bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.play .bar .mid { text-align: center; }
+.play .bar .lbl { display: block; font-size: 15px; font-weight: 800; color: var(--k-gold); }
+.play .bar .t { font-size: 12px; color: #94a3b8; }
+body.dark .iconbtn, body.dark .pill {
+  background: #1b2436; color: #e2e8f0; border: 1px solid var(--k-line);
+}
+
+.k-hud {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+}
+.k-pill {
+  display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 99px;
+  background: var(--k-card); border: 1.5px solid var(--k-line); font-size: 12px; color: #e2e8f0;
+}
+.k-pill.me { border-color: var(--k-gold); background: rgba(251, 191, 36, 0.12); }
+.k-pill.dead { opacity: 0.42; text-decoration: line-through; }
+.k-pill.trapped { border-color: #38bdf8; box-shadow: 0 0 8px rgba(56,189,248,0.45); }
+.k-pill .k-st { color: #93c5fd; font-weight: 700; }
+
+.k-stage {
+  flex: 1; min-height: 0; display: grid; place-items: center;
+}
+.k-canvas-wrap {
+  position: relative; width: 100%; max-width: 600px; aspect-ratio: 15 / 13;
+  border-radius: 14px; overflow: hidden; border: 2px solid rgba(56, 189, 248, 0.35);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55); background: #0b1120;
+}
+#cv {
+  display: block; width: 100%; height: 100%;
+}
+
+.k-res-card {
+  width: min(92vw, 400px); padding: 16px; border-radius: 16px;
+  background: #141d2e; border: 1.5px solid var(--k-gold); color: #f8fafc; text-align: center;
+}
+.k-res-card h2 { margin: 0 0 6px; color: var(--k-gold); }
+.k-res-sub { margin: 0 0 10px; font-size: 13px; color: #cbd5e1; }
+#resTable { display: grid; gap: 5px; font-size: 12.5px; text-align: left; }
+.k-res-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 9px; border-radius: 8px; background: rgba(255,255,255,0.05);
+}
+
+.coach-slot:empty { display: none; }
+.coach-slot .cpn {
+  position: static !important; width: 100% !important; max-width: 100% !important;
+  box-shadow: none; border-radius: 12px;
+}
+
+.k-keyguide {
+  text-align: center; font-size: 12px; color: #94a3b8;
+}
+
+/* 터치 패드: 데스크톱에선 숨기고, pointer:coarse 기기에서만 노출 */
+.k-tpad { display: none; justify-content: space-between; align-items: center; padding: 4px 6px; }
+@media (pointer: coarse) {
+  .k-tpad { display: flex; }
+  .k-keyguide { display: none; }
+}
+.k-dpad {
+  display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 38px); gap: 4px;
+}
+.k-dpad .up { grid-column: 2; grid-row: 1; }
+.k-dpad .lt { grid-column: 1; grid-row: 2; }
+.k-dpad .rt { grid-column: 3; grid-row: 2; }
+.k-dpad .dn { grid-column: 2; grid-row: 3; }
+.k-pad-btn, .k-act-btn {
+  border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.22);
+  background: #1b2436; color: #f8fafc; font-weight: 800; cursor: pointer; touch-action: none;
+}
+.k-actpad { display: flex; gap: 8px; }
+.k-act-btn {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 66px; height: 66px; font-size: 20px; border-radius: 50%;
+}
+.k-act-btn small { font-size: 11px; margin-top: 2px; }
+.k-act-btn.bomb { background: #0284c7; border-color: #7dd3fc; }
+.k-act-btn.needle { background: #b45309; border-color: #fde68a; }

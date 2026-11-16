@@ -1059,6 +1059,28 @@ button { font: inherit; cursor: pointer; }
           </g>
           <text x="318" y="182" font-size="30">😺</text>
         </svg>`;
+      case "kua":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="kuaBg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#0f2942"/><stop offset="100%" stop-color="#1e4b3a"/>
+            </linearGradient>
+          </defs>
+          <rect width="400" height="200" fill="url(#kuaBg)"/>
+          <g stroke="rgba(255,255,255,0.08)" stroke-width="1">
+            <line x1="80" y1="0" x2="80" y2="200"/><line x1="160" y1="0" x2="160" y2="200"/>
+            <line x1="240" y1="0" x2="240" y2="200"/><line x1="320" y1="0" x2="320" y2="200"/>
+            <line x1="0" y1="50" x2="400" y2="50"/><line x1="0" y1="100" x2="400" y2="100"/><line x1="0" y1="150" x2="400" y2="150"/>
+          </g>
+          <rect x="30" y="110" width="44" height="44" rx="6" fill="#d97706" stroke="#78350f" stroke-width="3"/>
+          <rect x="326" y="44" width="44" height="44" rx="6" fill="#eab308" stroke="#713f12" stroke-width="3"/>
+          <rect x="108" y="84" width="184" height="32" rx="14" fill="#38bdf8" opacity="0.72"/>
+          <rect x="184" y="16" width="32" height="168" rx="14" fill="#38bdf8" opacity="0.72"/>
+          <circle cx="200" cy="100" r="34" fill="#0ea5e9" stroke="#e0f2fe" stroke-width="4"/>
+          <ellipse cx="187" cy="86" rx="9" ry="5" transform="rotate(-25 187 86)" fill="rgba(255,255,255,0.75)"/>
+          <circle cx="96" cy="64" r="22" fill="#2563eb" stroke="#facc15" stroke-width="3"/>
+          <circle cx="304" cy="140" r="22" fill="#ef4444" stroke="#ffffff" stroke-width="3"/>
+        </svg>`;
       case "volley":
         return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
           <defs>
@@ -1452,14 +1474,14 @@ button { font: inherit; cursor: pointer; }
     baduk: "trad", omok: "trad", chess: "trad", janggi: "trad",
     gostop: "card", poker: "card", seotda: "card", onecard: "card",
     yut: "boardparty", cube: "boardparty", catch: "boardparty", draw: "boardparty",
-    volley: "action", land: "action", snake: "action", billiards: "action", sc: "action",
+    volley: "action", land: "action", snake: "action", billiards: "action", sc: "action", kua: "action",
     nyang: "brain", genius: "brain", brain: "brain", escape: "brain",
   };
   const COLLECTIONS = [
     { id: "col_trad", group: "trad", name: "전통 전략 모음", emoji: "♟️", sub: "바둑 · 오목 · 체스 · 장기", players: "1~2명 · 👀구경" },
     { id: "col_card", group: "card", name: "카드 · 베팅 모음", emoji: "♠️", sub: "홀덤 · 정통 섯다 · 원카드", players: "1~6명 · 👀구경" },
     { id: "col_board", group: "boardparty", name: "보드 · 파티 모음", emoji: "🎲", sub: "윷놀이 · 베니큐브 · 베니캐치 · 그림전달", players: "1~8명" },
-    { id: "col_action", group: "action", name: "액션 · 스포츠 모음", emoji: "⚡", sub: "냥냥 배구 · 땅따먹기 · 지렁이 · 당구", players: "1~2명 · 실시간" },
+    { id: "col_action", group: "action", name: "액션 · 스포츠 모음", emoji: "⚡", sub: "베니 크아 · 냥냥 배구 · 땅따먹기 · 지렁이 · 당구", players: "1~8명 · 실시간" },
   ];
 
   async function checkPermissions() {

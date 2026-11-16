@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f131d">
+<title>베니 크아 — 물풍선 액션 대전</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
+<script src="../common/fit.js?v=1"></script>
+<script src="../common/backnav.js?v=3"></script>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body class="dark">
+<div class="wrap" id="menu">
+  <header class="top">
+    <h1><span class="glogo" aria-hidden="true">💦</span>베니 크아</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section id="home" class="card">
+    <p class="k-sub">15×13 물풍선 액션 · 원작 수치·걸치기·구출·바늘 구현</p>
+
+    <div class="tabs" role="tablist">
+      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+    </div>
+
+    <div id="soloBox" class="box">
+      <div class="tiers three" id="tiers"></div>
+
+      <div class="k-sec-lbl">캐릭터 선택 (KR 기본·최대 능력치)</div>
+      <div class="k-chars" id="charGrid"></div>
+      <div class="k-char-stat" id="charStatBox"></div>
+
+      <div class="k-opt-row">
+        <span class="k-lbl">맵</span>
+        <div class="seg" id="mapSeg"></div>
+      </div>
+
+      <div class="k-opt-row">
+        <span class="k-lbl">방식</span>
+        <div class="seg" id="modeSeg">
+          <button type="button" class="btn active" data-m="free">개인전</button>
+          <button type="button" class="btn" data-m="team">팀전 (2:2)</button>
+        </div>
+      </div>
+
+      <div class="k-opt-row" id="botRow">
+        <span class="k-lbl">AI 수</span>
+        <div class="seg" id="botSeg">
+          <button type="button" class="btn" data-b="1">1명</button>
+          <button type="button" class="btn active" data-b="3">3명</button>
+          <button type="button" class="btn" data-b="5">5명</button>
+          <button type="button" class="btn" data-b="7">7명</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="friendBox" class="box" hidden>
+      <p class="lede">2~8명 친구와 실시간 물풍선 대결! 개인전/팀전 · 맵 · AI 빈자리 채우기를 대기실에서 고릅니다.</p>
+      <div class="k-sec-lbl">내 캐릭터</div>
+      <div class="k-chars" id="fCharGrid"></div>
+    </div>
+
+    <div id="watchBox" class="box" hidden>
+      <p class="lede">고수 AI 4명이 펼치는 물풍선 연쇄 폭발 대결을 구경해 보세요!</p>
+      <div class="k-opt-row">
+        <span class="k-lbl">맵</span>
+        <div class="seg" id="wMapSeg"></div>
+      </div>
+    </div>
+
+    <ul class="howto">
+      <li><b>방향키</b> 이동 (모서리 걸치기 자동 미끄러짐) · <b>Space</b> 물풍선 놓기 / 장갑 던지기 · <b>Ctrl</b> (또는 Z) 바늘 탈출</li>
+      <li>물풍선에 맞으면 약 <b>6초</b> 동안 물방울에 갇히며, 적이 닿으면 처치 · 같은 팀이 닿으면 구출됩니다.</li>
+    </ul>
+
+    <button class="btn primary big" id="startBtn">시작!</button>
+
+    <div class="row center minor">
+      <button class="btn ghost" id="helpBtn">❓ 하는 법</button>
+      <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
+    </div>
+  </section>
+</div>
+
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid">
+      <span class="lbl" id="playTitle">빌리지 10</span>
+      <span class="t" id="playSub">03:00 · 개인전</span>
+    </div>
+    <button class="pill" id="sndBtn" aria-label="소리">🔊</button>
+  </div>
+
+  <div class="k-hud" id="hudBar"></div>
+
+  <main class="k-stage">
+    <div class="k-canvas-wrap">
+      <canvas id="cv" width="600" height="520"></canvas>
+      <div class="overlay" id="resultOv" hidden>
+        <div class="modal k-res-card" role="dialog" aria-modal="true">
+          <h2 id="resTitle">경기 종료!</h2>
+          <p class="k-res-sub" id="resSub"></p>
+          <div id="resTable"></div>
+          <div class="row center" style="gap:8px;margin-top:10px">
+            <button type="button" class="btn primary" id="resAgainBtn">다시 한 판 ↺</button>
+            <button type="button" class="btn" id="resCoachBtn">🧑‍🏫 AI 선생님 복기</button>
+            <button type="button" class="btn ghost" id="resMenuBtn">메뉴로</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="coachSlot" class="coach-slot"></div>
+
+  <!-- 휴대폰/터치 기기 전용 가상 패드 (coarse pointer 에서만 표시) -->
+  <div class="k-tpad" id="touchPad">
+    <div class="k-dpad">
+      <button type="button" class="k-pad-btn up" data-dir="1">▲</button>
+      <button type="button" class="k-pad-btn lt" data-dir="4">◀</button>
+      <button type="button" class="k-pad-btn rt" data-dir="2">▶</button>
+      <button type="button" class="k-pad-btn dn" data-dir="3">▼</button>
+    </div>
+    <div class="k-actpad">
+      <button type="button" class="k-act-btn bomb" id="padBombBtn">🎈<small>물풍선</small></button>
+      <button type="button" class="k-act-btn needle" id="padNeedleBtn">🪡<small>바늘</small></button>
+    </div>
+  </div>
+
+  <div class="k-keyguide" id="keyGuide">⌨️ <b>방향키</b> 이동 · <b>Space</b> 물풍선/던지기 · <b>Ctrl</b> (또는 Z) 바늘 사용</div>
+</section>
+
+<script src="../common/glog.js?v=8"></script>
+<script src="../common/cozy.js?v=14"></script>
+<script src="../common/me.js?v=19"></script>
+<script src="../common/rank.js?v=15"></script>
+<script src="../common/arena-mock.js?v=10"></script>
+<script src="../common/arena.js?v=16"></script>
+<script src="../common/arena-ui.js?v=20"></script>
+<script src="../common/coach.js?v=4"></script>
+<script src="../common/tutorial.js?v=2"></script>
+<script src="rules.js?v=1"></script>
+<script src="maps.js?v=1"></script>
+<script src="core.js?v=2"></script>
+<script src="bots.js?v=2"></script>
+<script src="skins/default/skin.js?v=1"></script>
+<script src="render.js?v=1"></script>
+<script src="sound.js?v=1"></script>
+<script src="tutorial.js?v=1"></script>
+<script src="main.js?v=2"></script>
+</body>
+</html>

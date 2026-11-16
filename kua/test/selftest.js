@@ -1,0 +1,217 @@
+/* 베니 크아 핵심 시뮬레이션 단위 테스트 (node kua/test/selftest.js) */
+"use strict";
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+const Rules = require("../rules.js");
+const Maps = require("../maps.js");
+const Core = require("../core.js");
+const Bots = require("../bots.js");
+
+let passed = 0;
+function test(name, fn) {
+  fn();
+  console.log("  ✓ " + name);
+  passed++;
+}
+
+console.log("💦 KuaCore selftest");
+
+test("1. KR00967 캐릭터 9종 스탯 & 맵 3종(.txt 일치 + L자 스폰 탈출로) 검증", () => {
+  assert.strictEqual(Rules.CHAR_ORDER.length, 9);
+  assert.strictEqual(Rules.CHARS.dao.maxBombs, 10);
+  assert.strictEqual(Rules.CHARS.bazzi.maxSpeed, 9);
+  assert.strictEqual(Rules.CHARS.dizni.maxPower, 9);
+  assert(Rules.CHARS.rodumani.trapDeathMs < Rules.TIMING.TRAP_DEATH_MS, "로두마니 갇힘 사망 더 빠름");
+
+  for (const m of Maps.MAP_DEFS) {
+    const txtPath = path.join(__dirname, "../skins/default/maps", `${m.id}.txt`);
+    const fileAscii = fs.readFileSync(txtPath, "utf8").trim().replace(/\r\n/g, "\n");
+    assert.strictEqual(fileAscii, m.ascii, `${m.id}.txt 내용과 maps.js 일치`);
+
+    const parsed = Maps.getMap(m.id);
+    assert.strictEqual(parsed.grid.length, 13);
+    assert.strictEqual(parsed.grid[0].length, 15);
+    assert.strictEqual(parsed.spawns.length, 8, `${m.id} 스폰 8자리`);
+
+    for (const sp of parsed.spawns) {
+      let hasL = false;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (const [dx, dy] of dirs) {
+        const c1 = sp.c + dx, r1 = sp.r + dy;
+        if (c1 < 0 || c1 >= 15 || r1 < 0 || r1 >= 13 || parsed.grid[r1][c1] !== ".") continue;
+        for (const [px, py] of dirs) {
+          if (px === dx && py === dy) continue;
+          if (px === -dx && py === -dy) continue;
+          const c2 = c1 + px, r2 = r1 + py;
+          if (c2 >= 0 && c2 < 15 && r2 >= 0 && r2 < 13 && parsed.grid[r2][c2] === ".") hasL = true;
+        }
+      }
+      assert(hasL, `${m.id} 스폰 #${sp.slot}(${sp.c},${sp.r})에 2칸 L자 안전 탈출로 존재`);
+    }
+  }
+});
+
+test("2. 연속 이동 · 모서리 걸치기 자동 미끄러짐 & 물풍선 통과 유예 검증", () => {
+  const sim = Core.createMatch({
+    seed: 1,
+    mapId: "village10",
+    players: [
+      { id: "p0", name: "A", kind: "human", charId: "dao", team: 0 },
+      { id: "p1", name: "B", kind: "human", charId: "bazzi", team: 1 },
+    ],
+  });
+  // 빈 통로 만들고 (2, 1) 위치에 벽 세운 뒤, (1, 0)에서 y를 9px 아래로 걸친 상태로 오른쪽 이동 시도
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) sim.grid[r][c] = ".";
+  sim.grid[1][2] = "#";
+  const p = sim.players[0];
+  p.x = 1 * 40 + 20;
+  p.y = 0 * 40 + 20 + 9; // 아래쪽 벽 (2,1) 모서리에 걸침
+
+  for (let i = 0; i < 12; i++) Core.step(sim, { p0: { dir: 2 } }, 1000 / 30);
+  assert(p.x > 1 * 40 + 30, "모서리에 살짝 걸쳐도 0행 열린 통로로 자동 미끄러져 통과: x=" + p.x);
+
+  // 물풍선 설치 후 탈출 유예: 놓은 자리에서 밖으로 나온 뒤엔 다시 못 들어감
+  p.x = 20; p.y = 20;
+  Core.step(sim, { p0: { bomb: true } }, 1000 / 30);
+  assert.strictEqual(sim.bombs.length, 1);
+  assert(p.graceBombs.includes(sim.bombs[0].id), "설치 직후 물풍선 통과 유예 부여");
+
+  for (let i = 0; i < 20; i++) Core.step(sim, { p0: { dir: 2 } }, 1000 / 30);
+  assert(p.x > 55, "물풍선 위에서 오른쪽으로 빠져나옴");
+  assert.strictEqual(p.graceBombs.length, 0, "물풍선 밖으로 완전히 나가면 유예 해제");
+
+  const xBeforeBack = p.x;
+  for (let i = 0; i < 10; i++) Core.step(sim, { p0: { dir: 4 } }, 1000 / 30);
+  assert(p.x >= 40 + 13 - 0.1, "유예 해제 후엔 물풍선 칸을 지나갈 수 없음: x=" + p.x);
+});
+
+test("3. 연쇄 폭발 + 블록 드랍 당일 보호 + 물방울 갇힘·구출·처치·바늘·로두마니 검증", () => {
+  const sim = Core.createMatch({
+    seed: 7,
+    mapId: "village10",
+    mode: "team",
+    players: [
+      { id: "p0", name: "다오", kind: "human", charId: "dao", team: 0 },
+      { id: "p1", name: "배찌", kind: "human", charId: "bazzi", team: 0 },
+      { id: "p2", name: "로두", kind: "human", charId: "rodumani", team: 1 },
+      { id: "p3", name: "디지", kind: "human", charId: "dizni", team: 1 },
+    ],
+  });
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) sim.grid[r][c] = ".";
+
+  // 연쇄 폭발 테스트: B1(1,1, fuse 50ms) -> B2(3,1, fuse 2000ms) -> B3(3,2, B블록 파괴)
+  sim.grid[2][4] = "B";
+  sim.bombs.push(
+    { id: 101, owner: "p0", c: 1, r: 1, x: 60, y: 60, power: 3, fuseMs: 50, vx: 0, vy: 0, airMs: 0 },
+    { id: 102, owner: "p0", c: 3, r: 1, x: 140, y: 60, power: 2, fuseMs: 2000, vx: 0, vy: 0, airMs: 0 }
+  );
+  sim.players[0].x = 220; sim.players[0].y = 220;
+  sim.players[1].x = 220; sim.players[1].y = 260;
+  sim.players[2].x = 140; sim.players[2].y = 100; // (3,2) 로두마니
+  sim.players[3].x = 60;  sim.players[3].y = 100; // (1,2) 디지니
+
+  Core.step(sim, {}, 60);
+  Core.step(sim, {}, 20);
+  assert.strictEqual(sim.bombs.length, 0, "B1 폭발 시 사거리 안의 B2도 즉시 연쇄 폭발");
+  assert.strictEqual(sim.players[2].state, "trapped", "물줄기에 닿은 로두마니 갇힘");
+  assert.strictEqual(sim.players[3].state, "trapped", "물줄기에 닿은 디지니 갇힘");
+
+  // 바늘(Ctrl) 탈출 테스트
+  sim.players[3].needles = 1;
+  Core.step(sim, { p3: { needle: true } }, 33);
+  assert.strictEqual(sim.players[3].state, "alive", "바늘 사용 시 즉시 구출 + 무적");
+  assert(sim.players[3].invulnMs > 0);
+  assert.strictEqual(sim.players[3].needles, 0);
+
+  // 아군(p3)이 갇힌 로두마니(p2)와 28px 이내 접촉 -> 팀 구출!
+  sim.players[3].x = sim.players[2].x;
+  sim.players[3].y = sim.players[2].y;
+  Core.step(sim, {}, 33);
+  assert.strictEqual(sim.players[2].state, "alive", "같은 팀 접촉 시 물방울 구출");
+  assert.strictEqual(sim.players[3].rescues, 1);
+
+  // 아군(p3)이 다른 곳으로 물러난 뒤 적(p0) 물줄기에 갇혀 로두마니 빠른 사망 시간 검증
+  sim.players[3].x = 20; sim.players[3].y = 20;
+  sim.players[2].invulnMs = 0;
+  sim.flames.push({ c: Math.floor(sim.players[2].x / 40), r: Math.floor(sim.players[2].y / 40), owner: "p0", kind: "c", dir: 0, ms: 300 });
+  Core.step(sim, {}, 33);
+  assert.strictEqual(sim.players[2].state, "trapped");
+  // 로두마니는 4200ms만에 터지므로 4300ms 후 사망 (일반 6350ms보다 빠름)
+  for (let i = 0; i < 45; i++) Core.step(sim, {}, 100);
+  assert.strictEqual(sim.players[2].state, "dead", "로두마니 4.2초 경과 시 물방울 사망");
+});
+
+test("4. 신발(킥) · 장갑(던지기) · 밀 수 있는 블록(M) · 마귀 반전 검증", () => {
+  const sim = Core.createMatch({
+    seed: 9,
+    mapId: "village10",
+    players: [
+      { id: "p0", name: "다오", kind: "human", charId: "dao", team: 0 },
+      { id: "p1", name: "배찌", kind: "human", charId: "bazzi", team: 1 },
+    ],
+  });
+  for (let r = 0; r < 6; r++) for (let c = 0; c < 10; c++) sim.grid[r][c] = ".";
+  const p = sim.players[0];
+  p.x = 60; p.y = 60; // (1,1)
+  p.canThrow = true;
+  Core.step(sim, { p0: { dir: 2, bomb: true } }, 33); // (1,1)에 설치 + 오른쪽 봄
+  assert.strictEqual(sim.bombs.length, 1);
+  // 장갑 던지기 (같은 칸 풍선 위에서 다시 Space)
+  p.x = 60; p.y = 60;
+  Core.step(sim, { p0: { bomb: true } }, 33);
+  assert.strictEqual(sim.bombs[0].c, 5, "장갑으로 오른쪽 4칸(1→5) 날려 던지기");
+  assert(sim.bombs[0].airMs > 0);
+
+  // 신발 킥 테스트
+  p.canKick = true;
+  sim.bombs.push({ id: 99, owner: "p1", c: 2, r: 1, x: 100, y: 60, power: 2, fuseMs: 2500, vx: 0, vy: 0, airMs: 0 });
+  for (let i = 0; i < 20; i++) Core.step(sim, { p0: { dir: 2 } }, 33);
+  const kicked = sim.bombs.find(b => b.id === 99);
+  assert(kicked && kicked.c >= 3, "신발 킥으로 인접 물풍선이 오른쪽으로 굴러감: c=" + (kicked && kicked.c));
+
+  // 밀 수 있는 블록 M 테스트
+  sim.grid[3][3] = "M";
+  p.x = 2 * 40 + 20; p.y = 3 * 40 + 20;
+  for (let i = 0; i < 10; i++) Core.step(sim, { p0: { dir: 2 } }, 33);
+  assert.strictEqual(sim.grid[3][3], ".", "밀 수 있는 블록 원래 자리 비워짐");
+  assert.strictEqual(sim.grid[3][4], "M", "밀 수 있는 블록 오른쪽 1칸 이동");
+});
+
+test("5. BFS AI 봇 결정적 대전(4인 완주/안전 탈출/판 끝 복기 요약) 검증", () => {
+  const sim = Core.createMatch({
+    seed: 42,
+    mapId: "patrit14",
+    mode: "free",
+    players: [
+      { id: "b0", name: "AI0", kind: "ai", tier: "hard", charId: "dao", team: 0 },
+      { id: "b1", name: "AI1", kind: "ai", tier: "hard", charId: "bazzi", team: 1 },
+      { id: "b2", name: "AI2", kind: "ai", tier: "normal", charId: "dizni", team: 2 },
+      { id: "b3", name: "AI3", kind: "ai", tier: "easy", charId: "uni", team: 3 },
+    ],
+  });
+  for (let t = 0; t < 450; t++) {
+    if (sim.winner) break;
+    const ins = {};
+    for (const p of sim.players) if (p.state !== "dead") ins[p.id] = Bots.decideBotInput(sim, p);
+    Core.step(sim, ins, 1000 / 30);
+  }
+  const totalCratesBroken = sim.players.reduce((s, p) => s + p.crates, 0);
+  assert(totalCratesBroken >= 2, "AI 봇들이 스스로 막히지 않고 블록을 파밍함: " + totalCratesBroken);
+  const rev = Core.analyzeMatch(sim, "b0");
+  assert(rev.oppFlow && rev.myFlow && rev.reason, "판 끝 AI 선생님 복기 3단 요약 생성");
+
+  // 동시 틱 연쇄 폭발이 앞 풍선이 깬 상자 칸을 통과하지 않는지 검증 (brokenThisChain)
+  const cs = Core.createMatch({ seed: 3, mapId: "village10", players: [{ id: "a", charId: "dao", team: 0 }, { id: "b", charId: "bazzi", team: 1 }] });
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 6; c++) cs.grid[r][c] = ".";
+  cs.grid[1][3] = "B";
+  cs.players[1].x = 4 * 40 + 20; cs.players[1].y = 1 * 40 + 20; // 상자(3,1) 바로 뒤 (4,1)
+  cs.bombs.push(
+    { id: 1, owner: "a", c: 1, r: 1, x: 60, y: 60, power: 4, fuseMs: 10, vx: 0, vy: 0, airMs: 0 },
+    { id: 2, owner: "a", c: 2, r: 1, x: 100, y: 60, power: 4, fuseMs: 2000, vx: 0, vy: 0, airMs: 0 }
+  );
+  Core.step(cs, {}, 20);
+  assert.strictEqual(cs.players[1].state, "alive", "같은 연쇄 틱에서 앞 풍선이 깬 상자(3,1) 뒤(4,1)는 물줄기가 관통하지 않음");
+});
+
+console.log(`✅ All ${passed} KuaCore tests passed!`);
