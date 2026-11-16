@@ -147,19 +147,7 @@
   }
 
   function coachBWPublic(pub) {
-    if (!pub || pub.winner !== null) {
-      return { bestTile: null, oppFlow: "대국이 끝났어요.", myFlow: "결과를 확인해 보세요.", reason: "수 싸움 복기가 가장 좋아요." };
-    }
-    const evals = G.evalBWFromPublic(pub);
-    const best = evals.slice().sort((a, b) => b.ev - a.ev)[0];
-    return {
-      bestTile: best ? best.tile : null,
-      oppFlow: pub.leadColor
-        ? (pub.leadColor === "B" ? "상대가 ⬛흑(짝수)을 냈어요!" : "상대가 ⬜백(홀수)을 냈어요!")
-        : `상대 남은 타일: ⬛흑 ${pub.oppRemain.B}장 · ⬜백 ${pub.oppRemain.W}장`,
-      myFlow: best ? `추천 수: [${best.tile}] (기대 승률 ${Math.round(best.winRate * 100)}%)` : "관전 중",
-      reason: "공개된 색깔 비율만 보고 블라인드 확률을 계산한 결과예요.",
-    };
+    return G.coachBWFromPublic(pub);
   }
 
   // ── AI 선생님 분석 ──

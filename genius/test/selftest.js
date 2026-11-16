@@ -47,6 +47,22 @@ test("흑과 백: 코치·AI 블라인드 공정성 (상대 비밀 패 교체 �
   assert.strictEqual(a1, a2);
 });
 
+test("흑과 백: 과거 라운드 베이지안 추론 & 가성비/필승 추천 검증", () => {
+  const st = G.newBW({ firstLead: 0 });
+  // 상대(1)가 흑 3장(4,6,8) 소모했고 내가 [2,3,5]로 다 졌으면, 상대 남은 흑은 [0,2]뿐!
+  assert(G.playBW(st, 0, 2).ok && G.playBW(st, 1, 4).ok);
+  assert(G.playBW(st, 1, 6).ok && G.playBW(st, 0, 3).ok);
+  assert(G.playBW(st, 1, 8).ok && G.playBW(st, 0, 5).ok);
+  // 4라운드 선공(상대 1)이 또 흑(0)을 냄 → 남은 흑은 [0] 또는 [2] (4,6,8 불가능!)
+  assert(G.playBW(st, 1, 0).ok);
+  const pub = G.bwPublicView(st, 0);
+  const inf = G.inferOppBW(pub);
+  assert.deepStrictEqual(inf.leadCands, [0, 2], "과거 흑 3패 소모 시 남은 흑 후보 [0,2]로 정확히 소거");
+  const c = G.coachBW(st, 0);
+  // 내 손패 남은 [0,1,4,6,7,8] 중 [4]이면 [0,2] 상대로 100% 필승하면서 6,7,8 아낌!
+  assert.strictEqual(c.bestTile, 4, `후보 [0,2] 상대로 6,7,8 대신 100% 최소 필승패 [4] 추천 (실제 ${c.bestTile})`);
+});
+
 test("결! 합!: 합 판정 + 중복/오답 -1 + 결 +3 완주", () => {
   const st = G.newGH({ seed: 99, minHaps: 2, maxHaps: 4, players: 2 });
   assert(st.haps.length >= 2 && st.haps.length <= 4);

@@ -55,6 +55,7 @@
       if (st.leadColor === "B") oppB--; else oppW--;
     }
     return {
+      seat,
       round: st.round,
       myHand: st.hands[seat].slice(),
       scores: st.scores.slice(),
@@ -64,7 +65,15 @@
       isLeader: st.leader === seat,
       leadColor: st.leadColor,
       oppRemain: { B: Math.max(0, oppB), W: Math.max(0, oppW), total: Math.max(0, oppB + oppW) },
-      history: st.history.map(h => ({ ...h })),
+      // 공정 정보 분리: 상대 비밀 숫자는 빼고, 본인(seat)이 과거에 낸 숫자만 포함
+      history: st.history.map(h => ({
+        round: h.round,
+        leader: h.leader,
+        c0: h.c0,
+        c1: h.c1,
+        winner: h.winner,
+        myTile: seat === 0 ? h.t0 : h.t1,
+      })),
       winner: st.winner,
     };
   }
@@ -99,7 +108,9 @@
 
     const c0 = leadSeat === 0 ? bwColor(leadTile) : col;
     const c1 = leadSeat === 1 ? bwColor(leadTile) : col;
-    st.history.push({ round: st.round, leader: leadSeat, c0, c1, winner: roundWinner });
+    const t0 = leadSeat === 0 ? leadTile : followTile;
+    const t1 = leadSeat === 1 ? leadTile : followTile;
+    st.history.push({ round: st.round, leader: leadSeat, c0, c1, t0, t1, winner: roundWinner });
 
     st.round += 1;
     st._leadTile = null;
@@ -125,38 +136,96 @@
     };
   }
 
-  // 공개 정보만으로 각 타일의 승률 추정 (블라인드 공정성 보장)
+  // 공개 기록(색 + 승패 + 내 과거 제출 숫자)으로 상대 남은 패·이번 판 제출 패의 정확한 베이지안 사후 확률 계산
+  const BW_BY_COL = { B: [0, 2, 4, 6, 8], W: [1, 3, 5, 7] };
+  function inferColorDist(cards, rounds, oppSeat, needLead) {
+    const remW = Object.fromEntries(cards.map(c => [c, 0]));
+    const leadW = Object.fromEntries(cards.map(c => [c, 0]));
+    let ways = 0;
+    const used = new Set();
+    const matchRound = (ov, r) => {
+      if (r.myTile == null) return true;
+      if (r.winner === "draw") return ov === r.myTile;
+      if (r.winner === oppSeat) return ov > r.myTile;
+      return ov < r.myTile;
+    };
+    function dfs(idx) {
+      if (idx === rounds.length) {
+        const left = cards.filter(c => !used.has(c));
+        if (needLead) {
+          for (const lv of left) {
+            ways++;
+            leadW[lv]++;
+            for (const rv of left) if (rv !== lv) remW[rv]++;
+          }
+        } else {
+          ways++;
+          for (const rv of left) remW[rv]++;
+        }
+        return;
+      }
+      const r = rounds[idx];
+      for (const c of cards) {
+        if (used.has(c) || !matchRound(c, r)) continue;
+        used.add(c);
+        dfs(idx + 1);
+        used.delete(c);
+      }
+    }
+    dfs(0);
+    if (!ways) {
+      // 예외 폴백 (비정상 커스텀 기록 등)
+      for (const c of cards) { remW[c] = 1; leadW[c] = needLead ? 1 : 0; }
+    }
+    return { remW, leadW };
+  }
+
+  function inferOppBW(pub) {
+    const seat = pub.seat != null ? pub.seat : (pub.isLeader ? pub.leader : pub.turn);
+    const opp = seat ^ 1;
+    const roundsB = [], roundsW = [];
+    for (const h of (pub.history || [])) {
+      const oc = opp === 0 ? h.c0 : h.c1;
+      const rec = { myTile: h.myTile, winner: h.winner };
+      if (oc === "B") roundsB.push(rec); else roundsW.push(rec);
+    }
+    const isLeadB = !pub.isLeader && pub.leadColor === "B";
+    const isLeadW = !pub.isLeader && pub.leadColor === "W";
+    const dB = inferColorDist(BW_BY_COL.B, roundsB, opp, isLeadB);
+    const dW = inferColorDist(BW_BY_COL.W, roundsW, opp, isLeadW);
+    const remW = { ...dB.remW, ...dW.remW };
+    const leadW = isLeadB ? dB.leadW : isLeadW ? dW.leadW : null;
+    const bCands = BW_BY_COL.B.filter(c => remW[c] > 0);
+    const wCands = BW_BY_COL.W.filter(c => remW[c] > 0);
+    const leadCands = leadW ? (isLeadB ? BW_BY_COL.B : BW_BY_COL.W).filter(c => leadW[c] > 0) : [];
+    const allRem = [...bCands, ...wCands].sort((a, b) => a - b);
+    return { seat, opp, remW, leadW, bCands, wCands, leadCands, allRem };
+  }
+
+  // 공개 정보만으로 각 타일의 승률 추정 (블라인드 공정성 보장 + 베이지안 추론 반영)
   function evalBWFromPublic(pub) {
     const myHand = pub.myHand;
     if (!myHand.length) return [];
-    const opp = pub.turn; // meaningless, just need pool
-    void opp;
-    const pool = [];
-    if (!pub.isLeader && pub.leadColor) {
-      // 후공: 상대가 이번에 낸 색이 확정됨
-      const cands = pub.leadColor === "B" ? [0, 2, 4, 6, 8] : [1, 3, 5, 7];
-      for (const v of cands) pool.push(v);
+    const inf = inferOppBW(pub);
+    let pairs;
+    if (!pub.isLeader && pub.leadColor && inf.leadW) {
+      pairs = Object.entries(inf.leadW).map(([k, w]) => [Number(k), w]).filter(([, w]) => w > 0);
     } else {
-      // 선공: 상대 남은 흑/백 비율에 따라 가중 풀 구성
-      const bW = pub.oppRemain.B;
-      const wW = pub.oppRemain.W;
-      for (const v of [0, 2, 4, 6, 8]) for (let k = 0; k < bW; k++) pool.push(v);
-      for (const v of [1, 3, 5, 7]) for (let k = 0; k < wW; k++) pool.push(v);
-      if (!pool.length) for (const v of BW_ALL) pool.push(v);
+      pairs = Object.entries(inf.remW).map(([k, w]) => [Number(k), w]).filter(([, w]) => w > 0);
     }
+    const totalW = pairs.reduce((s, [, w]) => s + w, 0) || 1;
     return myHand.map(tile => {
-      let win = 0, draw = 0;
-      for (const ov of pool) {
-        if (tile > ov) win++;
-        else if (tile === ov) draw++;
+      let winW = 0, drawW = 0;
+      for (const [ov, w] of pairs) {
+        if (tile > ov) winW += w;
+        else if (tile === ov) drawW += w;
       }
-      const n = pool.length || 1;
       return {
         tile,
         color: bwColor(tile),
-        winRate: win / n,
-        drawRate: draw / n,
-        ev: (win + draw * 0.5) / n,
+        winRate: winW / totalW,
+        drawRate: drawW / totalW,
+        ev: (winW + drawW * 0.5) / totalW,
       };
     });
   }
@@ -209,22 +278,32 @@
     return scored[0].tile;
   }
 
-  function coachBW(st, seat) {
-    const pub = bwPublicView(st, seat);
-    if (pub.winner !== null) {
-      return { oppFlow: "대국이 끝났어요.", myFlow: "결과를 확인해 보세요.", reason: "수 싸움 복기가 가장 좋아요." };
+  function coachBWFromPublic(pub) {
+    if (!pub || pub.winner !== null) {
+      return { bestTile: null, oppFlow: "대국이 끝났어요.", myFlow: "결과를 확인해 보세요.", reason: "수 싸움 복기가 가장 좋아요." };
     }
     const evals = evalBWFromPublic(pub);
-    const opp = seat ^ 1;
+    const inf = inferOppBW(pub);
+    const seat = inf.seat, opp = inf.opp;
     const rem = 9 - pub.round;
     const oB = pub.oppRemain.B, oW = pub.oppRemain.W;
+    const myS = pub.scores[seat], opS = pub.scores[opp];
+    const diff = myS - opS;
+    const matchPoint = (myS + 1 > opS + (rem - 1));
+    const desperate = (opS - myS >= rem - 1 && rem <= 5);
 
-    let oppFlow = `상대 남은 타일: ⬛흑(짝) ${oB}장 · ⬜백(홀) ${oW}장`;
-    if (!pub.isLeader && pub.leadColor) {
-      oppFlow = pub.leadColor === "B"
-        ? "상대가 ⬛흑(짝수: 0·2·4·6·8)을 냈어요!"
-        : "상대가 ⬜백(홀수: 1·3·5·7)을 냈어요!";
+    let oppFlow = `상대 남은 패: ⬛흑 ${oB}장 · ⬜백 ${oW}장`;
+    if (inf.bCands.length < 5 || inf.wCands.length < 4) {
+      const bTxt = inf.bCands.length ? `[${inf.bCands.join("·")}]` : "없음";
+      const wTxt = inf.wCands.length ? `[${inf.wCands.join("·")}]` : "없음";
+      oppFlow += ` (후보 ⬛${bTxt} ⬜${wTxt})`;
     }
+    if (!pub.isLeader && pub.leadColor) {
+      const colName = pub.leadColor === "B" ? "⬛흑(짝수)" : "⬜백(홀수)";
+      if (inf.leadCands.length === 1) oppFlow = `상대가 낸 ${colName}은 추론상 [${inf.leadCands[0]}] 확정이에요!`;
+      else oppFlow = `상대가 낸 ${colName} 후보: [${inf.leadCands.join("·")}]`;
+    }
+
     if (!evals.length) {
       return {
         bestTile: null,
@@ -235,32 +314,76 @@
       };
     }
 
-    // 추천 타일 고르기
-    let best = evals.slice().sort((a, b) => b.ev - a.ev)[0];
+    const byEv = evals.slice().sort((a, b) => b.ev - a.ev || b.winRate - a.winRate || a.tile - b.tile);
+    const byWin = evals.slice().sort((a, b) => b.winRate - a.winRate || b.drawRate - a.drawRate || a.tile - b.tile);
+    const byLow = evals.slice().sort((a, b) => a.tile - b.tile);
+    let best = byEv[0];
     let modeHint = "";
+    const pct = v => Math.round(v * 100);
+
     if (!pub.isLeader && pub.leadColor) {
-      // 이길 확률 65% 이상 중 가장 작은 타일 (가성비 승)
-      const econ = evals.filter(e => e.winRate >= 0.65).sort((a, b) => a.tile - b.tile)[0];
-      if (econ) {
-        best = econ;
-        modeHint = `[${best.tile}]이면 ${Math.round(best.winRate * 100)}% 이상 이기면서 큰 패를 아껴요.`;
+      const sureWin = byLow.find(e => e.winRate >= 0.999);
+      if (sureWin) {
+        best = sureWin;
+        modeHint = `후보 [${inf.leadCands.join("·")}] 상대로 [${best.tile}]이면 100% 확실히 이기면서 큰 패를 아껴요.`;
+      } else if (matchPoint || rem === 1) {
+        best = byWin[0];
+        modeHint = rem === 1
+          ? `마지막 라운드예요! 아낄 필요 없이 승률 ${pct(best.winRate)}%인 [${best.tile}]으로 승부하세요.`
+          : `이번 판을 잡으면 승리가 확정돼요! 가장 확실한 [${best.tile}](승률 ${pct(best.winRate)}%)을 내세요.`;
+      } else if (desperate) {
+        best = byEv[0];
+        modeHint = `점수를 따라잡아야 해 아낄 여유가 없어요. 기댓값이 가장 높은 [${best.tile}](승률 ${pct(best.winRate)}%)을 추천해요.`;
       } else {
-        const dump = evals.slice().sort((a, b) => a.tile - b.tile)[0];
-        if (best.winRate < 0.45 && dump) {
-          best = dump;
-          modeHint = `불리한 색 싸움이라 가장 작은 [${best.tile}]을 버리고 다음 판을 노리는 게 좋아요.`;
+        const topW = byWin[0].winRate;
+        if (topW >= 0.60) {
+          best = evals.filter(e => e.winRate >= Math.max(0.60, topW - 0.14)).sort((a, b) => a.tile - b.tile)[0] || byWin[0];
+          modeHint = `상대 후보 [${inf.leadCands.join("·")}] 상대로 [${best.tile}]을 쓰면 ${pct(best.winRate)}% 확률로 이기면서 더 큰 패를 남길 수 있어요.`;
+        } else if (byEv[0].ev < 0.44 && evals.length > 2) {
+          best = byLow[0];
+          modeHint = `상대 패가 유리한 색 싸움이라(최고 ${pct(byEv[0].ev)}%) 가장 작은 [${best.tile}]을 버리고 큰 패를 아끼는 게 좋아요.`;
         } else {
-          modeHint = `[${best.tile}]으로 승부하면 승률 ${Math.round(best.winRate * 100)}%예요.`;
+          best = byEv[0];
+          modeHint = `팽팽한 승부예요! 후보 [${inf.leadCands.join("·")}] 대비 [${best.tile}]의 기대 승률이 ${pct(best.ev)}%로 가장 높아요.`;
         }
       }
     } else {
-      // 선공
-      const mid = evals.filter(e => e.tile >= 3 && e.tile <= 6).sort((a, b) => b.ev - a.ev)[0];
-      if (mid && pub.round < 5 && pub.scores[seat] <= pub.scores[opp] + 1) {
-        best = mid;
-        modeHint = `선공에서는 중간 패 [${best.tile}]로 간을 보며 큰 패(7·8)를 지키는 편이 유리해요.`;
+      const oppMax = inf.allRem.length ? inf.allRem[inf.allRem.length - 1] : -1;
+      const sureLead = oppMax >= 0 ? byLow.find(e => e.tile > oppMax) : null;
+      if (sureLead) {
+        best = sureLead;
+        modeHint = `추론상 상대 최대 패가 [${oppMax}] 이하라 선공인데도 [${best.tile}]을 내면 100% 필승이에요!`;
+      } else if (matchPoint || rem <= 2) {
+        best = byWin[0];
+        modeHint = rem <= 2
+          ? `종반 승부처예요! 아끼지 말고 승률이 가장 높은 [${best.tile}](${pct(best.winRate)}%)로 밀어붙이세요.`
+          : `1점만 추가하면 우승 확정이에요! [${best.tile}](승률 ${pct(best.winRate)}%)로 바로 끝낼 수 있어요.`;
       } else {
-        modeHint = `남은 ${rem}판 구도에서 [${best.tile}] 추천 (기대 승률 ${Math.round(best.winRate * 100)}%).`;
+        const strongCards = evals.filter(e => e.tile >= 7).map(e => e.tile);
+        const scoredLead = evals.map(e => {
+          // 선공은 상대가 색을 보고 응수하므로, 초중반 7·8 소모를 줄이고 중패(3~6) 압박 또는 저패 미끼 가치 반영
+          let s = e.ev * 100;
+          if (!desperate) {
+            if (e.tile >= 7) s -= (rem >= 5 ? 24 : 12);
+            else if (e.tile >= 3 && e.tile <= 6) s += 14 - Math.abs(e.tile - 4.5) * 1.5;
+            else s += (strongCards.length ? 8 : -4) + e.tile * 2;
+          } else if (e.tile >= 6) {
+            s += 8;
+          }
+          // 상대 해당 색 남은 수가 많을수록 상대 선택지 폭이 넓어 위협 감소
+          const sameRem = e.color === "B" ? inf.bCands : inf.wCands;
+          const oppBeatsSame = sameRem.filter(v => v > e.tile).length;
+          if (oppBeatsSame === 0 && sameRem.length) s += 16;
+          return { e, s };
+        }).sort((a, b) => b.s - a.s);
+        best = scoredLead[0].e;
+        if (best.tile <= 2 && strongCards.length) {
+          modeHint = `선공은 상대가 색을 보고 대응해요. [${best.tile}] 미끼로 상대 중·강패를 빼내면서 핵심 패(${strongCards.join("·")})를 지키는 전략이 좋아요.`;
+        } else if (best.tile >= 7) {
+          modeHint = `점수 싸움상 선공에서도 강한 [${best.tile}](기대 승률 ${pct(best.ev)}%)로 정면 승부할 타이밍이에요.`;
+        } else {
+          modeHint = `선공에선 [${best.tile}]으로 중반 압박을 걸면서 큰 패(7·8)는 후공 카운터로 아끼는 편이 유리해요 (기대 승률 ${pct(best.ev)}%).`;
+        }
       }
     }
 
@@ -271,6 +394,10 @@
       reason: modeHint,
       evals,
     };
+  }
+
+  function coachBW(st, seat) {
+    return coachBWFromPublic(bwPublicView(st, seat));
   }
 
   /* ════════════════════════════════════════════════════════════════
@@ -738,8 +865,10 @@
     bwPublicView,
     playBW,
     evalBWFromPublic,
+    inferOppBW,
     aiPickBW,
     coachBW,
+    coachBWFromPublic,
     // 결! 합!
     GH_SHAPES,
     GH_FG,
