@@ -84,6 +84,13 @@ U.main(async T => {
   await p.click('.esc-spot[data-spot="clock"]');
   await wait(p, () => __escape.state().flags.clockFixed);
   T.ok(await p.evaluate(() => __escape.state().inv.includes("thread") && document.getElementById("roomImg").getAttribute("src").includes("wall_north_fixed.jpg") && !document.querySelector(".ov-clock-badge")), "괘종시계 복구 후 실제 시계 일러스트 전환 + 명주실 획득");
+  await p.click('.esc-spot[data-spot="clock"]');
+  await wait(p, () => !document.getElementById("closeupView").hidden);
+  T.ok(await p.evaluate(() => {
+    const z = document.getElementById("zoomBody");
+    return !!z.querySelector('img[src*="zoom_clock.jpg"]') && !z.querySelector("svg");
+  }), "수리된 괘종시계 클릭 시 SVG 대신 실제 시계 확대 일러스트 표시");
+  await p.click("#zoomCloseBtn");
 
   // 6) 남쪽 이동: 오답 입력 시 스포일러 힌트 노출 안 됨 확인 → 4자리 다이얼 상자 0345 입력 → 드라이버 획득
   await p.click('#compass button[data-w="S"]');
@@ -122,11 +129,12 @@ U.main(async T => {
   await p.click('.esc-spot[data-spot="grate"]');
   await wait(p, () => __escape.state().flags.grateFished && __escape.state().inv.includes("master_key"));
 
-  // 8) 북쪽 출구 문: 마스터 키 + 황동 인장 메달 사용 → 최종 탈출!
+  // 8) 북쪽 출구 문: 마스터 키 + 황동 인장 메달 사용 → 실사 문 확대 + 최종 탈출!
   await p.click('#compass button[data-w="N"]');
   await p.click('.esc-slot[data-item="master_key"]');
   await p.click('.esc-spot[data-spot="door"]');
   await wait(p, () => __escape.state().flags.doorKeyDone && !document.getElementById("closeupView").hidden);
+  T.ok(await p.evaluate(() => !!document.getElementById("zoomBody").querySelector('img[src*="zoom_door.jpg"]')), "출구 문 클릭 시 실사 문 확대 일러스트 표시");
   await p.click("#doorSealSlot");
   await wait(p, () => __escape.state().flags.escaped);
   T.ok(await p.evaluate(() => document.getElementById("zoomBody").textContent.includes("탈출 성공")), "최종 서재 탈출 성공 화면 표시 확인");

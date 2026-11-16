@@ -66,14 +66,6 @@
 }
 .esc-spot[data-spot="silver_spot"] { min-width: 0; min-height: 0; }
 .esc-spot:focus-visible { outline: 2px solid var(--gold); }
-.esc-spot.glint::after {
-  content: "✨"; position: absolute; inset: 0; display: grid; place-items: center;
-  font-size: 18px; filter: drop-shadow(0 0 6px #fde68a); animation: glintPulse 1.8s infinite;
-}
-@keyframes glintPulse {
-  0%, 100% { opacity: 0.55; transform: scale(0.95); }
-  50% { opacity: 1; transform: scale(1.12); }
-}
 
 .esc-nav {
   position: absolute; top: 50%; transform: translateY(-50%);
@@ -85,7 +77,7 @@
 .esc-nav.right { right: 6px; }
 .esc-nav:active { background: rgba(245,158,11,0.35); }
 
-/* 방 위 시각 오버레이 (UV 형광 글씨 · 출구 자물쇠 상태) */
+/* 방 위 시각 오버레이 (UV 형광 글씨) */
 .ov-uv-slate {
   position: absolute; left: 71.5%; top: 18.5%; width: 19%; height: 31%;
   display: grid; place-items: center; text-align: center;
@@ -93,11 +85,6 @@
   font: 900 clamp(11px, 2.6vw, 18px)/1.35 sans-serif;
   background: radial-gradient(circle, rgba(168,85,247,0.24), transparent 72%);
   border-radius: 6px;
-}
-.ov-door-status {
-  position: absolute; left: 60%; top: 37%; transform: translate(-50%, -50%);
-  display: flex; gap: 6px; padding: 4px 8px; border-radius: 99px;
-  background: rgba(10,12,18,0.8); border: 1px solid var(--gold); font-size: 13px;
 }
 
 .esc-msg {
@@ -165,7 +152,8 @@
   overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .esc-closeup-body > * { flex: 1 0 auto; min-height: 100%; padding-top: 38px; }
-.esc-closeup-body > .ez-scene-shelf { padding-top: 0; }
+.esc-closeup-body > .ez-scene-shelf,
+.esc-closeup-body > .ez-scene-photo { padding-top: 0; }
 
 /* 1) 시계공의 일지 (양피지 클로즈업) */
 .ez-scene-diary {
@@ -252,7 +240,7 @@
 }
 .ez-scene-safe .ez-latch-btn { background: linear-gradient(180deg, #334155, #1e293b); border-color: #94a3b8; }
 
-/* 4) 동쪽 석판 (UV 형광) & 북쪽 괘종시계 */
+/* 4) 동쪽 석판 (UV 형광) & 실사 줌인 뷰(시계 · 출구 문) */
 .ez-scene-slate {
   width: 100%; display: grid; place-items: center;
   background: radial-gradient(circle at 50% 48%, rgba(168,85,247,0.34), #0c1016 68%);
@@ -261,30 +249,37 @@
   font: 900 clamp(22px, 5.4vw, 32px)/1.45 sans-serif; color: #f0abfc; text-align: center;
   text-shadow: 0 0 12px #c084fc, 0 0 26px #a855f7; letter-spacing: 3px;
 }
-.ez-scene-clock {
-  width: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 38px 12px 10px;
-  background: radial-gradient(circle at 50% 44%, #2d1e12, #0d0906 82%);
+.ez-scene-photo {
+  position: relative; width: 100%; height: 100%; overflow: hidden; background: #090b10;
 }
-.ez-scene-clock svg { height: clamp(130px, 44%, 195px); width: auto; }
+.ez-zoom-img {
+  width: 100%; height: 100%; object-fit: fill; display: block; pointer-events: none; user-select: none;
+}
 
-/* 5) 북쪽 출구 오크 문 (열쇠 구멍 + 인장 홈) */
-.ez-scene-door {
-  width: 100%; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 38px 12px 12px;
-  background: repeating-linear-gradient(90deg, #27190f 0 46px, #1e130b 46px 49px), #23160d;
-  box-shadow: inset 0 0 48px rgba(0,0,0,0.85);
+/* 5) 북쪽 출구 오크 문 실사 위 상호작용 슬롯 */
+.ez-door-hot {
+  position: absolute; background: transparent; border: 2px solid transparent; padding: 0;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+  transition: box-shadow .16s ease, border-color .16s ease, background .16s ease;
 }
-.ez-door-slots { display: flex; gap: clamp(14px, 4vw, 28px); align-items: center; }
-.ez-dslot {
-  width: clamp(114px, 31vw, 152px); height: clamp(114px, 31vw, 152px);
-  border-radius: 50%; border: 3px solid #8a6436;
-  background: radial-gradient(circle, #18110b 45%, #3d2a19 100%);
-  color: #f3efe6; display: grid; place-content: center; justify-items: center; gap: 4px;
-  cursor: pointer; text-align: center; box-shadow: inset 0 6px 16px rgba(0,0,0,0.85), 0 6px 16px rgba(0,0,0,0.6);
-  touch-action: manipulation; padding: 8px;
+.ez-door-hot:hover, .ez-door-hot:focus-visible {
+  border-color: rgba(251,191,36,0.45); box-shadow: 0 0 18px rgba(251,191,36,0.28); outline: none;
 }
-.ez-dslot b { font-size: clamp(11.5px, 2.7vw, 13px); color: #fde68a; }
-.ez-dslot small { font-size: clamp(10px, 2.2vw, 11.5px); color: #cbd5e1; }
-.ez-dslot.done { border-color: #34d399; background: radial-gradient(circle, rgba(16,185,129,0.28), #0d241b 85%); }
+.ez-door-hot.key {
+  left: 22%; top: 53%; width: 17%; height: 35%; border-radius: 14px;
+}
+.ez-door-hot.seal {
+  left: 42%; top: 13%; width: 32%; height: 35%; border-radius: 50%;
+}
+.ez-door-hot.key.done {
+  border-color: rgba(251,191,36,0.65);
+  background: radial-gradient(circle at 46% 64%, rgba(251,191,36,0.38), transparent 62%);
+}
+.ez-door-hot.seal.done {
+  border-color: rgba(251,191,36,0.85);
+  background: radial-gradient(circle, #fde68a 0%, #d97706 42%, #78350f 68%, transparent 72%);
+  box-shadow: inset 0 2px 10px rgba(255,255,255,0.45), 0 0 22px rgba(251,191,36,0.45);
+}
 
 /* 6) 탈출 완료 화면 */
 .ez-scene-escaped {

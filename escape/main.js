@@ -267,9 +267,6 @@
     if (st.wall === "E" && f.uvClueSeen) {
       html += `<div class="ov-uv-slate">☾ = 3<br>★ = 7<br>☀ = 9</div>`;
     }
-    if (st.wall === "N" && (f.doorKeyDone || f.doorSealDone || f.escaped)) {
-      html += `<div class="ov-door-status">${f.doorKeyDone ? "🔑✓" : "🔑✗"} ${f.doorSealDone ? "🪙✓" : "🪙✗"}</div>`;
-    }
     ov.innerHTML = html;
   }
 
@@ -397,24 +394,8 @@
         b.onclick = () => applyResult(E.pressBook(st, b.dataset.bk));
       });
     } else if (z === "clock") {
-      body.innerHTML = `<div class="ez-scene-clock">
-        <svg viewBox="0 0 180 220" aria-label="03시 45분 괘종시계">
-          <rect x="26" y="10" width="128" height="200" rx="14" fill="#3a2312" stroke="#8a6436" stroke-width="3"/>
-          <circle cx="90" cy="68" r="44" fill="#f3e5c8" stroke="#b45309" stroke-width="4"/>
-          <text x="90" y="37" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">XII</text>
-          <text x="122" y="72" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">III</text>
-          <text x="90" y="104" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">VI</text>
-          <text x="58" y="72" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">IX</text>
-          <!-- 03:45 시침·분침 -->
-          <line x1="90" y1="68" x2="112" y2="75" stroke="#1e1b18" stroke-width="4" stroke-linecap="round"/>
-          <line x1="90" y1="68" x2="54" y2="68" stroke="#1e1b18" stroke-width="2.5" stroke-linecap="round"/>
-          <circle cx="90" cy="68" r="3.5" fill="#b45309"/>
-          <!-- 하단 유리창 + 황금 시계추 -->
-          <rect x="48" y="124" width="84" height="72" rx="6" fill="#170f08" stroke="#785228" stroke-width="2"/>
-          <line x1="90" y1="126" x2="100" y2="176" stroke="#fbbf24" stroke-width="2.5"/>
-          <circle cx="101" cy="178" r="10" fill="#fbbf24" stroke="#b45309" stroke-width="2"/>
-        </svg>
-        <div class="ez-lock-cap">시계가 <b>03 : 45</b>를 가리키며 천천히 울리고 있다</div>
+      body.innerHTML = `<div class="ez-scene-photo">
+        <img src="assets/zoom_clock.jpg" class="ez-zoom-img" alt="03시 45분 괘종시계">
       </div>`;
     } else if (z === "box") {
       body.innerHTML = `<div class="ez-scene-chest">
@@ -483,20 +464,14 @@
       });
       $("safeSubmitBtn").onclick = () => applyResult(E.submitSafeCode(st, dialValsSafe.join("")));
     } else if (z === "door") {
-      body.innerHTML = `<div class="ez-scene-door">
-        <div class="ez-lock-cap">육중한 참나무 출구 문</div>
-        <div class="ez-door-slots">
-          <button type="button" class="ez-dslot${st.flags.doorKeyDone ? " done" : ""}" id="doorKeySlot">
-            <span style="font-size:26px">🔑</span>
-            <b>열쇠 구멍</b>
-            <small>${st.flags.doorKeyDone ? "해제됨 ✓" : (st.inv.includes("master_key") ? "열쇠 꽂기" : "잠겨 있음")}</small>
-          </button>
-          <button type="button" class="ez-dslot${st.flags.doorSealDone ? " done" : ""}" id="doorSealSlot">
-            <span style="font-size:26px">🪙</span>
-            <b>원형 홈</b>
-            <small>${st.flags.doorSealDone ? "장착됨 ✓" : (st.inv.includes("seal") ? "인장 끼우기" : "비어 있음")}</small>
-          </button>
-        </div>
+      body.innerHTML = `<div class="ez-scene-photo">
+        <img src="assets/zoom_door.jpg" class="ez-zoom-img" alt="출구 참나무 문 잠금장치">
+        <button type="button" class="ez-door-hot key${st.flags.doorKeyDone ? " done" : ""}" id="doorKeySlot"
+          aria-label="${st.flags.doorKeyDone ? "열쇠 구멍 잠금 해제됨" : "열쇠 구멍"}"
+          title="${st.flags.doorKeyDone ? "열쇠 구멍 잠금 해제됨" : "열쇠 구멍"}"></button>
+        <button type="button" class="ez-door-hot seal${st.flags.doorSealDone ? " done" : ""}" id="doorSealSlot"
+          aria-label="${st.flags.doorSealDone ? "인장 홈 장착됨" : "원형 인장 홈"}"
+          title="${st.flags.doorSealDone ? "인장 홈 장착됨" : "원형 인장 홈"}"></button>
       </div>`;
       $("doorKeySlot").onclick = () => applyResult(E.useOnDoor(st, st.inv.includes("master_key") ? "master_key" : ""));
       $("doorSealSlot").onclick = () => applyResult(E.useOnDoor(st, st.inv.includes("seal") ? "seal" : ""));
