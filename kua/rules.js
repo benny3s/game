@@ -20,20 +20,20 @@
   };
 
   const TIMING = {
-    TICK_HZ: 30,
-    FUSE_MS: 2500,          // 물풍선 폭발 지연 (R-103: 2.5초 — 원작 영상 정밀 검증 시 여기만 수정)
+    TICK_HZ: 60,            // 60Hz 부드러운 PC 아케이드 프레임 및 즉각 응답
+    FUSE_MS: 2600,          // 물풍선 폭발 지연 (R-103: ~2.5~2.6초 — 원작 영상 정밀 검증 시 여기만 수정)
     FLAME_MS: 540,          // 물줄기 지속 시간 (VBNB_116 실측 531~562ms, R-156)
     TRAP_DEATH_MS: 6350,    // 물방울 갇힘 -> 사망 시간 (VBNB_116 실측 6332~6355ms, R-159)
     TRAPPED_SPEED_PX: 17,   // 갇힘 상태 기어가기 속도 px/s (VBNB_116 실측 17 px/s, R-161)
-    SPEED_PX_PER_LV: 33.3,  // 속도 1단계당 px/s (VBNB_116 lv.4~8 실측 ~33.3 px/s/lv, R-183/184)
+    SPEED_PX_PER_LV: 35.0,  // 속도 1단계당 px/s (lv.5 = 175px/s ≈ 4.38칸/초, lv.9 = 315px/s ≈ 7.88칸/초)
     RESCUE_INVULN_MS: 900,  // 구출/바늘 탈출 직후 짧은 무적 보호
-    KICK_SPEED_PX: 320,     // 신발/붉은악마 물풍선 차기 속도 px/s
+    KICK_SPEED_PX: 340,     // 신발/붉은악마 물풍선 차기 속도 px/s
     GLOVE_THROW_TILES: 4,   // 장갑 던지기 비행 칸 수
     THROW_AIR_MS: 260,      // 장갑 던지기 체공 시간
-    PUSH_HOLD_MS: 180,      // 밀 수 있는 블록(M) 밀기 홀드 시간
+    PUSH_HOLD_MS: 160,      // 밀 수 있는 블록(M) 밀기 홀드 시간
     DEVIL_MS: 7000,         // 마귀(방향 반전) 지속 시간
     MATCH_MS: 180000,       // 기본 경기 제한 시간 (3분)
-    WARMUP_MS: 1200,        // 라운드 시작 카운트다운 연출
+    WARMUP_MS: 800,         // 라운드 시작 카운트다운 연출
   };
 
   // KR00967 Client CharacterTable (census.json C00..C07, C14) 기반 캐릭터 9종

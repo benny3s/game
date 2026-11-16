@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0f131d">
+<meta name="theme-color" content="#08529e">
 <title>베니 크아 — 물풍선 액션 대전</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body class="dark">
 <div class="wrap" id="menu">
@@ -21,7 +21,7 @@
   </header>
 
   <section id="home" class="card">
-    <p class="k-sub">15×13 물풍선 액션 · 원작 수치·걸치기·구출·바늘 구현</p>
+    <p class="k-sub">15×13 물풍선 아케이드 · 60fps 부드러운 조작 · 선입력 코너턴 · 바늘 탈출</p>
 
     <div class="tabs" role="tablist">
       <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
@@ -75,7 +75,7 @@
     </div>
 
     <ul class="howto">
-      <li><b>방향키</b> 이동 (모서리 걸치기 자동 미끄러짐) · <b>Space</b> 물풍선 놓기 / 장갑 던지기 · <b>Ctrl</b> (또는 Z) 바늘 탈출</li>
+      <li><b>방향키</b> 이동 (코너 선입력 · 모서리 자동 미끄러짐) · <b>Space</b> 물풍선 연속 설치/던지기 · <b>Ctrl</b>(또는 Z) 바늘 탈출</li>
       <li>물풍선에 맞으면 약 <b>6초</b> 동안 물방울에 갇히며, 적이 닿으면 처치 · 같은 팀이 닿으면 구출됩니다.</li>
     </ul>
 
@@ -89,38 +89,49 @@
 </div>
 
 <section class="play" id="play" hidden>
-  <div class="bar">
-    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
-    <div class="mid">
-      <span class="lbl" id="playTitle">빌리지 10</span>
-      <span class="t" id="playSub">03:00 · 개인전</span>
+  <div class="k-arcade-shell">
+    <div class="k-top-strip bar">
+      <button class="iconbtn k-btn-exit" id="backBtn" aria-label="나가기">‹ 나가기</button>
+      <div class="mid">
+        <span class="lbl" id="playTitle">빌리지 10</span>
+        <span class="t" id="playSub">03:00 · 개인전</span>
+      </div>
+      <button class="pill k-btn-snd" id="sndBtn" aria-label="소리">🔊</button>
     </div>
-    <button class="pill" id="sndBtn" aria-label="소리">🔊</button>
-  </div>
 
-  <div class="k-hud" id="hudBar"></div>
-
-  <main class="k-stage">
-    <div class="k-canvas-wrap">
-      <canvas id="cv" width="600" height="520"></canvas>
-      <div class="overlay" id="resultOv" hidden>
-        <div class="modal k-res-card" role="dialog" aria-modal="true">
-          <h2 id="resTitle">경기 종료!</h2>
-          <p class="k-res-sub" id="resSub"></p>
-          <div id="resTable"></div>
-          <div class="row center" style="gap:8px;margin-top:10px">
-            <button type="button" class="btn primary" id="resAgainBtn">다시 한 판 ↺</button>
-            <button type="button" class="btn" id="resCoachBtn">🧑‍🏫 AI 선생님 복기</button>
-            <button type="button" class="btn ghost" id="resMenuBtn">메뉴로</button>
+    <div class="k-board-row">
+      <main class="k-stage">
+        <div class="k-canvas-wrap">
+          <canvas id="cv" width="600" height="520"></canvas>
+          <div class="overlay" id="resultOv" hidden>
+            <div class="modal k-res-card" role="dialog" aria-modal="true">
+              <h2 id="resTitle">경기 종료!</h2>
+              <p class="k-res-sub" id="resSub"></p>
+              <div id="resTable"></div>
+              <div class="row center" style="gap:8px;margin-top:10px">
+                <button type="button" class="btn primary" id="resAgainBtn">다시 한 판 ↺</button>
+                <button type="button" class="btn" id="resCoachBtn">🧑‍🏫 AI 선생님 복기</button>
+                <button type="button" class="btn ghost" id="resMenuBtn">메뉴로</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </main>
+
+      <aside class="k-side">
+        <div class="k-timer-box" id="timerBox">
+          <span class="k-timer-lbl">TIME</span>
+          <b class="k-timer-val" id="timerVal">03:00</b>
+        </div>
+        <div class="k-hud" id="hudBar"></div>
+        <div class="k-item-box" id="ctrlItemBox"></div>
+      </aside>
     </div>
-  </main>
+  </div>
 
   <div id="coachSlot" class="coach-slot"></div>
 
-  <!-- 휴대폰/터치 기기 전용 가상 패드 (coarse pointer 에서만 표시) -->
+  <!-- 실제 모바일/소형 터치 기기 전용 가상 패드 (데스크톱에선 항상 숨김) -->
   <div class="k-tpad" id="touchPad">
     <div class="k-dpad">
       <button type="button" class="k-pad-btn up" data-dir="1">▲</button>
@@ -134,7 +145,7 @@
     </div>
   </div>
 
-  <div class="k-keyguide" id="keyGuide">⌨️ <b>방향키</b> 이동 · <b>Space</b> 물풍선/던지기 · <b>Ctrl</b> (또는 Z) 바늘 사용</div>
+  <div class="k-keyguide" id="keyGuide">⌨️ <b>방향키</b> 이동(코너 선입력 · 미끄러짐) · <b>Space</b> 물풍선 설치/던지기 · <b>Ctrl</b> (또는 Z) 바늘 탈출</div>
 </section>
 
 <script src="../common/glog.js?v=8"></script>
@@ -146,14 +157,14 @@
 <script src="../common/arena-ui.js?v=20"></script>
 <script src="../common/coach.js?v=4"></script>
 <script src="../common/tutorial.js?v=2"></script>
-<script src="rules.js?v=1"></script>
-<script src="maps.js?v=1"></script>
-<script src="core.js?v=2"></script>
-<script src="bots.js?v=2"></script>
-<script src="skins/default/skin.js?v=1"></script>
-<script src="render.js?v=1"></script>
+<script src="rules.js?v=2"></script>
+<script src="maps.js?v=2"></script>
+<script src="core.js?v=3"></script>
+<script src="bots.js?v=3"></script>
+<script src="skins/default/skin.js?v=2"></script>
+<script src="render.js?v=2"></script>
 <script src="sound.js?v=1"></script>
 <script src="tutorial.js?v=1"></script>
-<script src="main.js?v=2"></script>
+<script src="main.js?v=3"></script>
 </body>
 </html>

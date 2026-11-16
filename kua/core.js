@@ -138,7 +138,7 @@
   }
 
   function isSolidTile(ch) {
-    return ch === "#" || ch === "B" || ch === "M";
+    return ch === "#" || ch === "H" || ch === "B" || ch === "M";
   }
 
   function bombAt(sim, c, r) {
@@ -168,6 +168,46 @@
       if (rectsOverlap(x0, y0, x1, y1, bx0, by0, bx0 + T, by0 + T)) return false;
     }
     return true;
+  }
+
+  function canEnterDir(sim, p, rawDir) {
+    if (!p || p.state === "dead" || !rawDir) return false;
+    const eff = p.devilMs > 0 ? OPP_DIR[rawDir] : rawDir;
+    const dx = DIR_DX[eff], dy = DIR_DY[eff];
+    const laneStep = T * 0.5 + 2; // 인접 타일 경계를 실제로 넘을 수 있는지 확인
+    if (dx !== 0) {
+      const probeX = centerOf(cellOf(p.x)) + dx * laneStep;
+      if (canStand(sim, p, probeX, p.y)) return true;
+      const baseR = cellOf(p.y);
+      for (let dr = -1; dr <= 1; dr++) {
+        const rr = baseR + dr;
+        if (rr < 0 || rr >= ROWS) continue;
+        const cy = centerOf(rr);
+        if (Math.abs(p.y - cy) <= ASSIST && canStand(sim, p, probeX, cy)) return true;
+      }
+    } else if (dy !== 0) {
+      const probeY = centerOf(cellOf(p.y)) + dy * laneStep;
+      if (canStand(sim, p, p.x, probeY)) return true;
+      const baseC = cellOf(p.x);
+      for (let dc = -1; dc <= 1; dc++) {
+        const cc = baseC + dc;
+        if (cc < 0 || cc >= COLS) continue;
+        const cx = centerOf(cc);
+        if (Math.abs(p.x - cx) <= ASSIST && canStand(sim, p, cx, probeY)) return true;
+      }
+    }
+    return false;
+  }
+
+  function chooseLookaheadDir(sim, p, dirs) {
+    if (!dirs || !dirs.length) return 0;
+    const primary = dirs[dirs.length - 1];
+    if (dirs.length < 2 || !p || p.state !== "alive") return primary;
+    if (canEnterDir(sim, p, primary)) return primary;
+    for (let i = dirs.length - 2; i >= 0; i--) {
+      if (canEnterDir(sim, p, dirs[i])) return dirs[i];
+    }
+    return primary;
   }
 
   function updateGraceBombs(sim, p) {
@@ -464,7 +504,7 @@
           const nr = b.r + dy * dist;
           if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) break;
           const tile = sim.grid[nr][nc];
-          if (tile === "#") break;
+          if (tile === "#" || tile === "H") break;
 
           const key = cKey(nc, nr);
           // 같은 연쇄 폭발에서 방금 부서진 블록 자리면 뒤 풍선 물줄기도 여기서 정지 (순서 무관 일관성)
@@ -795,6 +835,7 @@
     createMatch,
     step,
     canStand,
+    chooseLookaheadDir,
     placeOrThrowBomb,
     useNeedle,
     analyzeMatch,

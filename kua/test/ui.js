@@ -36,6 +36,20 @@ U.main(async T => {
   await p.click("#startBtn");
   await wait(p, () => !document.getElementById("play").hidden && !!__kua.state());
 
+  // PC 데스크톱 뷰포트(1180x800)에서 터치패드 비노출 + 사이드바(타이머/Ctrl아이템) + 한 화면 맞춤 확인
+  await p.setViewportSize({ width: 1180, height: 800 });
+  await T.sleep(80);
+  const deskOk = await p.evaluate(() => {
+    const tp = getComputedStyle(document.getElementById("touchPad")).display;
+    const tv = document.getElementById("timerVal").textContent;
+    const cb = document.getElementById("ctrlItemBox").textContent;
+    const shell = document.querySelector(".k-arcade-shell").getBoundingClientRect();
+    return { tp, tv, cb, h: shell.height, scroll: document.documentElement.scrollHeight };
+  });
+  T.ok(deskOk.tp === "none", "데스크톱 1180x800에서 가상 터치패드 숨김 (display=" + deskOk.tp + ")");
+  T.ok(deskOk.tv.includes(":") && deskOk.cb.includes("Ctrl"), "크아 우측 사이드바 타이머 & Ctrl 바늘 슬롯 표시");
+  T.ok(deskOk.h <= 790, "데스크톱 1180x800 세로 스크롤 없이 아케이드 프레임 수납 (h=" + Math.round(deskOk.h) + ")");
+
   // 워밍업 지나고 키보드 Space / 방향키 입력 테스트
   await wait(p, () => __kua.state().warmupMs <= 0, 4000);
   const startPos = await p.evaluate(() => {

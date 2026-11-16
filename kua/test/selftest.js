@@ -214,4 +214,43 @@ test("5. BFS AI 봇 결정적 대전(4인 완주/안전 탈출/판 끝 복기 �
   assert.strictEqual(cs.players[1].state, "alive", "같은 연쇄 틱에서 앞 풍선이 깬 상자(3,1) 뒤(4,1)는 물줄기가 관통하지 않음");
 });
 
+test("6. 60Hz · 집 타일(H) 충돌/차폐 · 2키 선입력 코너턴(chooseLookaheadDir) 검증", () => {
+  assert.strictEqual(Rules.TIMING.TICK_HZ, 60, "기본 시뮬레이션 주파수 60Hz");
+
+  const sim = Core.createMatch({
+    seed: 12,
+    mapId: "village10",
+    players: [
+      { id: "p0", name: "다오", kind: "human", charId: "dao", team: 0 },
+      { id: "p1", name: "배찌", kind: "human", charId: "bazzi", team: 1 },
+    ],
+  });
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 6; c++) sim.grid[r][c] = ".";
+  // (1,1) 집(H), (3,0) 집(H) -> 오른쪽 이동 중 (2,1) 교차로 아래(3)를 미리 누른 상황 모사
+  sim.grid[1][1] = "H";
+  sim.grid[1][3] = "H";
+  sim.grid[0][4] = "B";
+  const p = sim.players[0];
+  p.x = 1 * 40 + 20;
+  p.y = 0 * 40 + 20;
+
+  // 아직 (1,0)에 있어 (1,1) 집 때문에 아래(3) 진입 불가 -> 선입력 [2,3] 에서 보조키 2(오른쪽) 유지
+  assert.strictEqual(Core.chooseLookaheadDir(sim, p, [2, 3]), 2, "아래가 막힌 상태에선 기존 오른쪽(2) 유지");
+
+  // (2,0) 교차로 중심까지 이동하면 즉시 아래(3)로 코너 턴!
+  for (let i = 0; i < 30; i++) {
+    const d = Core.chooseLookaheadDir(sim, p, [2, 3]);
+    Core.step(sim, { p0: { dir: d } }, 1000 / 60);
+    if (p.y > 0 * 40 + 24) break;
+  }
+  assert(p.y > 24 && Math.abs(p.x - (2 * 40 + 20)) <= 12, "교차로 도달 즉시 아래쪽으로 자연 코너턴: x=" + p.x + ", y=" + p.y);
+
+  // 집(H) 파괴 불가 & 물줄기 차폐 검증
+  sim.bombs.push({ id: 55, owner: "p0", c: 2, r: 1, x: 100, y: 60, power: 4, fuseMs: 10, vx: 0, vy: 0, airMs: 0 });
+  sim.players[1].x = 4 * 40 + 20; sim.players[1].y = 1 * 40 + 20; // (3,1) 집 뒤 (4,1)
+  Core.step(sim, {}, 20);
+  assert.strictEqual(sim.grid[1][3], "H", "집 타일(H)은 물풍선에 부서지지 않음");
+  assert.strictEqual(sim.players[1].state, "alive", "집 타일(H) 뒤 플레이어는 물줄기 피격 안 됨");
+});
+
 console.log(`✅ All ${passed} KuaCore tests passed!`);

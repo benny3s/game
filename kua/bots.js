@@ -17,7 +17,7 @@
   const DX = Core.DIR_DX;
   const DY = Core.DIR_DY;
 
-  const isWall = ch => ch === "#" || ch === "B" || ch === "M";
+  const isWall = ch => ch === "#" || ch === "H" || ch === "B" || ch === "M";
 
   function buildDangerGrid(sim, extraBomb = null) {
     const danger = Array.from({ length: ROWS }, () => new Array(COLS).fill(Infinity));
@@ -35,7 +35,7 @@
         for (let k = 1; k <= b.power; k++) {
           const nc = b.c + DX[d] * k, nr = b.r + DY[d] * k;
           if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) break;
-          if (sim.grid[nr][nc] === "#") break;
+          if (sim.grid[nr][nc] === "#" || sim.grid[nr][nc] === "H") break;
           cells.push([nc, nr]);
           if (sim.grid[nr][nc] === "B" || sim.grid[nr][nc] === "M") break;
         }
@@ -227,7 +227,7 @@
         const ec = Math.floor(q.x / T), er = Math.floor(q.y / T);
         return (ec === pc && Math.abs(er - pr) <= p.power) || (er === pr && Math.abs(ec - pc) <= p.power);
       });
-      const chance = tier === "easy" ? ((sim.tick % 5) === 0) : true;
+      const chance = tier === "easy" ? (((sim.tick + p.slot * 7) % 14) === 0) : (((sim.tick + p.slot * 3) % 4) === 0);
       if (chance && (nearCrate || nearEnemy) && hasSafeEscape(sim, p, pc, pr)) {
         return { dir: 0, bomb: true, needle: false };
       }

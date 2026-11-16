@@ -1,6 +1,6 @@
-/* 베니 크아 — 캔버스 렌더러 (kua/render.js)
-   · 스킨 훅(KuaSkins[skinId])으로 배경/블록/풀숲/물풍선/캐릭터를 계층 순서대로 렌더
-   · 풀숲(G) 은 캐릭터/아이템 위 레이어에 그려 숨기 연출(같은 편 또는 인접 시 반투명) */
+/* 베니 크아 — 2.5D 깊이 정렬 캔버스 렌더러 (kua/render.js)
+   · 바닥/아이템/물줄기 후 행(r = 0..ROWS-1) 단위 Painter's Algorithm으로 집(H)·나무(#)·블록(B/M)·풍선·캐릭터·풀숲(G) 순서 렌더
+   · 최상단에 이름표·내 화살표(▼) 오버레이를 그려 지붕 뒤에서도 아군/내 위치 가시성 유지 */
 ((root) => {
   "use strict";
   const Rules = root.KuaRules;
@@ -16,40 +16,24 @@
     const ROWS = Rules.GRID.ROWS;
     const rows = typeof snap.g === "string" ? snap.g.split("\n").map(l => l.split("")) : snap.grid;
     const mapDef = Maps.getMap(opts.mapId || "village10");
-    const theme = skin.getTheme(mapDef.theme);
+    const themeId = mapDef.theme || "village";
+    const theme = skin.getTheme(themeId);
     const nowMs = opts.nowMs || Date.now();
     const myId = opts.myId || "p0";
     const mode = opts.mode || "free";
 
     ctx.clearRect(0, 0, COLS * T, ROWS * T);
 
-    // 1) 바닥 + 풀숲 아래 바닥
+    // 1) 바닥
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         skin.drawFloorCell(ctx, theme, c, r, T, mapDef.id);
       }
     }
 
-    // 2) 아이템 + 물줄기 + 정적 블록
+    // 2) 바닥 아이템 & 물줄기
     for (const it of (snap.it || snap.items || [])) {
       skin.drawItem(ctx, { id: it.id, kind: it.k || it.kind, c: it.c, r: it.r }, T, nowMs);
-    }
-    for (let r = 0; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const ch = rows[r][c];
-        if (ch === "#" || ch === "B" || ch === "M") {
-          skin.drawBlock(ctx, theme, ch, c, r, T);
-        }
-      }
-    }
-
-    // 3) 물풍선 & 물줄기
-    for (const b of (snap.b || snap.bombs || [])) {
-      skin.drawBomb(ctx, {
-        x: b.x, y: b.y,
-        fuseMs: b.fs != null ? b.fs : b.fuseMs,
-        airMs: b.air != null ? b.air : (b.airMs || 0),
-      }, T, nowMs, Rules.TIMING.FUSE_MS);
     }
     for (const f of (snap.fl || snap.flames || [])) {
       skin.drawFlame(ctx, {
@@ -59,7 +43,7 @@
       }, T, Rules.TIMING.FLAME_MS);
     }
 
-    // 4) 캐릭터 (Y 좌표 정렬로 원근감)
+    // 3) 행 단위 깊이 정렬 준비
     const players = (snap.p || snap.players || []).map(p => ({
       id: p.id,
       name: p.n || p.name,
@@ -76,18 +60,53 @@
       devilMs: p.dv != null ? p.dv : (p.devilMs || 0),
     })).sort((a, b) => a.y - b.y);
 
+    const me = players.find(p => p.id === myId);
+    const playersByRow = Array.from({ length: ROWS }, () => []);
     for (const p of players) {
-      skin.drawCharacter(ctx, p, T, p.id === myId, mode, nowMs);
+      const rr = Math.min(ROWS - 1, Math.max(0, Math.floor(p.y / T)));
+      playersByRow[rr].push(p);
     }
 
-    // 5) 풀숲(G) 오버레이 — 캐릭터/풍선 위를 덮어 숨기 구현 (내/같은편 위치면 반투명)
-    const me = players.find(p => p.id === myId);
+    const bombsByRow = Array.from({ length: ROWS }, () => []);
+    for (const b of (snap.b || snap.bombs || [])) {
+      const rr = Math.min(ROWS - 1, Math.max(0, Math.floor(b.y / T)));
+      bombsByRow[rr].push({
+        x: b.x, y: b.y,
+        fuseMs: b.fs != null ? b.fs : b.fuseMs,
+        airMs: b.air != null ? b.air : (b.airMs || 0),
+      });
+    }
+
+    // 4) 행별 Painter's Algorithm (블록 -> 물풍선 -> 캐릭터 -> 풀숲)
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
-        if (rows[r][c] === "G") {
-          const meInside = me && me.state !== "dead" && Math.floor(me.x / T) === c && Math.floor(me.y / T) === r;
-          skin.drawBush(ctx, theme, c, r, T, !!meInside);
+        const ch = rows[r][c];
+        if (ch === "#" || ch === "H" || ch === "B" || ch === "M") {
+          skin.drawBlock(ctx, theme, ch, c, r, T, themeId);
         }
+      }
+      for (const b of bombsByRow[r]) {
+        skin.drawBomb(ctx, b, T, nowMs, Rules.TIMING.FUSE_MS);
+      }
+      for (const p of playersByRow[r]) {
+        skin.drawCharacter(ctx, p, T, p.id === myId, mode, nowMs);
+      }
+      for (let c = 0; c < COLS; c++) {
+        if (rows[r][c] === "G") {
+          const dim = players.some(p =>
+            p.state !== "dead" &&
+            (p.id === myId || (mode === "team" && me && p.team === me.team)) &&
+            Math.floor(p.x / T) === c && Math.floor(p.y / T) === r
+          );
+          skin.drawBush(ctx, theme, c, r, T, dim);
+        }
+      }
+    }
+
+    // 5) 이름표 & 내 캐릭터 화살표(▼) 오버레이
+    if (skin.drawCharacterOverlay) {
+      for (const p of players) {
+        skin.drawCharacterOverlay(ctx, p, T, p.id === myId, mode, nowMs);
       }
     }
 
@@ -95,13 +114,17 @@
     const warm = snap.w != null ? snap.w : (snap.warmupMs || 0);
     if (warm > 0) {
       ctx.save();
-      ctx.fillStyle = "rgba(8, 12, 22, 0.48)";
+      ctx.fillStyle = "rgba(8, 22, 52, 0.34)";
       ctx.fillRect(0, 0, COLS * T, ROWS * T);
-      ctx.font = "900 44px 'Jua', sans-serif";
+      ctx.font = "900 46px 'Jua', sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillStyle = "#fde047";
-      ctx.fillText(warm > 600 ? "READY..." : "START!", (COLS * T) / 2, (ROWS * T) / 2);
+      const label = warm > 360 ? "READY!" : "START!";
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = "#082f49";
+      ctx.strokeText(label, (COLS * T) / 2, (ROWS * T) / 2);
+      ctx.fillStyle = warm > 360 ? "#fde047" : "#38bdf8";
+      ctx.fillText(label, (COLS * T) / 2, (ROWS * T) / 2);
       ctx.restore();
     }
   }

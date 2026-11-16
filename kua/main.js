@@ -1,4 +1,4 @@
-/* 베니 크아 — 컨트롤러 · 키보드(방향키·Space·Ctrl) · 30Hz 시뮬 · 친구랑(ArenaUI Host권위) · 판 끝 복기 (kua/main.js) */
+/* 베니 크아 — 컨트롤러 · 키보드(2키 선입력 코너턴·Space 연속·Ctrl) · 60Hz 시뮬 · 친구랑(ArenaUI Host권위) · 판 끝 복기 (kua/main.js) */
 (() => {
   "use strict";
   const Rules = window.KuaRules;
@@ -39,17 +39,35 @@
   let finalSent = false;
   let pendingEvents = [];
 
-  // 키보드 입력 (가장 최근 누른 방향키 우선 + 1틱 단위 Space/Ctrl 버퍼링)
+  // 키보드 입력 (2키 선입력 코너턴 스택 + Space 연속 설치 + Ctrl 바늘 버퍼링)
   const dirStack = [];
   let touchDir = 0;
+  let spaceHeld = false;
   let pendingBomb = false;
   let pendingNeedle = false;
   let lastNetSentDir = -1;
   let lastNetInputAt = 0;
+  let lastHudHtml = "";
+  let lastItemHtml = "";
 
   function activeDir() {
     if (touchDir) return touchDir;
     return dirStack.length ? dirStack[dirStack.length - 1] : 0;
+  }
+
+  function currentDirs() {
+    if (touchDir) return [touchDir];
+    return dirStack.slice();
+  }
+
+  function canSpaceHoldDrop(snap, pid) {
+    if (!snap || !pid) return false;
+    const plist = snap.p || snap.players || [];
+    const me = plist.find(q => q.id === pid);
+    if (!me || (me.s || me.state) !== "alive") return false;
+    const pc = Math.floor(me.x / Core.T), pr = Math.floor(me.y / Core.T);
+    const bombs = snap.b || snap.bombs || [];
+    return !bombs.some(b => (b.air != null ? b.air : (b.airMs || 0)) <= 0 && b.c === pc && b.r === pr);
   }
 
   function fmtTime(ms) {
@@ -176,10 +194,13 @@
     $("resultOv").hidden = true;
     resultShown = false;
     rankRecorded = false;
+    spaceHeld = false;
     pendingBomb = false;
     pendingNeedle = false;
     dirStack.length = 0;
     touchDir = 0;
+    lastHudHtml = "";
+    lastItemHtml = "";
     if (coach) { coach.destroy(); coach = null; }
     $("coachSlot").innerHTML = "";
   }
@@ -266,7 +287,7 @@
     startLoop();
   }
 
-  // ── 30Hz 시뮬 + 60fps 렌더 루프 ──
+  // ── 60Hz 시뮬 + 렌더 루프 ──
   function startLoop() {
     stopLoop();
     lastFrameMs = performance.now();
@@ -279,15 +300,20 @@
       lastFrameMs = now;
 
       if (playMode === "friend" && !isHost) {
-        // 게스트: 방향 전환 시 즉시 + 이동 중 100ms 주기 신뢰 재전송으로 패킷 유실 고착 방지
-        const d = activeDir();
-        const changed = d !== lastNetSentDir || pendingBomb || pendingNeedle;
+        // 게스트: 2키 선입력(d, d2) + Space 연속 설치 + 100ms keepalive
+        const dirs = currentDirs();
+        const d = dirs.length ? dirs[dirs.length - 1] : 0;
+        const d2 = dirs.length >= 2 ? dirs[dirs.length - 2] : 0;
+        const holdBomb = spaceHeld && canSpaceHoldDrop(remoteSnap, myId);
+        const sendBomb = pendingBomb || holdBomb;
+        const netKey = d + d2 * 10;
+        const changed = netKey !== lastNetSentDir || sendBomb || pendingNeedle;
         const keepalive = d !== 0 && (now - lastNetInputAt >= 100);
         if (changed || keepalive) {
-          lastNetSentDir = d;
+          lastNetSentDir = netKey;
           lastNetInputAt = now;
           if (arena) {
-            arena.send({ t: "in", d, b: pendingBomb ? 1 : 0, n: pendingNeedle ? 1 : 0 }, d === 0 || pendingBomb || pendingNeedle);
+            arena.send({ t: "in", d, d2, b: sendBomb ? 1 : 0, n: pendingNeedle ? 1 : 0 }, d === 0 || sendBomb || pendingNeedle);
           }
           pendingBomb = false;
           pendingNeedle = false;
@@ -299,7 +325,7 @@
       if (!sim) return;
       accMs += dt;
       let steps = 0;
-      while (accMs >= stepMs && steps < 4) {
+      while (accMs >= stepMs && steps < 6) {
         accMs -= stepMs;
         steps++;
         if (sim.winner) break;
@@ -309,7 +335,10 @@
         for (const p of sim.players) {
           if (p.state === "dead") continue;
           if (p.id === myId && playMode !== "watch") {
-            inputs[p.id] = { dir: activeDir(), bomb: pendingBomb, needle: pendingNeedle };
+            const dirs = currentDirs();
+            const dir = Core.chooseLookaheadDir(sim, p, dirs);
+            const holdBomb = spaceHeld && canSpaceHoldDrop(sim, p.id);
+            inputs[p.id] = { dir, bomb: pendingBomb || holdBomb, needle: pendingNeedle };
             pendingBomb = false;
             pendingNeedle = false;
           } else if (p.kind === "ai") {
@@ -319,7 +348,12 @@
             inputs[p.id] = { dir: 0, bomb: false, needle: false };
           } else if (peerInputs[p.id]) {
             const pi = peerInputs[p.id];
-            inputs[p.id] = { dir: pi.dir || 0, bomb: !!pi.bomb, needle: !!pi.needle };
+            const pDirs = pi.d2 ? [pi.d2, pi.dir || 0] : (pi.dir ? [pi.dir] : []);
+            inputs[p.id] = {
+              dir: Core.chooseLookaheadDir(sim, p, pDirs),
+              bomb: !!pi.bomb,
+              needle: !!pi.needle,
+            };
             pi.bomb = false;
             pi.needle = false;
           }
@@ -376,20 +410,77 @@
 
     const leftMs = stateLike.tm != null ? stateLike.tm : stateLike.timeLeftMs;
     const mapName = (Maps.MAP_BY_ID[mapId] && Maps.MAP_BY_ID[mapId].name) || "빌리지 10";
+    const tStr = fmtTime(leftMs);
     $("playTitle").textContent = mapName;
-    $("playSub").textContent = `${fmtTime(leftMs)} · ${mode === "team" ? "팀전" : "개인전"}`;
+    $("playSub").textContent = `${tStr} · ${mode === "team" ? "팀전" : "개인전"}`;
+    const timerVal = $("timerVal");
+    const timerBox = $("timerBox");
+    if (timerVal) timerVal.textContent = tStr;
+    if (timerBox) timerBox.classList.toggle("urgent", leftMs <= 30000);
 
     const plist = stateLike.p || stateLike.players || [];
-    $("hudBar").innerHTML = plist.map(p => {
+    const hudHtml = plist.map(p => {
       const id = p.id, nm = p.n || p.name, stt = p.s || p.state;
+      const tm = p.tm != null ? p.tm : p.team;
+      const chId = p.ch || p.charId || "dao";
+      const ch = Rules.CHARS[chId] || Rules.CHARS.dao;
       const mb = p.mb != null ? p.mb : p.maxBombs;
       const pw = p.pw != null ? p.pw : p.power;
       const sp = p.sp != null ? p.sp : p.speed;
       const nd = p.nd != null ? p.nd : p.needles;
       const isMe = id === myId;
-      const cls = `k-pill${isMe ? " me" : ""}${stt === "dead" ? " dead" : stt === "trapped" ? " trapped" : ""}`;
-      return `<div class="${cls}"><b>${esc(nm)}</b><span class="k-st">🎈${mb} 🌊${pw} 🛼${sp}${nd ? ` 🪡${nd}` : ""}</span></div>`;
+      const tCls = mode === "team" ? (tm === 0 ? " team-b" : " team-r") : "";
+      const cls = `k-slot${isMe ? " me" : ""}${tCls}${stt === "dead" ? " dead" : stt === "trapped" ? " trapped" : ""}`;
+      const tag = stt === "dead"
+        ? `<span class="k-slot-tag ko">KO</span>`
+        : stt === "trapped"
+          ? `<span class="k-slot-tag trap">갇힘!</span>`
+          : isMe
+            ? `<span class="k-slot-tag">나</span>`
+            : "";
+      return `<div class="${cls}">
+        <div class="k-av" style="background:${ch.color}"><span class="k-av-trim" style="background:${ch.trim}"></span>${esc(ch.name[0])}</div>
+        <div class="k-slot-info">
+          <div class="k-slot-top"><span class="k-slot-name">${esc(nm)}</span>${tag}</div>
+          <div class="k-slot-st">🎈${mb} 🌊${pw} 🛼${sp}${nd ? ` 🪡${nd}` : ""}</div>
+        </div>
+      </div>`;
     }).join("");
+    if (hudHtml !== lastHudHtml) {
+      lastHudHtml = hudHtml;
+      $("hudBar").innerHTML = hudHtml;
+    }
+
+    const ctrlBox = $("ctrlItemBox");
+    if (ctrlBox) {
+      const me = plist.find(p => p.id === myId) || plist[0];
+      if (me) {
+        const ch = Rules.CHARS[me.ch || me.charId || "dao"] || Rules.CHARS.dao;
+        const mb = me.mb != null ? me.mb : me.maxBombs;
+        const pw = me.pw != null ? me.pw : me.power;
+        const sp = me.sp != null ? me.sp : me.speed;
+        const nd = me.nd != null ? me.nd : me.needles;
+        const ck = me.ck != null ? me.ck : me.canKick;
+        const ct = me.ct != null ? me.ct : me.canThrow;
+        const dv = me.dv != null ? me.dv : me.devilMs;
+        const itemHtml = `<div class="k-item-row">
+            <button type="button" class="k-needle-btn${nd > 0 ? " ready" : ""}" id="ctrlNeedleUse">🪡 바늘 ×${nd}</button>
+            <span class="k-keycap">Ctrl</span>
+          </div>
+          <div class="k-perk-row">
+            <span>🎈${mb}/${ch.maxBombs}</span>
+            <span>🌊${pw}/${ch.maxPower}</span>
+            <span>🛼${sp}/${ch.maxSpeed}</span>
+            ${ck ? `<span>👟킥</span>` : ""}
+            ${ct ? `<span>🥊던지기</span>` : ""}
+            ${dv > 0 ? `<span style="color:#c084fc">👾반전</span>` : ""}
+          </div>`;
+        if (itemHtml !== lastItemHtml) {
+          lastItemHtml = itemHtml;
+          ctrlBox.innerHTML = itemHtml;
+        }
+      }
+    }
 
     const win = stateLike.win !== undefined ? stateLike.win : stateLike.winner;
     if (win && !resultShown) {
@@ -525,8 +616,9 @@
               }
             }
           } else if (msg.t === "in" && isHost && from) {
-            const cur = peerInputs[from] || { dir: 0, bomb: false, needle: false };
+            const cur = peerInputs[from] || { dir: 0, d2: 0, bomb: false, needle: false };
             cur.dir = msg.d | 0;
+            cur.d2 = msg.d2 | 0;
             if (msg.b) cur.bomb = true;
             if (msg.n) cur.needle = true;
             peerInputs[from] = cur;
@@ -623,6 +715,7 @@
       }
       if (e.code === "Space") {
         e.preventDefault();
+        spaceHeld = true;
         if (!e.repeat) pendingBomb = true;
         return;
       }
@@ -633,6 +726,7 @@
     });
 
     window.addEventListener("keyup", e => {
+      if (e.code === "Space") { spaceHeld = false; return; }
       const d = KEY_DIR[e.code];
       if (d) {
         const i = dirStack.indexOf(d);
@@ -640,7 +734,14 @@
       }
     });
 
-    window.addEventListener("blur", () => { dirStack.length = 0; touchDir = 0; });
+    window.addEventListener("blur", () => { dirStack.length = 0; touchDir = 0; spaceHeld = false; });
+
+    const ctrlBox = $("ctrlItemBox");
+    if (ctrlBox) {
+      ctrlBox.addEventListener("click", e => {
+        if (e.target && e.target.closest("#ctrlNeedleUse")) pendingNeedle = true;
+      });
+    }
 
     $("touchPad").querySelectorAll("[data-dir]").forEach(btn => {
       const d = Number(btn.dataset.dir);
