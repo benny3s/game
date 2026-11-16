@@ -116,15 +116,21 @@
 .arn-pl .vreq{border:1px solid rgba(251,191,36,.45);background:rgba(245,158,11,.14);color:#fde68a;border-radius:99px;padding:4px 9px;font:700 12px var(--text,inherit);cursor:pointer;white-space:nowrap}
 .arn-pl .vmic+.vreq,.arn-pl b+.vreq,.arn-pl i+.vreq,.arn-pl .dot+.vreq{margin-left:auto}
 .arn-pl .vreq+.kick{margin-left:4px}
-.arn-vtab{position:fixed;left:0;top:calc(44% + 54px);z-index:55;width:38px;height:44px;border:1px solid rgba(255,255,255,.22);border-left:0;border-radius:0 14px 14px 0;background:rgba(15,23,42,.72);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent}
+.arn-vtab{position:fixed;left:0;top:calc(44% + 54px);z-index:55;width:38px;height:44px;border:1px solid rgba(255,255,255,.22);border-left:0;border-radius:0 14px 14px 0;background:rgba(15,23,42,.72);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent;transition:box-shadow .15s,border-color .15s}
 .arn-vtab.on{background:rgba(5,150,105,.88);border-color:#34d399}
 .arn-vtab.ls{background:rgba(37,99,235,.88);border-color:#60a5fa}
+.arn-vtab.speaking{box-shadow:0 0 0 3px rgba(52,211,153,.85),0 0 18px rgba(16,185,129,.75)!important}
 .arn-vtab i{position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:#f59e0b;border:2px solid #0f172a}
+.arn-ptt{position:fixed;left:0;top:calc(44% + 106px);z-index:55;min-width:44px;height:40px;padding:0 10px 0 8px;border:1px solid rgba(251,191,36,.5);border-left:0;border-radius:0 14px 14px 0;background:rgba(15,23,42,.86);color:#fde68a;font:700 12px var(--round,inherit);cursor:pointer;display:inline-flex;align-items:center;gap:4px;box-shadow:0 4px 14px rgba(0,0,0,.4);user-select:none;-webkit-user-select:none;touch-action:none}
+.arn-ptt.live{background:#059669;border-color:#6ee7b7;color:#fff;box-shadow:0 0 16px rgba(16,185,129,.75)}
+.arn-ptt[hidden]{display:none}
+.arn-pl.speaking{border-color:#34d399;background:rgba(16,185,129,.12);box-shadow:0 0 0 1px rgba(52,211,153,.4)}
+.arn-vvol{width:70px;accent-color:#34d399;cursor:pointer;margin-left:auto}
 .arn-vpan{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:58;width:min(440px,100%);background:var(--card,#142030);color:var(--ink,#f1f5f9);border:1.5px solid rgba(255,255,255,.15);border-bottom:0;border-radius:20px 20px 0 0;padding:12px 12px calc(env(safe-area-inset-bottom,0px) + 14px);display:grid;gap:10px;box-shadow:0 -12px 40px rgba(0,0,0,.55);font:14.5px/1.4 var(--text,system-ui,"Malgun Gothic",sans-serif)}
 .arn-vpan[hidden]{display:none}
 .arn-vpan .hd{display:flex;align-items:center;justify-content:space-between;font:800 16px var(--round,inherit)}
 .arn-vpan .hd button{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:inherit;cursor:pointer}
-.arn-vacts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.arn-vacts{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
 .arn-vlist{max-height:min(30vh,220px);overflow:auto;display:grid;gap:6px}
 .arn-vbub{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:66;width:min(92vw,400px);display:grid;gap:8px;pointer-events:auto}
 .arn-vbub[hidden]{display:none}
@@ -259,15 +265,19 @@
 
   // ── 🎤 P2P/TURN 저지연 음성 대화 (2~8인 온디맨드 메시, 켜짐 알림 + 음성 요청/음소거) ─────────
   const vSt = {
-    mic: 0,                  // 0=끔, 1=마이크+듣기, 2=듣기만(음소거)
+    mic: 0,                  // 0=끔, 1=상시말하기, 2=듣기만, 3=무전기(누르고 말하기)
+    pttDown: false,
     stream: null,            // MediaStream
-    peers: new Map(),        // uid -> { pc, iceWait, audio, muted }
+    peers: new Map(),        // uid -> { pc, iceWait, audio, analyser, data }
+    vols: new Map(),         // uid -> 0..100
+    speaking: new Set(),     // 지금 말하는 중 uid
     preIce: new Map(),       // uid -> early RTCIceCandidateInit[]
     muted: new Set(),        // 내 기기에서 소리 끈 상대 uid
     knownOn: new Set(),      // 이미 '켜짐 알림'을 띄운 uid
     initChecked: false,
     reqCool: new Map(),      // uid -> last timestamp
-    tab: null, pan: null, bub: null,
+    actx: null, localAna: null, localData: null, vadT: null,
+    tab: null, pttBtn: null, pan: null, bub: null,
   };
   function lowLatSdp(sdp) {
     try {
@@ -280,11 +290,65 @@
       });
     } catch (e) { return sdp; }
   }
+  function attachAnalyser(stream) {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC || !stream || !stream.getAudioTracks().length) return null;
+      if (!vSt.actx) vSt.actx = new AC();
+      if (vSt.actx.state === "suspended") vSt.actx.resume().catch(() => {});
+      const src = vSt.actx.createMediaStreamSource(stream);
+      const ana = vSt.actx.createAnalyser();
+      ana.fftSize = 256;
+      src.connect(ana);
+      return { ana, data: new Uint8Array(ana.frequencyBinCount) };
+    } catch (e) { return null; }
+  }
+  function sampleLevel(ana, data) {
+    if (!ana || !data) return 0;
+    ana.getByteFrequencyData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) sum += data[i];
+    return sum / data.length;
+  }
+  function startVadLoop() {
+    if (vSt.vadT) return;
+    vSt.vadT = setInterval(() => {
+      if (!net || !vSt.mic) return;
+      const nextSpk = new Set();
+      const myLive = (vSt.mic === 1 || (vSt.mic === 3 && vSt.pttDown));
+      if (myLive && vSt.localAna && sampleLevel(vSt.localAna, vSt.localData) > 12) nextSpk.add(net.uid);
+      for (const [uid, vp] of vSt.peers) {
+        if (!vSt.muted.has(uid) && vp.ana && sampleLevel(vp.ana, vp.data) > 12) nextSpk.add(uid);
+      }
+      let changed = nextSpk.size !== vSt.speaking.size;
+      if (!changed) for (const u of nextSpk) if (!vSt.speaking.has(u)) { changed = true; break; }
+      if (!changed) return;
+      vSt.speaking = nextSpk;
+      if (vSt.tab) vSt.tab.classList.toggle("speaking", nextSpk.size > 0);
+      if (vSt.pan && !vSt.pan.hidden) {
+        vSt.pan.querySelectorAll("[data-vuid]").forEach(row => row.classList.toggle("speaking", nextSpk.has(row.dataset.vuid)));
+      }
+    }, 130);
+  }
+  function stopVadLoop() {
+    if (vSt.vadT) { clearInterval(vSt.vadT); vSt.vadT = null; }
+    vSt.speaking.clear();
+    vSt.localAna = null; vSt.localData = null;
+  }
+  function setPttHold(on) {
+    if (vSt.mic !== 3 || !vSt.stream) return;
+    vSt.pttDown = !!on;
+    vSt.stream.getAudioTracks().forEach(t => { t.enabled = vSt.pttDown; });
+    if (vSt.pttBtn) vSt.pttBtn.classList.toggle("live", vSt.pttDown);
+  }
   function voiceUiInit() {
     style();
     if (!vSt.tab) {
       const tab = document.createElement("button");
       tab.className = "arn-vtab"; tab.type = "button"; tab.setAttribute("aria-label", "음성 대화"); tab.hidden = true;
+      const pttBtn = document.createElement("button");
+      pttBtn.className = "arn-ptt"; pttBtn.type = "button"; pttBtn.hidden = true;
+      pttBtn.innerHTML = "🎙️ <span>꾹 눌러 말하기</span>";
       const pan = document.createElement("div");
       pan.className = "arn-vpan"; pan.hidden = true;
       pan.innerHTML = `<div class="hd"><span>🎤 음성 대화</span><button type="button" data-vx aria-label="닫기">✕</button></div>
@@ -293,8 +357,16 @@
         <div class="arn-vlist" data-vlist></div>`;
       const bub = document.createElement("div");
       bub.className = "arn-vbub"; bub.hidden = true;
-      document.body.append(tab, pan, bub);
+      document.body.append(tab, pttBtn, pan, bub);
       tab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) renderVoicePan(); };
+      pttBtn.addEventListener("pointerdown", e => { e.preventDefault(); setPttHold(true); });
+      ["pointerup", "pointercancel", "pointerleave"].forEach(ev => pttBtn.addEventListener(ev, () => setPttHold(false)));
+      document.addEventListener("keydown", e => {
+        if (e.code === "Space" && !e.repeat && vSt.mic === 3 && !/^(INPUT|TEXTAREA)$/.test((document.activeElement || {}).tagName)) {
+          e.preventDefault(); setPttHold(true);
+        }
+      });
+      document.addEventListener("keyup", e => { if (e.code === "Space" && vSt.mic === 3 && vSt.pttDown) setPttHold(false); });
       pan.addEventListener("click", e => {
         const b = e.target.closest("button"); if (!b) return;
         if (b.matches("[data-vx]")) pan.hidden = true;
@@ -302,7 +374,16 @@
         else if (b.dataset.vmute) togglePeerMute(b.dataset.vmute);
         else if (b.dataset.vreq) sendVoiceReq(b.dataset.vreq);
       });
-      vSt.tab = tab; vSt.pan = pan; vSt.bub = bub;
+      pan.addEventListener("input", e => {
+        const rng = e.target.closest("[data-vvol]");
+        if (!rng) return;
+        const uid = rng.dataset.vvol;
+        const val = Math.max(0, Math.min(100, Number(rng.value)));
+        vSt.vols.set(uid, val);
+        const vp = vSt.peers.get(uid);
+        if (vp && vp.audio) vp.audio.volume = val / 100;
+      });
+      vSt.tab = tab; vSt.pttBtn = pttBtn; vSt.pan = pan; vSt.bub = bub;
     }
   }
   function voiceClosePeer(uid) {
@@ -340,11 +421,14 @@
       if (!vp.audio) {
         const au = document.createElement("audio");
         au.autoplay = true; au.playsInline = true; au.muted = vSt.muted.has(uid);
+        au.volume = (vSt.vols.has(uid) ? vSt.vols.get(uid) : 100) / 100;
         document.body.appendChild(au);
         vp.audio = au;
       }
       vp.audio.srcObject = stream;
       vp.audio.play().catch(() => {});
+      const aInfo = attachAnalyser(stream);
+      if (aInfo) { vp.ana = aInfo.ana; vp.data = aInfo.data; startVadLoop(); }
     };
     pc.onconnectionstatechange = () => {
       if (["failed", "closed"].includes(pc.connectionState) && vSt.peers.get(uid) === vp) {
@@ -387,15 +471,20 @@
     const anyOtherOn = Object.entries(pl).some(([u, p]) => u !== (net && net.uid) && p && p.mic > 0);
     if (vSt.tab) {
       vSt.tab.hidden = !net || !playing;
-      vSt.tab.classList.toggle("on", vSt.mic === 1);
+      vSt.tab.classList.toggle("on", vSt.mic === 1 || vSt.mic === 3);
       vSt.tab.classList.toggle("ls", vSt.mic === 2);
-      vSt.tab.innerHTML = (vSt.mic === 2 ? "🎧" : "🎤") + (vSt.mic === 0 && anyOtherOn ? "<i></i>" : "");
+      vSt.tab.innerHTML = (vSt.mic === 2 ? "🎧" : vSt.mic === 3 ? "🎙️" : "🎤") + (vSt.mic === 0 && anyOtherOn ? "<i></i>" : "");
+    }
+    if (vSt.pttBtn) {
+      vSt.pttBtn.hidden = !net || !playing || vSt.mic !== 3;
+      if (vSt.mic !== 3) setPttHold(false);
     }
     if (box && !playing) {
       const vb = box.querySelector("[data-lvoice]");
       if (vb) {
         vb.innerHTML = `<b>🎤 음성 대화</b>
-          <button type="button" class="arn-vbtn${vSt.mic === 1 ? " on" : ""}" data-lv="1">${vSt.mic === 1 ? "🎤 켜짐 (말하기)" : "🎤 말하기 켜기"}</button>
+          <button type="button" class="arn-vbtn${vSt.mic === 1 ? " on" : ""}" data-lv="1">${vSt.mic === 1 ? "🎤 켜짐 (말하기)" : "🎤 말하기"}</button>
+          <button type="button" class="arn-vbtn${vSt.mic === 3 ? " on" : ""}" data-lv="3">${vSt.mic === 3 ? "🎙️ 무전기 켜짐" : "🎙️ 무전기"}</button>
           <button type="button" class="arn-vbtn${vSt.mic === 2 ? " ls" : ""}" data-lv="2">${vSt.mic === 2 ? "🎧 듣기만 중" : "🎧 듣기만"}</button>
           ${vSt.mic ? `<button type="button" class="arn-vbtn" data-lv="0">🔕 끄기</button>` : ""}`;
       }
@@ -409,27 +498,32 @@
     const list = vSt.pan.querySelector("[data-vlist]");
     acts.innerHTML = `
       <button type="button" class="arn-vbtn${vSt.mic === 1 ? " on" : ""}" data-vmode="1">🎤 말하기</button>
+      <button type="button" class="arn-vbtn${vSt.mic === 3 ? " on" : ""}" data-vmode="3">🎙️ 무전기</button>
       <button type="button" class="arn-vbtn${vSt.mic === 2 ? " ls" : ""}" data-vmode="2">🎧 듣기만</button>
       <button type="button" class="arn-vbtn${vSt.mic === 0 ? " on" : ""}" style="${vSt.mic === 0 ? "background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)" : ""}" data-vmode="0">🔕 끄기</button>`;
     const pl = net.players || {};
     const onCount = Object.values(pl).filter(p => p && p.mic > 0).length;
-    tip.textContent = onCount >= 5
-      ? "5명 이상이 함께할 땐 말할 때만 마이크를 켜면 소리가 더 선명해요."
-      : "같은 방 친구와 직접 통화해요 (원할 때만 켜고 끄세요).";
+    tip.textContent = vSt.mic === 3
+      ? "무전기 모드: 왼쪽 '🎙️ 꾹 눌러 말하기' 또는 스페이스바를 누르는 동안만 목소리가 나가요."
+      : onCount >= 5
+        ? "5명 이상 함께할 땐 '🎙️ 무전기' 모드로 전환하면 소리가 훨씬 또렷해요."
+        : "같은 방 친구와 직접 통화해요 (원할 때만 켜고 끄세요).";
     list.innerHTML = Object.entries(pl).map(([uid, p]) => {
       const mine = uid === net.uid;
       const m = mine ? vSt.mic : (p && p.mic) || 0;
-      const badge = m === 1 ? '<span class="vmic">🎤 통화중</span>' : m === 2 ? '<span class="vmic ls">🎧 듣기만</span>' : '<span class="arn-soft" style="font-size:12px">미참여</span>';
+      const spk = vSt.speaking.has(uid);
+      const badge = m === 1 ? '<span class="vmic">🎤 통화중</span>' : m === 3 ? '<span class="vmic">🎙️ 무전기</span>' : m === 2 ? '<span class="vmic ls">🎧 듣기만</span>' : '<span class="arn-soft" style="font-size:12px">미참여</span>';
       let act = "";
       if (!mine) {
         if (m > 0) {
           const isMuted = vSt.muted.has(uid);
-          act = `<button type="button" class="vreq" style="margin-left:6px" data-vmute="${esc(uid)}">${isMuted ? "🔇 소리켜기" : "🔊 안듣기"}</button>`;
+          const vol = vSt.vols.has(uid) ? vSt.vols.get(uid) : 100;
+          act = `<input class="arn-vvol" type="range" min="0" max="100" value="${vol}" data-vvol="${esc(uid)}" aria-label="음량"><button type="button" class="vreq" style="margin-left:4px" data-vmute="${esc(uid)}">${isMuted ? "🔇 켜기" : "🔊 끄기"}</button>`;
         } else {
-          act = `<button type="button" class="vreq" style="margin-left:6px" data-vreq="${esc(uid)}">📞 요청</button>`;
+          act = `<button type="button" class="vreq" data-vreq="${esc(uid)}">📞 요청</button>`;
         }
       }
-      return `<div class="arn-pl"><b>${esc((p && p.name) || "?")}</b>${mine ? "<i>나</i>" : ""}${badge}${act}</div>`;
+      return `<div class="arn-pl${spk ? " speaking" : ""}" data-vuid="${esc(uid)}"><b>${esc((p && p.name) || "?")}</b>${mine ? "<i>나</i>" : ""}${badge}${act}</div>`;
     }).join("");
   }
   function showVoiceToast(html, onAct) {
@@ -452,11 +546,12 @@
   }
   async function setVoice(mode) {
     if (!net) return;
-    const next = mode === 1 || mode === 2 ? mode : 0;
+    const next = mode === 1 || mode === 2 || mode === 3 ? mode : 0;
     const hadStream = !!vSt.stream;
 
     if (next === 0) {
-      vSt.mic = 0;
+      vSt.mic = 0; vSt.pttDown = false;
+      stopVadLoop();
       if (vSt.stream) { vSt.stream.getTracks().forEach(t => t.stop()); vSt.stream = null; }
       for (const uid of [...vSt.peers.keys()]) { voiceSend(uid, { k: "vb" }); voiceClosePeer(uid); }
       try { await net.setMe({ mic: 0 }); } catch (e) {}
@@ -465,23 +560,28 @@
       return;
     }
 
-    if (next === 1) {
+    if (next === 1 || next === 3) {
       if (!vSt.stream) {
         try {
           if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("no mic api");
           vSt.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+          const aInfo = attachAnalyser(vSt.stream);
+          if (aInfo) { vSt.localAna = aInfo.ana; vSt.localData = aInfo.data; }
         } catch (e) {
           if (window.Cozy && Cozy.toast) Cozy.toast("마이크를 쓸 수 없어 '🎧 듣기만'으로 연결할게요", 2600);
           return setVoice(2);
         }
       }
-      vSt.stream.getAudioTracks().forEach(t => { t.enabled = true; });
+      vSt.pttDown = false;
+      vSt.stream.getAudioTracks().forEach(t => { t.enabled = (next === 1); });
     } else if (next === 2 && vSt.stream) {
+      vSt.pttDown = false;
       vSt.stream.getAudioTracks().forEach(t => { t.enabled = false; });
     }
 
-    const upgradingFromListen = !hadStream && next === 1 && vSt.peers.size > 0;
+    const upgradingFromListen = !hadStream && (next === 1 || next === 3) && vSt.peers.size > 0;
     vSt.mic = next;
+    startVadLoop();
     try { await net.setMe({ mic: next }); } catch (e) {}
     if (upgradingFromListen) {
       const oldUids = [...vSt.peers.keys()];
@@ -603,14 +703,18 @@
   }
   function voiceOff() {
     vSt.mic = 0;
+    vSt.pttDown = false;
+    stopVadLoop();
     vSt.knownOn.clear();
     vSt.muted.clear();
+    vSt.vols.clear();
     vSt.preIce.clear();
     vSt.reqCool.clear();
     vSt.initChecked = false;
     if (vSt.stream) { vSt.stream.getTracks().forEach(t => t.stop()); vSt.stream = null; }
     for (const uid of [...vSt.peers.keys()]) voiceClosePeer(uid);
     if (vSt.tab) vSt.tab.hidden = true;
+    if (vSt.pttBtn) { vSt.pttBtn.hidden = true; vSt.pttBtn.classList.remove("live"); }
     if (vSt.pan) vSt.pan.hidden = true;
     if (vSt.bub) { vSt.bub.innerHTML = ""; vSt.bub.hidden = true; }
   }
@@ -761,7 +865,7 @@
       const p = pl[uid] || {}, mine = uid === net.uid;
       const dot = uid === host ? "" : peers ? `<span class="dot ${peers.get(uid) ? "ok" : "slow"}" title="${peers.get(uid) ? "직접 연결" : "서버 경유"}"></span>` : "";
       const vm = mine ? vSt.mic : (p.mic || 0);
-      const micBadge = vm === 1 ? '<span class="vmic">🎤</span>' : vm === 2 ? '<span class="vmic ls">🎧</span>' : "";
+      const micBadge = vm === 1 ? '<span class="vmic">🎤</span>' : vm === 3 ? '<span class="vmic">🎙️</span>' : vm === 2 ? '<span class="vmic ls">🎧</span>' : "";
       const vreqBtn = !mine && vm === 0 ? `<button type="button" class="vreq" data-vreq="${esc(uid)}" title="음성 대화 요청">📞 요청</button>` : "";
       return `<div class="arn-pl">${uid === host ? "👑" : "🙂"} <b>${esc(p.name || "?")}</b>${mine ? "<i>나</i>" : ""}${p.watch ? "<i>구경</i>" : ""}${micBadge}${dot}${vreqBtn}${net.isHost && !mine ? `<button class="kick" data-kick="${esc(uid)}">내보내기</button>` : ""}</div>`;
     }).join("");

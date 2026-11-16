@@ -95,12 +95,14 @@
   border-radius: 6px;
 }
 .ov-safe-behind {
-  position: absolute; left: 34%; top: 9%; width: 32%; height: 35%;
-  background: linear-gradient(145deg, #1f2937, #0f172a);
-  border: 3px solid #64748b; border-radius: 8px;
-  display: grid; place-items: center; color: #fbbf24; font-size: clamp(13px, 3vw, 22px); font-weight: 900;
-  box-shadow: inset 0 0 22px rgba(0,0,0,0.8);
+  position: absolute; left: 32%; top: 8%; width: 36%; height: 37%;
+  border-radius: 8px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.85);
 }
+.ov-clock-pend {
+  position: absolute; left: 19.5%; top: 44%; width: 6%; height: 27%; pointer-events: none;
+}
+.pend-swing { transform-origin: 20px 2px; animation: pendSwing 1.8s ease-in-out infinite alternate; }
+@keyframes pendSwing { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
 .ov-clock-badge {
   position: absolute; left: 16.5%; top: 26%; width: 12%; padding: 2px 0; text-align: center;
   background: rgba(15,23,42,0.88); border: 1px solid #fbbf24; border-radius: 6px;

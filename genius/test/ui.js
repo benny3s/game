@@ -14,9 +14,10 @@ U.main(async T => {
   T.ok(await p.evaluate(() => !document.getElementById('tabLocal')), '지니어스 한 기기 탭 제거됨');
   T.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), '모바일(390px) 가로 넘침 없음');
 
-  // 1) 튜토리얼 테스트 (흑과 백 연습 단계 통과)
+  // 1) 튜토리얼 테스트 (흑과 백 연습 단계 + 자막 정상 표시 검증)
   await p.click('#helpBtn');
   await wait(p, () => !!document.querySelector('.tut-ov'));
+  T.ok(await p.evaluate(() => document.getElementById('tutSub').textContent.trim().length > 10), '흑과 백 튜토리얼 자막(body) 정상 출력');
   for (let i = 0; i < 3; i++) await p.click('#tutNext');
   await wait(p, () => !!document.querySelector('.gtut-tiles button'));
   await p.evaluate(() => {
@@ -105,7 +106,7 @@ U.main(async T => {
   await wait(pH, () => document.querySelectorAll('.arn-pl .vmic').length >= 2, 5000);
   T.ok(true, '음성 대화 요청·수락 및 참가자 상태 배지 동기화 완료');
 
-  // 종목을 결! 합!(gh) 으로 선택 후 시작
+  // 게임 시작 후 음성 플로팅 버튼·음성 패널(무전기·음량 슬라이더) 확인
   await pH.evaluate(() => { const d = document.querySelector('#arKind')?.closest('details'); if (d) d.open = true; });
   await pH.click('#arKind button[data-k="gh"]');
   await wait(pH, () => { const b = document.querySelector('[data-start]'); return b && !b.disabled && __qa.vis(b); });
@@ -114,6 +115,10 @@ U.main(async T => {
   await wait(pW, () => !document.getElementById('play').hidden);
   T.ok(await pW.evaluate(() => __genius.kind() === 'gh'), '게스트 화면에 결! 합! 동기화 완료');
   T.ok(await pH.evaluate(() => { const t = document.querySelector('.arn-vtab'); return !!t && !t.hidden; }), '게임 중 음성 대화 플로팅 버튼 표시 확인');
+  await pH.click('.arn-vtab');
+  await wait(pH, () => { const vp = document.querySelector('.arn-vpan'); return vp && !vp.hidden && !!vp.querySelector('[data-vvol]'); });
+  T.ok(true, '음성 패널 내 무전기 모드·상대별 볼륨 슬라이더 표시 확인');
+  await pH.click('.arn-vpan [data-vx]');
 
   // 방장이 첫 합 찾고 게스트에 점수 동기화 확인
   const hap0 = await pH.evaluate(() => __genius.state().haps[0]);

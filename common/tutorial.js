@@ -83,13 +83,33 @@
   };
   const sfx = (n, o) => { try { if (window.NYSND && window.NYSND.play && /^(cat|x|unx|hint|win|miss)$/.test(n)) window.NYSND.play(n, o); else if (window.Cozy && Cozy.sfx) Cozy.sfx.play(n, o); } catch (e) {} };
 
+  const stripHtml = s => String(s ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  let koVoices = [];
+  function loadVoices() {
+    try {
+      if (!window.speechSynthesis) return;
+      koVoices = (window.speechSynthesis.getVoices() || []).filter(v => /^ko/i.test(v.lang));
+    } catch (e) {}
+  }
+  if (typeof window !== "undefined" && window.speechSynthesis) {
+    loadVoices();
+    try { window.speechSynthesis.addEventListener("voiceschanged", loadVoices); } catch (e) {}
+  }
+  function pickKoVoice() {
+    if (!koVoices.length) loadVoices();
+    return koVoices.find(v => /Natural|Neural|Google|Online|Sora|Yuna|SunHi|InJoon/i.test(v.name)) || koVoices[0] || null;
+  }
+
   function speak(text, on) {
     try {
       if (!window.speechSynthesis) return;
       window.speechSynthesis.cancel();
-      if (!on || !text) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = "ko-KR"; u.rate = 1.06; u.pitch = 1.0;
+      const plain = stripHtml(text);
+      if (!on || !plain) return;
+      const u = new SpeechSynthesisUtterance(plain);
+      const v = pickKoVoice();
+      if (v) u.voice = v;
+      u.lang = "ko-KR"; u.rate = 0.96; u.pitch = 1.03;
       window.speechSynthesis.speak(u);
     } catch (e) {}
   }
@@ -197,12 +217,14 @@
       q("#tutTag").textContent = st.tag || `STEP ${idx + 1}`;
       q("#tutCnt").textContent = `${idx + 1} / ${steps.length}`;
       q("#tutTitle").textContent = st.title || "";
-      q("#tutSub").innerHTML = st.body || "";
+      const bodyHtml = st.body || st.text || (st.tts && st.say) || "";
+      q("#tutSub").innerHTML = bodyHtml;
       const tryEl = q("#tutTry");
       if (st.interactive) {
+        const iHint = typeof st.interactive === "object" ? st.interactive.hint : st.hint;
         tryEl.hidden = false;
         tryEl.classList.remove("ok");
-        tryEl.textContent = st.interactive.hint || "👆 화면을 직접 눌러 체험해 보세요!";
+        tryEl.textContent = iHint || "👆 화면을 직접 눌러 체험해 보세요!";
       } else {
         tryEl.hidden = true;
       }
@@ -219,7 +241,8 @@
           if (interDone) return;
           interDone = true;
           tryEl.classList.add("ok");
-          tryEl.textContent = msg || (st.interactive && st.interactive.doneText) || "✅ 잘했어요!";
+          const doneMsg = typeof st.interactive === "object" ? st.interactive.doneText : st.doneText;
+          tryEl.textContent = msg || doneMsg || "✅ 잘했어요!";
           sfx("good");
           if (playing && idx < steps.length - 1) {
             const id = setTimeout(() => { if (!closed && playing) drawStep(idx + 1); }, 1300);
@@ -234,13 +257,14 @@
         if (st.onEnter) st.onEnter(stage, ctrl);
       } catch (e) { console.error("[tutorial]", e); }
 
-      speak(st.say || q("#tutSub").textContent, voice);
+      const voiceTxt = st.tts || (st.body ? st.say : "") || q("#tutSub").textContent;
+      speak(voiceTxt, voice);
       syncNav();
       pausedElapsed = 0;
       stepStartedAt = performance.now();
       renderProg(st.interactive ? 100 : 0);
 
-      const dur = st.duration || 4600;
+      const dur = st.duration || st.ms || 4600;
       if (playing && !st.interactive && idx < steps.length - 1) {
         const tick = () => {
           if (closed || !playing) return;
