@@ -321,6 +321,7 @@
       return withNote('chipPer', '점수 1점에 주고받는 칩 — 🏦 은행 방은 1칩 = 100원이라 1칩이면 점당 100원')
         + qrow('박 (피박·광박·멍박)', '예) 켜면: 내가 졌는데 피가 7장 이하면 피박이라 2배로 내요', seg('baks', [[1, '켬'], [0, '끔']].concat(baksOn() || baksOff() ? [] : [[2, '일부만']]), baksOn() ? 1 : baksOff() ? 0 : 2), !baksOn())
         + qrow('피 뺏기 세기', '쪽·따닥·싹쓸이·폭탄·뻑 먹기 때 상대마다 피를 몇 장 뺏는지', seg('steal', [[0, '안 뺏음'], [1, '보통'], [2, '세게']].concat(stealLv() < 0 ? [[-1, '직접 고침']] : []), stealLv()), stealLv() !== 1)
+        + withNote('stealBonus', '보너스 쌍피·쓰리피를 내거나 뒤집어 먹을 때 상대마다 피를 몇 장 가져오는지')
         + withNote('ppeokFirst', '예) 3점: 내 첫 차례에 뻑이 나면 다른 사람마다 3점씩 받아요. 판 점수와 따로라 판은 안 끝나요')
         + withNote('ppeokYeon', '예) 6점: 뻑을 연달아 두 번 하면 다른 사람마다 6점씩 받아요')
         + withNote('kook', '9월 술잔 한 장은 열끗도 되고 쌍피(피 2장)도 돼요. 자동이면 점수 셀 때 나은 쪽으로');
@@ -410,7 +411,7 @@
       <tr><td>뻑</td><td>낸 패로 짝을 맞췄는데 뒤집은 패도 같은 달 → 세 장이 바닥에 남아요. 나중에 네 번째 패로 먹으면 ${pi(R.stealEat)}, 내가 싼 뻑(자뻑)을 먹으면 ${pi(R.stealSelf)}</td></tr>
       <tr><td>폭탄</td><td>손에 같은 달 세 장 + 바닥에 한 장 → 세 장을 한꺼번에 내서 네 장 다. ${pi(R.stealBomb)} · 흔들기처럼 ${R.shakeX > 1 ? '×' + R.shakeX : '배수 없이'} · 그 뒤 두 번은 '뒤집기만' 해도 돼요</td></tr>
       <tr><td>흔들기</td><td>손에 같은 달 세 장 → 보여 주고 내면, 이겼을 때 ${R.shakeX > 1 ? '×' + R.shakeX : '배수 없음 (보여 주기만)'}</td></tr>
-      <tr><td>보너스 피</td><td>내면 바로 내 피가 되고 더미에서 한 장 더 받아요. 더미에서 나오면 먹고 한 장 더 뒤집어요 ${R.bonus ? '' : '(지금은 꺼 둠)'}</td></tr>
+      <tr><td>보너스 피</td><td>내면 바로 내 피가 되고 더미에서 한 장 더 받아요. 더미에서 나오면 먹고 한 장 더 뒤집어요${R.stealBonus ? ' · 상대마다 ' + pi(R.stealBonus) : ''} ${R.bonus ? '' : '(지금은 꺼 둠)'}</td></tr>
       <tr><td>총통</td><td>처음 받은 손패에 같은 달 네 장 → ${chong}</td></tr>
       <tr><td>쓰리뻑</td><td>한 판에 뻑을 세 번 → ${p3}</td></tr>
       ${R.ppeokFirst ? `<tr><td>첫뻑 위로금</td><td>자기 첫 차례에 뻑이 나면 다른 사람마다 <b>${R.ppeokFirst}점</b>씩 받아요. 판 점수와 따로라 판은 안 끝나고, 이기든 지든·나가리여도 주고받아요</td></tr>` : ''}
@@ -2021,7 +2022,8 @@
           const T = targets(ses);
           sfx('coin');
           await moveTo(e.card, T[e.card], { dur: D(420), arc: 30, z: 470 });
-          await popup('보너스 피!', 'gold', e.from === 'hand' ? '한 장 더 받아요' : '한 장 더 뒤집어요');
+          const baseTxt = e.from === 'hand' ? '한 장 더 받아요' : '한 장 더 뒤집어요';
+          await popup('보너스 피!', 'gold', e.steal ? `${baseTxt} · 피 ${e.steal}장씩` : baseTxt);
           break;
         }
         case 'draw': {
@@ -2648,7 +2650,7 @@
         if (ses.cfg.role === 'host') { const sb = document.createElement('button'); sb.className = 'btn'; sb.textContent = '🏦 정산'; sb.onclick = () => ses.bank.flush().then(() => Bank.panel({ game: 'gostop', gid: ses.bank.gid, tab: 'settle' })); $('resBtns').appendChild(sb); }
       }
       let autoT = 0;
-      if (watch && !ses.paused) autoT = setTimeout(() => { if (SES === ses && ses.alive) done('next'); }, FAST ? 30 : 4200);
+      if (watch && !ses.paused) autoT = setTimeout(() => { if (SES === ses && ses.alive) done('next'); }, FAST ? 600 : 4200);   // 시험용(FAST)도 결과 창을 잠깐은 띄움 — 30ms 면 느린 브라우저에서 결과를 못 보고 다음 판으로 넘어감
       else if (ses.cfg.online && ses.cfg.role !== 'host' && ses.roundMsg && ses.roundMsg.S.round > s.round) autoT = setTimeout(() => { if (SES === ses && ses.alive) done('next'); }, FAST ? 30 : 2500);   // 방장이 벌써 다음 판을 열었으면 따라감
       ses.pending = { resolve: v => done(v), reject: e => { clearTimeout(autoT); $('resBox').hidden = true; reject(e); } };
       ses.pending.isResult = true;

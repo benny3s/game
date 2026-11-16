@@ -962,6 +962,23 @@ section('우리 집 규칙: 무작위 규칙 × 무작위 판 (오류 없음 · 
 (async () => {
   section('AI 끼리 (오류 없음 · 점수 분포 · 실력 순서, 같은 판을 자리 바꿔 두 번)');
   const fmt = r => `${r.edge >= 0 ? '+' : ''}${r.edge.toFixed(2)} ± ${r.se.toFixed(2)}`;
+  section('보너스 피 뺏기 (stealBonus)');
+  {
+    const sHandOff = S({ hands: [[48, 0], [4]], table: [12, 16, 20], deck: [24, 28], cap: [[], [2, 3]], rules: { stealBonus: 0 } });
+    act(sHandOff, P(48));
+    eq(sHandOff.cap[1].length, 2, 'stealBonus 0(기본): 손에서 보너스 피 내도 상대 피 그대로');
+
+    const sHandOn = S({ hands: [[48, 0], [4]], table: [12, 16, 20], deck: [24, 28], cap: [[], [2, 3]], rules: { stealBonus: 1 } });
+    const evH = act(sHandOn, P(48));
+    eq(sHandOn.cap[1].length, 1, 'stealBonus 1: 손에서 보너스 피 내면 상대 피 1장 뺏음');
+    ok(evH.some(e => e.t === 'steal' && e.from === 1 && e.to === 0), 'stealBonus 1 손패 이벤트 발생');
+
+    const sDeckOn = S({ hands: [[0, 4], [8, 12]], table: [16, 20, 24], deck: [49, 28], cap: [[], [2, 3]], rules: { stealBonus: 1 } });
+    const evD = act(sDeckOn, P(0));
+    eq(sDeckOn.cap[1].length, 1, 'stealBonus 1: 더미에서 보너스 피 뒤집어도 상대 피 1장 뺏음');
+    ok(evD.some(e => e.t === 'steal' && e.from === 1 && e.to === 0), 'stealBonus 1 더미 이벤트 발생');
+  }
+
   let t = Date.now();
   const ee = await duel('easy', 'easy', 1500, 2);
   eq(ee.err, '', '🐣 끼리 맞고 3,000판 오류 없음');

@@ -96,6 +96,7 @@
     { k: 'stealEat', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '남의 뻑 먹기' },
     { k: 'stealSelf', g: 'steal', t: 'num', d: 2, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '자뻑 먹기' },
     { k: 'stealDealt', g: 'steal', t: 'num', d: 1, min: 0, max: 3, unit: '장', zero: '안 뺏음', label: '처음 깔린 세 장 먹기', note: '판 시작 때 바닥에 같은 월 세 장이 깔렸고, 그걸 네 번째 패로 먹을 때 (11-01 훈 님)' },
+    { k: 'stealBonus', g: 'steal', t: 'num', d: 0, min: 0, max: 2, unit: '장', zero: '안 뺏음', label: '보너스 피 가져올 때', note: '손에서 내거나 더미에서 뒤집어 보너스 피를 먹을 때 상대마다 뺏는 피' },
     { k: 'nagariX', g: 'nagari', t: 'num', d: 2, min: 1, max: 4, unit: '배', label: '나가리 다음 판 배수', note: '나가리가 나면 다음 판 점수에 곱해요 (1배면 없음)' },
     { k: 'nagariMax', g: 'nagari', t: 'num', d: 3, min: 0, max: 5, unit: '번', zero: '안 쌓음', label: '연속 나가리 쌓는 한도', note: '연달아 나가리가 나도 이 횟수까지만 곱해요' },
     { k: 'saleOn', g: 'sale', t: 'bool', d: true, label: '광 팔기', note: '끄면 쉬는 사람은 그냥 쉬어요' },
@@ -573,7 +574,9 @@
     // 보너스 피를 내면 바로 먹고 더미에서 한 장 받아 손에 (차례는 그대로)
     if (isBonus(c)) {
       removeFrom(h, c); s.cap[p].push(c);
-      if (ev) ev.push({ t: 'bonus', p, card: c, from: 'hand' });
+      const sb = rulesOf(s).stealBonus;
+      if (ev) ev.push({ t: 'bonus', p, card: c, from: 'hand', steal: sb });
+      if (sb > 0) for (let q = 0; q < s.n; q++) if (q !== p) stealPi(s, q, p, sb, ev);
       if (s.deck.length) { const d = s.deck.pop(); h.push(d); sortIds(h); if (s.decl) s.decl[p] = 0; if (ev) ev.push({ t: 'draw', p, card: d }); }   // 새 패가 들어와 '없을 달' 짐작은 지움
       if (!hasTurns(s, p)) { s.cur = newCur(p, 'bonus'); return scoreCheck(s, ev); }
       return;
@@ -622,7 +625,9 @@
       if (ev) ev.push({ t: 'flip', p, card: d });
       if (!isBonus(d)) break;
       s.cap[p].push(d);                                   // 더미에서 나온 보너스 피: 먹고 한 장 더
-      if (ev) ev.push({ t: 'bonus', p, card: d, from: 'deck' });
+      const sb = rulesOf(s).stealBonus;
+      if (sb > 0) cur.steal += sb;
+      if (ev) ev.push({ t: 'bonus', p, card: d, from: 'deck', steal: sb });
       d = -1;
     }
     cur.flip = d;

@@ -399,7 +399,7 @@ const Gate = (() => {
   // 가입 신청: 닉네임 + PIN → 게임 공통 프로필(me.js GME) 만들기·이어 받기. 아케이드 첫 화면처럼 me.js 가 없는 곳은 불러옴
   async function registerProfile(name, pin) {
     await ensureFirebase();
-    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=14"); } catch (e) {} }
+    if (!window.GME && GATE_BASE) { try { await loadScript(GATE_BASE + "me.js?v=19"); } catch (e) {} }
     if (!window.GME || !GME.register) return { name };
     return GME.register(db(), name, pin);
   }
@@ -459,16 +459,77 @@ const Gate = (() => {
     return true;
   }
 
+  const profNameKey = n => String(n || "").trim().toLowerCase().replace(/\s+/g, "").replace(/[.#$\[\]\/]/g, "_");
+  async function findPidByName(name) {
+    const k = profNameKey(name);
+    if (!k) return "";
+    try { return (await db().ref("gp/names/" + k).get()).val() || ""; } catch (e) { return ""; }
+  }
+  async function linkLifetimeDevice(pid, name, targetUid) {
+    if (!pid) return null;
+    const safeName = String(name || "친구").slice(0, 12);
+    const ref = db().ref("game_lifetime/" + pid);
+    const cur = (await ref.get().catch(() => null));
+    const val = (cur && cur.val && cur.val()) || {};
+    const slots = (val && val.slots) || {};
+    let slot = ["1", "2", "3", "4"].find(s => slots[s] === targetUid) || "";
+    if (!slot && targetUid) slot = ["1", "2", "3", "4"].find(s => !slots[s]) || "";
+    const patch = { active: true, name: safeName, t: TS() };
+    if (slot && targetUid) patch["slots/" + slot] = targetUid;
+    await ref.update(patch);
+    return { pid, slot };
+  }
+  async function trySelfActivateLifetime(pid, name) {
+    if (!pid || !user) return { ok: false };
+    try {
+      const snap = await db().ref("game_lifetime/" + pid).get();
+      const lt = snap.val();
+      if (!lt || lt.active !== true) return { ok: false };
+      const slots = lt.slots || {};
+      let slot = ["1", "2", "3", "4"].find(s => slots[s] === user.uid) || "";
+      if (!slot) slot = ["1", "2", "3", "4"].find(s => !slots[s]) || "";
+      if (!slot) return { ok: false, full: true };
+      const safeName = String(name || lt.name || "친구").slice(0, 12);
+      if (slots[slot] !== user.uid) {
+        await db().ref("game_lifetime/" + pid + "/slots/" + slot).set(user.uid);
+      }
+      await db().ref("game_devices/" + user.uid).set({
+        name: safeName,
+        pid,
+        slot,
+        selfAdded: pid,
+        role: "friend",
+        status: "active",
+        expiresAt: 0,
+        ua: detectDeviceName().slice(0, 24),
+        t: TS(),
+        lastSeen: TS(),
+      });
+      applyAllowed("friend", 0, safeName);
+      gToast(`🎉 '${safeName}' 평생 회원 새 기기가 바로 등록되었어요!`, 3400);
+      return { ok: true, slot };
+    } catch (e) {
+      return { ok: false };
+    }
+  }
+
   // ── 4) 관리자용 기기 제어 API ────────────────────
   // days: 1·7·30 = 그만큼, 0 = 계속 (예전 role "temp24h" = 1일)
-  async function approveRequest(targetUid, { role = "friend", name = "친구", ua = "", days } = {}) {
+  async function approveRequest(targetUid, { role = "friend", name = "친구", ua = "", days, pid = "" } = {}) {
     await ensureFirebase();
     if (days == null) days = role === "temp24h" ? 1 : 0;
     days = [1, 7, 30].includes(Number(days)) ? Number(days) : 0;
     role = days ? "temp24h" : "friend";
     const safeName = String(name || "친구").slice(0, 12);
     const expiresAt = days ? now() + days * DAY : 0;
-    await db().ref("game_devices/" + targetUid).set({
+    let link = null;
+    if (!days) {
+      try {
+        const foundPid = pid || await findPidByName(safeName);
+        if (foundPid) link = await linkLifetimeDevice(foundPid, safeName, targetUid);
+      } catch (e) {}
+    }
+    const devDoc = {
       name: safeName,
       role,
       status: "active",
@@ -476,7 +537,9 @@ const Gate = (() => {
       ua: String(ua || "등록 기기").slice(0, 24),
       t: TS(),
       lastSeen: TS(),
-    });
+    };
+    if (link && link.pid) { devDoc.pid = link.pid; if (link.slot) devDoc.slot = link.slot; }
+    await db().ref("game_devices/" + targetUid).set(devDoc);
     await db().ref("game_requests/" + targetUid).update({ name: safeName, status: "approved", role, approvedAt: TS() }).catch(() => {});
   }
 
@@ -492,6 +555,12 @@ const Gate = (() => {
 
   async function removeDevice(targetUid) {
     await ensureFirebase();
+    try {
+      const d = (await db().ref("game_devices/" + targetUid).get()).val();
+      if (d && d.pid && d.slot) {
+        await db().ref(`game_lifetime/${d.pid}/slots/${d.slot}`).remove().catch(() => {});
+      }
+    } catch (e) {}
     await db().ref("game_devices/" + targetUid).update({ status: "revoked", expiresAt: 0 });
   }
 
@@ -724,7 +793,7 @@ const Gate = (() => {
       const nameInp = body.querySelector("#bgReqName"), pinInp = body.querySelector("#bgReqPin"), noteInp = body.querySelector("#bgReqNote");
       const msgEl = body.querySelector("#bgReqMsg"), reqBtn = body.querySelector("#bgReqBtn"), waitBox = body.querySelector("#bgReqWait");
       const sameDev = () => !!myProfName() && nameInp.value.trim() === myProfName();
-      const hint = () => { body.querySelector("#bgPinHint").textContent = sameDev() ? "이 기기에서 쓰던 닉네임이라 비워도 돼요" : "새 닉네임이면 정하고, 다른 기기에서 쓰던 닉네임이면 그 PIN"; };
+      const hint = () => { body.querySelector("#bgPinHint").textContent = sameDev() ? "이 기기에서 쓰던 닉네임이라 비워도 돼요" : "새 닉네임이면 정하고, ♾️ 평생 허용된 친구는 내 닉네임·PIN으로 새 기기(최대 4대)가 바로 열려요"; };
       hint();
       nameInp.oninput = () => { form.name = nameInp.value; msgEl.textContent = ""; hint(); };
       pinInp.oninput = () => { pinInp.value = pinInp.value.replace(/\D/g, "").slice(0, 4); form.pin = pinInp.value; msgEl.textContent = ""; };
@@ -744,10 +813,18 @@ const Gate = (() => {
         reqBtn.textContent = "보내는 중...";
         try {
           const prof = await registerProfile(nm, pin);
+          let selfRes = { ok: false };
+          if (prof && prof.pid) selfRes = await trySelfActivateLifetime(prof.pid, prof.name || nm);
+          if (selfRes.ok) {
+            hideLockOverlay(true);
+            return;
+          }
           await requestDeviceApproval(prof.name || nm, st => {
             waitBox.hidden = false;
             if (st === "pending") {
-              waitBox.innerHTML = `<b>📮 '${esc(prof.name || nm)}' 가입 신청을 보냈어요!</b><br>베니가 허용하면 이 화면이 바로 열려요.`;
+              waitBox.innerHTML = selfRes.full
+                ? `<b>📱 '${esc(prof.name || nm)}' 평생 회원 본인 기기(4대)가 다 찼어요.</b><br>베니에게 가입 신청을 보냈으니 확인하면 바로 열려요.`
+                : `<b>📮 '${esc(prof.name || nm)}' 가입 신청을 보냈어요!</b><br>베니가 허용하면 이 화면이 바로 열려요.`;
               reqBtn.textContent = "⏳ 허용 기다리는 중";
             } else if (st === "rejected") {
               waitBox.innerHTML = "😿 이번에는 허용되지 않았어요.";
@@ -940,7 +1017,7 @@ const Gate = (() => {
         <div class="bgate-visl">${rows || '<span class="bgate-meta">오늘은 아직 아무도 안 왔어요.</span>'}</div>
         <div class="bgate-meta" style="margin-top:7px">👑 관리자 · ✅ 허용 · 💞 브릿지 · 👀 손님(+승인 누르면 바로 평생 허용 가능) · 🟢 테두리 = 지금</div></div>`;
       el.querySelectorAll("[data-visapp]").forEach(b => {
-        b.onclick = () => { openAdminModal(); };
+        b.onclick = () => { openAdminModal(b.dataset.visapp); };
       });
     };
     const fn = snap => { val = snap.val() || {}; draw(); };
@@ -950,17 +1027,18 @@ const Gate = (() => {
   }
 
   // ── 포털 [👑 출입·기기 관리] 모달 ─────────────────────────────────
-  let adminEl = null, adminSubs = [];
+  let adminEl = null, adminSubs = [], adminFocusUid = "";
   function clearAdminSubs() {
     for (const [r, ev, fn] of adminSubs.splice(0)) {
       try { r.off(ev, fn); } catch (e) {}
     }
   }
 
-  async function openAdminModal() {
+  async function openAdminModal(focusUid = "") {
     injectStyle();
     await ensureFirebase();
     if (!watching && !IS_LOCAL) { try { await checkPermissionsAndWatch(); } catch (e) {} }
+    adminFocusUid = focusUid || "";
     if (!adminEl) {
       adminEl = document.createElement("div");
       adminEl.className = "bgate-ov";
@@ -1097,8 +1175,9 @@ const Gate = (() => {
       }
       listEl.innerHTML = items.map(p => {
         const nm = p.name && p.name !== "손님" ? p.name : "";
+        const hi = adminFocusUid && p.uid === adminFocusUid;
         return `
-          <div class="bgate-row">
+          <div class="bgate-row"${hi ? ' data-hi="1" style="border:1.5px solid #34d399;background:rgba(16,185,129,0.12)"' : ""}>
             <div style="display:grid;gap:3px">
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 <input class="bgate-inp" data-vname="${esc(p.uid)}" maxlength="12" value="${esc(nm)}" placeholder="이름/별명" style="width:110px;padding:5px 8px;font-size:13px">
@@ -1123,6 +1202,8 @@ const Gate = (() => {
           catch (e) { b.disabled = false; alert("승인하지 못했어요: " + (e.message || e)); }
         };
       });
+      const hiEl = listEl.querySelector('[data-hi="1"]');
+      if (hiEl) { adminFocusUid = ""; setTimeout(() => hiEl.scrollIntoView({ behavior: "smooth", block: "center" }), 60); }
     };
     const presRef = db().ref("game_presence");
     const onPres = snap => { presVal = snap.val() || {}; drawPres(); };
@@ -1151,18 +1232,20 @@ const Gate = (() => {
         const st = expired ? "revoked" : (d.status || "active");
         const stLabel = expired ? "끝남" : st === "active" ? "허용" : st === "paused" ? "멈춤" : "차단";
         const expTxt = exp > 0 && !expired ? ` · ${leftTxt(exp)}` : "";
+        const selfTag = st === "active" && exp === 0 && d.pid ? ` · <span style="color:#86efac">♾️ 본인기기추가 ON</span>` : "";
         return `
           <div class="bgate-row">
             <div>
               <b>${esc(d.name || "기기")}</b>
               <span class="bgate-pill ${st}">${stLabel}</span>
-              <div class="bgate-meta">${durLabel(exp)}${expTxt} · ${esc(d.ua || "브라우저")} · 최근 ${fmtTimeAgo(d.lastSeen || d.t)}</div>
+              <div class="bgate-meta">${durLabel(exp)}${expTxt}${selfTag} · ${esc(d.ua || "브라우저")} · 최근 ${fmtTimeAgo(d.lastSeen || d.t)}</div>
             </div>
             <div style="display:flex;gap:5px;flex-wrap:wrap">
               ${st === "active"
                 ? `<button class="bgate-btn ghost sm" data-dact="pause" data-uid="${esc(d.uid)}">⏸ 멈춤</button>`
-                : `<button class="bgate-btn green sm" data-dact="resume" data-uid="${esc(d.uid)}">▶ 다시 허용 (계속)</button>`}
-              ${st === "active" && exp > 0 ? `<button class="bgate-btn ghost sm" data-dact="always" data-uid="${esc(d.uid)}">♾️ 계속으로</button>` : ""}
+                : `<button class="bgate-btn green sm" data-dact="resume" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">▶ 다시 허용 (계속)</button>`}
+              ${st === "active" && exp > 0 ? `<button class="bgate-btn ghost sm" data-dact="always" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">♾️ 계속으로</button>` : ""}
+              ${st === "active" && exp === 0 && !d.pid ? `<button class="bgate-btn ghost sm" data-dact="lifetime" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">🔗 본인기기추가</button>` : ""}
               <button class="bgate-btn ghost sm" data-dact="24h" data-uid="${esc(d.uid)}">⏳ 오늘만</button>
               <button class="bgate-btn ghost sm" data-dact="revoke" data-uid="${esc(d.uid)}" style="color:#fca5a5">🗑 차단</button>
             </div>
@@ -1171,9 +1254,20 @@ const Gate = (() => {
       }).join("");
       listEl.querySelectorAll("[data-dact]").forEach(b => {
         b.onclick = async () => {
-          const { dact, uid } = b.dataset;
+          const { dact, uid, name } = b.dataset;
           if (dact === "pause") await updateDevice(uid, { status: "paused" });
-          else if (dact === "resume" || dact === "always") await updateDevice(uid, { status: "active", role: "friend", expiresAt: 0 });
+          else if (dact === "resume" || dact === "always" || dact === "lifetime") {
+            const foundPid = await findPidByName(name);
+            const patch = { status: "active", role: "friend", expiresAt: 0 };
+            if (foundPid) {
+              const link = await linkLifetimeDevice(foundPid, name, uid);
+              if (link) { patch.pid = link.pid; if (link.slot) patch.slot = link.slot; }
+            } else if (dact === "lifetime") {
+              alert(`'${name}' 닉네임의 프로필(PIN)을 아직 못 찾았어요. 친구가 한 번 '👤 내 프로필'로 PIN을 정한 뒤 다시 눌러 주세요.`);
+              return;
+            }
+            await updateDevice(uid, patch);
+          }
           else if (dact === "24h") await updateDevice(uid, { status: "active", role: "temp24h", expiresAt: now() + DAY });
           else if (dact === "revoke") await removeDevice(uid);
         };

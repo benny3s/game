@@ -720,7 +720,7 @@ button { font: inherit; cursor: pointer; }
 
 <header class="topbar">
   <div class="topbar-in">
-    <div class="brand">
+    <div class="brand" title="관리자 로그인은 로고 3번 클릭">
       <div class="brand-logo">🎮</div>
       <div class="brand-txt">
         <b>BENNY ARCADE</b>
@@ -815,7 +815,7 @@ button { font: inherit; cursor: pointer; }
       <p>휴대폰 세로·가로 화면과 데스크톱 키보드·마우스를 모두 지원합니다. 게임에 들어가서 <b>혼자 · 한 기기 · 친구랑</b> 중에 고르면 돼요.</p>
     </div>
   </section>
-  <p class="cost-note">🖥️ 서버·통신 비용은 베니가 내고 있어요. 재밌게 하셨다면 <button type="button" id="coffeeBtn">☕ 커피 사 주기</button></p>
+  <p class="cost-note">🖥️ 서버·통신 비용은 베니가 내고 있어요. 재밌게 하셨다면 <button type="button" id="coffeeBtn">☕ 커피 사 주기</button><button type="button" id="admFootBtn" style="margin-left:10px;opacity:.65">👑 관리자</button></p>
 </main>
 
 <!-- 프로필 & 방 만들기 권한 모달 (Gate 가 없을 때만 쓰는 예비 창) -->
@@ -1860,6 +1860,7 @@ button { font: inherit; cursor: pointer; }
   // 기기 허용이 바뀌면 배지도 바로 (Gate 가 나중에 확인을 끝내도)
   if (window.Gate && Gate.onChange) Gate.onChange(s => { if (s.status !== "checking" && s.status !== "open" && !isAdmin) { canHost = !!s.canHost; updateHostBadge(); } mountReqs(); if (games.length && [isAdm(), canHost].join() !== homeSig) refreshHome(); });
   $("coffeeBtn").onclick = () => { if (window.Gate && Gate.openCoffee) Gate.openCoffee(); };
+  if ($("admFootBtn")) $("admFootBtn").onclick = () => { if (window.Gate && Gate.adminLoginPrompt) Gate.adminLoginPrompt(); };
   // 📒 아쉬운 장면: 복기에서 모은 '내 수가 많이 손해였던 장면' (이 기기) — 있을 때만 단추
   const drawMst = () => { const n = window.Mistakes ? Mistakes.count() : 0; $("mstBtn").hidden = !n; $("mstBtn").textContent = `📒 아쉬운 장면 ${n}`; };
   $("mstBtn").onclick = () => { if (window.Mistakes) Mistakes.open({}); };

@@ -483,11 +483,39 @@ async function mePickTests(browser) {
   }
 }
 
+async function lifetimeSelfTests(browser) {
+  console.log('평생 회원 PIN 새 기기 자가 추가 (gate.js)');
+  const pinH = require('crypto').createHash('sha256').update('bennygame:pL:2580').digest('hex').slice(0, 32);
+  const ctx = await newCtx(browser, { fake: { rules: 'gp', user: { uid: 'newDev2', claims: {} } } });
+  await ctx.addInitScript(h => {
+    const t = window.__fs && window.__fs.tree;
+    if (!t) return;
+    t.gp = { players: { pL: { n: '평생친구', hp: true, c: 1, l: 2 } }, names: { '평생친구': 'pL' }, pins: { pL: h } };
+    t.game_lifetime = { pL: { active: true, name: '평생친구', slots: { '1': 'oldDev1' } } };
+  }, pinH);
+  const p = await open(ctx, LOCAL + '/game/snake/?gate=1');
+  await waitFn(p, () => !!window.Gate);
+  await p.evaluate(() => window.Gate.showLogin());
+  await waitFn(p, () => !!document.getElementById('bgReqName'));
+  await p.fill('#bgReqName', '평생친구');
+  await p.fill('#bgReqPin', '2580');
+  await p.click('#bgReqBtn');
+  const unlocked = await waitFn(p, () => window.Gate && window.Gate.state.allowed && window.Gate.state.uid === 'newDev2', null, 5000);
+  const snap = await p.evaluate(() => ({
+    dev: window.__fs.get('game_devices/newDev2'),
+    slot2: window.__fs.get('game_lifetime/pL/slots/2'),
+    req: window.__fs.get('game_requests/newDev2'),
+  }));
+  ok(unlocked && snap.dev && snap.dev.status === 'active' && snap.dev.slot === '2' && snap.slot2 === 'newDev2' && !snap.req,
+    `평생 회원 PIN 통과 시 슬롯 2 자동 점유 + 즉시 허용 — ${JSON.stringify(snap)}`);
+  await ctx.close();
+}
+
 (async () => {
   const t0 = Date.now();
   const pw = require(PW);
   const browser = await pw.chromium.launch({ executablePath: CHROME.find(f => fs.existsSync(f)), args: ['--mute-audio'] });
-  for (const t of [cozyTests, arenaUiTests, gateFlagTests, guestTasteTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, roomLinkTests, reportStatusTests, mePickTests]) {
+  for (const t of [cozyTests, arenaUiTests, gateFlagTests, guestTasteTests, gateAdminTests, snakeGateTests, arenaOwnTests, presenceTests, roomLinkTests, reportStatusTests, mePickTests, lifetimeSelfTests]) {
     try { await t(browser); } catch (e) { fail++; console.log('  ✘ FAIL: 시험 도구 예외 ' + (e.stack || e.message).split('\n').slice(0, 3).join(' | ')); }
   }
   await browser.close();

@@ -30,8 +30,21 @@
       ".read": "auth != null && (auth.token.admin === 1)",
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.admin === 1)",
-        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('role').val() === data.child('role').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))",
+        ".write": "auth != null && (auth.token.admin === 1 || (auth.uid === $uid && data.exists() && newData.child('status').val() === data.child('status').val() && newData.child('role').val() === data.child('role').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()) || (auth.uid === $uid && !data.exists() && newData.exists() && newData.child('selfAdded').isString() && newData.child('status').val() === 'active' && newData.child('role').val() === 'friend' && newData.child('expiresAt').val() === 0 && newData.child('slot').isString() && newData.child('slot').val().matches(/^[1-4]$/) && root.child('game_lifetime/' + newData.child('selfAdded').val() + '/active').val() === true && root.child('gp/pins/' + newData.child('selfAdded').val()).exists() && root.child('gp/pinchk/' + newData.child('selfAdded').val() + '/' + auth.uid).val() === root.child('gp/pins/' + newData.child('selfAdded').val()).val() && root.child('game_lifetime/' + newData.child('selfAdded').val() + '/slots/' + newData.child('slot').val()).val() === auth.uid))",
         ".validate": "!newData.exists() || (newData.child('name').isString() && newData.child('name').val().length <= 16 && newData.child('status').isString())"
+      }
+    },
+    "game_lifetime": {
+      ".read": "auth != null && auth.token.admin === 1",
+      "$pid": {
+        ".read": "auth != null && (auth.token.admin === 1 || (root.child('gp/pins/' + $pid).exists() && root.child('gp/pinchk/' + $pid + '/' + auth.uid).val() === root.child('gp/pins/' + $pid).val()))",
+        ".write": "auth != null && auth.token.admin === 1",
+        "slots": {
+          "$slot": {
+            ".validate": "$slot.matches(/^[1-4]$/) && (!newData.exists() || (newData.isString() && newData.val().length <= 40))",
+            ".write": "auth != null && (auth.token.admin === 1 || (!data.exists() && newData.exists() && newData.val() === auth.uid && root.child('game_lifetime/' + $pid + '/active').val() === true && root.child('gp/pins/' + $pid).exists() && root.child('gp/pinchk/' + $pid + '/' + auth.uid).val() === root.child('gp/pins/' + $pid).val()))"
+          }
+        }
       }
     },
     "game_requests": {

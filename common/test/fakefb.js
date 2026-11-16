@@ -153,13 +153,42 @@
     return S;
   }
 
-  // firebase/database.rules.json 의 gp/*(이름·프로필·PIN) 규칙을 그대로 흉내 (test/gp 도 같음). 다른 곳은 다 허용
-  //   쓴 경로를 규칙 칸(players/$pid · names/$key · pins/$pid · pinchk/$pid/$uid)으로 올려서 판단
+  // firebase/database.rules.json 의 gp/* · game_devices · game_lifetime 규칙을 그대로 흉내
   function gpRules(w) {
+    const adm = w.claims.admin === 1;
+    const devM = /^(game_devices)\/([^/]+)$/.exec(w.path);
+    if (devM) {
+      if (!w.uid) return false;
+      const uid = devM[2], data = w.root(w.path), nd = w.newRoot(w.path);
+      const va = nd == null || (typeof nd.name === "string" && nd.name.length <= 16 && typeof nd.status === "string");
+      if (!va) return false;
+      if (adm) return true;
+      if (w.uid !== uid) return false;
+      if (data != null && nd != null && nd.status === data.status && nd.role === data.role && nd.expiresAt === data.expiresAt) return true;
+      if (data == null && nd != null && typeof nd.selfAdded === "string" && nd.status === "active" && nd.role === "friend" && nd.expiresAt === 0 && typeof nd.slot === "string" && /^[1-4]$/.test(nd.slot)) {
+        const pid = nd.selfAdded;
+        return w.root("game_lifetime/" + pid + "/active") === true
+          && w.root("gp/pins/" + pid) != null
+          && w.root("gp/pinchk/" + pid + "/" + w.uid) === w.root("gp/pins/" + pid)
+          && w.root("game_lifetime/" + pid + "/slots/" + nd.slot) === w.uid;
+      }
+      return false;
+    }
+    const ltM = /^game_lifetime\/([^/]+)\/slots\/([^/]+)$/.exec(w.path);
+    if (ltM) {
+      if (!w.uid) return false;
+      const [, pid, slot] = ltM, data = w.root(w.path), nd = w.newRoot(w.path);
+      if (!/^[1-4]$/.test(slot)) return false;
+      if (adm) return nd == null || (typeof nd === "string" && nd.length <= 40);
+      return data == null && nd === w.uid
+        && w.root("game_lifetime/" + pid + "/active") === true
+        && w.root("gp/pins/" + pid) != null
+        && w.root("gp/pinchk/" + pid + "/" + w.uid) === w.root("gp/pins/" + pid);
+    }
     const m = /^((?:test\/)?gp)\/(players|names|pins|pinchk)\/([^/]+)(?:\/([^/]+))?/.exec(w.path);
     if (!m) return true;
     if (!w.uid) return false;
-    const [, base, kind, id, sub] = m, adm = w.claims.admin === 1;
+    const [, base, kind, id, sub] = m;
     const node = kind === "pinchk" ? `${base}/pinchk/${id}/${sub}` : `${base}/${kind}/${id}`;
     const data = w.root(node), nd = w.newRoot(node), root = p => w.root(base + "/" + p);
     const pinOk = pid => root("pins/" + pid) != null && root("pinchk/" + pid + "/" + w.uid) === root("pins/" + pid);
