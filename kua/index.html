@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#08529e">
+<meta name="theme-color" content="#0d5bb5">
 <title>베니 크아 — 물풍선 액션 대전</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,81 +11,115 @@
 <link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
-<body class="dark">
-<div class="wrap" id="menu">
-  <header class="top">
-    <h1><span class="glogo" aria-hidden="true">💦</span>베니 크아</h1>
-    <a href="../">게임 목록</a>
-  </header>
-
-  <section id="home" class="card">
-    <p class="k-sub">15×13 물풍선 아케이드 · 60fps 부드러운 조작 · 선입력 코너턴 · 바늘 탈출</p>
-
-    <div class="tabs" role="tablist">
-      <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
-      <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
-      <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
-    </div>
-
-    <div id="soloBox" class="box">
-      <div class="tiers three" id="tiers"></div>
-
-      <div class="k-sec-lbl">캐릭터 선택 (KR 기본·최대 능력치)</div>
-      <div class="k-chars" id="charGrid"></div>
-      <div class="k-char-stat" id="charStatBox"></div>
-
-      <div class="k-opt-row">
-        <span class="k-lbl">맵</span>
-        <div class="seg" id="mapSeg"></div>
+<body class="dark kua-body">
+<div class="wrap k-menu-wrap" id="menu">
+  <div class="k-lobby-shell">
+    <header class="k-lobby-head">
+      <div class="k-logo-pill">
+        <span class="glogo" aria-hidden="true">💦</span>
+        <b>CRAZY ARCADE</b>
+        <small>베니 크아</small>
       </div>
+      <div class="tabs k-lobby-tabs" role="tablist">
+        <button class="btn" id="tabSolo" aria-pressed="true">혼자 하기</button>
+        <button class="btn" id="tabFriend" aria-pressed="false">친구랑 멀티</button>
+        <button class="btn" id="tabWatch" aria-pressed="false">AI 관전</button>
+      </div>
+      <div class="k-head-tools">
+        <button type="button" class="k-tool-btn" id="helpBtn">❓ 하는 법</button>
+        <button type="button" class="k-tool-btn" id="rankBtn">🏆 랭킹</button>
+        <a class="k-tool-btn k-home-link" href="../">나가기</a>
+      </div>
+    </header>
 
-      <div class="k-opt-row">
-        <span class="k-lbl">방식</span>
-        <div class="seg" id="modeSeg">
-          <button type="button" class="btn active" data-m="free">개인전</button>
-          <button type="button" class="btn" data-m="team">팀전 (2:2)</button>
+    <div class="k-lobby-body">
+      <div class="k-lobby-left">
+        <div id="soloBox" class="k-lbox">
+          <div class="k-room-title">
+            <span>🎮 대기실 플레이어</span>
+            <small>빈 슬롯을 누르면 AI 인원이 바뀝니다</small>
+          </div>
+          <div class="k-room-slots" id="lobbySlots"></div>
+
+          <div class="k-room-opts">
+            <div class="k-tiers-row">
+              <span class="k-olbl">AI 난이도</span>
+              <div class="tiers three" id="tiers"></div>
+            </div>
+            <div class="k-opt-pair">
+              <div class="k-opt-row">
+                <span class="k-olbl">대전 방식</span>
+                <div class="seg" id="modeSeg">
+                  <button type="button" class="btn active" data-m="free">개인전</button>
+                  <button type="button" class="btn" data-m="team">팀전 (2:2)</button>
+                </div>
+              </div>
+              <div class="k-opt-row" id="botRow">
+                <span class="k-olbl">AI 수</span>
+                <div class="seg" id="botSeg">
+                  <button type="button" class="btn" data-b="1">1명</button>
+                  <button type="button" class="btn active" data-b="3">3명</button>
+                  <button type="button" class="btn" data-b="5">5명</button>
+                  <button type="button" class="btn" data-b="7">7명</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="k-opt-row" id="botRow">
-        <span class="k-lbl">AI 수</span>
-        <div class="seg" id="botSeg">
-          <button type="button" class="btn" data-b="1">1명</button>
-          <button type="button" class="btn active" data-b="3">3명</button>
-          <button type="button" class="btn" data-b="5">5명</button>
-          <button type="button" class="btn" data-b="7">7명</button>
+        <div id="friendBox" class="k-lbox" hidden>
+          <div class="k-room-title">
+            <span>🌐 친구랑 실시간 멀티 대기실</span>
+            <small>2~8인 방 만들기 · 초대 링크 지원</small>
+          </div>
+          <p class="k-friend-lede">방 코드를 만들거나 초대 링크로 친구가 들어오면, 오른쪽에서 고른 캐릭터·맵·방식으로 바로 대결이 시작됩니다.</p>
+          <div class="k-room-title" style="margin-top:10px;border:none;padding:0">
+            <small>✨ 오른쪽 패널에서 캐릭터와 맵을 고른 뒤 아래 버튼을 눌러 방을 열어 보세요.</small>
+          </div>
         </div>
+
+        <div id="watchBox" class="k-lbox" hidden>
+          <div class="k-room-title">
+            <span>📺 고수 AI 4인 관전 모드</span>
+            <small>다오 · 배찌 · 디지니 · 로두마니 자동 대결</small>
+          </div>
+          <div class="k-watch-cast" id="watchCast"></div>
+          <div class="k-opt-row" style="margin-top:10px">
+            <span class="k-olbl">맵 선택</span>
+            <div class="seg" id="wMapSeg"></div>
+          </div>
+        </div>
+
+        <ul class="k-lobby-howto howto">
+          <li><b>방향키</b> 이동(코너 선입력 · 미끄러짐) · <b>Space</b> 물풍선 연속 설치/던지기 · <b>Ctrl</b>(또는 Z) 바늘 탈출</li>
+          <li>물풍선에 맞으면 약 <b>6초</b> 동안 물방울에 갇히며, 적이 닿으면 처치 · 같은 팀이 닿으면 구출됩니다.</li>
+        </ul>
       </div>
+
+      <aside class="k-lobby-right">
+        <div class="k-panel-card" id="charPickerWrap">
+          <div class="k-panel-hdr">캐릭터 선택</div>
+          <div class="k-chars" id="charGrid"></div>
+          <div class="k-char-stat" id="charStatBox"></div>
+        </div>
+
+        <div class="k-panel-card k-map-card">
+          <div class="k-panel-hdr">맵 선택</div>
+          <div class="k-map-preview">
+            <canvas id="mapMiniCv" width="120" height="104" aria-label="맵 미니맵"></canvas>
+            <div class="k-map-info">
+              <div class="seg k-map-seg" id="mapSeg"></div>
+              <p class="k-map-desc" id="mapDescBox"></p>
+            </div>
+          </div>
+        </div>
+
+        <button class="btn primary big k-game-start" id="startBtn">GAME START!</button>
+      </aside>
     </div>
-
-    <div id="friendBox" class="box" hidden>
-      <p class="lede">2~8명 친구와 실시간 물풍선 대결! 개인전/팀전 · 맵 · AI 빈자리 채우기를 대기실에서 고릅니다.</p>
-      <div class="k-sec-lbl">내 캐릭터</div>
-      <div class="k-chars" id="fCharGrid"></div>
-    </div>
-
-    <div id="watchBox" class="box" hidden>
-      <p class="lede">고수 AI 4명이 펼치는 물풍선 연쇄 폭발 대결을 구경해 보세요!</p>
-      <div class="k-opt-row">
-        <span class="k-lbl">맵</span>
-        <div class="seg" id="wMapSeg"></div>
-      </div>
-    </div>
-
-    <ul class="howto">
-      <li><b>방향키</b> 이동 (코너 선입력 · 모서리 자동 미끄러짐) · <b>Space</b> 물풍선 연속 설치/던지기 · <b>Ctrl</b>(또는 Z) 바늘 탈출</li>
-      <li>물풍선에 맞으면 약 <b>6초</b> 동안 물방울에 갇히며, 적이 닿으면 처치 · 같은 팀이 닿으면 구출됩니다.</li>
-    </ul>
-
-    <button class="btn primary big" id="startBtn">시작!</button>
-
-    <div class="row center minor">
-      <button class="btn ghost" id="helpBtn">❓ 하는 법</button>
-      <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
-    </div>
-  </section>
+  </div>
 </div>
 
 <section class="play" id="play" hidden>
@@ -102,7 +136,7 @@
     <div class="k-board-row">
       <main class="k-stage">
         <div class="k-canvas-wrap">
-          <canvas id="cv" width="600" height="520"></canvas>
+          <canvas id="cv" width="1200" height="1040"></canvas>
           <div class="overlay" id="resultOv" hidden>
             <div class="modal k-res-card" role="dialog" aria-modal="true">
               <h2 id="resTitle">경기 종료!</h2>
@@ -111,7 +145,7 @@
               <div class="row center" style="gap:8px;margin-top:10px">
                 <button type="button" class="btn primary" id="resAgainBtn">다시 한 판 ↺</button>
                 <button type="button" class="btn" id="resCoachBtn">🧑‍🏫 AI 선생님 복기</button>
-                <button type="button" class="btn ghost" id="resMenuBtn">메뉴로</button>
+                <button type="button" class="btn ghost" id="resMenuBtn">대기실로</button>
               </div>
             </div>
           </div>
@@ -161,10 +195,10 @@
 <script src="maps.js?v=2"></script>
 <script src="core.js?v=3"></script>
 <script src="bots.js?v=3"></script>
-<script src="skins/default/skin.js?v=2"></script>
-<script src="render.js?v=2"></script>
+<script src="skins/default/skin.js?v=3"></script>
+<script src="render.js?v=3"></script>
 <script src="sound.js?v=1"></script>
 <script src="tutorial.js?v=1"></script>
-<script src="main.js?v=3"></script>
+<script src="main.js?v=4"></script>
 </body>
 </html>

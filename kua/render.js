@@ -22,6 +22,12 @@
     const myId = opts.myId || "p0";
     const mode = opts.mode || "free";
 
+    ctx.save();
+    const cw = ctx.canvas ? ctx.canvas.width : COLS * T;
+    const ch = ctx.canvas ? ctx.canvas.height : ROWS * T;
+    ctx.setTransform(cw / (COLS * T), 0, 0, ch / (ROWS * T), 0, 0);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
     ctx.clearRect(0, 0, COLS * T, ROWS * T);
 
     // 1) 바닥
@@ -127,6 +133,7 @@
       ctx.fillText(label, (COLS * T) / 2, (ROWS * T) / 2);
       ctx.restore();
     }
+    ctx.restore();
   }
 
   root.KuaRender = { renderMatch };

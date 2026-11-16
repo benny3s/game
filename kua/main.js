@@ -75,13 +75,87 @@
     return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   }
 
-  // ── 메뉴 UI ──
+  // ── 메뉴 UI (아쿠아 블루 대기실 · 3D 포트레이트 · 실시간 미니맵) ──
+  const portSrc = id => `skins/default/assets/port_${id || "dao"}.png`;
+
+  function statBarRow(lbl, val, cap) {
+    let pips = "";
+    for (let i = 1; i <= 10; i++) {
+      const cls = i <= val ? "fill" : (i <= cap ? "cap" : "");
+      pips += `<span class="k-pip ${cls}"></span>`;
+    }
+    return `<div class="k-pip-row"><span>${lbl}</span><div class="k-pips">${pips}</div><span>${val}/${cap}</span></div>`;
+  }
+
+  function renderLobbySlots() {
+    const box = $("lobbySlots");
+    if (!box) return;
+    const myNm = (window.GME && GME.me && GME.me.name) || localStorage.getItem("game.arena.name") || "나";
+    const aiPool = buildBotConfigs(botCount, 1, 1, selectedChar);
+    const tierTxt = tier === "hard" ? "고급" : (tier === "easy" ? "초급" : "중급");
+    const slots = [];
+    for (let i = 0; i < 8; i++) {
+      if (i === 0) {
+        const tmCls = gameMode === "team" ? " team-b" : "";
+        const tmBadge = gameMode === "team" ? `<span class="k-rslot-badge tb">BLUE</span>` : "";
+        slots.push(`<button type="button" class="k-rslot host${tmCls}" data-slot="0" title="내 슬롯">
+          <span class="k-rslot-badge">방장</span>${tmBadge}
+          <img class="k-rslot-img" src="${portSrc(selectedChar)}" alt="${esc(myNm)}">
+          <span class="k-rslot-name">${esc(myNm)}</span>
+        </button>`);
+      } else if (i <= botCount && aiPool[i - 1]) {
+        const b = aiPool[i - 1];
+        const tmCls = gameMode === "team" ? (b.team === 0 ? " team-b" : " team-r") : "";
+        const tmBadge = gameMode === "team" ? `<span class="k-rslot-badge ${b.team === 0 ? "tb" : "tr"}">${b.team === 0 ? "BLUE" : "RED"}</span>` : "";
+        slots.push(`<button type="button" class="k-rslot${tmCls}" data-slot="${i}" title="클릭하면 AI 인원 변경">
+          <span class="k-rslot-badge com">${tierTxt}</span>${tmBadge}
+          <img class="k-rslot-img" src="${portSrc(b.charId)}" alt="${esc(b.name)}">
+          <span class="k-rslot-name">${esc(b.name)}</span>
+        </button>`);
+      } else {
+        slots.push(`<button type="button" class="k-rslot empty" data-slot="${i}" title="클릭해서 AI 추가/변경">
+          <span class="k-rslot-empty-ic">+</span>
+          <span class="k-rslot-name">빈 자리</span>
+        </button>`);
+      }
+    }
+    box.innerHTML = slots.join("");
+    box.querySelectorAll("[data-slot]").forEach(btn => {
+      btn.onclick = () => {
+        const idx = Number(btn.dataset.slot);
+        if (idx === 0) return;
+        const choices = [1, 3, 5, 7];
+        const target = choices.find(n => n >= idx) || 1;
+        botCount = (idx <= botCount && botCount > 1) ? Math.max(1, target - 2) : target;
+        Cozy.save("kua.bots", String(botCount));
+        $("botSeg").querySelectorAll("[data-b]").forEach(x => x.classList.toggle("active", Number(x.dataset.b) === botCount));
+        renderLobbySlots();
+      };
+    });
+  }
+
+  function renderWatchCast() {
+    const box = $("watchCast");
+    if (!box) return;
+    const cast = [
+      { id: "dao", name: "다오(고수)" },
+      { id: "bazzi", name: "배찌(고수)" },
+      { id: "dizni", name: "디지니(고수)" },
+      { id: "rodumani", name: "로두마니(고수)" },
+    ];
+    box.innerHTML = cast.map(c => `<div class="k-rslot">
+      <span class="k-rslot-badge com">AI</span>
+      <img class="k-rslot-img" src="${portSrc(c.id)}" alt="${esc(c.name)}">
+      <span class="k-rslot-name">${esc(c.name)}</span>
+    </div>`).join("");
+  }
+
   function renderCharPickers() {
     const html = Rules.CHAR_ORDER.map(id => {
       const ch = Rules.CHARS[id];
       return `<button type="button" class="k-char-btn" data-ch="${id}" aria-pressed="${id === selectedChar}">
-        <span class="dot" style="background:${ch.color};border-color:${ch.trim}"></span>
-        <b>${esc(ch.name)}</b>
+        <img src="${portSrc(id)}" alt="${esc(ch.name)}">
+        <span>${esc(ch.name)}</span>
       </button>`;
     }).join("");
     ["charGrid", "fCharGrid"].forEach(gid => {
@@ -93,11 +167,56 @@
           selectedChar = b.dataset.ch;
           Cozy.save("kua.char", selectedChar);
           renderCharPickers();
+          renderLobbySlots();
         };
       });
     });
     const cur = Rules.CHARS[selectedChar] || Rules.CHARS.dao;
-    $("charStatBox").innerHTML = `<b>${esc(cur.name)}</b> — 🎈 풍선 <b>${cur.bombs}/${cur.maxBombs}</b> · 🌊 물줄기 <b>${cur.power}/${cur.maxPower}</b> · 🛼 속도 <b>${cur.speed}/${cur.maxSpeed}</b><br><span style="color:#94a3b8">${esc(cur.desc)}</span>`;
+    $("charStatBox").innerHTML = `<img class="k-stat-port" src="${portSrc(cur.id)}" alt="${esc(cur.name)}">
+      <div>
+        <div class="k-stat-name">${esc(cur.name)} <small style="color:#93c5fd">(${esc(cur.code)})</small></div>
+        ${statBarRow("물풍선", cur.bombs, cur.maxBombs)}
+        ${statBarRow("물줄기", cur.power, cur.maxPower)}
+        ${statBarRow("속도", cur.speed, cur.maxSpeed)}
+        <div class="k-stat-desc">${esc(cur.desc)}</div>
+      </div>`;
+  }
+
+  function drawMinimap() {
+    const cv = $("mapMiniCv");
+    if (!cv) return;
+    const ctx = cv.getContext("2d");
+    const m = Maps.getMap(selectedMap);
+    const cols = m.grid[0].length, rows = m.grid.length;
+    const cw = cv.width / cols, ch = cv.height / rows;
+    const bgA = m.theme === "pirate" ? "#c8904e" : (m.theme === "camp" ? "#438452" : "#67bd2a");
+    const roadC = m.theme === "pirate" ? "#a23034" : "#788294";
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const tile = m.grid[r][c];
+        const isRoad = (m.id === "village10" || m.id === "patrit14") ? (c === 7 || r === 6) : (r === 6 || (c === 7 && r >= 2 && r <= 10));
+        ctx.fillStyle = isRoad ? roadC : bgA;
+        ctx.fillRect(c * cw, r * ch, Math.ceil(cw), Math.ceil(ch));
+        if (tile === "H") {
+          ctx.fillStyle = m.theme === "camp" ? "#0ea5e9" : "#ef4444";
+          ctx.fillRect(c * cw + 1, r * ch + 1, cw - 2, ch - 2);
+        } else if (tile === "#") {
+          ctx.fillStyle = m.theme === "pirate" ? "#78350f" : "#15803d";
+          ctx.fillRect(c * cw + 1, r * ch + 1, cw - 2, ch - 2);
+        } else if (tile === "B") {
+          ctx.fillStyle = (c + r) % 2 === 0 ? "#f97316" : "#dc2626";
+          ctx.fillRect(c * cw + 1, r * ch + 1, cw - 2, ch - 2);
+        } else if (tile === "M") {
+          ctx.fillStyle = "#facc15";
+          ctx.fillRect(c * cw + 1, r * ch + 1, cw - 2, ch - 2);
+        } else if (tile === "G") {
+          ctx.fillStyle = "#22c55e";
+          ctx.fillRect(c * cw + 1, r * ch + 1, cw - 2, ch - 2);
+        }
+      }
+    }
+    const desc = $("mapDescBox");
+    if (desc) desc.textContent = m.desc || "";
   }
 
   function renderMapSegs() {
@@ -116,6 +235,7 @@
         };
       });
     });
+    drawMinimap();
   }
 
   function setTab(m) {
@@ -126,7 +246,9 @@
     $("soloBox").hidden = playMode !== "solo";
     $("friendBox").hidden = playMode !== "friend";
     $("watchBox").hidden = playMode !== "watch";
-    $("startBtn").textContent = playMode === "friend" ? "방 만들기 / 들어가기" : "시작!";
+    const cp = $("charPickerWrap");
+    if (cp) cp.hidden = playMode === "watch";
+    $("startBtn").textContent = playMode === "friend" ? "방 만들기 / 들어가기" : "GAME START!";
   }
 
   function initMenu() {
@@ -137,10 +259,13 @@
     ], id => {
       tier = id;
       Cozy.save("kua.tier", id);
+      renderLobbySlots();
     }, { selected: tier });
 
     renderCharPickers();
     renderMapSegs();
+    renderLobbySlots();
+    renderWatchCast();
 
     $("modeSeg").querySelectorAll("[data-m]").forEach(b => {
       b.classList.toggle("active", b.dataset.m === gameMode);
@@ -148,6 +273,7 @@
         gameMode = b.dataset.m;
         Cozy.save("kua.gmode", gameMode);
         $("modeSeg").querySelectorAll("[data-m]").forEach(x => x.classList.toggle("active", x === b));
+        renderLobbySlots();
       };
     });
 
@@ -157,6 +283,7 @@
         botCount = Number(b.dataset.b);
         Cozy.save("kua.bots", String(botCount));
         $("botSeg").querySelectorAll("[data-b]").forEach(x => x.classList.toggle("active", x === b));
+        renderLobbySlots();
       };
     });
 
@@ -439,10 +566,15 @@
             ? `<span class="k-slot-tag">나</span>`
             : "";
       return `<div class="${cls}">
-        <div class="k-av" style="background:${ch.color}"><span class="k-av-trim" style="background:${ch.trim}"></span>${esc(ch.name[0])}</div>
+        <img class="k-av-img" src="skins/default/assets/port_${esc(ch.id)}.png" alt="${esc(ch.name)}">
         <div class="k-slot-info">
           <div class="k-slot-top"><span class="k-slot-name">${esc(nm)}</span>${tag}</div>
-          <div class="k-slot-st">🎈${mb} 🌊${pw} 🛼${sp}${nd ? ` 🪡${nd}` : ""}</div>
+          <div class="k-slot-st">
+            <span><img class="k-mini-ic" src="skins/default/assets/item_bomb.png" alt="">${mb}</span>
+            <span><img class="k-mini-ic" src="skins/default/assets/item_fluid.png" alt="">${pw}</span>
+            <span><img class="k-mini-ic" src="skins/default/assets/item_roller.png" alt="">${sp}</span>
+            ${nd ? `<span><img class="k-mini-ic" src="skins/default/assets/item_needle.png" alt="">${nd}</span>` : ""}
+          </div>
         </div>
       </div>`;
     }).join("");
@@ -464,16 +596,18 @@
         const ct = me.ct != null ? me.ct : me.canThrow;
         const dv = me.dv != null ? me.dv : me.devilMs;
         const itemHtml = `<div class="k-item-row">
-            <button type="button" class="k-needle-btn${nd > 0 ? " ready" : ""}" id="ctrlNeedleUse">🪡 바늘 ×${nd}</button>
+            <button type="button" class="k-needle-btn${nd > 0 ? " ready" : ""}" id="ctrlNeedleUse">
+              <img src="skins/default/assets/item_needle.png" alt="">바늘 ×${nd}
+            </button>
             <span class="k-keycap">Ctrl</span>
           </div>
           <div class="k-perk-row">
-            <span>🎈${mb}/${ch.maxBombs}</span>
-            <span>🌊${pw}/${ch.maxPower}</span>
-            <span>🛼${sp}/${ch.maxSpeed}</span>
-            ${ck ? `<span>👟킥</span>` : ""}
-            ${ct ? `<span>🥊던지기</span>` : ""}
-            ${dv > 0 ? `<span style="color:#c084fc">👾반전</span>` : ""}
+            <span><img class="k-mini-ic" src="skins/default/assets/item_bomb.png" alt="">${mb}/${ch.maxBombs}</span>
+            <span><img class="k-mini-ic" src="skins/default/assets/item_fluid.png" alt="">${pw}/${ch.maxPower}</span>
+            <span><img class="k-mini-ic" src="skins/default/assets/item_roller.png" alt="">${sp}/${ch.maxSpeed}</span>
+            ${ck ? `<span><img class="k-mini-ic" src="skins/default/assets/item_shoe.png" alt="">킥</span>` : ""}
+            ${ct ? `<span><img class="k-mini-ic" src="skins/default/assets/item_glove.png" alt="">던지기</span>` : ""}
+            ${dv > 0 ? `<span style="color:#c084fc"><img class="k-mini-ic" src="skins/default/assets/item_devil.png" alt="">반전</span>` : ""}
           </div>`;
         if (itemHtml !== lastItemHtml) {
           lastItemHtml = itemHtml;

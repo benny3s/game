@@ -31,6 +31,18 @@ U.main(async T => {
   await p.click(".tut-x");
 
   // 캐릭터 선택 후 시작!
+  const lobbyOk = await p.evaluate(() => {
+    const slots = document.querySelectorAll("#lobbySlots .k-rslot").length;
+    const imgs = [...document.querySelectorAll("#menu img")];
+    const broken = imgs.filter(i => !i.complete || i.naturalWidth === 0).length;
+    const mctx = document.getElementById("mapMiniCv").getContext("2d");
+    const pix = mctx.getImageData(0, 0, 120, 104).data;
+    let diffColors = new Set();
+    for (let i = 0; i < pix.length; i += 16) diffColors.add((pix[i] << 16) | (pix[i + 1] << 8) | pix[i + 2]);
+    return { slots, broken, totalImgs: imgs.length, miniColors: diffColors.size };
+  });
+  T.ok(lobbyOk.slots === 8 && lobbyOk.broken === 0 && lobbyOk.totalImgs >= 9 && lobbyOk.miniColors >= 4, `대기실 8슬롯·미니맵(${lobbyOk.miniColors}색)·3D 포트레이트(${lobbyOk.totalImgs}장) 로드 완료 (broken=${lobbyOk.broken})`);
+
   await p.click('.k-char-btn[data-ch="bazzi"]');
   await wait(p, () => document.getElementById("charStatBox").textContent.includes("배찌"));
   await p.click("#startBtn");

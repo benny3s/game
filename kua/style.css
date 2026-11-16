@@ -1,47 +1,295 @@
-/* 베니 크아 — 크레이지 아케이드 아쿠아 블루 배틀 프레임 & 메뉴 (kua/style.css) */
+/* 베니 크아 — 원작 아쿠아 블루 대기실 & 2x HiDPI 배틀 프레임 (kua/style.css) */
 :root {
   --k-accent: #38bdf8;
-  --k-gold: #fbbf24;
-  --k-card: #131c2e;
-  --k-line: rgba(148, 163, 184, 0.22);
+  --k-gold: #fde047;
+  --k-blue-top: #1d96ff;
+  --k-blue-mid: #0c6ad0;
+  --k-blue-deep: #064296;
+  --k-blue-rim: #7be0ff;
 }
 
-.k-sub { margin: 0 0 10px; font-size: 13px; color: #94a3b8; text-align: center; }
-.k-sec-lbl { font-size: 12px; font-weight: 700; color: #cbd5e1; margin: 10px 0 6px; }
+body.kua-body {
+  background: radial-gradient(circle at 20% 15%, #1d7de0 0%, #0d4b9a 48%, #072b66 100%) !important;
+  min-height: 100dvh;
+}
 
+/* ── 원작 아쿠아 블루 대기실 로비 (#menu) ── */
+.k-menu-wrap {
+  max-width: 1000px !important;
+  padding: 10px 12px !important;
+  margin: 0 auto;
+}
+
+.k-lobby-shell {
+  background: linear-gradient(180deg, #1b8ef2 0%, #0c65c9 14%, #074aa1 100%);
+  border: 3px solid var(--k-blue-rim);
+  border-radius: 18px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 18px 42px rgba(2, 16, 48, 0.72), inset 0 2px 0 rgba(255,255,255,0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.k-lobby-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.k-logo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 99px;
+  background: linear-gradient(180deg, #0b3d8a, #06275c);
+  border: 2px solid #5bc8ff;
+  color: #fff;
+  box-shadow: inset 0 2px 5px rgba(0,0,0,0.45);
+}
+.k-logo-pill b { font-size: 14px; letter-spacing: 0.03em; color: var(--k-gold); font-weight: 900; }
+.k-logo-pill small { font-size: 12px; color: #bae6fd; font-weight: 800; }
+
+.k-lobby-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 0 !important;
+  background: rgba(5, 36, 84, 0.68);
+  border: 2px solid #4cc2ff;
+  padding: 3px;
+  border-radius: 99px;
+}
+.k-lobby-tabs .btn {
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #dbeafe;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.k-lobby-tabs .btn[aria-pressed="true"] {
+  background: linear-gradient(180deg, #fde047, #f59e0b);
+  color: #1e293b;
+  box-shadow: 0 2px 0 #b45309;
+}
+
+.k-head-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.k-tool-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 11px; border-radius: 99px; text-decoration: none;
+  background: linear-gradient(180deg, #38bdf8, #0284c7);
+  border: 2px solid #bae6fd; color: #fff; font-size: 12px; font-weight: 800;
+  cursor: pointer; box-shadow: 0 2px 0 #075985;
+}
+.k-home-link { background: linear-gradient(180deg, #64748b, #334155); border-color: #cbd5e1; box-shadow: 0 2px 0 #1e293b; }
+
+.k-lobby-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.95fr);
+  gap: 10px;
+  align-items: stretch;
+}
+
+.k-lobby-left, .k-lobby-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.k-lbox, .k-panel-card {
+  background: linear-gradient(180deg, rgba(8, 49, 114, 0.92), rgba(5, 32, 78, 0.95));
+  border: 2px solid #4cc2ff;
+  border-radius: 12px;
+  padding: 9px 10px;
+  box-shadow: inset 0 2px 8px rgba(2, 14, 38, 0.55);
+}
+
+.k-room-title {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px solid rgba(125, 211, 252, 0.3);
+}
+.k-room-title span { font-size: 13.5px; font-weight: 900; color: #fef08a; }
+.k-room-title small { font-size: 11px; color: #93c5fd; font-weight: 700; }
+
+/* 8인 대기방 슬롯 그리드 (4x2) */
+.k-room-slots {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+.k-rslot {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 6px 4px 7px; border-radius: 10px;
+  background: linear-gradient(180deg, #1659b5, #0a367c);
+  border: 2px solid #60a5fa;
+  color: #f8fafc; cursor: pointer; text-align: center;
+  box-shadow: 0 3px 0 rgba(3, 18, 46, 0.75);
+  transition: transform .1s, border-color .1s;
+}
+.k-rslot:hover { transform: translateY(-1px); border-color: #bae6fd; }
+.k-rslot.host {
+  background: linear-gradient(180deg, #1d73db, #0c4aa6);
+  border-color: var(--k-gold);
+  box-shadow: 0 0 10px rgba(253, 224, 71, 0.35), 0 3px 0 #78350f;
+}
+.k-rslot.team-b { border-color: #60a5fa; box-shadow: inset 0 0 0 2px #3b82f6; }
+.k-rslot.team-r { border-color: #f87171; box-shadow: inset 0 0 0 2px #ef4444; }
+.k-rslot.empty {
+  background: rgba(6, 26, 62, 0.65);
+  border: 2px dashed rgba(125, 211, 252, 0.4);
+  color: #7dd3fc; opacity: 0.85;
+}
+.k-rslot-img {
+  width: 52px; height: 52px; object-fit: contain;
+  filter: drop-shadow(0 3px 4px rgba(0,0,0,0.45));
+}
+.k-rslot-empty-ic {
+  width: 52px; height: 52px; display: grid; place-items: center;
+  font-size: 20px; font-weight: 900; color: rgba(147, 197, 253, 0.6);
+}
+.k-rslot-name {
+  font-size: 11.5px; font-weight: 800; max-width: 100%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.k-rslot-badge {
+  position: absolute; top: 4px; left: 4px;
+  font-size: 9.5px; font-weight: 900; padding: 1px 5px; border-radius: 99px;
+  background: #fde047; color: #1e293b;
+}
+.k-rslot-badge.com { background: #38bdf8; color: #082f49; }
+.k-rslot-badge.tb { background: #2563eb; color: #fff; left: auto; right: 4px; }
+.k-rslot-badge.tr { background: #dc2626; color: #fff; left: auto; right: 4px; }
+
+.k-room-opts {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(125, 211, 252, 0.25);
+  display: flex; flex-direction: column; gap: 6px;
+}
+.k-tiers-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.k-tiers-row .tiers.three {
+  flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 !important;
+}
+body.kua-body .tiers .tier {
+  padding: 5px 6px !important; border-radius: 9px !important;
+  background: rgba(10, 44, 102, 0.85) !important; border: 1.5px solid #4cc2ff !important;
+  color: #e0f2fe !important;
+}
+body.kua-body .tiers .tier.active, body.kua-body .tiers .tier[aria-pressed="true"] {
+  background: linear-gradient(180deg, #0ea5e9, #0369a1) !important;
+  border-color: var(--k-gold) !important; color: #fef08a !important;
+}
+body.kua-body .tiers .tier .t-desc { font-size: 10px !important; color: #bae6fd !important; }
+
+.k-opt-pair { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.k-opt-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.k-olbl { min-width: 56px; font-size: 11.5px; font-weight: 800; color: #bae6fd; }
+
+body.kua-body .seg {
+  display: inline-flex; gap: 4px; flex-wrap: wrap;
+}
+body.kua-body .seg .btn {
+  padding: 4px 9px; border-radius: 8px; font-size: 12px; font-weight: 800;
+  background: #0a2d6e; border: 1.5px solid #3b82f6; color: #dbeafe; cursor: pointer;
+}
+body.kua-body .seg .btn.active {
+  background: linear-gradient(180deg, #fbbf24, #d97706);
+  border-color: #fef08a; color: #1e293b;
+}
+
+.k-friend-lede { margin: 0 0 8px; font-size: 12.5px; color: #dbeafe; line-height: 1.45; }
+.k-sec-lbl { font-size: 12px; font-weight: 800; color: #fef08a; margin: 4px 0 6px; }
+.k-watch-cast {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;
+}
+
+/* 우측 캐릭터/능력치/맵/게임스타트 패널 */
+.k-panel-hdr {
+  font-size: 12px; font-weight: 900; color: #fef08a;
+  margin-bottom: 6px; letter-spacing: 0.02em;
+}
 .k-chars {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
 }
 .k-char-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  padding: 6px 4px; border-radius: 10px; border: 1.5px solid var(--k-line);
-  background: rgba(15, 23, 42, 0.72); color: #e2e8f0; cursor: pointer; font: inherit; font-size: 12px;
-  transition: transform .12s, border-color .12s, background .12s;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 4px 2px; border-radius: 9px; border: 2px solid #2e79d4;
+  background: linear-gradient(180deg, #114796, #082b66); color: #e2e8f0;
+  cursor: pointer; font: inherit; font-size: 11px; font-weight: 800;
+  transition: transform .1s, border-color .1s, background .1s;
 }
-.k-char-btn .dot {
-  width: 22px; height: 22px; border-radius: 50%; border: 2px solid #fff;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+.k-char-btn img {
+  width: 34px; height: 34px; object-fit: contain;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45));
 }
 .k-char-btn[aria-pressed="true"] {
-  border-color: var(--k-gold); background: rgba(251, 191, 36, 0.14); color: #fef08a;
-  transform: translateY(-1px);
+  border-color: var(--k-gold);
+  background: linear-gradient(180deg, #0284c7, #075985);
+  color: #fef08a; transform: translateY(-1px);
+  box-shadow: 0 0 8px rgba(253, 224, 71, 0.4);
 }
 
 .k-char-stat {
-  margin-top: 8px; padding: 8px 10px; border-radius: 10px;
-  background: rgba(15, 23, 42, 0.72); border: 1px solid var(--k-line);
-  font-size: 12px; line-height: 1.45; color: #cbd5e1;
+  margin-top: 7px; padding: 7px 8px; border-radius: 9px;
+  background: rgba(4, 21, 52, 0.85); border: 1.5px solid #2b7ad6;
+  display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: center;
+  font-size: 11.5px; color: #e0f2fe;
 }
-.k-char-stat b { color: #fde68a; }
-
-.k-opt-row {
-  display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap;
+.k-stat-port {
+  width: 52px; height: 52px; object-fit: contain;
+  background: radial-gradient(circle, rgba(56,189,248,0.28), transparent 72%);
+  border-radius: 10px;
 }
-.k-lbl { min-width: 44px; font-size: 12px; font-weight: 700; color: #94a3b8; }
+.k-stat-name { font-weight: 900; font-size: 13px; color: #fef08a; margin-bottom: 3px; }
+.k-stat-desc { font-size: 10.5px; color: #93c5fd; margin-top: 3px; line-height: 1.3; }
+.k-pip-row {
+  display: grid; grid-template-columns: 44px 1fr 30px; align-items: center; gap: 5px; margin: 2px 0;
+  font-size: 10.5px; font-weight: 800; color: #bae6fd;
+}
+.k-pips { display: flex; gap: 2px; }
+.k-pip { flex: 1; height: 6px; border-radius: 2px; background: rgba(148, 163, 184, 0.18); max-width: 11px; }
+.k-pip.cap { background: rgba(56, 189, 248, 0.35); border: 1px solid rgba(125, 211, 252, 0.45); }
+.k-pip.fill { background: linear-gradient(180deg, #fde047, #f59e0b); box-shadow: 0 0 4px rgba(251, 191, 36, 0.45); }
 
-/* ── 인게임 아쿠아 블루 아케이드 프레임 ── */
+.k-map-preview {
+  display: grid; grid-template-columns: 120px 1fr; gap: 9px; align-items: center;
+}
+#mapMiniCv {
+  display: block; width: 120px; height: 104px; border-radius: 8px;
+  border: 2px solid #5bc8ff; background: #4ea52b;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.45);
+}
+.k-map-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.k-map-desc { margin: 0; font-size: 11px; color: #bae6fd; line-height: 1.38; }
+
+.k-game-start {
+  width: 100%; padding: 12px 16px !important; border-radius: 14px !important;
+  background: linear-gradient(180deg, #fde047 0%, #f59e0b 52%, #ea580c 100%) !important;
+  border: 3px solid #fef9c3 !important; color: #1e293b !important;
+  font-family: 'Jua', sans-serif !important; font-size: 22px !important; font-weight: 900 !important;
+  letter-spacing: 0.04em; text-shadow: 0 1px 0 rgba(255,255,255,0.55);
+  box-shadow: 0 5px 0 #9a3412, 0 10px 22px rgba(2, 16, 48, 0.55) !important;
+  cursor: pointer;
+}
+.k-game-start:active { transform: translateY(2px); }
+
+.k-lobby-howto {
+  margin: 0 !important; padding: 7px 10px 7px 22px !important; border-radius: 10px;
+  background: rgba(4, 21, 52, 0.68); border: 1px solid rgba(125, 211, 252, 0.3);
+  font-size: 11.5px !important; color: #dbeafe !important; line-height: 1.45;
+}
+.k-lobby-howto b { color: #fef08a; }
+
+/* ── 인게임 아쿠아 블루 아케이드 프레임 (#play) ── */
 .play {
   max-width: 960px; margin: 0 auto; min-height: 100dvh;
   display: flex; flex-direction: column; justify-content: center;
@@ -59,8 +307,7 @@
 }
 
 .k-top-strip {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 2px 4px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 4px;
 }
 .k-top-strip .mid { text-align: center; }
 .k-top-strip .lbl {
@@ -78,14 +325,11 @@ body.dark .k-btn-exit, body.dark .k-btn-snd {
 
 .k-board-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 224px;
+  grid-template-columns: minmax(0, 1fr) 232px;
   gap: 10px;
   align-items: stretch;
 }
-
-.k-stage {
-  min-width: 0; display: grid; place-items: center;
-}
+.k-stage { min-width: 0; display: grid; place-items: center; }
 .k-canvas-wrap {
   position: relative;
   width: min(100%, calc((100dvh - 110px) * 15 / 13), 680px);
@@ -95,14 +339,11 @@ body.dark .k-btn-exit, body.dark .k-btn-snd {
   box-shadow: 0 0 0 2px #5ac8fa, inset 0 0 12px rgba(0,0,0,0.45);
   background: #4ea52b;
 }
-#cv {
-  display: block; width: 100%; height: 100%;
-}
+#cv { display: block; width: 100%; height: 100%; }
 
-/* 오른쪽 크아 사이드바 */
 .k-side {
-  display: flex; flex-direction: column; gap: 8px;
-  background: rgba(5, 39, 88, 0.56);
+  display: flex; flex-direction: column; gap: 7px;
+  background: rgba(5, 39, 88, 0.62);
   border: 2px solid #4cc2ff;
   border-radius: 12px;
   padding: 8px;
@@ -111,15 +352,10 @@ body.dark .k-btn-exit, body.dark .k-btn-snd {
 
 .k-timer-box {
   display: flex; align-items: center; justify-content: space-between;
-  background: #071630;
-  border: 2px solid #38bdf8;
-  border-radius: 10px;
-  padding: 6px 10px;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.65);
+  background: #071630; border: 2px solid #38bdf8; border-radius: 10px;
+  padding: 5px 10px; box-shadow: inset 0 2px 6px rgba(0,0,0,0.65);
 }
-.k-timer-lbl {
-  font-size: 11px; font-weight: 900; letter-spacing: 0.08em; color: #7dd3fc;
-}
+.k-timer-lbl { font-size: 11px; font-weight: 900; letter-spacing: 0.08em; color: #7dd3fc; }
 .k-timer-val {
   font-family: ui-monospace, Consolas, monospace;
   font-size: 20px; font-weight: 900; color: #fb923c;
@@ -132,68 +368,57 @@ body.dark .k-btn-exit, body.dark .k-btn-snd {
   flex: 1; min-height: 0; overflow-y: auto;
 }
 .k-slot {
-  display: grid; grid-template-columns: 30px 1fr; align-items: center; gap: 7px;
-  padding: 5px 7px; border-radius: 9px;
-  background: rgba(12, 54, 114, 0.85);
+  display: grid; grid-template-columns: 34px 1fr; align-items: center; gap: 7px;
+  padding: 4px 7px; border-radius: 9px;
+  background: rgba(12, 54, 114, 0.88);
   border: 2px solid #2b7ad6;
   color: #f8fafc; font-size: 11.5px;
 }
 .k-slot.me {
   background: linear-gradient(90deg, rgba(14, 116, 204, 0.96), rgba(12, 66, 138, 0.92));
-  border-color: #fde047;
-  box-shadow: 0 0 8px rgba(253, 224, 71, 0.35);
+  border-color: #fde047; box-shadow: 0 0 8px rgba(253, 224, 71, 0.35);
 }
 .k-slot.team-b { border-left: 5px solid #60a5fa; }
 .k-slot.team-r { border-left: 5px solid #f87171; }
 .k-slot.trapped { border-color: #38bdf8; background: rgba(14, 116, 144, 0.9); }
 .k-slot.dead { opacity: 0.42; filter: grayscale(0.75); }
 
-.k-av {
-  position: relative; width: 28px; height: 28px; border-radius: 50%;
-  border: 2px solid #0f172a; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.22);
-  display: grid; place-items: center; font-weight: 900; font-size: 12px; color: #fff;
-}
-.k-av-trim {
-  position: absolute; top: -2px; left: 2px; right: 2px; height: 6px; border-radius: 99px;
+.k-av-img {
+  width: 32px; height: 32px; object-fit: contain; border-radius: 8px;
+  background: rgba(5, 26, 66, 0.72); border: 1.5px solid rgba(125, 211, 252, 0.45);
 }
 .k-slot-info { min-width: 0; }
-.k-slot-top {
-  display: flex; align-items: center; justify-content: space-between; gap: 4px;
-}
-.k-slot-name {
-  font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+.k-slot-top { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.k-slot-name { font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .k-slot-tag {
-  font-size: 10px; font-weight: 900; padding: 1px 5px; border-radius: 99px;
+  font-size: 9.5px; font-weight: 900; padding: 1px 5px; border-radius: 99px;
   background: #fde047; color: #1e293b;
 }
 .k-slot-tag.ko { background: #475569; color: #e2e8f0; }
 .k-slot-tag.trap { background: #38bdf8; color: #082f49; }
-.k-slot-st { font-size: 10.5px; color: #bfdbfe; margin-top: 1px; font-weight: 700; }
+.k-slot-st {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10.5px; color: #bfdbfe; margin-top: 2px; font-weight: 800;
+}
+.k-mini-ic { width: 13px; height: 13px; object-fit: contain; vertical-align: -2px; }
 
 .k-item-box {
-  background: #071a38;
-  border: 2px solid #38bdf8;
-  border-radius: 10px;
-  padding: 7px 8px;
-  display: flex; flex-direction: column; gap: 5px;
+  background: #071a38; border: 2px solid #38bdf8; border-radius: 10px;
+  padding: 7px 8px; display: flex; flex-direction: column; gap: 5px;
 }
-.k-item-row {
-  display: flex; align-items: center; justify-content: space-between; gap: 6px;
-}
+.k-item-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 .k-needle-btn {
-  display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px;
+  display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 8px;
   background: #102a56; border: 1.5px solid #60a5fa; color: #f8fafc;
   font-size: 12px; font-weight: 800; cursor: pointer;
 }
 .k-needle-btn.ready { border-color: #fde047; background: #1d4ed8; }
+.k-needle-btn img { width: 18px; height: 18px; object-fit: contain; }
 .k-keycap {
   font-size: 10px; font-weight: 900; padding: 2px 5px; border-radius: 5px;
   background: #f97316; color: #fff; border: 1px solid #fed7aa;
 }
-.k-perk-row {
-  display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; color: #bae6fd; font-weight: 700;
-}
+.k-perk-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 11px; color: #bae6fd; font-weight: 800; }
 
 .k-res-card {
   width: min(92vw, 400px); padding: 16px; border-radius: 16px;
@@ -213,17 +438,19 @@ body.dark .k-btn-exit, body.dark .k-btn-snd {
   box-shadow: none; border-radius: 12px;
 }
 
-.k-keyguide {
-  text-align: center; font-size: 12px; color: #cbd5e1;
-}
+.k-keyguide { text-align: center; font-size: 12px; color: #dbeafe; font-weight: 700; }
 
-/* 터치 패드: 실제 모바일/태블릿 소형 터치 기기에서만 표시 (PC 숨김 보장) */
+/* 터치 패드: 실제 소형 터치 기기에서만 표시 (PC 데스크톱은 항상 숨김) */
 .k-tpad { display: none; justify-content: space-between; align-items: center; padding: 4px 6px; }
 @media (hover: none) and (pointer: coarse) and (max-width: 820px) {
   .k-tpad { display: flex; }
   .k-keyguide { display: none; }
 }
-@media (max-width: 760px) {
+
+@media (max-width: 820px) {
+  .k-lobby-body { grid-template-columns: 1fr; }
+  .k-room-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .k-chars { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .k-board-row { grid-template-columns: 1fr; }
   .k-canvas-wrap { width: min(100%, calc((100dvh - 250px) * 15 / 13)); }
   .k-hud { flex-direction: row; flex-wrap: wrap; }
