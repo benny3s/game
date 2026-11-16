@@ -49,6 +49,7 @@
         escaped: false,
       },
       bookSeq: [],
+      seenHints: [],
       hintsUsed: 0,
       moves: 0,
       elapsedMs: 0,
@@ -147,34 +148,39 @@
 
       // ── 동쪽 (책장 · 슬레이트) ──
       case "bookshelf":
+        if (f.shelfOpen) {
+          return stepResult(st, true, "비밀 칸이 열려 있는 고서적 책장이다. 안에는 더 이상 아무것도 없다.", "tap");
+        }
         st.zoom = "bookshelf";
-        return stepResult(st, true, f.shelfOpen ? "비밀 칸이 열린 책장이다." : "유난히 색이 선명한 책 4권이 꽂혀 있다. 누르는 순서가 있을 것 같다.", "tap");
+        return stepResult(st, true, "가죽 양장본들이 꽂혀 있는 고서적 책장이다. 몇 권의 책등이 유난히 닳아 있다.", "tap");
       case "candle":
         return stepResult(st, true, "반쯤 탄 양초가 놓인 촛대. 벽 위 어두운 석판 바로 아래에 놓여 있다.", "tap");
       case "slate":
-        if (st.selected === "uv_on" || f.uvClueSeen) {
+        if (st.selected === "uv_on") {
+          const firstReveal = !f.uvClueSeen;
           f.uvClueSeen = true;
-          st.zoom = "slate";
-          return stepResult(st, true, "🟣 UV 불빛을 비추자 어두운 석판 위에 숨은 형광 기호 '☾ 3 · ★ 7 · ☀ 9'가 떠올랐다!", "magic");
+          if (!firstReveal) st.zoom = "slate";
+          return stepResult(st, true, "🟣 보라빛 UV 불빛을 비추자 석판 위에 숨어 있던 형광 기호 '☾ 3 · ★ 7 · ☀ 9'가 떠올랐다!", "magic");
         }
-        st.zoom = "slate";
-        return stepResult(st, true, "아무것도 쓰이지 않은 텅 빈 어두운 석판처럼 보인다. 특수한 빛으로 비춰 볼 수 있을까?", "tap");
+        if (f.uvClueSeen) {
+          st.zoom = "slate";
+          return stepResult(st, true, "형광 기호 '☾ = 3, ★ = 7, ☀ = 9'가 어둡게 빛나고 있다.", "tap");
+        }
+        return stepResult(st, true, "차가운 검은 석판이다. 손으로 만져 보아도 맨질맨질할 뿐 아무 글씨도 보이지 않는다.", "tap");
 
       // ── 북쪽 (괘종시계 · 출구 문) ──
       case "clock":
         if (f.clockFixed) {
           st.zoom = "clock";
-          return stepResult(st, true, "시계가 03:45를 가리키며 천천히 흔들리고 있다.", "clock");
+          return stepResult(st, true, "괘종시계가 03:45를 가리킨 채 느리게 째깍이고 있다.", "clock");
         }
         if (st.selected === "pendulum") {
           f.clockFixed = true;
           remInv(st, "pendulum");
           addInv(st, "thread");
-          st.zoom = "clock";
-          return stepResult(st, true, "🕰️ 황금 시계추를 걸자 괘종시계가 3시 45분에서 종을 울리며 멈추고, 아래칸에서 '명주실'이 떨어졌다!", "clock", { acquired: ["thread"] });
+          return stepResult(st, true, "🕰️ 황금 시계추를 걸자 괘종시계가 3시 45분에서 종을 울리고, 하단 함에서 '명주실'이 떨어졌다!", "clock", { acquired: ["thread"] });
         }
-        st.zoom = "clock";
-        return stepResult(st, false, "괘종시계의 추가 빠져 있어 멈춰 있다. 안쪽에 시계추를 거는 고리가 보인다.", "lock");
+        return stepResult(st, false, "커다란 호두나무 괘종시계다. 유리문 안쪽 시계추 고리가 비어 시곗바늘이 멈춰 서 있다.", "lock");
       case "door":
         return useOnDoor(st, st.selected);
 
@@ -304,13 +310,16 @@
   function getHotspots(state, wall = state.wall) {
     const f = state.flags;
     if (wall === "S") {
-      return [
-        { id: "lamp",        label: "스탠드 조명",   x: 24, y: 29, w: 13, h: 25, done: false },
-        { id: "diary",       label: "시계공의 일지", x: 32, y: 44, w: 23, h: 12, done: f.diaryRead },
-        { id: "box",         label: "4자리 다이얼 상자", x: 60, y: 39, w: 16, h: 16, done: f.boxOpen },
-        { id: "drawer",      label: "잠긴 서랍",     x: 62, y: 56, w: 16, h: 32, done: f.drawerOpen },
-        { id: "silver_spot", label: f.silverPicked ? "책상 틈" : "작은 은열쇠", x: 54, y: 45, w: 9, h: 12, done: f.silverPicked, glint: !f.silverPicked },
+      const spots = [
+        { id: "lamp",   label: "스탠드 조명",     x: 24, y: 29, w: 13, h: 25, done: false },
+        { id: "diary",  label: "시계공의 일지",   x: 32, y: 44, w: 20, h: 12, done: f.diaryRead },
+        { id: "box",    label: "4자리 다이얼 상자", x: 60, y: 39, w: 16, h: 16, done: f.boxOpen },
+        { id: "drawer", label: "잠긴 서랍",       x: 62, y: 56, w: 16, h: 32, done: f.drawerOpen },
       ];
+      if (!f.silverPicked) {
+        spots.push({ id: "silver_spot", label: "작은 은열쇠", x: 52, y: 45, w: 7.5, h: 11, done: false, glint: true });
+      }
+      return spots;
     }
     if (wall === "E") {
       return [

@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=1">
+<link rel="stylesheet" href="style.css?v=2">
 </head>
 <body class="dark">
 <div class="wrap">
@@ -64,12 +64,20 @@
   </div>
 
   <main class="esc-main">
-    <div class="esc-viewport" id="viewport">
-      <img id="roomImg" alt="서재 벽면">
-      <div id="visualOverlays" class="esc-ov-layer"></div>
-      <div id="hotspots" class="esc-hotspots"></div>
-      <button type="button" class="esc-nav left" id="turnLeftBtn" aria-label="왼쪽 보기">◀</button>
-      <button type="button" class="esc-nav right" id="turnRightBtn" aria-label="오른쪽 보기">▶</button>
+    <div class="esc-vp-slot">
+      <div class="esc-viewport" id="viewport">
+        <img id="roomImg" alt="서재 벽면">
+        <div id="visualOverlays" class="esc-ov-layer"></div>
+        <div id="hotspots" class="esc-hotspots"></div>
+        <button type="button" class="esc-nav left" id="turnLeftBtn" aria-label="왼쪽 보기">◀</button>
+        <button type="button" class="esc-nav right" id="turnRightBtn" aria-label="오른쪽 보기">▶</button>
+
+        <!-- 방 안 인게임 줌인 화면 (팝업 모달 대신 뷰포트 내부 전환) -->
+        <div class="esc-closeup" id="closeupView" hidden>
+          <button type="button" class="esc-back-cam" id="zoomCloseBtn" aria-label="물러나기">← 물러나기</button>
+          <div id="zoomBody" class="esc-closeup-body"></div>
+        </div>
+      </div>
     </div>
 
     <div class="esc-msg" id="msgBox">서재 안은 고요하다. 책상 위부터 자세히 살펴보자.</div>
@@ -88,25 +96,14 @@
   </div>
 </section>
 
-<!-- 확대 퍼즐 모달 -->
-<div class="overlay" id="zoomModal" hidden>
-  <div class="modal esc-zoom-card" role="dialog" aria-modal="true" aria-labelledby="zoomTitle">
-    <div class="esc-zoom-hd">
-      <h3 id="zoomTitle">자세히 보기</h3>
-      <button type="button" class="esc-x" id="zoomCloseBtn" aria-label="닫기">✕</button>
-    </div>
-    <div id="zoomBody" class="esc-zoom-body"></div>
-  </div>
-</div>
-
 <script src="../common/glog.js?v=8"></script>
 <script src="../common/cozy.js?v=14"></script>
 <script src="../common/me.js?v=19"></script>
 <script src="../common/rank.js?v=14"></script>
 <script src="../common/coach.js?v=4"></script>
 <script src="../common/tutorial.js?v=1"></script>
-<script src="core.js?v=1"></script>
+<script src="core.js?v=2"></script>
 <script src="tutorial.js?v=1"></script>
-<script src="main.js?v=1"></script>
+<script src="main.js?v=2"></script>
 </body>
 </html>

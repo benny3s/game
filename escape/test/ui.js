@@ -41,47 +41,54 @@ U.main(async T => {
   await p.click('.esc-spot[data-spot="silver_spot"]');
   await wait(p, () => __escape.state().inv.includes("silver_key"));
   await p.click('.esc-spot[data-spot="diary"]');
-  await wait(p, () => !document.getElementById("zoomModal").hidden);
+  await wait(p, () => !document.getElementById("closeupView").hidden);
   await p.click("#zoomCloseBtn");
   await p.click('.esc-slot[data-item="silver_key"]');
   await p.click('.esc-spot[data-spot="drawer"]');
   await wait(p, () => __escape.state().flags.drawerOpen);
   T.ok(await p.evaluate(() => __escape.state().inv.includes("magnet") && __escape.state().inv.includes("uv_off")), "서랍 열고 자석 + 빈 UV 손전등 획득");
 
-  // 4) 동쪽 이동: 책장 4색 책 순서 맞추기 → UV 합치기 → 어두운 석판 UV 비추기
+  // 4) 동쪽 이동: 맨손으로 석판 눌러도 팝업/줌 안 뜸 → 책장 4색 책 순서 맞추기 → UV 합치기 → 어두운 석판 UV 비추기
   await p.click('#compass button[data-w="E"]');
   await wait(p, () => __escape.state().wall === "E");
-  await p.click('.esc-spot[data-spot="bookshelf"]');
-  await wait(p, () => !document.getElementById("zoomModal").hidden);
-  for (const col of ["red", "gold", "green", "blue"]) {
-    await p.click(`.ez-book[data-bk="${col}"]`);
-  }
-  await wait(p, () => __escape.state().flags.shelfOpen);
-  T.ok(await p.evaluate(() => __escape.state().inv.includes("pendulum") && __escape.state().inv.includes("battery")), "책장 4색 퍼즐 성공 → 시계추 + 건전지 획득");
+  await p.click('.esc-spot[data-spot="slate"]');
+  await T.sleep(100);
+  T.ok(await p.evaluate(() => document.getElementById("closeupView").hidden), "맨손으로 석판 클릭 시 불필요한 팝업/줌 안 뜸");
 
-  // 인벤토리 합치기: 빈 UV 손전등 + 건전지 → 켜진 UV 손전등
+  await p.click('.esc-spot[data-spot="bookshelf"]');
+  await wait(p, () => !document.getElementById("closeupView").hidden);
+  for (const col of ["red", "gold", "green", "blue"]) {
+    await p.click(`.ez-spine[data-bk="${col}"]`);
+  }
+  await wait(p, () => __escape.state().flags.shelfOpen && document.getElementById("closeupView").hidden);
+  await p.click('.esc-spot[data-spot="bookshelf"]');
+  await T.sleep(100);
+  T.ok(await p.evaluate(() => document.getElementById("closeupView").hidden && __escape.state().inv.includes("pendulum") && __escape.state().inv.includes("battery")), "이미 열린 책장 재클릭 시 버튼 팝업 안 뜸 + 시계추·건전지 획득");
+
+  // 인벤토리 합치기: 빈 UV 손전등 + 건전지 → 켜진 UV 손전등 → 석판에 비추기 (벽면 직접 발광)
   await p.click("#combineBtn");
   await p.click('.esc-slot[data-item="uv_off"]');
   await p.click('.esc-slot[data-item="battery"]');
   await wait(p, () => __escape.state().inv.includes("uv_on"));
   await p.click('.esc-spot[data-spot="slate"]');
   await wait(p, () => __escape.state().flags.uvClueSeen);
-  await p.click("#zoomCloseBtn");
-  T.ok(await p.evaluate(() => !!document.querySelector(".ov-uv-slate")), "동쪽 석판 위 형광 단서 ☾3 ★7 ☀9 출현");
+  T.ok(await p.evaluate(() => !!document.querySelector(".ov-uv-slate") && document.getElementById("closeupView").hidden), "동쪽 석판 위 형광 단서 ☾3 ★7 ☀9 벽면 직접 출현 (팝업 방해 없음)");
 
-  // 5) 북쪽 이동: 시계추 장착 → 03:45 확인 + 명주실 획득
+  // 5) 북쪽 이동: 맨손 시계 클릭 시 줌 안 뜸 → 시계추 장착 → 03:45 확인 + 명주실 획득
   await p.click('#compass button[data-w="N"]');
   await wait(p, () => __escape.state().wall === "N");
+  await p.click('.esc-spot[data-spot="clock"]');
+  await T.sleep(100);
+  T.ok(await p.evaluate(() => document.getElementById("closeupView").hidden), "맨손 시계 클릭 시 스포일러 팝업 안 뜸");
   await p.click('.esc-slot[data-item="pendulum"]');
   await p.click('.esc-spot[data-spot="clock"]');
   await wait(p, () => __escape.state().flags.clockFixed);
-  await p.click("#zoomCloseBtn");
   T.ok(await p.evaluate(() => __escape.state().inv.includes("thread") && !!document.querySelector(".ov-clock-badge")), "괘종시계 복구(03:45) + 명주실 획득");
 
   // 6) 남쪽 이동: 4자리 다이얼 상자 0345 입력 → 드라이버 획득
   await p.click('#compass button[data-w="S"]');
   await p.click('.esc-spot[data-spot="box"]');
-  await wait(p, () => !document.getElementById("zoomModal").hidden);
+  await wait(p, () => !document.getElementById("closeupView").hidden);
   // 0, 3, 4, 5 다이얼 맞추기
   for (let i = 0; i < 3; i++) await p.click('[data-du="1"]');
   for (let i = 0; i < 4; i++) await p.click('[data-du="2"]');
@@ -94,7 +101,7 @@ U.main(async T => {
   await p.click('#compass button[data-w="W"]');
   await p.click('.esc-slot[data-item="driver"]');
   await p.click('.esc-spot[data-spot="frame"]');
-  await wait(p, () => __escape.state().flags.frameOpen && !document.getElementById("zoomModal").hidden);
+  await wait(p, () => __escape.state().flags.frameOpen && !document.getElementById("closeupView").hidden);
   for (let i = 0; i < 3; i++) await p.click('[data-su="0"]');
   for (let i = 0; i < 7; i++) await p.click('[data-su="1"]');
   for (let i = 0; i < 9; i++) await p.click('[data-su="2"]');
@@ -112,10 +119,10 @@ U.main(async T => {
   await p.click('#compass button[data-w="N"]');
   await p.click('.esc-slot[data-item="master_key"]');
   await p.click('.esc-spot[data-spot="door"]');
-  await wait(p, () => __escape.state().flags.doorKeyDone && !document.getElementById("zoomModal").hidden);
+  await wait(p, () => __escape.state().flags.doorKeyDone && !document.getElementById("closeupView").hidden);
   await p.click("#doorSealSlot");
   await wait(p, () => __escape.state().flags.escaped);
-  T.ok(await p.evaluate(() => document.getElementById("zoomTitle").textContent.includes("탈출 성공")), "최종 서재 탈출 성공 화면 표시 확인");
+  T.ok(await p.evaluate(() => document.getElementById("zoomBody").textContent.includes("탈출 성공")), "최종 서재 탈출 성공 화면 표시 확인");
 
   await p.close();
 });

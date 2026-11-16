@@ -42,11 +42,15 @@
 
 .esc-main {
   min-height: 0; display: grid; grid-template-rows: 1fr auto; gap: 6px;
-  padding: 6px 8px; place-items: center; overflow: hidden;
+  padding: 6px 8px; justify-items: center; align-items: stretch; overflow: hidden;
+}
+.esc-vp-slot {
+  width: 100%; height: 100%; min-height: 0;
+  container-type: size; display: grid; place-items: center;
 }
 
 .esc-viewport {
-  position: relative; width: 100%; max-width: 720px; max-height: 100%;
+  position: relative; width: min(100cqw, 133.33cqh, 720px);
   aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
   border: 1.5px solid rgba(245,158,11,0.35); background: #07080b;
   box-shadow: 0 12px 30px rgba(0,0,0,0.65); user-select: none; -webkit-user-select: none;
@@ -58,8 +62,9 @@
 .esc-spot {
   position: absolute; background: transparent; border: 0; padding: 0; cursor: pointer;
   border-radius: 8px; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-  min-width: 36px; min-height: 36px;
+  min-width: 32px; min-height: 32px;
 }
+.esc-spot[data-spot="silver_spot"] { min-width: 0; min-height: 0; }
 .esc-spot:focus-visible { outline: 2px solid var(--gold); }
 .esc-spot.glint::after {
   content: "✨"; position: absolute; inset: 0; display: grid; place-items: center;
@@ -128,7 +133,8 @@
 }
 .esc-tool-btn {
   padding: 5px 10px; border-radius: 99px; border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.06); color: var(--ink); font: 700 12px inherit; cursor: pointer;
+  background: rgba(255,255,255,0.06); color: var(--ink);
+  font-family: inherit; font-weight: 700; font-size: 12px; line-height: 1.2; cursor: pointer;
 }
 .esc-tool-btn[aria-pressed="true"] {
   border-color: #c084fc; background: rgba(192,132,252,0.22); color: #f3e8ff;
@@ -150,60 +156,150 @@
 .esc-slot.sel { border-color: var(--gold); background: rgba(251,191,36,0.18); box-shadow: 0 0 0 1px var(--gold); }
 .esc-slot.comb { border-color: #c084fc; background: rgba(192,132,252,0.22); box-shadow: 0 0 0 1px #c084fc; }
 
-/* 확대 퍼즐 모달 */
-.esc-zoom-card { width: min(420px, 94vw); max-height: 86dvh; overflow: auto; display: grid; gap: 12px; }
-.esc-zoom-hd { display: flex; justify-content: space-between; align-items: center; }
-.esc-zoom-hd h3 { margin: 0; font-size: 17px; color: #fef3c7; }
-.esc-x {
-  width: 34px; height: 34px; border-radius: 9px; border: 1px solid rgba(255,255,255,0.18);
-  background: rgba(255,255,255,0.06); color: var(--ink); font-size: 15px; cursor: pointer;
+/* 인게임 뷰포트 줌인 스테이지 */
+.esc-closeup {
+  position: absolute; inset: 0; z-index: 6; background: #0c0d12;
+  display: grid; overflow: hidden; animation: escCamIn .18s ease-out;
 }
-.esc-zoom-body { display: grid; gap: 12px; }
+.esc-closeup[hidden] { display: none !important; }
+@keyframes escCamIn { from { opacity: 0; transform: scale(1.05); } to { opacity: 1; transform: scale(1); } }
 
+.esc-back-cam {
+  position: absolute; top: 8px; left: 8px; z-index: 4;
+  padding: 5px 11px; border-radius: 99px;
+  background: rgba(12,13,18,0.82); border: 1px solid rgba(251,191,36,0.42);
+  color: #fef3c7; font-family: inherit; font-weight: 700; font-size: 12px; line-height: 1.2; cursor: pointer;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  touch-action: manipulation;
+}
+.esc-closeup-body {
+  position: relative; width: 100%; height: 100%; display: flex; flex-direction: column;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+.esc-closeup-body > * { flex: 1 0 auto; min-height: 100%; padding-top: 38px; }
+.esc-closeup-body > .ez-scene-shelf { padding-top: 0; }
+
+/* 1) 시계공의 일지 (양피지 클로즈업) */
+.ez-scene-diary {
+  width: 100%; display: grid; place-items: center; padding: 38px 14px 12px;
+  background: radial-gradient(circle at 50% 45%, #2a1d13, #110b07 80%);
+}
 .ez-parchment {
-  padding: 16px; border-radius: 10px; background: linear-gradient(160deg, #f3e5c8, #dfd0af);
-  color: #2c1d0e; border: 2px solid #9c7442; line-height: 1.65; font-size: 14px;
+  width: min(94%, 440px); padding: 12px 15px; border-radius: 6px 10px 8px 6px;
+  background: linear-gradient(155deg, #f3e4c3, #dfc99b 65%, #cfb480);
+  color: #2b1a0c; border: 1px solid #8a6436;
+  box-shadow: 0 12px 26px rgba(0,0,0,0.72), inset 0 0 24px rgba(139,92,42,0.22);
+  line-height: 1.48; font: 500 clamp(11px, 2.3vw, 13.5px)/1.48 "Gowun Dodum", serif;
 }
-.ez-books { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.ez-book {
-  height: 112px; border-radius: 8px; border: 2px solid rgba(255,255,255,0.22);
-  color: #fff; font: 900 14px var(--round, inherit); cursor: pointer;
-  display: grid; place-items: center; text-shadow: 0 1px 3px rgba(0,0,0,0.6); transition: transform .1s;
-}
-.ez-book.pushed { transform: translateY(6px); opacity: 0.65; border-color: #fbbf24; }
-.ez-book.red { background: linear-gradient(180deg, #b91c1c, #7f1d1d); }
-.ez-book.gold { background: linear-gradient(180deg, #d97706, #92400e); }
-.ez-book.green { background: linear-gradient(180deg, #15803d, #14532d); }
-.ez-book.blue { background: linear-gradient(180deg, #1d4ed8, #1e3a8a); }
+.ez-parchment .hd { font-weight: 800; color: #5c3312; border-bottom: 1px solid rgba(92,51,18,0.28); padding-bottom: 4px; margin-bottom: 6px; font-size: clamp(12px, 2.7vw, 15px); }
 
-.ez-dials { display: flex; justify-content: center; gap: 10px; }
-.ez-dial {
-  display: grid; gap: 4px; place-items: center; padding: 8px; border-radius: 10px;
-  background: #0f172a; border: 1.5px solid #475569; min-width: 58px;
+/* 2) 고서적 책장 (실제 가죽 양장 책등) */
+.ez-scene-shelf {
+  width: 100%; height: 100%; display: grid; grid-template-rows: 1fr auto;
+  background: linear-gradient(180deg, #1b120c 0%, #100a06 80%);
+  box-shadow: inset 0 0 40px rgba(0,0,0,0.88);
 }
+.ez-shelf-row {
+  display: flex; align-items: flex-end; justify-content: center; gap: clamp(5px, 1.8vw, 12px);
+  padding: 28px 18px 0; height: 100%;
+}
+.ez-spine {
+  position: relative; width: clamp(32px, 10vw, 56px); height: clamp(128px, 64%, 240px);
+  border-radius: 5px 5px 2px 2px; border: 1.5px solid rgba(255,255,255,0.16);
+  display: grid; grid-template-rows: auto 1fr auto; align-items: center; justify-items: center;
+  padding: 10px 4px; cursor: pointer; color: rgba(254,243,199,0.92);
+  box-shadow: inset -4px 0 8px rgba(0,0,0,0.45), inset 3px 0 6px rgba(255,255,255,0.12), 2px 0 8px rgba(0,0,0,0.7);
+  transition: transform .14s ease, filter .14s ease; touch-action: manipulation;
+}
+.ez-spine::before, .ez-spine::after {
+  content: ""; width: 78%; height: 2px; background: linear-gradient(90deg, transparent, rgba(251,191,36,0.75), transparent);
+}
+.ez-spine .mark { font-size: clamp(15px, 3.6vw, 22px); filter: drop-shadow(0 1px 2px rgba(0,0,0,0.7)); }
+.ez-spine.deco { cursor: default; filter: brightness(0.75) saturate(0.7); height: clamp(120px, 59%, 222px); background: linear-gradient(180deg, #4b382a, #2c2017); }
+.ez-spine.red   { background: linear-gradient(180deg, #991b1b, #581010); border-color: rgba(252,165,165,0.28); }
+.ez-spine.gold  { background: linear-gradient(180deg, #ca8a04, #784805); border-color: rgba(253,224,71,0.34); }
+.ez-spine.green { background: linear-gradient(180deg, #166534, #0c3b1e); border-color: rgba(134,239,172,0.28); }
+.ez-spine.blue  { background: linear-gradient(180deg, #1e40af, #11235f); border-color: rgba(147,197,253,0.28); }
+.ez-spine.pushed { transform: translateY(8px) scaleY(0.96); filter: brightness(0.68); box-shadow: inset 0 6px 14px rgba(0,0,0,0.85); }
+.ez-shelf-plank {
+  height: clamp(22px, 8%, 34px);
+  background: linear-gradient(180deg, #5c3a21, #382112);
+  border-top: 2px solid #7c5233;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+}
+.ez-pin { width: 8px; height: 8px; border-radius: 50%; background: #1e130b; border: 1px solid rgba(251,191,36,0.35); }
+.ez-pin.lit { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+
+/* 3) 나무 상자 & 벽 금고 다이얼 */
+.ez-scene-chest, .ez-scene-safe {
+  width: 100%; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 38px 14px 12px;
+}
+.ez-scene-chest {
+  background: radial-gradient(circle at 50% 42%, #3a2515, #180f09 80%);
+  box-shadow: inset 0 0 0 6px rgba(180,126,62,0.25);
+}
+.ez-scene-safe {
+  background: radial-gradient(circle at 50% 42%, #293241, #11161f 80%);
+  box-shadow: inset 0 0 0 8px #1f2937, inset 0 0 36px rgba(0,0,0,0.85);
+}
+.ez-lock-cap { font-size: clamp(12px, 2.7vw, 14px); color: #e2d4bc; letter-spacing: 0.4px; text-shadow: 0 1px 2px #000; }
+.ez-dials { display: flex; justify-content: center; gap: clamp(6px, 2.2vw, 12px); }
+.ez-dial {
+  display: grid; gap: 4px; place-items: center; padding: 7px 6px; border-radius: 10px;
+  background: #0d121c; border: 1.5px solid #6b5332; min-width: clamp(46px, 12vw, 60px);
+  box-shadow: inset 0 3px 8px rgba(0,0,0,0.75);
+}
+.ez-scene-safe .ez-dial { border-color: #64748b; }
 .ez-dial button {
-  width: 40px; height: 32px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+  width: 38px; height: 28px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.22);
   background: rgba(255,255,255,0.08); color: #f8fafc; cursor: pointer; font-weight: 800;
   touch-action: manipulation;
 }
-.ez-dial .val { font: 900 24px monospace; color: var(--gold); padding: 2px 0; }
-
-.ez-slate {
-  padding: 26px 14px; border-radius: 12px; text-align: center;
-  background: #0f1419; border: 2px solid #334155; min-height: 120px; display: grid; place-items: center;
+.ez-dial .val { font: 900 clamp(20px, 5vw, 26px) monospace; color: var(--gold); padding: 2px 0; }
+.ez-latch-btn {
+  padding: 9px 22px; border-radius: 99px; border: 1.5px solid rgba(251,191,36,0.55);
+  background: linear-gradient(180deg, #784b14, #4f2f08); color: #fef3c7;
+  font-family: inherit; font-weight: 800; font-size: 13.5px; line-height: 1.2; cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5); touch-action: manipulation;
 }
-.ez-slate.uv {
-  background: radial-gradient(circle, rgba(168,85,247,0.32), #0f1419 72%);
-  border-color: #a855f7;
+.ez-scene-safe .ez-latch-btn { background: linear-gradient(180deg, #334155, #1e293b); border-color: #94a3b8; }
+
+/* 4) 동쪽 석판 (UV 형광) & 북쪽 괘종시계 */
+.ez-scene-slate {
+  width: 100%; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 48%, rgba(168,85,247,0.34), #0c1016 68%);
 }
 .ez-uv-txt {
-  font: 900 26px/1.4 sans-serif; color: #f0abfc;
-  text-shadow: 0 0 12px #c084fc, 0 0 24px #a855f7; letter-spacing: 3px;
+  font: 900 clamp(22px, 5.4vw, 32px)/1.45 sans-serif; color: #f0abfc; text-align: center;
+  text-shadow: 0 0 12px #c084fc, 0 0 26px #a855f7; letter-spacing: 3px;
 }
+.ez-scene-clock {
+  width: 100%; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 38px 12px 10px;
+  background: radial-gradient(circle at 50% 44%, #2d1e12, #0d0906 82%);
+}
+.ez-scene-clock svg { height: clamp(130px, 44%, 195px); width: auto; }
 
-.ez-door-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.ez-dslot {
-  padding: 14px 10px; border-radius: 12px; border: 1.5px dashed #64748b; background: #141a24;
-  color: var(--ink); display: grid; place-items: center; gap: 4px; cursor: pointer; font-size: 13px;
+/* 5) 북쪽 출구 오크 문 (열쇠 구멍 + 인장 홈) */
+.ez-scene-door {
+  width: 100%; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 38px 12px 12px;
+  background: repeating-linear-gradient(90deg, #27190f 0 46px, #1e130b 46px 49px), #23160d;
+  box-shadow: inset 0 0 48px rgba(0,0,0,0.85);
 }
-.ez-dslot.done { border-style: solid; border-color: #34d399; background: rgba(52,211,153,0.14); color: #d1fae5; }
+.ez-door-slots { display: flex; gap: clamp(14px, 4vw, 28px); align-items: center; }
+.ez-dslot {
+  width: clamp(114px, 31vw, 152px); height: clamp(114px, 31vw, 152px);
+  border-radius: 50%; border: 3px solid #8a6436;
+  background: radial-gradient(circle, #18110b 45%, #3d2a19 100%);
+  color: #f3efe6; display: grid; place-content: center; justify-items: center; gap: 4px;
+  cursor: pointer; text-align: center; box-shadow: inset 0 6px 16px rgba(0,0,0,0.85), 0 6px 16px rgba(0,0,0,0.6);
+  touch-action: manipulation; padding: 8px;
+}
+.ez-dslot b { font-size: clamp(11.5px, 2.7vw, 13px); color: #fde68a; }
+.ez-dslot small { font-size: clamp(10px, 2.2vw, 11.5px); color: #cbd5e1; }
+.ez-dslot.done { border-color: #34d399; background: radial-gradient(circle, rgba(16,185,129,0.28), #0d241b 85%); }
+
+/* 6) 탈출 완료 화면 */
+.ez-scene-escaped {
+  width: 100%; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 16px;
+  background: radial-gradient(circle at 50% 35%, rgba(253,224,71,0.28), #14100b 78%);
+}

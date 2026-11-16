@@ -5,7 +5,9 @@
   const E = window.EscapeCore;
   const $ = id => document.getElementById(id);
   const esc = s => (window.Cozy && Cozy.esc ? Cozy.esc(s) : String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])));
-  const LS_SAVE = () => `benny.escape.ep1.${(window.GME && GME.me && GME.me.pid) || "guest"}`;
+  const curPid = () => (window.GME && GME.me && GME.me.pid) || "guest";
+  const LS_SAVE = (pid = curPid()) => `benny.escape.ep1.${pid}`;
+  const VALID_ZOOMS = new Set(["diary", "bookshelf", "clock", "box", "slate", "safe", "door"]);
 
   let st = null;
   let muted = false;
@@ -13,26 +15,32 @@
   let coach = null;
   let coachBtnCtl = null;
   let hintLvl = 1;
-  let seenHints = new Set();
   let combinePickA = null;
   let timerId = null;
   let sessionStart = Date.now();
-  let activePid = (window.GME && GME.me && GME.me.pid) || "guest";
+  let activePid = curPid();
   let dialValsBox = [0, 0, 0, 0];
   let dialValsSafe = [0, 0, 0];
 
-  function loadSave() {
+  function loadSave(pid = curPid()) {
     try {
-      const s = JSON.parse(localStorage.getItem(LS_SAVE()) || "null");
+      const s = JSON.parse(localStorage.getItem(LS_SAVE(pid)) || "null");
       if (s && s.flags && Array.isArray(s.inv) && Array.isArray(s.bookSeq) && E.WALLS.includes(s.wall)) {
         const base = E.initialState(s.startedAt || Date.now());
         const inv = s.inv.filter(id => !!E.ITEMS[id]);
         const selected = s.selected && inv.includes(s.selected) ? s.selected : null;
+        const bookSeq = s.bookSeq.filter(c => E.BOOK_TARGET.includes(c));
+        const seenHints = Array.isArray(s.seenHints) ? s.seenHints.filter(x => typeof x === "string").slice(0, 64) : [];
         return {
           ...base,
           ...s,
           inv,
           selected,
+          bookSeq,
+          seenHints,
+          zoom: VALID_ZOOMS.has(s.zoom) ? s.zoom : null,
+          hintsUsed: Number.isFinite(+s.hintsUsed) ? Math.max(0, Math.round(+s.hintsUsed)) : 0,
+          moves: Number.isFinite(+s.moves) ? Math.max(0, Math.round(+s.moves)) : 0,
           flags: { ...base.flags, ...s.flags },
           elapsedMs: Number.isFinite(+s.elapsedMs) ? Math.max(0, +s.elapsedMs) : 0,
         };
@@ -53,7 +61,7 @@
   }
   function saveState() {
     if (!st) return;
-    try { localStorage.setItem(LS_SAVE(), JSON.stringify(st)); } catch (e) {}
+    try { localStorage.setItem(LS_SAVE(activePid), JSON.stringify(st)); } catch (e) {}
   }
 
   function sfx(kind) {
@@ -121,13 +129,13 @@
   }
 
   function startGame(fresh = false) {
-    const saved = !fresh && loadSave();
+    const pid = curPid();
+    const saved = !fresh && loadSave(pid);
     const useSaved = saved && !saved.flags.escaped;
     st = useSaved ? saved : E.initialState(Date.now());
-    activePid = (window.GME && GME.me && GME.me.pid) || "guest";
+    activePid = pid;
     sessionStart = Date.now();
     hintLvl = 1;
-    seenHints = new Set();
     combinePickA = null;
     if (!useSaved) {
       dialValsBox = [0, 0, 0, 0];
@@ -146,7 +154,7 @@
     if (timerId) { clearInterval(timerId); timerId = null; }
     if (coachBtnCtl) { coachBtnCtl.destroy(); coachBtnCtl = null; }
     if (coach) { coach.destroy(); coach = null; }
-    $("zoomModal").hidden = true;
+    $("closeupView").hidden = true;
     $("play").hidden = true;
     $("home").closest(".wrap").hidden = false;
     updateHomeBanner();
@@ -176,9 +184,11 @@
 
   function refreshCoach(countUse = false) {
     if (!coach || !st) return;
-    const hintKey = `${Object.values(st.flags).map(v => v ? 1 : 0).join("")}:${hintLvl}`;
-    if (countUse && !seenHints.has(hintKey)) {
-      seenHints.add(hintKey);
+    const flagSig = Object.values(st.flags).map(v => v ? 1 : 0).join("");
+    const hintKey = `${flagSig}:${hintLvl}`;
+    if (!Array.isArray(st.seenHints)) st.seenHints = [];
+    if (countUse && !st.seenHints.includes(hintKey)) {
+      st.seenHints.push(hintKey);
       st.hintsUsed++;
       saveState();
     }
@@ -198,11 +208,15 @@
   }
 
   function applyResult(res) {
+    const prevFlags = st ? Object.values(st.flags).map(v => v ? 1 : 0).join("") : "";
     const prevEscaped = st ? !!st.flags.escaped : false;
+    const elapsedBefore = getElapsedMs();
     st = res.state;
+    const nextFlags = Object.values(st.flags).map(v => v ? 1 : 0).join("");
+    if (combinePickA && !st.inv.includes(combinePickA)) combinePickA = null;
     const justEscaped = !prevEscaped && st.flags.escaped;
     if (justEscaped) {
-      st.elapsedMs = Math.max(0, getElapsedMs());
+      st.elapsedMs = Math.max(0, elapsedBefore);
       const score = Math.max(100, Math.round(1000 - st.elapsedMs / 1000 - st.hintsUsed * 60));
       if (window.GRank) GRank.result("escape", { mode: "ai", res: "w", score, tier: "ep1" });
       if (window.Cozy && Cozy.confetti) Cozy.confetti();
@@ -211,7 +225,7 @@
     if (res.sfx) sfx(res.sfx);
     saveState();
     if (coach && coach.visible) {
-      hintLvl = 1;
+      if (nextFlags !== prevFlags) hintLvl = 1;
       refreshCoach(false);
     }
     renderAll();
@@ -320,68 +334,90 @@
   }
 
   function renderZoom() {
-    const modal = $("zoomModal");
+    const view = $("closeupView");
+    const backBtn = $("zoomCloseBtn");
+    const body = $("zoomBody");
+
     if (st.flags.escaped) {
-      $("zoomTitle").textContent = "🎉 서재 탈출 성공!";
       const el = getElapsedMs();
       const stars = st.hintsUsed === 0 ? "★★★" : st.hintsUsed <= 2 ? "★★☆" : "★☆☆";
-      $("zoomBody").innerHTML = `
+      backBtn.hidden = true;
+      body.innerHTML = `<div class="ez-scene-escaped">
         <div class="ez-parchment" style="text-align:center">
-          <div style="font-size:32px;margin-bottom:6px">🗝️🚪✨</div>
-          <b>시계공 할아버지의 비밀 서재에서 무사히 탈출했습니다!</b><br><br>
-          ⏱ 클리어 시간: <b>${fmtSec(el)}</b><br>
-          🧑‍🏫 사용 힌트: <b>${st.hintsUsed}회</b> (${stars})
+          <div style="font-size:28px;margin-bottom:4px">🗝️ 🚪 ✨</div>
+          <div class="hd">서재 탈출 성공!</div>
+          시계공 할아버지의 비밀 서재 문을 열고 밖으로 나왔습니다.<br><br>
+          ⏱ 클리어 시간: <b>${fmtSec(el)}</b> &nbsp;·&nbsp; 🧑‍🏫 힌트 <b>${st.hintsUsed}회</b> (${stars})
         </div>
-        <button type="button" class="btn primary big" id="escReplayBtn">처음부터 다시 도전 ↺</button>`;
+        <button type="button" class="btn primary" id="escReplayBtn">처음부터 다시 도전 ↺</button>
+      </div>`;
       $("escReplayBtn").onclick = () => startGame(true);
-      modal.hidden = false;
+      view.hidden = false;
       return;
     }
 
-    if (!st.zoom) { modal.hidden = true; return; }
+    if (!st.zoom) { view.hidden = true; body.innerHTML = ""; return; }
+    backBtn.hidden = false;
     const z = st.zoom;
-    const body = $("zoomBody");
 
     if (z === "diary") {
-      $("zoomTitle").textContent = "📜 시계공의 일지";
-      body.innerHTML = `<div class="ez-parchment">
+      body.innerHTML = `<div class="ez-scene-diary"><div class="ez-parchment">
+        <div class="hd">📜 시계공의 일지</div>
         <i>"내 모든 시간은 북쪽 시계에 멈춰 있소.<br>
-        숨겨 둔 추를 찾으려면 서재 책장을 아래 순서대로 누르시오."</i><br><br>
+        숨겨 둔 추를 찾으려면 서재의 책들을 아래 순서대로 누르시오."</i><br><br>
         1️⃣ 타오르는 <b>붉은 장미</b>의 장<br>
         2️⃣ 눈부신 <b>황금</b> 톱니바퀴의 장<br>
         3️⃣ 비취빛 <b>초록</b> 시계판의 장<br>
         4️⃣ 깊은 <b>푸른 밤</b>하늘의 장<br><br>
-        <small>※ 빛이 닿지 않는 동쪽 석판은 보라빛 자외선 아래 진실을 드러낸다.</small>
-      </div>`;
+        <small style="opacity:.82">※ 빛이 닿지 않는 동쪽 석판은 보라빛 자외선 아래 진실을 드러낸다.</small>
+      </div></div>`;
     } else if (z === "bookshelf") {
-      $("zoomTitle").textContent = "📚 고서적 책장 (4색 책 누르기)";
-      body.innerHTML = `
-        <p style="margin:0;font-size:13px;color:var(--soft)">${st.flags.shelfOpen ? "비밀 칸이 열려 비어 있습니다." : `일지 순서대로 4권을 차례로 누르세요 (${st.bookSeq.length}/4)`}</p>
-        <div class="ez-books">
-          ${[["red", "빨강"], ["gold", "금색"], ["green", "초록"], ["blue", "파랑"]].map(([c, nm]) =>
-            `<button type="button" class="ez-book ${c}${st.bookSeq.includes(c) || st.flags.shelfOpen ? " pushed" : ""}" data-bk="${c}">${nm}</button>`
+      // 정답 순서(red->gold->green->blue)와 다르게 섞어 배치 + 책등 문양만 표현
+      const books = [
+        { k: "blue",  cls: "blue",  ic: "🌙", lbl: "푸른 밤하늘의 장" },
+        { k: "",      cls: "deco",  ic: "❦",  lbl: "낡은 가죽 고서" },
+        { k: "red",   cls: "red",   ic: "🌹", lbl: "붉은 장미의 장" },
+        { k: "",      cls: "deco",  ic: "✦",  lbl: "두꺼운 필사본" },
+        { k: "gold",  cls: "gold",  ic: "⚙",  lbl: "황금 톱니바퀴의 장" },
+        { k: "green", cls: "green", ic: "🕰", lbl: "초록 시계판의 장" },
+      ];
+      body.innerHTML = `<div class="ez-scene-shelf">
+        <div class="ez-shelf-row">
+          ${books.map(b => b.k
+            ? `<button type="button" class="ez-spine ${b.cls}${st.bookSeq.includes(b.k) ? " pushed" : ""}" data-bk="${b.k}" aria-label="${b.lbl}" title="${b.lbl}"><span class="mark">${b.ic}</span></button>`
+            : `<div class="ez-spine deco" aria-hidden="true"><span class="mark">${b.ic}</span></div>`
           ).join("")}
-        </div>`;
+        </div>
+        <div class="ez-shelf-plank" aria-hidden="true">
+          ${[0, 1, 2, 3].map(i => `<span class="ez-pin${i < st.bookSeq.length ? " lit" : ""}"></span>`).join("")}
+        </div>
+      </div>`;
       body.querySelectorAll("[data-bk]").forEach(b => {
         b.onclick = () => applyResult(E.pressBook(st, b.dataset.bk));
       });
     } else if (z === "clock") {
-      $("zoomTitle").textContent = "🕰️ 괘종시계";
-      body.innerHTML = `
-        <div style="text-align:center;padding:14px;border-radius:12px;background:#0f172a;border:1px solid var(--line)">
-          <div style="font:900 32px monospace;color:${st.flags.clockFixed ? "var(--gold)" : "#64748b"}">${st.flags.clockFixed ? "03 : 45" : "-- : --"}</div>
-          <p style="margin:8px 0 0;font-size:13px;color:#cbd5e1">${st.flags.clockFixed ? "황금 시계추가 걸려 3시 45분을 가리킨 채 종을 울렸습니다." : "시계추 고리가 비어 있습니다. 아래 가방에서 시계추를 선택해 클릭하거나 아래 버튼을 누르세요."}</p>
-          ${!st.flags.clockFixed && st.inv.includes("pendulum") ? `<button type="button" class="btn primary" id="hangPendBtn" style="margin-top:10px">🕰️ 황금 시계추 걸기</button>` : ""}
-        </div>`;
-      if ($("hangPendBtn")) {
-        $("hangPendBtn").onclick = () => {
-          const s1 = E.selectItem({ ...st, selected: null }, "pendulum").state;
-          applyResult(E.inspectSpot(s1, "clock"));
-        };
-      }
+      body.innerHTML = `<div class="ez-scene-clock">
+        <svg viewBox="0 0 180 220" aria-label="03시 45분 괘종시계">
+          <rect x="26" y="10" width="128" height="200" rx="14" fill="#3a2312" stroke="#8a6436" stroke-width="3"/>
+          <circle cx="90" cy="68" r="44" fill="#f3e5c8" stroke="#b45309" stroke-width="4"/>
+          <text x="90" y="37" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">XII</text>
+          <text x="122" y="72" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">III</text>
+          <text x="90" y="104" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">VI</text>
+          <text x="58" y="72" text-anchor="middle" font-size="10" fill="#451a03" font-weight="bold">IX</text>
+          <!-- 03:45 시침·분침 -->
+          <line x1="90" y1="68" x2="112" y2="75" stroke="#1e1b18" stroke-width="4" stroke-linecap="round"/>
+          <line x1="90" y1="68" x2="54" y2="68" stroke="#1e1b18" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="90" cy="68" r="3.5" fill="#b45309"/>
+          <!-- 하단 유리창 + 황금 시계추 -->
+          <rect x="48" y="124" width="84" height="72" rx="6" fill="#170f08" stroke="#785228" stroke-width="2"/>
+          <line x1="90" y1="126" x2="100" y2="176" stroke="#fbbf24" stroke-width="2.5"/>
+          <circle cx="101" cy="178" r="10" fill="#fbbf24" stroke="#b45309" stroke-width="2"/>
+        </svg>
+        <div class="ez-lock-cap">시계가 <b>03 : 45</b>를 가리키며 천천히 울리고 있다</div>
+      </div>`;
     } else if (z === "box") {
-      $("zoomTitle").textContent = "🔒 4자리 숫자 상자";
-      body.innerHTML = `
+      body.innerHTML = `<div class="ez-scene-chest">
+        <div class="ez-lock-cap">나무 상자 황동 다이얼</div>
         <div class="ez-dials">
           ${dialValsBox.map((v, i) => `
             <div class="ez-dial">
@@ -390,7 +426,8 @@
               <button type="button" data-dd="${i}">▼</button>
             </div>`).join("")}
         </div>
-        <button type="button" class="btn primary" id="boxSubmitBtn">자물쇠 열기 🔓</button>`;
+        <button type="button" class="ez-latch-btn" id="boxSubmitBtn">걸쇠 당기기 🔓</button>
+      </div>`;
       body.querySelectorAll("[data-du]").forEach(b => {
         b.onclick = () => {
           const i = +b.dataset.du;
@@ -409,25 +446,13 @@
       });
       $("boxSubmitBtn").onclick = () => applyResult(E.submitBoxCode(st, dialValsBox.join("")));
     } else if (z === "slate") {
-      $("zoomTitle").textContent = "⬛ 동쪽 벽 어두운 석판";
-      const uv = st.flags.uvClueSeen;
-      body.innerHTML = `
-        <div class="ez-slate${uv ? " uv" : ""}">
-          ${uv
-            ? `<div class="ez-uv-txt">☾ = 3<br>★ = 7<br>☀ = 9</div>`
-            : `<span style="color:#64748b">눈으로는 아무 무늬도 보이지 않는다.<br>특수 손전등을 켜서 비춰야 한다.</span>`}
-        </div>
-        ${!uv && st.inv.includes("uv_on") ? `<button type="button" class="btn primary" id="shineUvBtn">🟣 UV 손전등 비추기</button>` : ""}`;
-      if ($("shineUvBtn")) {
-        $("shineUvBtn").onclick = () => {
-          const s1 = E.selectItem({ ...st, selected: null }, "uv_on").state;
-          applyResult(E.inspectSpot(s1, "slate"));
-        };
-      }
+      body.innerHTML = `<div class="ez-scene-slate">
+        <div class="ez-uv-txt">☾ = 3<br>★ = 7<br>☀ = 9</div>
+      </div>`;
     } else if (z === "safe") {
-      $("zoomTitle").textContent = "🔐 벽 속 숨은 금고 (☾ · ★ · ☀)";
       const syms = ["☾", "★", "☀"];
-      body.innerHTML = `
+      body.innerHTML = `<div class="ez-scene-safe">
+        <div class="ez-lock-cap">숨겨진 강철 벽 금고</div>
         <div class="ez-dials">
           ${dialValsSafe.map((v, i) => `
             <div class="ez-dial">
@@ -437,7 +462,8 @@
               <button type="button" data-sd="${i}">▼</button>
             </div>`).join("")}
         </div>
-        <button type="button" class="btn primary" id="safeSubmitBtn">금고 열기 🔓</button>`;
+        <button type="button" class="ez-latch-btn" id="safeSubmitBtn">금고 손잡이 돌리기 🔓</button>
+      </div>`;
       body.querySelectorAll("[data-su]").forEach(b => {
         b.onclick = () => {
           const i = +b.dataset.su;
@@ -456,26 +482,26 @@
       });
       $("safeSubmitBtn").onclick = () => applyResult(E.submitSafeCode(st, dialValsSafe.join("")));
     } else if (z === "door") {
-      $("zoomTitle").textContent = "🚪 서재 출구 문";
-      body.innerHTML = `
-        <p style="margin:0;font-size:13px;color:var(--soft)">이중 잠금을 모두 풀면 서재에서 탈출할 수 있습니다.</p>
+      body.innerHTML = `<div class="ez-scene-door">
+        <div class="ez-lock-cap">육중한 참나무 출구 문</div>
         <div class="ez-door-slots">
           <button type="button" class="ez-dslot${st.flags.doorKeyDone ? " done" : ""}" id="doorKeySlot">
             <span style="font-size:26px">🔑</span>
-            <b>상단 열쇠 구멍</b>
-            <small>${st.flags.doorKeyDone ? "잠금 해제됨 ✓" : (st.inv.includes("master_key") ? "클릭해 키 사용" : "마스터 키 필요")}</small>
+            <b>열쇠 구멍</b>
+            <small>${st.flags.doorKeyDone ? "해제됨 ✓" : (st.inv.includes("master_key") ? "열쇠 꽂기" : "잠겨 있음")}</small>
           </button>
           <button type="button" class="ez-dslot${st.flags.doorSealDone ? " done" : ""}" id="doorSealSlot">
             <span style="font-size:26px">🪙</span>
-            <b>중앙 원형 홈</b>
-            <small>${st.flags.doorSealDone ? "인장 장착됨 ✓" : (st.inv.includes("seal") ? "클릭해 인장 끼우기" : "인장 메달 필요")}</small>
+            <b>원형 홈</b>
+            <small>${st.flags.doorSealDone ? "장착됨 ✓" : (st.inv.includes("seal") ? "인장 끼우기" : "비어 있음")}</small>
           </button>
-        </div>`;
+        </div>
+      </div>`;
       $("doorKeySlot").onclick = () => applyResult(E.useOnDoor(st, st.inv.includes("master_key") ? "master_key" : ""));
       $("doorSealSlot").onclick = () => applyResult(E.useOnDoor(st, st.inv.includes("seal") ? "seal" : ""));
     }
 
-    modal.hidden = false;
+    view.hidden = false;
   }
 
   function wireEvents() {
@@ -512,17 +538,17 @@
       sfx("tap");
     };
     $("zoomCloseBtn").onclick = () => { if (st && !st.flags.escaped) applyResult(E.closeZoom(st)); };
-    $("zoomModal").onclick = e => {
-      if (e.target === $("zoomModal") && st && !st.flags.escaped) applyResult(E.closeZoom(st));
-    };
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape" && st && st.zoom && !st.flags.escaped) applyResult(E.closeZoom(st));
+    });
 
     document.addEventListener("visibilitychange", () => {
-      if (!st) return;
+      if (!st || $("play").hidden) return;
       if (document.hidden) { flushElapsed(); saveState(); }
       else { sessionStart = Date.now(); }
     });
     if (window.GME && GME.onChange) GME.onChange(() => {
-      const nextPid = (window.GME && GME.me && GME.me.pid) || "guest";
+      const nextPid = curPid();
       if (st && !$("play").hidden && nextPid !== activePid) leaveGame();
       else updateHomeBanner();
     });
