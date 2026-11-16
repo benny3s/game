@@ -39,7 +39,20 @@ window.ArenaMock = util => {
         players[d.from] = { ...d.me, t: Date.now(), p2p: 1 };
         post({ k: "join!", game, code, to: d.from, meta, players, shared }, true);
         E.emit("join", d.from, players[d.from]); E.emit("p2p", d.from, true); sync(); E.emit("players", players);
-      } else if (d.k === "up") { if (players[d.from]) E.emit("msg", d.from, d.m); }
+      } else if (d.k === "up") {
+        if (players[d.from]) {
+          if (d.m && d.m._sys === 1) {
+            const pkt = { ...d.m, from: d.from };
+            if (d.m.to && d.m.to !== uid) post({ k: "down", game, code, m: pkt, to: d.m.to }, true);
+            else {
+              E.emit("sys", d.from, pkt);
+              if (!d.m.to) Object.keys(players).forEach(id => { if (id !== uid && id !== d.from) post({ k: "down", game, code, m: pkt, to: id }, true); });
+            }
+          } else {
+            E.emit("msg", d.from, d.m);
+          }
+        }
+      }
       else if (d.k === "bye") { if (players[d.from]) { delete players[d.from]; E.emit("leave", d.from); sync(); E.emit("players", players); } }
       else if (d.k === "me") { if (players[d.from]) { players[d.from] = { ...players[d.from], ...d.p }; sync(); E.emit("players", players); } }
       else if (d.k === "chat") E.emit("chat", d.c);
@@ -51,6 +64,7 @@ window.ArenaMock = util => {
       on: E.on,
       broadcast(m, rel = false) { post({ k: "down", game, code, m }, rel); },
       send(to, m, rel = false) { post({ k: "down", game, code, m, to }, rel); },
+      sys(to, payload) { const pkt = { ...(payload || {}), _sys: 1, from: uid, ...(to ? { to } : {}) }; post({ k: "down", game, code, m: pkt, ...(to ? { to } : {}) }, true); },
       peers: () => Object.keys(players).filter(u => u !== uid).map(u => [u, true]),
       setPhase(phase, cfg) { meta = { ...meta, phase, cfg: cfg === undefined ? meta.cfg : cfg }; E.emit("meta", meta); sync(); return Promise.resolve(); },
       setMeta(p) { meta = { ...meta, ...p }; E.emit("meta", meta); sync(); return Promise.resolve(); },
@@ -80,7 +94,12 @@ window.ArenaMock = util => {
     const h = d => {
       if (d.game !== game || d.code !== code) return;
       if (d.k === "room") { meta = d.meta; players = d.players; E.emit("meta", meta); E.emit("players", players); }
-      else if (d.k === "down") { if (!d.to || d.to === uid) E.emit("msg", d.m); }
+      else if (d.k === "down") {
+        if (!d.to || d.to === uid) {
+          if (d.m && d.m._sys === 1) { if (d.m.from !== uid) E.emit("sys", d.m); }
+          else E.emit("msg", d.m);
+        }
+      }
       else if (d.k === "sh") { shared[d.key] = d.v; for (const [k, cb] of shWatch) if (k === d.key) cb(d.v); }
       else if (d.k === "kick") { if (d.to === uid) E.emit("kicked"); }
       else if (d.k === "closed") E.emit("closed");
@@ -92,6 +111,7 @@ window.ArenaMock = util => {
       code, isHost: false, uid, get meta() { return meta; }, get players() { return players; }, p2p: true, rtt: LAT * 2 || 1, connected: true,
       on: E.on,
       send(m, rel = false) { post({ k: "up", game, code, from: uid, m }, rel); return true; },
+      sys(to, payload) { post({ k: "up", game, code, from: uid, m: { ...(payload || {}), _sys: 1, from: uid, ...(to ? { to } : {}) } }, true); return true; },
       watchShared(key, cb) { shWatch.push([key, cb]); cb(key in shared ? shared[key] : null); },
       setMe(p) { post({ k: "me", game, code, from: uid, p }, true); return Promise.resolve(); },
       chat(text) { const c = { u: uid, n: me.name, m: String(text).slice(0, 120), t: Date.now() }; E.emit("chat", c); post({ k: "chat", game, code, c }); return Promise.resolve(); },
@@ -116,6 +136,7 @@ window.ArenaMock = util => {
     inviteUrl: util.inviteUrl, roomFromUrl: util.roomFromUrl, cleanCode: util.cleanCode,
     now: () => Date.now(), GUEST: false, ROOT: "mock/", mock: true, db: () => null, uid, ready: true,
     get canHost() { return canHost; }, get isAdmin() { return canHost; },
+    getIce: () => ({ iceServers: [] }), ensureIce: async () => ({ iceServers: [] }),
     refreshPerms: async () => { if (window.Gate && Gate.state && Gate.state.canHost) canHost = true; },
   };
 };

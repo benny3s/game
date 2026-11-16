@@ -105,7 +105,31 @@
 .arn-fld{width:100%;box-sizing:border-box;border:1.5px solid var(--line,rgba(255,255,255,.18));background:rgba(0,0,0,.28);color:inherit;border-radius:12px;padding:10px 12px;font:15px var(--text,inherit);outline:none}
 .arn-fld:focus{border-color:var(--gold,#f59e0b)}
 .arn-rt{text-align:center;font:700 15px/1.3 var(--round,inherit);margin:-6px 0 -2px;overflow-wrap:anywhere}
-.arn-rt:empty{display:none}`;
+.arn-rt:empty{display:none}
+.arn-vbar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 10px;border-radius:12px;background:rgba(0,0,0,.2);border:1px solid var(--line,rgba(255,255,255,.12))}
+.arn-vbar b{font-size:13px;color:var(--soft,#94a3b8);margin-right:auto}
+.arn-vbtn{border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:var(--ink,#f1f5f9);border-radius:99px;padding:6px 11px;font:700 12.5px var(--round,inherit);cursor:pointer}
+.arn-vbtn.on{background:#059669;border-color:#34d399;color:#fff}
+.arn-vbtn.ls{background:#2563eb;border-color:#60a5fa;color:#fff}
+.arn-pl .vmic{font-size:12px;padding:2px 7px;border-radius:99px;background:rgba(16,185,129,.18);color:#6ee7b7;white-space:nowrap}
+.arn-pl .vmic.ls{background:rgba(59,130,246,.2);color:#93c5fd}
+.arn-pl .vreq{border:1px solid rgba(251,191,36,.45);background:rgba(245,158,11,.14);color:#fde68a;border-radius:99px;padding:4px 9px;font:700 12px var(--text,inherit);cursor:pointer;white-space:nowrap}
+.arn-pl .vmic+.vreq,.arn-pl b+.vreq,.arn-pl i+.vreq,.arn-pl .dot+.vreq{margin-left:auto}
+.arn-pl .vreq+.kick{margin-left:4px}
+.arn-vtab{position:fixed;left:0;top:calc(44% + 54px);z-index:55;width:38px;height:44px;border:1px solid rgba(255,255,255,.22);border-left:0;border-radius:0 14px 14px 0;background:rgba(15,23,42,.72);color:#fff;font-size:18px;cursor:pointer;display:grid;place-items:center;box-shadow:0 4px 14px rgba(0,0,0,.35);-webkit-tap-highlight-color:transparent}
+.arn-vtab.on{background:rgba(5,150,105,.88);border-color:#34d399}
+.arn-vtab.ls{background:rgba(37,99,235,.88);border-color:#60a5fa}
+.arn-vtab i{position:absolute;top:-4px;right:-4px;width:12px;height:12px;border-radius:50%;background:#f59e0b;border:2px solid #0f172a}
+.arn-vpan{position:fixed;left:50%;bottom:0;transform:translateX(-50%);z-index:58;width:min(440px,100%);background:var(--card,#142030);color:var(--ink,#f1f5f9);border:1.5px solid rgba(255,255,255,.15);border-bottom:0;border-radius:20px 20px 0 0;padding:12px 12px calc(env(safe-area-inset-bottom,0px) + 14px);display:grid;gap:10px;box-shadow:0 -12px 40px rgba(0,0,0,.55);font:14.5px/1.4 var(--text,system-ui,"Malgun Gothic",sans-serif)}
+.arn-vpan[hidden]{display:none}
+.arn-vpan .hd{display:flex;align-items:center;justify-content:space-between;font:800 16px var(--round,inherit)}
+.arn-vpan .hd button{width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:inherit;cursor:pointer}
+.arn-vacts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.arn-vlist{max-height:min(30vh,220px);overflow:auto;display:grid;gap:6px}
+.arn-vbub{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 12px);transform:translateX(-50%);z-index:66;width:min(92vw,400px);display:grid;gap:8px;pointer-events:auto}
+.arn-vbub[hidden]{display:none}
+.arn-vtoast{background:rgba(15,23,42,.95);color:#fff;border:1.5px solid rgba(251,191,36,.55);border-radius:16px;padding:11px 13px;display:grid;gap:8px;box-shadow:0 12px 32px rgba(0,0,0,.55);animation:arn-bub .2s ease-out;font:14px/1.4 var(--text,system-ui,sans-serif)}
+.arn-vtoast .btns{display:flex;gap:6px;flex-wrap:wrap}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = css; document.head.appendChild(s); };
 
@@ -232,6 +256,364 @@
   }
 
   function chatOff() { if (badge) badge.hidden = true; if (!chat) return; chat.tab.hidden = true; chat.pan.hidden = true; chat.bub.innerHTML = ""; }
+
+  // ── 🎤 P2P/TURN 저지연 음성 대화 (2~8인 온디맨드 메시, 켜짐 알림 + 음성 요청/음소거) ─────────
+  const vSt = {
+    mic: 0,                  // 0=끔, 1=마이크+듣기, 2=듣기만(음소거)
+    stream: null,            // MediaStream
+    peers: new Map(),        // uid -> { pc, iceWait, audio, muted }
+    preIce: new Map(),       // uid -> early RTCIceCandidateInit[]
+    muted: new Set(),        // 내 기기에서 소리 끈 상대 uid
+    knownOn: new Set(),      // 이미 '켜짐 알림'을 띄운 uid
+    initChecked: false,
+    reqCool: new Map(),      // uid -> last timestamp
+    tab: null, pan: null, bub: null,
+  };
+  function lowLatSdp(sdp) {
+    try {
+      return String(sdp || "").replace(/a=fmtp:(\d+) ([^\r\n]+)/g, (all, pt, pars) => {
+        if (!sdp.includes(`a=rtpmap:${pt} opus`)) return all;
+        let p = pars;
+        if (!/minptime=/.test(p)) p += ";minptime=10";
+        if (!/useinbandfec=/.test(p)) p += ";useinbandfec=1";
+        return `a=fmtp:${pt} ${p}`;
+      });
+    } catch (e) { return sdp; }
+  }
+  function voiceUiInit() {
+    style();
+    if (!vSt.tab) {
+      const tab = document.createElement("button");
+      tab.className = "arn-vtab"; tab.type = "button"; tab.setAttribute("aria-label", "음성 대화"); tab.hidden = true;
+      const pan = document.createElement("div");
+      pan.className = "arn-vpan"; pan.hidden = true;
+      pan.innerHTML = `<div class="hd"><span>🎤 음성 대화</span><button type="button" data-vx aria-label="닫기">✕</button></div>
+        <div class="arn-vacts" data-vacts></div>
+        <div class="arn-soft" data-vtip style="font-size:12.5px"></div>
+        <div class="arn-vlist" data-vlist></div>`;
+      const bub = document.createElement("div");
+      bub.className = "arn-vbub"; bub.hidden = true;
+      document.body.append(tab, pan, bub);
+      tab.onclick = () => { pan.hidden = !pan.hidden; if (!pan.hidden) renderVoicePan(); };
+      pan.addEventListener("click", e => {
+        const b = e.target.closest("button"); if (!b) return;
+        if (b.matches("[data-vx]")) pan.hidden = true;
+        else if (b.dataset.vmode != null) setVoice(Number(b.dataset.vmode));
+        else if (b.dataset.vmute) togglePeerMute(b.dataset.vmute);
+        else if (b.dataset.vreq) sendVoiceReq(b.dataset.vreq);
+      });
+      vSt.tab = tab; vSt.pan = pan; vSt.bub = bub;
+    }
+  }
+  function voiceClosePeer(uid) {
+    const vp = vSt.peers.get(uid);
+    if (!vp) return;
+    vSt.peers.delete(uid);
+    try { vp.pc.close(); } catch (e) {}
+    if (vp.audio) try { vp.audio.srcObject = null; vp.audio.remove(); } catch (e) {}
+  }
+  function voiceSend(to, pkt) {
+    if (!net) return;
+    if (typeof net.sys === "function") net.sys(to, pkt);
+  }
+  async function voiceEnsurePeer(uid, initiate) {
+    if (!net || !vSt.mic || !uid || uid === net.uid || !window.RTCPeerConnection) return null;
+    if (vSt.peers.has(uid)) return vSt.peers.get(uid);
+    let ice = { iceServers: [] };
+    try { ice = (Arena.ensureIce ? await Arena.ensureIce() : Arena.getIce ? Arena.getIce() : ice) || ice; } catch (e) {}
+    if (!net || !vSt.mic) return null;
+    const pc = new RTCPeerConnection(ice);
+    const queued = vSt.preIce.get(uid) || [];
+    vSt.preIce.delete(uid);
+    const vp = { pc, iceWait: queued, audio: null };
+    vSt.peers.set(uid, vp);
+    if (vSt.stream) {
+      vSt.stream.getAudioTracks().forEach(tr => pc.addTrack(tr, vSt.stream));
+    } else {
+      try { pc.addTransceiver("audio", { direction: "recvonly" }); } catch (e) {}
+    }
+    pc.onicecandidate = e => {
+      if (e.candidate) voiceSend(uid, { k: "vi", cand: JSON.stringify(e.candidate) });
+    };
+    pc.ontrack = e => {
+      const stream = (e.streams && e.streams[0]) || new MediaStream([e.track]);
+      if (!vp.audio) {
+        const au = document.createElement("audio");
+        au.autoplay = true; au.playsInline = true; au.muted = vSt.muted.has(uid);
+        document.body.appendChild(au);
+        vp.audio = au;
+      }
+      vp.audio.srcObject = stream;
+      vp.audio.play().catch(() => {});
+    };
+    pc.onconnectionstatechange = () => {
+      if (["failed", "closed"].includes(pc.connectionState) && vSt.peers.get(uid) === vp) {
+        voiceClosePeer(uid);
+      }
+    };
+    if (initiate) {
+      try {
+        const off = await pc.createOffer({ offerToReceiveAudio: true });
+        off.sdp = lowLatSdp(off.sdp);
+        await pc.setLocalDescription(off);
+        voiceSend(uid, { k: "vo", sdp: off.sdp });
+      } catch (e) {}
+    }
+    return vp;
+  }
+  function reconcileVoicePeers() {
+    if (!net) return;
+    const pl = net.players || {};
+    if (!vSt.mic) {
+      for (const uid of [...vSt.peers.keys()]) voiceClosePeer(uid);
+      return;
+    }
+    const want = new Set();
+    Object.entries(pl).forEach(([uid, p]) => {
+      if (uid !== net.uid && p && p.mic > 0) want.add(uid);
+    });
+    for (const uid of [...vSt.peers.keys()]) {
+      if (!want.has(uid)) voiceClosePeer(uid);
+    }
+    for (const uid of want) {
+      if (!vSt.peers.has(uid) && String(net.uid) < String(uid)) {
+        voiceEnsurePeer(uid, true);
+      }
+    }
+  }
+  function updateVoiceBtnUi() {
+    voiceUiInit();
+    const pl = (net && net.players) || {};
+    const anyOtherOn = Object.entries(pl).some(([u, p]) => u !== (net && net.uid) && p && p.mic > 0);
+    if (vSt.tab) {
+      vSt.tab.hidden = !net || !playing;
+      vSt.tab.classList.toggle("on", vSt.mic === 1);
+      vSt.tab.classList.toggle("ls", vSt.mic === 2);
+      vSt.tab.innerHTML = (vSt.mic === 2 ? "🎧" : "🎤") + (vSt.mic === 0 && anyOtherOn ? "<i></i>" : "");
+    }
+    if (box && !playing) {
+      const vb = box.querySelector("[data-lvoice]");
+      if (vb) {
+        vb.innerHTML = `<b>🎤 음성 대화</b>
+          <button type="button" class="arn-vbtn${vSt.mic === 1 ? " on" : ""}" data-lv="1">${vSt.mic === 1 ? "🎤 켜짐 (말하기)" : "🎤 말하기 켜기"}</button>
+          <button type="button" class="arn-vbtn${vSt.mic === 2 ? " ls" : ""}" data-lv="2">${vSt.mic === 2 ? "🎧 듣기만 중" : "🎧 듣기만"}</button>
+          ${vSt.mic ? `<button type="button" class="arn-vbtn" data-lv="0">🔕 끄기</button>` : ""}`;
+      }
+    }
+    if (vSt.pan && !vSt.pan.hidden) renderVoicePan();
+  }
+  function renderVoicePan() {
+    if (!vSt.pan || !net) return;
+    const acts = vSt.pan.querySelector("[data-vacts]");
+    const tip = vSt.pan.querySelector("[data-vtip]");
+    const list = vSt.pan.querySelector("[data-vlist]");
+    acts.innerHTML = `
+      <button type="button" class="arn-vbtn${vSt.mic === 1 ? " on" : ""}" data-vmode="1">🎤 말하기</button>
+      <button type="button" class="arn-vbtn${vSt.mic === 2 ? " ls" : ""}" data-vmode="2">🎧 듣기만</button>
+      <button type="button" class="arn-vbtn${vSt.mic === 0 ? " on" : ""}" style="${vSt.mic === 0 ? "background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)" : ""}" data-vmode="0">🔕 끄기</button>`;
+    const pl = net.players || {};
+    const onCount = Object.values(pl).filter(p => p && p.mic > 0).length;
+    tip.textContent = onCount >= 5
+      ? "5명 이상이 함께할 땐 말할 때만 마이크를 켜면 소리가 더 선명해요."
+      : "같은 방 친구와 직접 통화해요 (원할 때만 켜고 끄세요).";
+    list.innerHTML = Object.entries(pl).map(([uid, p]) => {
+      const mine = uid === net.uid;
+      const m = mine ? vSt.mic : (p && p.mic) || 0;
+      const badge = m === 1 ? '<span class="vmic">🎤 통화중</span>' : m === 2 ? '<span class="vmic ls">🎧 듣기만</span>' : '<span class="arn-soft" style="font-size:12px">미참여</span>';
+      let act = "";
+      if (!mine) {
+        if (m > 0) {
+          const isMuted = vSt.muted.has(uid);
+          act = `<button type="button" class="vreq" style="margin-left:6px" data-vmute="${esc(uid)}">${isMuted ? "🔇 소리켜기" : "🔊 안듣기"}</button>`;
+        } else {
+          act = `<button type="button" class="vreq" style="margin-left:6px" data-vreq="${esc(uid)}">📞 요청</button>`;
+        }
+      }
+      return `<div class="arn-pl"><b>${esc((p && p.name) || "?")}</b>${mine ? "<i>나</i>" : ""}${badge}${act}</div>`;
+    }).join("");
+  }
+  function showVoiceToast(html, onAct) {
+    voiceUiInit();
+    if (!vSt.bub) return;
+    const card = document.createElement("div");
+    card.className = "arn-vtoast";
+    card.innerHTML = html;
+    vSt.bub.innerHTML = "";
+    vSt.bub.appendChild(card);
+    vSt.bub.hidden = false;
+    const close = () => { card.remove(); if (!vSt.bub.children.length) vSt.bub.hidden = true; };
+    const t = setTimeout(close, 9000);
+    card.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      clearTimeout(t);
+      close();
+      if (onAct) onAct(b);
+    });
+  }
+  async function setVoice(mode) {
+    if (!net) return;
+    const next = mode === 1 || mode === 2 ? mode : 0;
+    const hadStream = !!vSt.stream;
+
+    if (next === 0) {
+      vSt.mic = 0;
+      if (vSt.stream) { vSt.stream.getTracks().forEach(t => t.stop()); vSt.stream = null; }
+      for (const uid of [...vSt.peers.keys()]) { voiceSend(uid, { k: "vb" }); voiceClosePeer(uid); }
+      try { await net.setMe({ mic: 0 }); } catch (e) {}
+      updateVoiceBtnUi();
+      if (!playing) drawPlayers();
+      return;
+    }
+
+    if (next === 1) {
+      if (!vSt.stream) {
+        try {
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error("no mic api");
+          vSt.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        } catch (e) {
+          if (window.Cozy && Cozy.toast) Cozy.toast("마이크를 쓸 수 없어 '🎧 듣기만'으로 연결할게요", 2600);
+          return setVoice(2);
+        }
+      }
+      vSt.stream.getAudioTracks().forEach(t => { t.enabled = true; });
+    } else if (next === 2 && vSt.stream) {
+      vSt.stream.getAudioTracks().forEach(t => { t.enabled = false; });
+    }
+
+    const upgradingFromListen = !hadStream && next === 1 && vSt.peers.size > 0;
+    vSt.mic = next;
+    try { await net.setMe({ mic: next }); } catch (e) {}
+    if (upgradingFromListen) {
+      const oldUids = [...vSt.peers.keys()];
+      for (const uid of oldUids) { voiceSend(uid, { k: "vb" }); voiceClosePeer(uid); }
+      for (const uid of oldUids) voiceEnsurePeer(uid, true);
+    } else {
+      reconcileVoicePeers();
+    }
+    updateVoiceBtnUi();
+    if (!playing) drawPlayers();
+  }
+  function togglePeerMute(uid) {
+    if (vSt.muted.has(uid)) vSt.muted.delete(uid); else vSt.muted.add(uid);
+    const vp = vSt.peers.get(uid);
+    if (vp && vp.audio) vp.audio.muted = vSt.muted.has(uid);
+    renderVoicePan();
+  }
+  function sendVoiceReq(uid) {
+    if (!net) return;
+    const now = Date.now();
+    if (now - (vSt.reqCool.get(uid) || 0) < 4000) {
+      if (window.Cozy && Cozy.toast) Cozy.toast("잠시 뒤에 다시 요청해 주세요", 1400);
+      return;
+    }
+    vSt.reqCool.set(uid, now);
+    voiceSend(uid, { k: "vrq", name: (me && me.name) || "친구" });
+    const targetNm = (net.players && net.players[uid] && net.players[uid].name) || "친구";
+    if (window.Cozy && Cozy.toast) Cozy.toast(`📞 ${targetNm}님에게 음성 대화 요청을 보냈어요`, 1800);
+  }
+  async function onVoiceSys(a, b) {
+    const m = b && typeof b === "object" ? b : a;
+    const from = (b && typeof b === "object" && typeof a === "string") ? a : (m && m.from);
+    if (!m || !from || !net || from === net.uid) return;
+    if (m.k === "vrq") {
+      if (vSt.mic === 1) return;
+      showVoiceToast(
+        `<div>📞 <b>${esc(m.name || "친구")}</b>님이 음성 대화를 요청했어요!</div>
+         <div class="btns">
+           <button type="button" class="arn-vbtn on" data-va="1">🎤 수락하고 켜기</button>
+           <button type="button" class="arn-vbtn ls" data-va="2">🎧 듣기만</button>
+           <button type="button" class="arn-vbtn" data-va="no">거절</button>
+         </div>`,
+        btn => {
+          const a0 = btn.dataset.va;
+          if (a0 === "1" || a0 === "2") setVoice(Number(a0));
+          else voiceSend(from, { k: "vrq_no", name: (me && me.name) || "친구" });
+        }
+      );
+    } else if (m.k === "vrq_no") {
+      if (window.Cozy && Cozy.toast) Cozy.toast(`🔕 ${m.name || "친구"}님이 지금은 음성이 어렵대요`, 2400);
+    } else if (m.k === "vo") {
+      if (!vSt.mic) return;
+      voiceClosePeer(from);
+      const vp = await voiceEnsurePeer(from, false);
+      if (!vp || !net || !vSt.mic) return;
+      try {
+        await vp.pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
+        for (const c of vp.iceWait.splice(0)) await vp.pc.addIceCandidate(c).catch(() => {});
+        const ans = await vp.pc.createAnswer();
+        ans.sdp = lowLatSdp(ans.sdp);
+        await vp.pc.setLocalDescription(ans);
+        voiceSend(from, { k: "va", sdp: ans.sdp });
+      } catch (e) {}
+    } else if (m.k === "va") {
+      const vp = vSt.peers.get(from);
+      if (!vp) return;
+      try {
+        await vp.pc.setRemoteDescription({ type: "answer", sdp: m.sdp });
+        for (const c of vp.iceWait.splice(0)) await vp.pc.addIceCandidate(c).catch(() => {});
+      } catch (e) {}
+    } else if (m.k === "vi") {
+      let cand; try { cand = JSON.parse(m.cand); } catch (e) { return; }
+      const vp = vSt.peers.get(from);
+      if (!vp) {
+        const q = vSt.preIce.get(from) || [];
+        if (q.length < 30) { q.push(cand); vSt.preIce.set(from, q); }
+        return;
+      }
+      if (vp.pc.remoteDescription) vp.pc.addIceCandidate(cand).catch(() => {});
+      else vp.iceWait.push(cand);
+    } else if (m.k === "vb") {
+      vSt.preIce.delete(from);
+      voiceClosePeer(from);
+    }
+  }
+  function onVoicePlayers(pl) {
+    if (!net) return;
+    const pMap = pl || {};
+    const newlyOn = [];
+    Object.entries(pMap).forEach(([uid, p]) => {
+      if (uid === net.uid) return;
+      if (p && p.mic > 0) {
+        if (!vSt.knownOn.has(uid)) {
+          vSt.knownOn.add(uid);
+          newlyOn.push(p.name || "친구");
+        }
+      } else {
+        vSt.knownOn.delete(uid);
+      }
+    });
+    if (newlyOn.length && vSt.mic === 0) {
+      const who = newlyOn.length === 1 ? newlyOn[0] : `${newlyOn[0]} 외 ${newlyOn.length - 1}명`;
+      showVoiceToast(
+        `<div>🔊 <b>${esc(who)}</b>님이 음성 대화를 켰어요!</div>
+         <div class="btns">
+           <button type="button" class="arn-vbtn on" data-va="1">🎤 나도 켜기</button>
+           <button type="button" class="arn-vbtn ls" data-va="2">🎧 듣기만</button>
+           <button type="button" class="arn-vbtn" data-va="0">닫기</button>
+         </div>`,
+        btn => {
+          const a0 = btn.dataset.va;
+          if (a0 === "1" || a0 === "2") setVoice(Number(a0));
+        }
+      );
+    }
+    vSt.initChecked = true;
+    reconcileVoicePeers();
+    updateVoiceBtnUi();
+  }
+  function voiceOff() {
+    vSt.mic = 0;
+    vSt.knownOn.clear();
+    vSt.muted.clear();
+    vSt.preIce.clear();
+    vSt.reqCool.clear();
+    vSt.initChecked = false;
+    if (vSt.stream) { vSt.stream.getTracks().forEach(t => t.stop()); vSt.stream = null; }
+    for (const uid of [...vSt.peers.keys()]) voiceClosePeer(uid);
+    if (vSt.tab) vSt.tab.hidden = true;
+    if (vSt.pan) vSt.pan.hidden = true;
+    if (vSt.bub) { vSt.bub.innerHTML = ""; vSt.bub.hidden = true; }
+  }
   function onChat(c) {
     if (!chat || !c || !c.m) return;
     const mine = net && c.u === net.uid;
@@ -314,6 +696,7 @@
         <button class="arn-btn" type="button" data-accsave>저장</button>
         <p class="arn-soft" data-accmsg>초대 링크로 오면 비밀번호 없이 들어와요. 이미 앉은 사람은 그대로예요.</p></div></details>` : ""}
       <div class="arn-head"><span>참가자</span><span data-count></span></div>
+      <div class="arn-vbar" data-lvoice></div>
       <div class="arn-list" data-pl></div>
       <div class="arn-desc" data-desc hidden></div>
       <div data-lchat></div>
@@ -325,7 +708,7 @@
       ${isHost ? `<button class="arn-btn pri" id="arStart" data-start disabled>시작하기</button>` : `<p class="arn-wait">방장이 시작하면 바로 시작돼요</p>`}
       <button class="arn-btn" id="arLeave" data-leave>나가기</button>`;
     const det = box.querySelector("[data-opts]"); det.addEventListener("toggle", () => { optsOpen = det.open; });
-    drawPlayers(); drawSettings(); drawCoach(); drawAccess(true);
+    drawPlayers(); drawSettings(); drawCoach(); drawAccess(true); updateVoiceBtnUi();
     chatDock(box.querySelector("[data-lchat]"));
   }
   // 방 제목·🔒 표시 (모두) + 방장 입력칸 (처음 한 번만 채움 — 치는 도중 meta 가 와도 안 지워지게)
@@ -377,7 +760,10 @@
     el.innerHTML = ids.map(uid => {
       const p = pl[uid] || {}, mine = uid === net.uid;
       const dot = uid === host ? "" : peers ? `<span class="dot ${peers.get(uid) ? "ok" : "slow"}" title="${peers.get(uid) ? "직접 연결" : "서버 경유"}"></span>` : "";
-      return `<div class="arn-pl">${uid === host ? "👑" : "🙂"} <b>${esc(p.name || "?")}</b>${mine ? "<i>나</i>" : ""}${p.watch ? "<i>구경</i>" : ""}${dot}${net.isHost && !mine ? `<button class="kick" data-kick="${esc(uid)}">내보내기</button>` : ""}</div>`;
+      const vm = mine ? vSt.mic : (p.mic || 0);
+      const micBadge = vm === 1 ? '<span class="vmic">🎤</span>' : vm === 2 ? '<span class="vmic ls">🎧</span>' : "";
+      const vreqBtn = !mine && vm === 0 ? `<button type="button" class="vreq" data-vreq="${esc(uid)}" title="음성 대화 요청">📞 요청</button>` : "";
+      return `<div class="arn-pl">${uid === host ? "👑" : "🙂"} <b>${esc(p.name || "?")}</b>${mine ? "<i>나</i>" : ""}${p.watch ? "<i>구경</i>" : ""}${micBadge}${dot}${vreqBtn}${net.isHost && !mine ? `<button class="kick" data-kick="${esc(uid)}">내보내기</button>` : ""}</div>`;
     }).join("");
     const n = seatedIds().length, min = minOf(), max = maxOf();
     const cnt = box.querySelector("[data-count]"); if (cnt) cnt.textContent = min === max ? `${n}/${max}명` : `${n}명 · ${min}~${max}명까지`;
@@ -457,18 +843,18 @@
   function wire() {
     offs.forEach(f => f()); offs = [];
     armBack();
-    chatOn(); offs.push(net.on("chat", onChat));
+    chatOn(); voiceUiInit(); offs.push(net.on("chat", onChat)); offs.push(net.on("sys", onVoiceSys));
     if (net.isHost) {
       logStart(); offs.push(net.on("players", logPlayers)); offs.push(net.on("chat", logChat));
       offs.push(net.on("p2p", (uid, o) => { if (log && uid) logSafe(log.child(`players/${uid}`).update({ p2p: o ? 1 : 0 })); connBadge(); }));
     } else offs.push(net.on("p2p", () => connBadge()));
     connBadge();
-    offs.push(net.on("players", () => { if (!playing) drawPlayers(); }));
+    offs.push(net.on("players", pl => { onVoicePlayers(pl); if (!playing) drawPlayers(); }));
     if (net.isHost) offs.push(net.on("p2p", () => { if (!playing) drawPlayers(); }));
     offs.push(net.on("meta", m => {
       if (!m) return;
-      if (m.phase === "play" && !playing) { playing = true; hide(); logMatch(); connBadge(); opt.onStart && opt.onStart(ctx()); }
-      else if (m.phase === "lobby" && playing) { playing = false; opt.onLobby && opt.onLobby(ctx()); lobby(); }
+      if (m.phase === "play" && !playing) { playing = true; hide(); logMatch(); connBadge(); updateVoiceBtnUi(); opt.onStart && opt.onStart(ctx()); }
+      else if (m.phase === "lobby" && playing) { playing = false; opt.onLobby && opt.onLobby(ctx()); updateVoiceBtnUi(); lobby(); }
       else if (!playing) { drawSettings(); drawCoach(); drawAccess(false); }
     }));
     if (!net.isHost) {
@@ -480,7 +866,7 @@
   function end(why) {
     backArmed = false;
     logEnd();
-    const was = net; net = null; playing = false; offs.forEach(f => f()); offs = []; chatOff();
+    const was = net; net = null; playing = false; offs.forEach(f => f()); offs = []; chatOff(); voiceOff();
     if (was) was.leave();
     setUrlRoom(null);
     hide();
@@ -540,7 +926,7 @@
     try {
       net = await Arena.join(opt.game, code, { name: me.name, me: me.pid ? { pid: me.pid } : {}, pw });
       playing = false; wire(); setUrlRoom(net.code);
-      if (net.meta && net.meta.phase === "play") { playing = true; hide(); connBadge(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
+      if (net.meta && net.meta.phase === "play") { playing = true; hide(); connBadge(); updateVoiceBtnUi(); opt.onStart && opt.onStart(ctx()); }   // 판이 이미 진행 중이면 바로 (게임이 알아서 구경·다음 판)
       else lobby();
     } catch (e) {
       net = null;
@@ -594,6 +980,8 @@
     else if (t.matches("[data-rank]")) { if (window.GRank) GRank.open(opt.game); }
     else if (t.matches("[data-share]")) share();
     else if (t.matches("[data-start]")) { if (net && net.isHost) { const c = (net.meta && net.meta.cfg) || cfg; net.setPhase("play", c); } }
+    else if (t.dataset.lv != null) setVoice(Number(t.dataset.lv));
+    else if (t.dataset.vreq) sendVoiceReq(t.dataset.vreq);
     else if (t.dataset.kick) { if (net && net.isHost) net.kick(t.dataset.kick); }
     else if (t.matches("[data-leave]")) end("");
   }
@@ -611,7 +999,7 @@
       box.innerHTML = `<button class="arn-x" data-x>✕</button><h2>연결하지 못했어요</h2><p class="arn-soft">인터넷 연결을 확인하고 다시 해 주세요. (${esc(e.message)})</p>`;
       return;
     }
-    if (net && net.gone) { offs.forEach(f => f()); offs = []; net = null; playing = false; chatOff(); }   // 게임 쪽에서 이미 나간 방이면 잊고 새로
+    if (net && net.gone) { offs.forEach(f => f()); offs = []; net = null; playing = false; chatOff(); voiceOff(); }   // 게임 쪽에서 이미 나간 방이면 잊고 새로
     if (net) { playing ? hide() : lobby(); return; }
     const code = Arena.roomFromUrl();
     if (code) doJoin(code); else home();

@@ -26,7 +26,7 @@
   };
 
   let gameKind = Cozy.store("genius.kind", "bw");
-  let playMode = "solo"; // "solo" | "local" | "friend" | "watch"
+  let playMode = "solo"; // "solo" | "friend" | "watch"
   let aiTier = Cozy.store("genius.tier", "normal");
   let watchMs = 800;
 
@@ -35,7 +35,6 @@
     { kind: "ai", tier: "normal", name: "🧠 보통 AI", emoji: "🤖" },
   ];
   let mySeat = 0;
-  let localPicker = null;
 
   // 게임 상태
   let st = null;
@@ -43,7 +42,6 @@
   let bwBusy = false;
   let ghSelected = [];
   let ghHintHighlight = [];
-  let ghActiveClicker = 0; // 한 기기 다인 결! 합! 시 선택한 참가자
   let m12Sel = null;       // { kind:"move", fr, fc } | { kind:"drop", pt }
   let aiTimer = null;
   let resultRecorded = false;
@@ -96,35 +94,18 @@
       btn.setAttribute("aria-pressed", btn.dataset.kind === k ? "true" : "false");
     });
     $("gameBrief").innerHTML = GAME_META[k].brief;
-    if (localPicker) buildLocalSetup();
   }
 
   function setModeTab(m) {
-    playMode = m;
-    $("tabSolo").setAttribute("aria-pressed", m === "solo" ? "true" : "false");
-    $("tabLocal").setAttribute("aria-pressed", m === "local" ? "true" : "false");
-    $("tabFriend").setAttribute("aria-pressed", m === "friend" ? "true" : "false");
-    $("tabWatch").setAttribute("aria-pressed", m === "watch" ? "true" : "false");
+    playMode = m === "friend" || m === "watch" ? m : "solo";
+    $("tabSolo").setAttribute("aria-pressed", playMode === "solo" ? "true" : "false");
+    $("tabFriend").setAttribute("aria-pressed", playMode === "friend" ? "true" : "false");
+    $("tabWatch").setAttribute("aria-pressed", playMode === "watch" ? "true" : "false");
 
-    $("soloBox").hidden = (m === "watch" || m === "friend");
-    $("aiOpts").hidden = (m !== "solo");
-    $("localSetup").hidden = (m !== "local");
-    $("watchBox").hidden = (m !== "watch");
-    $("startBtn").textContent = m === "friend" ? "방 만들기 / 들어가기" : "시작!";
-    if (m === "local") buildLocalSetup();
-  }
-
-  function buildLocalSetup() {
-    if (!window.HotSeat) return;
-    if (localPicker) { localPicker.destroy(); localPicker = null; }
-    const maxP = gameKind === "gh" ? 6 : 2;
-    localPicker = HotSeat.setup($("localSetup"), {
-      game: "genius_" + gameKind,
-      min: 2,
-      max: maxP,
-      allowAI: gameKind !== "gh",
-      tiers: ["easy", "normal", "hard"],
-    });
+    $("soloBox").hidden = (playMode === "watch" || playMode === "friend");
+    $("aiOpts").hidden = (playMode !== "solo");
+    $("watchBox").hidden = (playMode !== "watch");
+    $("startBtn").textContent = playMode === "friend" ? "방 만들기 / 들어가기" : "시작!";
   }
 
   function buildTiers() {
@@ -151,7 +132,6 @@
     }
     matchId++;
     stopTimers();
-    if (window.HotSeat) HotSeat.close();
     if (coach) coach.hide();
     arenaOffs.forEach(f => { try { f(); } catch (e) {} });
     arenaOffs = [];
@@ -247,7 +227,7 @@
     const bar = $("scoreBar");
     bar.innerHTML = "";
     const curTurn = st.kind === "gh"
-      ? (playMode === "local" ? ghActiveClicker : null)
+      ? null
       : (st.kind === "bw" && playMode === "friend" && !isHost && remoteViewBW) ? remoteViewBW.turn : st.turn;
     const bwScores = (st.kind === "bw" && playMode === "friend" && !isHost && remoteViewBW) ? remoteViewBW.scores : st.scores;
     seats.forEach((p, i) => {
@@ -259,11 +239,6 @@
           ? ((bwScores && bwScores[i]) || 0) + "승"
           : (i === 0 ? "🟢 아랫진영" : "🔴 윗진영");
       chip.innerHTML = `<span class="nm">${Cozy.esc(p.emoji || "🙂")} ${Cozy.esc(p.name)}</span><span class="pts">${pt}</span>`;
-      if (st.kind === "gh" && playMode === "local" && !st.done) {
-        chip.style.cursor = "pointer";
-        chip.title = "정답을 외칠 사람 선택";
-        chip.onclick = () => { ghActiveClicker = i; sfx("tap"); renderScores(); };
-      }
       bar.appendChild(chip);
     });
   }
@@ -273,7 +248,6 @@
   // ════════════════════════════════════════════════
   function getBWViewSeat() {
     if (playMode === "friend" && !isHost) return Math.min(1, mySeat);
-    if (playMode === "local" && st.turn !== null && seats[st.turn]?.kind === "human") return st.turn;
     return mySeat;
   }
 
@@ -372,7 +346,7 @@
 
   async function commitBWTile(seat, tile) {
     if (tile === null || bwBusy) return;
-    if (seat === mySeat || playMode === "local") bwSelectedTile = null;
+    if (seat === mySeat) bwSelectedTile = null;
     if (playMode === "friend" && !isHost) {
       arena.send({ t: "bw_pick", tile }, true);
       bwBusy = true;
@@ -380,8 +354,6 @@
       return;
     }
 
-    const myMatch = matchId;
-    const prevTurn = st.turn;
     const res = G.playBW(st, seat, tile);
     if (!res.ok) {
       if (playMode === "friend" && isHost && seat !== mySeat && seats[seat]?.uid) {
@@ -396,19 +368,6 @@
 
     if (playMode === "friend" && isHost) {
       pushBWViews();
-    }
-
-    // 한 기기 모드: 다음 인간 차례면 가림막!
-    if (playMode === "local" && st.winner === null && st.turn !== prevTurn && seats[st.turn]?.kind === "human") {
-      bwBusy = true;
-      render();
-      if (res.resolved) {
-        const msg = res.roundWinner === "draw" ? "이번 라운드 무승부!" : `${seats[res.roundWinner].name} 라운드 승리 (+1점)!`;
-        Cozy.toast(msg, 1200);
-      }
-      await HotSeat.cover({ name: seats[st.turn].name, emoji: seats[st.turn].emoji, sub: "상대 숫자를 보지 못하게 화면을 넘겨 주세요" });
-      if (myMatch !== matchId) return;
-      bwBusy = false;
     }
 
     render();
@@ -470,9 +429,7 @@
       ? st.found.map(f => `<span class="gh-chip">✅ ${f.triple.map(n => n + 1).join("·")} (${seats[f.by]?.name || ""})</span>`).join("")
       : `<span style="font-size:12px;color:var(--g-muted)">아직 찾은 합이 없어요 · 같은/다른 속성 3장을 눌러 보세요!</span>`;
 
-    const localTip = playMode === "local" && !st.done
-      ? `<span style="color:var(--g-gold)">현재 점수 적립: <b>${seats[ghActiveClicker]?.name || ""}</b> (상단 이름 탭해 변경)</span>`
-      : `<span>합 +1점 · 결 성공 +3점 · 오답 -1점</span>`;
+    const localTip = `<span>합 +1점 · 결 성공 +3점 · 오답 -1점</span>`;
 
     stage.innerHTML = `
       <div class="gh-top">${localTip}<span>카드 9장 · ${st.found.length}합 발견</span></div>
@@ -494,13 +451,13 @@
       };
     });
     const hapBtn = document.getElementById("ghHapBtn");
-    if (hapBtn) hapBtn.onclick = () => triggerHapGH(playMode === "local" ? ghActiveClicker : mySeat, ghSelected.slice());
+    if (hapBtn) hapBtn.onclick = () => triggerHapGH(mySeat, ghSelected.slice());
     const gyulBtn = document.getElementById("ghGyulBtn");
-    if (gyulBtn) gyulBtn.onclick = () => triggerGyulGH(playMode === "local" ? ghActiveClicker : mySeat);
+    if (gyulBtn) gyulBtn.onclick = () => triggerGyulGH(mySeat);
   }
 
   function triggerHapGH(seat, triple) {
-    if (seat === mySeat || playMode === "local") { ghSelected = []; ghHintHighlight = []; }
+    if (seat === mySeat) { ghSelected = []; ghHintHighlight = []; }
     if (playMode === "friend" && !isHost) {
       arena.send({ t: "gh_hap", triple }, true);
       return;
@@ -519,7 +476,7 @@
   }
 
   function triggerGyulGH(seat) {
-    if (seat === mySeat || playMode === "local") { ghSelected = []; ghHintHighlight = []; }
+    if (seat === mySeat) { ghSelected = []; ghHintHighlight = []; }
     if (playMode === "friend" && !isHost) {
       arena.send({ t: "gh_gyul" }, true);
       return;
@@ -601,7 +558,7 @@
   function render12() {
     const stage = $("stage");
     const flip = (playMode === "friend" && mySeat === 1);
-    const activeSeat = playMode === "local" ? st.turn : mySeat;
+    const activeSeat = mySeat;
     const isMyTurn = st.winner === null && st.turn === activeSeat && seats[activeSeat]?.kind === "human" && playMode !== "watch";
     $("playTitle").textContent = "🦁 십이장기";
     $("playSub").textContent = st.winner !== null
@@ -740,7 +697,6 @@
     bwBusy = false;
     ghSelected = [];
     ghHintHighlight = [];
-    ghActiveClicker = 0;
     m12Sel = null;
     remoteViewBW = null;
     resultRecorded = false;
@@ -758,12 +714,6 @@
         { kind: "ai", tier: "hard", name: "🧠 지니어스 α", emoji: "🦊" },
         { kind: "ai", tier: "hard", name: "👑 지니어스 β", emoji: "🦉" },
       ];
-      mySeat = 0;
-    } else if (playMode === "local") {
-      seats = (localPicker ? localPicker.seats : [
-        { kind: "human", name: "플레이어 1", emoji: "🙂" },
-        { kind: "human", name: "플레이어 2", emoji: "😎" },
-      ]).map(s => ({ ...s }));
       mySeat = 0;
     }
 
@@ -974,7 +924,6 @@
     btn.onclick = () => selectKind(btn.dataset.kind);
   });
   $("tabSolo").onclick = () => setModeTab("solo");
-  $("tabLocal").onclick = () => setModeTab("local");
   $("tabFriend").onclick = () => setModeTab("friend");
   $("tabWatch").onclick = () => setModeTab("watch");
 

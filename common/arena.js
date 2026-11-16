@@ -273,6 +273,18 @@ const Arena = (() => {
     const deliver = (uid, m) => {
       if (!m || typeof m !== "object") return;
       if (m.t === "_p") { const p = peers.get(uid); if (p) p.send({ t: "_q", c: m.c }, false); return; }   // 친구의 왕복 시간 재기
+      if (m._sys === 1) {
+        const pkt = { ...m, from: uid };
+        if (m.to && m.to !== user.uid) { sendTo(m.to, { ...pkt, _q: ++qseq }, true); return; }
+        E.emit("sys", uid, pkt);
+        if (!m.to) {
+          const b = { ...pkt, _q: ++qseq };
+          let relay = false;
+          for (const id of Object.keys(players)) { if (id === user.uid || id === uid) continue; const p = peers.get(id); if (!(p && p.send(b, true))) relay = true; }
+          if (relay) pushQ(b);
+        }
+        return;
+      }
       E.emit("msg", uid, m);
     };
     const newPeer = uid => {
@@ -317,6 +329,16 @@ const Arena = (() => {
         if (relay) { if (rel) pushQ(m); else { downPending = m; if (!downT) downT = setTimeout(flushDown, Math.max(0, 50 - (performance.now() - downAt))); } }   // 서버 경유: 초당 20번까지
       },
       send(uid, m, rel = false) { if (rel) m = { ...m, _q: ++qseq }; sendTo(uid, m, rel); },
+      sys(to, payload) {
+        const pkt = { ...(payload || {}), _sys: 1, from: user.uid, ...(to ? { to } : {}) };
+        if (to) sendTo(to, { ...pkt, _q: ++qseq }, true);
+        else {
+          const b = { ...pkt, _q: ++qseq };
+          let relay = false;
+          for (const id of Object.keys(players)) { if (id === user.uid) continue; const p = peers.get(id); if (!(p && p.send(b, true))) relay = true; }
+          if (relay) pushQ(b);
+        }
+      },
       peers: () => [...peers].map(([uid, p]) => [uid, p.open()]),
       get relaying() { return needRelay(); },
       setPhase(phase, cfg) { meta = { ...meta, phase, cfg: cfg === undefined ? meta.cfg : cfg }; writeIdx(); E.emit("meta", meta); return room.child("meta").update({ phase, cfg: meta.cfg }); },
@@ -393,6 +415,7 @@ const Arena = (() => {
       if (!m || typeof m !== "object") return;
       if (m.t === "_q") { const d = performance.now() - m.c; rtt = rtt ? rtt * 0.8 + d * 0.2 : d; return; }
       if (m._q != null) { if (seen.has(m._q)) return; seen.add(m._q); seenQ.push(m._q); if (seenQ.length > 400) seen.delete(seenQ.shift()); }
+      if (m._sys === 1) { if (m.from !== user.uid) E.emit("sys", m); return; }
       E.emit("msg", m);
     };
     const newPeer = () => {
@@ -448,6 +471,12 @@ const Arena = (() => {
         if (peer && peer.send(m, rel)) return true;
         if (rel) { room.child("upq").push({ u: user.uid, m, t: TS() }).catch(() => {}); return true; }
         upPending = m; if (!upT) upT = setTimeout(flushUp, Math.max(0, 66 - (performance.now() - lastUp)));   // RTDB: 초당 15번까지
+        return true;
+      },
+      sys(to, payload) {
+        const pkt = { ...(payload || {}), _sys: 1, from: user.uid, ...(to ? { to } : {}) };
+        if (peer && peer.send(pkt, true)) return true;
+        room.child("upq").push({ u: user.uid, m: pkt, t: TS() }).catch(() => {});
         return true;
       },
       watchShared(key, cb) { S.on(room.child("shared/" + key), "value", s => cb(s.val())); },
@@ -603,6 +632,7 @@ const Arena = (() => {
     init, host, join, listRooms, deleteRoom, inviteUrl, roomFromUrl, cleanCode, now, GUEST, ROOT, mock: false,
     db: () => app && app.database(), get uid() { return user && user.uid; }, get ready() { return !!app; },
     get canHost() { return hostFlag; }, get isAdmin() { return adminFlag; },
+    getIce: () => ICE, ensureIce: async () => { await loadIce(); return ICE; },
     refreshPerms, ...ACCESS_API,
   };
 })();

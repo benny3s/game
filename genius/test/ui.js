@@ -1,5 +1,5 @@
 // 베니 지니어스 브라우저 통합 UI 시험 (node genius/test/ui.js)
-// - 3종목(흑과 백 · 결! 합! · 십이장기) 혼자 / 한 기기 / AI 구경 / 튜토리얼 / AI 선생님 / 온라인 친구랑(2인 mock) 검증
+// - 3종목(흑과 백 · 결! 합! · 십이장기) 혼자 / AI 구경 / 튜토리얼 / AI 선생님 / 온라인 친구랑(2인 mock) 검증
 'use strict';
 const U = require('../../test/qa/lib/uitest');
 
@@ -11,6 +11,7 @@ const wait = async (p, fn, ms = 8000) => {
 U.main(async T => {
   const p = await T.open('genius/');
   await wait(p, () => !!window.__genius && !!document.getElementById('startBtn'));
+  T.ok(await p.evaluate(() => !document.getElementById('tabLocal')), '지니어스 한 기기 탭 제거됨');
   T.ok(await p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), '모바일(390px) 가로 넘침 없음');
 
   // 1) 튜토리얼 테스트 (흑과 백 연습 단계 통과)
@@ -85,6 +86,25 @@ U.main(async T => {
   await wait(pW, () => !!window.__genius);
   await wait(pH, () => window.ArenaUI && ArenaUI.net && Object.keys(ArenaUI.net.players || {}).length >= 2, 10000);
 
+  // 대기실 음성 대화: 방장이 듣기만 켜기 → 게스트 알림 배너 표시 → 요청 보내기 → 수락 검증
+  await wait(pH, () => !!document.querySelector('[data-lv="2"]'));
+  await pH.click('[data-lv="2"]');
+  await wait(pW, () => {
+    const b = document.querySelector('.arn-vbub');
+    return b && !b.hidden && b.textContent.includes('음성 대화를 켰어요');
+  }, 5000);
+  T.ok(true, '상대 음성 켜짐 알림 배너 실시간 표시 확인');
+
+  await wait(pH, () => !!document.querySelector('[data-vreq]'));
+  await pH.click('[data-vreq]');
+  await wait(pW, () => {
+    const b = document.querySelector('.arn-vbub');
+    return b && !b.hidden && b.textContent.includes('요청했어요');
+  }, 5000);
+  await pW.click('.arn-vtoast [data-va="2"]');
+  await wait(pH, () => document.querySelectorAll('.arn-pl .vmic').length >= 2, 5000);
+  T.ok(true, '음성 대화 요청·수락 및 참가자 상태 배지 동기화 완료');
+
   // 종목을 결! 합!(gh) 으로 선택 후 시작
   await pH.evaluate(() => { const d = document.querySelector('#arKind')?.closest('details'); if (d) d.open = true; });
   await pH.click('#arKind button[data-k="gh"]');
@@ -93,6 +113,7 @@ U.main(async T => {
   await wait(pH, () => !document.getElementById('play').hidden);
   await wait(pW, () => !document.getElementById('play').hidden);
   T.ok(await pW.evaluate(() => __genius.kind() === 'gh'), '게스트 화면에 결! 합! 동기화 완료');
+  T.ok(await pH.evaluate(() => { const t = document.querySelector('.arn-vtab'); return !!t && !t.hidden; }), '게임 중 음성 대화 플로팅 버튼 표시 확인');
 
   // 방장이 첫 합 찾고 게스트에 점수 동기화 확인
   const hap0 = await pH.evaluate(() => __genius.state().haps[0]);
