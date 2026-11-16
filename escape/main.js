@@ -240,6 +240,8 @@
 
   function roomSrc(s) {
     if (s.wall === "N" && s.flags.clockFixed) return "assets/wall_north_fixed.jpg";
+    if (s.wall === "S" && s.flags.silverPicked) return "assets/wall_south_nokey.jpg";
+    if (s.wall === "W" && s.flags.safeOpen) return "assets/wall_west_safe_open.jpg";
     if (s.wall === "W" && s.flags.frameOpen) return "assets/wall_west_safe.jpg";
     return WALL_IMG[s.wall];
   }

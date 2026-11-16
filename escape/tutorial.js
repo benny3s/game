@@ -70,7 +70,7 @@
         render: () => `
           <div style="display:grid;gap:8px;place-items:center;font-size:13px">
             <div style="padding:10px 14px;border-radius:12px;background:#131c2e;border:1px solid #334155">
-              🔦 손전등 + 🔋 건전지 = <b style="color:#c084fc">🟣 켜진 UV 손전등</b>
+              🪢 긴 막대 + 🪝 고리 = <b style="color:#fde68a">🛠️ 연결된 갈고리</b> <span style="color:#64748b">(예시)</span>
             </div>
             <div style="color:#94a3b8">진행 상황은 자동 저장되어 언제든 이어할 수 있어요.</div>
           </div>`,

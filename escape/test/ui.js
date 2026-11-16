@@ -37,9 +37,13 @@ U.main(async T => {
   T.ok(await p.evaluate(() => document.querySelector(".cpn-body").textContent.includes("은열쇠")), "현재 진행 맞춤 AI 힌트 확인");
   await p.click(".cpn-min");
 
-  // 3) 남쪽: 은열쇠 줍기 → 일지 읽기 → 은열쇠 선택해 서랍 열기
+  // 3) 남쪽: 은열쇠 줍기(책상 위 열쇠 사라진 이미지 전환 확인) → 장식 벽시계 구분 → 일지 읽기 → 은열쇠 선택해 서랍 열기
   await p.click('.esc-spot[data-spot="silver_spot"]');
   await wait(p, () => __escape.state().inv.includes("silver_key"));
+  T.ok(await p.evaluate(() => document.getElementById("roomImg").getAttribute("src").includes("wall_south_nokey.jpg")), "은열쇠 획득 후 책상 위 열쇠 사라진 일러스트 전환");
+  await p.click('.esc-spot[data-spot="wall_clock"]');
+  await T.sleep(60);
+  T.ok(await p.evaluate(() => document.getElementById("msgBox").textContent.includes("장식용")), "남쪽 장식 벽시계 클릭 시 혼동 방지 안내");
   await p.click('.esc-spot[data-spot="diary"]');
   await wait(p, () => !document.getElementById("closeupView").hidden);
   await p.click("#zoomCloseBtn");
@@ -121,6 +125,7 @@ U.main(async T => {
   for (let i = 0; i < 9; i++) await p.click('[data-su="2"]');
   await p.click("#safeSubmitBtn");
   await wait(p, () => __escape.state().flags.safeOpen);
+  T.ok(await p.evaluate(() => document.getElementById("roomImg").getAttribute("src").includes("wall_west_safe_open.jpg")), "금고 해제 후 열린 빈 금고 일러스트 전환");
 
   await p.click("#combineBtn");
   await p.click('.esc-slot[data-item="magnet"]');

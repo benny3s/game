@@ -122,6 +122,8 @@
       // ── 남쪽 (책상) ──
       case "lamp":
         return stepResult(st, true, "초록 갓이 씌워진 황동 스탠드. 따뜻한 불빛이 책상 위 종이를 비추고 있다.", "tap");
+      case "wall_clock":
+        return stepResult(st, true, "장식용 낡은 벽시계다. 태엽이 망가진 채 오래전 멈춰 있어 단서로는 쓸 수 없어 보인다.", "tap");
       case "silver_spot":
         if (f.silverPicked) return stepResult(st, true, "은열쇠가 놓여 있던 자리다.", "tap");
         f.silverPicked = true;
@@ -311,10 +313,11 @@
     const f = state.flags;
     if (wall === "S") {
       const spots = [
-        { id: "lamp",   label: "스탠드 조명",     x: 24, y: 29, w: 13, h: 25, done: false },
-        { id: "diary",  label: "시계공의 일지",   x: 32, y: 44, w: 20, h: 12, done: f.diaryRead },
-        { id: "box",    label: "4자리 다이얼 상자", x: 60, y: 39, w: 16, h: 16, done: f.boxOpen },
-        { id: "drawer", label: "잠긴 서랍",       x: 62, y: 56, w: 16, h: 32, done: f.drawerOpen },
+        { id: "lamp",       label: "스탠드 조명",     x: 24, y: 29, w: 13, h: 25, done: false },
+        { id: "wall_clock", label: "장식용 벽시계",   x: 57, y: 8,  w: 12, h: 28, done: false },
+        { id: "diary",      label: "시계공의 일지",   x: 32, y: 44, w: 20, h: 12, done: f.diaryRead },
+        { id: "box",        label: "4자리 다이얼 상자", x: 60, y: 39, w: 16, h: 16, done: f.boxOpen },
+        { id: "drawer",     label: "잠긴 서랍",       x: 62, y: 56, w: 16, h: 32, done: f.drawerOpen },
       ];
       if (!f.silverPicked) {
         spots.push({ id: "silver_spot", label: "작은 은열쇠", x: 52, y: 45, w: 7.5, h: 11, done: false, glint: true });
