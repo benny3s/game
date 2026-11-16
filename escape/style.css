@@ -85,28 +85,14 @@
 .esc-nav.right { right: 6px; }
 .esc-nav:active { background: rgba(245,158,11,0.35); }
 
-/* 방 위 시각 오버레이 (UV 형광 글씨, 열린 금고, 시계 03:45) */
+/* 방 위 시각 오버레이 (UV 형광 글씨 · 출구 자물쇠 상태) */
 .ov-uv-slate {
   position: absolute; left: 71.5%; top: 18.5%; width: 19%; height: 31%;
   display: grid; place-items: center; text-align: center;
   color: #e879f9; text-shadow: 0 0 8px #a855f7, 0 0 18px #c084fc;
   font: 900 clamp(11px, 2.6vw, 18px)/1.35 sans-serif;
-  background: radial-gradient(circle, rgba(168,85,247,0.26), transparent 72%);
+  background: radial-gradient(circle, rgba(168,85,247,0.24), transparent 72%);
   border-radius: 6px;
-}
-.ov-safe-behind {
-  position: absolute; left: 32%; top: 8%; width: 36%; height: 37%;
-  border-radius: 8px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.85);
-}
-.ov-clock-pend {
-  position: absolute; left: 19.5%; top: 44%; width: 6%; height: 27%; pointer-events: none;
-}
-.pend-swing { transform-origin: 20px 2px; animation: pendSwing 1.8s ease-in-out infinite alternate; }
-@keyframes pendSwing { from { transform: rotate(-9deg); } to { transform: rotate(9deg); } }
-.ov-clock-badge {
-  position: absolute; left: 16.5%; top: 26%; width: 12%; padding: 2px 0; text-align: center;
-  background: rgba(15,23,42,0.88); border: 1px solid #fbbf24; border-radius: 6px;
-  color: #fef3c7; font: 900 clamp(10px, 2.2vw, 14px) monospace;
 }
 .ov-door-status {
   position: absolute; left: 60%; top: 37%; transform: translate(-50%, -50%);

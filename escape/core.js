@@ -108,7 +108,7 @@
       return stepResult(st, true, "✨ 명주실 끝에 자석을 단단히 묶어 '자석 낚싯줄'을 만들었다!", "combine", { acquired: ["magnet_line"] });
     }
     if (pair === "master_key+seal") {
-      return stepResult(st, false, "서로 합치는 게 아니라 북쪽 출구 문의 열쇠 구멍과 중앙 홈에 각각 끼워야 합니다.", "err");
+      return stepResult(st, false, "이 두 물건은 서로 합칠 수 없다.", "err");
     }
     return stepResult(st, false, "이 두 물건은 서로 합칠 수 없을 것 같다.", "err");
   }
@@ -134,7 +134,7 @@
       case "drawer":
         if (f.drawerOpen) return stepResult(st, true, "이미 열어 본 서랍. 안은 비어 있다.", "tap");
         if (st.selected !== "silver_key") {
-          return stepResult(st, false, "오른쪽 서랍이 단단히 잠겨 있다. 가느다란 열쇠가 필요해 보인다.", "lock");
+          return stepResult(st, false, "오른쪽 서랍이 단단히 잠겨 있다. 작고 가는 열쇠 구멍이 보인다.", "lock");
         }
         f.drawerOpen = true;
         remInv(st, "silver_key");
@@ -193,7 +193,7 @@
             st.zoom = "safe";
             return stepResult(st, true, "🪛 드라이버로 액자 네 귀퉁이 나사를 풀자 액자 뒤에 숨겨진 벽 금고가 나타났다!", "unlock");
           }
-          return stepResult(st, false, "벽에 아주 단단히 고정된 금테 액자. 네 모서리에 나사가 박혀 있어 공구가 필요하다.", "lock");
+          return stepResult(st, false, "벽에 아주 단단히 고정된 금테 액자. 네 모서리에 작은 일자 나사가 박혀 있다.", "lock");
         }
         if (f.safeOpen) return stepResult(st, true, "이미 열려 있는 벽 금고. 황동 인장 메달을 꺼냈던 곳이다.", "tap");
         st.zoom = "safe";
@@ -222,7 +222,7 @@
     if (BOOK_TARGET[nextIdx] !== color) {
       st.bookSeq = [];
       st.moves++;
-      return stepResult(st, false, `책을 눌렀지만 제자리로 튕겨 나왔다. 순서가 틀린 것 같다 (일지 단서를 다시 보자).`, "err");
+      return stepResult(st, false, "책을 밀어 넣었지만 다시 제자리로 튕겨 나왔다.", "err");
     }
     st.bookSeq.push(color);
     st.moves++;
@@ -247,7 +247,7 @@
       st.zoom = null;
       return stepResult(st, true, "🔓 0345! 나무 상자가 열리며 '일자 드라이버'를 얻었다!", "unlock", { acquired: ["driver"] });
     }
-    return stepResult(st, false, "다이얼이 돌아가지 않는다. 시계가 가리키는 네 자리 시각이 아닐까?", "err");
+    return stepResult(st, false, "걸쇠가 잠긴 채 열리지 않는다.", "err");
   }
 
   function submitSafeCode(state, code) {
@@ -261,7 +261,7 @@
       st.zoom = null;
       return stepResult(st, true, "🔓 ☾3 ★7 ☀9! 육중한 금고가 열리고 안에서 '황동 인장 메달'을 손에 넣었다!", "unlock", { acquired: ["seal"] });
     }
-    return stepResult(st, false, "금고가 잠긴 채 꿈쩍도 하지 않는다. 동쪽 어두운 석판의 비밀과 관련이 있을 것 같다.", "err");
+    return stepResult(st, false, "육중한 금고 손잡이가 잠긴 채 꿈쩍도 하지 않는다.", "err");
   }
 
   function useOnDoor(state, itemId) {
@@ -279,7 +279,7 @@
         return stepResult(st, true, "🎉 마지막 자물쇠까지 풀렸다! 육중한 오크 문이 열리며 서재에서 탈출했다!", "escape");
       }
       st.zoom = "door";
-      return stepResult(st, true, "🔑 상단 열쇠 구멍 잠금이 풀렸다! 이제 문 중앙의 원형 홈에 인장 메달만 끼우면 된다.", "unlock");
+      return stepResult(st, true, "🔑 상단 열쇠 구멍 잠금이 풀렸다! 중앙의 둥근 홈이 아직 비어 있다.", "unlock");
     }
 
     if (itemId === "seal" && !f.doorSealDone) {
@@ -292,12 +292,12 @@
         return stepResult(st, true, "🎉 황동 인장 메달이 딱 들어맞았다! 오크 문이 활짝 열리며 서재 탈출 성공!", "escape");
       }
       st.zoom = "door";
-      return stepResult(st, true, "🪙 문 중앙 원형 홈에 인장이 딱 맞물렸다! 이제 상단 열쇠 구멍에 마스터 키를 꽂으면 열린다.", "unlock");
+      return stepResult(st, true, "🪙 문 중앙 원형 홈에 인장이 딱 맞물렸다! 상단 열쇠 구멍이 아직 잠겨 있다.", "unlock");
     }
 
     st.zoom = "door";
-    const need = [!f.doorKeyDone && "열쇠 구멍(마스터 키)", !f.doorSealDone && "원형 홈(황동 인장 메달)"].filter(Boolean).join("과 ");
-    return stepResult(st, false, `단단한 참나무 출구 문. ${need}가 아직 잠겨 있다.`, "lock");
+    const need = [!f.doorKeyDone && "열쇠 구멍", !f.doorSealDone && "중앙의 둥근 홈"].filter(Boolean).join("과 ");
+    return stepResult(st, false, `단단한 참나무 출구 문. ${need}이 아직 잠겨 있다.`, "lock");
   }
 
   function closeZoom(state) {

@@ -83,12 +83,18 @@ U.main(async T => {
   await p.click('.esc-slot[data-item="pendulum"]');
   await p.click('.esc-spot[data-spot="clock"]');
   await wait(p, () => __escape.state().flags.clockFixed);
-  T.ok(await p.evaluate(() => __escape.state().inv.includes("thread") && !!document.querySelector(".ov-clock-badge")), "괘종시계 복구(03:45) + 명주실 획득");
+  T.ok(await p.evaluate(() => __escape.state().inv.includes("thread") && document.getElementById("roomImg").getAttribute("src").includes("wall_north_fixed.jpg") && !document.querySelector(".ov-clock-badge")), "괘종시계 복구 후 실제 시계 일러스트 전환 + 명주실 획득");
 
-  // 6) 남쪽 이동: 4자리 다이얼 상자 0345 입력 → 드라이버 획득
+  // 6) 남쪽 이동: 오답 입력 시 스포일러 힌트 노출 안 됨 확인 → 4자리 다이얼 상자 0345 입력 → 드라이버 획득
   await p.click('#compass button[data-w="S"]');
   await p.click('.esc-spot[data-spot="box"]');
   await wait(p, () => !document.getElementById("closeupView").hidden);
+  await p.click("#boxSubmitBtn");
+  await T.sleep(80);
+  T.ok(await p.evaluate(() => {
+    const m = document.getElementById("msgBox").textContent;
+    return !m.includes("시계") && !m.includes("0345");
+  }), "자물쇠 오답 시 스포일러 힌트 미노출");
   // 0, 3, 4, 5 다이얼 맞추기
   for (let i = 0; i < 3; i++) await p.click('[data-du="1"]');
   for (let i = 0; i < 4; i++) await p.click('[data-du="2"]');
@@ -97,11 +103,12 @@ U.main(async T => {
   await wait(p, () => __escape.state().flags.boxOpen);
   T.ok(await p.evaluate(() => __escape.state().inv.includes("driver")), "0345 상자 열림 → 드라이버 획득");
 
-  // 7) 서쪽 이동: 액자 나사 풀기 → 금고 379 열기 → 자석+실 조합 → 환풍구 마스터키 낚시
+  // 7) 서쪽 이동: 액자 나사 풀기 → 숨겨진 벽 금고 실사 전환 확인 → 금고 379 열기 → 자석+실 조합 → 환풍구 마스터키 낚시
   await p.click('#compass button[data-w="W"]');
   await p.click('.esc-slot[data-item="driver"]');
   await p.click('.esc-spot[data-spot="frame"]');
   await wait(p, () => __escape.state().flags.frameOpen && !document.getElementById("closeupView").hidden);
+  T.ok(await p.evaluate(() => document.getElementById("roomImg").getAttribute("src").includes("wall_west_safe.jpg") && !document.querySelector(".ov-safe-behind")), "액자 해제 후 가짜 SVG 대신 실제 벽 금고 이미지로 전환");
   for (let i = 0; i < 3; i++) await p.click('[data-su="0"]');
   for (let i = 0; i < 7; i++) await p.click('[data-su="1"]');
   for (let i = 0; i < 9; i++) await p.click('[data-su="2"]');

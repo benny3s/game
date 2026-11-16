@@ -238,6 +238,12 @@
     W: "assets/wall_west.jpg",
   };
 
+  function roomSrc(s) {
+    if (s.wall === "N" && s.flags.clockFixed) return "assets/wall_north_fixed.jpg";
+    if (s.wall === "W" && s.flags.frameOpen) return "assets/wall_west_safe.jpg";
+    return WALL_IMG[s.wall];
+  }
+
   function renderAll() {
     if (!st) return;
     $("playTitle").textContent = E.WALL_NAMES[st.wall];
@@ -245,7 +251,8 @@
 
     $("compass").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.w === st.wall));
     const img = $("roomImg");
-    if (img.getAttribute("src") !== WALL_IMG[st.wall]) img.setAttribute("src", WALL_IMG[st.wall]);
+    const targetSrc = roomSrc(st);
+    if (img.getAttribute("src") !== targetSrc) img.setAttribute("src", targetSrc);
 
     renderOverlays();
     renderHotspots();
@@ -259,19 +266,6 @@
     let html = "";
     if (st.wall === "E" && f.uvClueSeen) {
       html += `<div class="ov-uv-slate">☾ = 3<br>★ = 7<br>☀ = 9</div>`;
-    }
-    if (st.wall === "W" && f.frameOpen) {
-      html += `<div class="ov-safe-behind"><svg viewBox="0 0 180 120" width="100%" height="100%" preserveAspectRatio="none">
-        <rect x="6" y="6" width="168" height="108" rx="6" fill="#1e293b" stroke="#475569" stroke-width="4"/>
-        <rect x="16" y="14" width="148" height="92" rx="4" fill="${f.safeOpen ? "#0b0f17" : "#334155"}" stroke="#64748b" stroke-width="2"/>
-        ${f.safeOpen
-          ? `<circle cx="90" cy="60" r="22" fill="#0f172a" stroke="#fbbf24" stroke-dasharray="4 3" stroke-width="2"/><text x="90" y="65" text-anchor="middle" font-size="14" fill="#fbbf24" font-weight="bold">OPEN</text>`
-          : `<circle cx="116" cy="60" r="14" fill="#0f172a" stroke="#94a3b8" stroke-width="3"/><line x1="116" y1="60" x2="128" y2="54" stroke="#cbd5e1" stroke-width="3" stroke-linecap="round"/><rect x="40" y="45" width="44" height="30" rx="4" fill="#0f172a" stroke="#94a3b8" stroke-width="1.5"/><text x="62" y="64" text-anchor="middle" font-size="11" fill="#fde68a">☾ ★ ☀</text>`}
-      </svg></div>`;
-    }
-    if (st.wall === "N" && f.clockFixed) {
-      html += `<div class="ov-clock-badge">03:45</div>
-        <div class="ov-clock-pend"><svg viewBox="0 0 40 90" width="100%" height="100%"><g class="pend-swing"><line x1="20" y1="2" x2="20" y2="66" stroke="#fbbf24" stroke-width="2.5"/><circle cx="20" cy="70" r="10" fill="#fbbf24" stroke="#92400e" stroke-width="2"/></g></svg></div>`;
     }
     if (st.wall === "N" && (f.doorKeyDone || f.doorSealDone || f.escaped)) {
       html += `<div class="ov-door-status">${f.doorKeyDone ? "🔑✓" : "🔑✗"} ${f.doorSealDone ? "🪙✓" : "🪙✗"}</div>`;
