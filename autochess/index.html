@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1433">
+<title>베니체스</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="../common/cozy.css?v=14">
+<script src="../common/backnav.js?v=3"></script>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div id="app">
+  <header class="top">
+    <a href="../">게임 목록</a>
+    <h1>♟️ 베니체스</h1>
+    <button class="iconbtn" id="rankBtn" aria-label="랭킹">🏆</button>
+  </header>
+
+  <!-- 메뉴 -->
+  <section id="menu" class="panel">
+    <p class="lead">오토체스 <b>운영</b> 연습장. 전투는 보드 힘으로 확률 계산 — 언제 <b>레벨업 · 리롤 · 저축</b>할지만 겨룹니다.</p>
+    <div class="row">
+      <span class="lbl">규칙</span>
+      <div class="seg" id="ruleSeg">
+        <button data-v="A" class="on">A 베니 오리지널 · 6명</button>
+        <button data-v="B">B TFT 경제 미러 · 8명</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="lbl">상대</span>
+      <div class="seg" id="oppSeg">
+        <button data-v="mix" class="on">섞어서</button>
+        <button data-v="econ">모두 저축형</button>
+        <button data-v="fast8">모두 빠른 8</button>
+        <button data-v="reroll">모두 리롤</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="lbl">추천 표시</span>
+      <div class="seg" id="hintSeg">
+        <button data-v="1" class="on">켜기</button>
+        <button data-v="0">끄기</button>
+      </div>
+    </div>
+    <div class="row btns">
+      <button class="big" id="playBtn">혼자 vs AI</button>
+      <button class="big ghost" id="watchBtn">AI 구경</button>
+    </div>
+    <p class="stats" id="statLine"></p>
+    <details class="help">
+      <summary>규칙 요약</summary>
+      <ul>
+        <li>매 라운드 기본 골드 + <b>이자</b>(10골드당 1) + <b>연승·연패 보너스</b>.</li>
+        <li>상점 5칸, 새로고침 2골드, 경험치 4골드 = 4XP. 레벨이 오르면 보드 칸이 늘고 비싼 유닛이 잘 나옵니다.</li>
+        <li>같은 유닛 3개 = 2성, 2성 3개 = 3성. 유닛은 모두가 같은 <b>공유 풀</b>에서 나옵니다.</li>
+        <li>보드 = 힘 센 순서로 레벨 수만큼 자동 배치. 나머지는 벤치(눌러서 팔기).</li>
+        <li>회전목마 라운드엔 유닛+아이템, PvE 라운드엔 아이템(이기면 골드도).</li>
+        <li>규칙 B 숫자(확률·풀·XP·이자·연승)는 TFT Set 18 공개 수치. 이름·그림은 쓰지 않습니다.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- 게임 -->
+  <section id="game" hidden>
+    <div class="hud">
+      <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+      <div class="hudItem"><small>라운드</small><b id="hRound">2-1</b><i id="hKind"></i></div>
+      <div class="hudItem"><small>체력</small><b id="hHp">60</b></div>
+      <div class="hudItem gold"><small>골드</small><b id="hGold">0</b><i id="hInt"></i></div>
+      <div class="hudItem"><small>레벨</small><b id="hLvl">3</b><i id="hXp"></i></div>
+      <div class="hudItem"><small>연승/연패</small><b id="hStreak">-</b></div>
+      <div class="hudItem"><small>힘</small><b id="hPow">0</b><i id="hRank"></i></div>
+    </div>
+
+    <div class="main">
+      <div class="left">
+        <div class="hint" id="hint" hidden></div>
+        <h3>상점 <span class="odds" id="odds"></span></h3>
+        <div class="shop" id="shop"></div>
+        <div class="acts">
+          <button id="rollBtn">🔄 새로고침 <small>2</small></button>
+          <button id="xpBtn">⬆️ 경험치 <small>4</small></button>
+          <button id="endBtn" class="primary">⚔️ 준비 끝</button>
+        </div>
+        <h3>보드 <span id="boardCnt"></span></h3>
+        <div class="units board" id="board"></div>
+        <h3>벤치 <span id="benchCnt"></span> <small class="muted">눌러서 팔기</small></h3>
+        <div class="units bench" id="bench"></div>
+      </div>
+      <div class="right">
+        <h3>참가자</h3>
+        <ol class="players" id="players"></ol>
+        <h3>지난 라운드</h3>
+        <ul class="log" id="log"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 결과 -->
+  <div class="pop" id="pop" hidden>
+    <div class="popBox">
+      <h2 id="popTitle"></h2>
+      <div id="popBody"></div>
+      <div class="row btns">
+        <button class="big" id="againBtn">한 판 더</button>
+        <button class="big ghost" id="menuBtn">메뉴</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../common/cozy.js?v=13"></script>
+<script src="../common/me.js?v=17"></script>
+<script src="../common/rank.js?v=12"></script>
+<script src="core.js?v=1"></script>
+<script src="ai.js?v=1"></script>
+<script src="main.js?v=1"></script>
+</body>
+</html>
