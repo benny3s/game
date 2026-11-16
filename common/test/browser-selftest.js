@@ -509,6 +509,28 @@ async function lifetimeSelfTests(browser) {
   ok(unlocked && snap.dev && snap.dev.status === 'active' && snap.dev.slot === '2' && snap.slot2 === 'newDev2' && !snap.req,
     `평생 회원 PIN 통과 시 슬롯 2 자동 점유 + 즉시 허용 — ${JSON.stringify(snap)}`);
   await ctx.close();
+  // 관리자 모달: 같은 이름 훈 2대가 1명 카드로 묶이고 subrow 2개로 표시되는지 검증
+  {
+    const ctx2 = await newCtx(browser, { fake: { rules: 'gp', user: { uid: 'adm1', claims: { admin: 1 } } } });
+    await ctx2.addInitScript(() => {
+      const t = window.__fs && window.__fs.tree;
+      if (t) t.game_devices = {
+        h1: { name: '훈', status: 'active', expiresAt: 0, ua: 'Windows PC', t: 10 },
+        h2: { name: '훈', status: 'active', expiresAt: 0, ua: 'Galaxy 폰', t: 20 },
+      };
+    });
+    const p2 = await open(ctx2, LOCAL + '/game/snake/?gate=1');
+    await waitFn(p2, () => !!window.Gate);
+    await p2.evaluate(() => Gate.openAdminModal());
+    await waitFn(p2, () => document.querySelectorAll('[data-pgrp]').length === 1);
+    const grp = await p2.evaluate(() => ({
+      groups: document.querySelectorAll('[data-pgrp]').length,
+      subs: document.querySelectorAll('.bgate-subrow').length,
+      cnt: (document.getElementById('bgDevCount') || {}).textContent,
+    }));
+    ok(grp.groups === 1 && grp.subs === 2 && /1명 · 2대/.test(grp.cnt), `관리자 모달 사람별 통합 그룹핑 ('훈' 1명 · 2대) — ${JSON.stringify(grp)}`);
+    await ctx2.close();
+  }
 }
 
 (async () => {

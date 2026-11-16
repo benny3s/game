@@ -564,6 +564,17 @@ const Gate = (() => {
     await db().ref("game_devices/" + targetUid).update({ status: "revoked", expiresAt: 0 });
   }
 
+  async function deleteDevice(targetUid) {
+    await ensureFirebase();
+    try {
+      const d = (await db().ref("game_devices/" + targetUid).get()).val();
+      if (d && d.pid && d.slot) {
+        await db().ref(`game_lifetime/${d.pid}/slots/${d.slot}`).remove().catch(() => {});
+      }
+    } catch (e) {}
+    await db().ref("game_devices/" + targetUid).remove();
+  }
+
   // ── UI 스타일 주입 ────────────────────────────────────────────────
   let styleInjected = false;
   function injectStyle() {
@@ -677,6 +688,11 @@ const Gate = (() => {
       button.bgate-vis { cursor: pointer; font-family: inherit; }
       button.bgate-vis:hover { border-color: #66c0f4; background: rgba(102,192,244,0.15); }
       .bgate-vis small { color: #94a3b8; font-size: 11px; }
+      .bgate-pgrp { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 11px; padding: 10px 11px; margin-bottom: 9px; }
+      .bgate-pgrp:last-child { margin-bottom: 0; }
+      .bgate-phdr { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding-bottom: 7px; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 7px; }
+      .bgate-subrow { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 7px; border-radius: 7px; background: rgba(0,0,0,0.22); margin-bottom: 5px; flex-wrap: wrap; }
+      .bgate-subrow:last-child { margin-bottom: 0; }
       .bgate-sec {
         background: rgba(12,19,29,0.75); border: 1px solid rgba(255,255,255,0.08);
         border-radius: 12px; padding: 14px; margin-bottom: 14px;
@@ -1099,12 +1115,12 @@ const Gate = (() => {
 
           <div class="bgate-sec">
             <h4><span>👀 최근 방문 · 미승인 기기</span> <span class="bgate-meta" id="bgPresCount">불러오는 중...</span></h4>
-            <div class="bgate-meta" style="margin:-4px 0 8px">방 초대 링크로 같이 놀았지만 아직 승인 안 된 기기예요. 바로 평생 승인할 수 있어요.</div>
+            <div class="bgate-meta" style="margin:-4px 0 8px">카톡 창과 크롬을 둘 다 열면 기기가 2개로 보일 수 있어요. 중복 손님 창은 <b>✕ 숨기기</b>로 치워 주세요.</div>
             <div id="bgPresList"><div class="bgate-meta">불러오는 중...</div></div>
           </div>
 
           <div class="bgate-sec">
-            <h4><span>📱 허용된 기기</span> <span class="bgate-meta" id="bgDevCount">0대</span></h4>
+            <h4><span>📱 허용된 회원 · 통합 관리</span> <span class="bgate-meta" id="bgDevCount">0명</span></h4>
             <div id="bgDevList"><div class="bgate-meta">기기를 불러오는 중...</div></div>
           </div>
         ` : state.allowed ? "" : `
@@ -1152,12 +1168,16 @@ const Gate = (() => {
 
     // 허용된 기기 목록 + 최근 방문 미승인 기기 연동 구독
     let devVal = {}, presVal = {};
+    const HIDE_PRES_KEY = "game.gate.hidePres.v1";
+    const loadHidePres = () => { try { return new Set(JSON.parse(lsGet(HIDE_PRES_KEY) || "[]")); } catch (e) { return new Set(); } };
+    const saveHidePres = s => lsSet(HIDE_PRES_KEY, JSON.stringify([...s].slice(-120)));
     const drawPres = () => {
       const cntEl = adminEl.querySelector("#bgPresCount");
       const listEl = adminEl.querySelector("#bgPresList");
       if (!cntEl || !listEl) return;
+      const hiddenSet = loadHidePres();
       const cutoff = now() - 7 * DAY;
-      const items = Object.entries(presVal || {})
+      const allUnapproved = Object.entries(presVal || {})
         .map(([uid, p]) => Object.assign({}, p, { uid }))
         .filter(p => {
           if (!p || !p.t || p.t < cutoff || p.mode === "admin") return false;
@@ -1166,22 +1186,28 @@ const Gate = (() => {
           const activeDev = d && d.status === "active" && (!exp || now() <= exp);
           return !activeDev;
         })
-        .sort((a, b) => (b.t || 0) - (a.t || 0))
-        .slice(0, 20);
-      cntEl.textContent = `${items.length}대`;
+        .sort((a, b) => (b.t || 0) - (a.t || 0));
+      const hiddenCount = allUnapproved.filter(p => hiddenSet.has(p.uid)).length;
+      const items = allUnapproved.filter(p => !hiddenSet.has(p.uid)).slice(0, 20);
+      cntEl.innerHTML = `${items.length}대` + (hiddenCount ? ` · <button type="button" id="bgPresReset" style="border:0;background:none;color:#93c5fd;font:inherit;text-decoration:underline;cursor:pointer;padding:0">숨김 ${hiddenCount}건 보기</button>` : "");
+      const resetBtn = cntEl.querySelector("#bgPresReset");
+      if (resetBtn) resetBtn.onclick = () => { lsSet(HIDE_PRES_KEY, "[]"); drawPres(); };
       if (!items.length) {
         listEl.innerHTML = `<div class="bgate-meta">최근 7일 안에 미승인 방문 기기가 없어요.</div>`;
         return;
       }
+      const activeDevs = Object.values(devVal || {}).filter(d => d && d.status === "active" && (!d.expiresAt || now() <= Number(d.expiresAt)));
       listEl.innerHTML = items.map(p => {
         const nm = p.name && p.name !== "손님" ? p.name : "";
         const hi = adminFocusUid && p.uid === adminFocusUid;
+        const dup = !nm && p.ua ? activeDevs.find(d => d.ua === p.ua && Math.abs((d.lastSeen || d.t || 0) - p.t) < 20 * 60000) : null;
         return `
           <div class="bgate-row"${hi ? ' data-hi="1" style="border:1.5px solid #34d399;background:rgba(16,185,129,0.12)"' : ""}>
             <div style="display:grid;gap:3px">
               <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
                 <input class="bgate-inp" data-vname="${esc(p.uid)}" maxlength="12" value="${esc(nm)}" placeholder="이름/별명" style="width:110px;padding:5px 8px;font-size:13px">
                 <span class="bgate-pill want">${esc(GAME_KO[p.game] || p.game || "방문")}</span>
+                ${dup ? `<span style="font-size:11px;color:#fcd34d">⚠️ '${esc(dup.name)}'(${esc(dup.ua)}) 중복 의심</span>` : ""}
               </div>
               <div class="bgate-meta">${esc(p.ua || "기기")} · ${fmtTimeAgo(p.t)}</div>
             </div>
@@ -1189,6 +1215,7 @@ const Gate = (() => {
               <button class="bgate-btn green sm" data-papp="${esc(p.uid)}" data-days="0" data-ua="${esc(p.ua || "")}">♾️ 평생 승인</button>
               <button class="bgate-btn ghost sm" data-papp="${esc(p.uid)}" data-days="7" data-ua="${esc(p.ua || "")}">📅 1주</button>
               <button class="bgate-btn ghost sm" data-papp="${esc(p.uid)}" data-days="1" data-ua="${esc(p.ua || "")}">⏳ 하루</button>
+              <button class="bgate-btn ghost sm" data-phide="${esc(p.uid)}" title="중복·불필요한 방문 숨기기">✕</button>
             </div>
           </div>`;
       }).join("");
@@ -1202,6 +1229,9 @@ const Gate = (() => {
           catch (e) { b.disabled = false; alert("승인하지 못했어요: " + (e.message || e)); }
         };
       });
+      listEl.querySelectorAll("[data-phide]").forEach(b => {
+        b.onclick = () => { const s = loadHidePres(); s.add(b.dataset.phide); saveHidePres(s); drawPres(); };
+      });
       const hiEl = listEl.querySelector('[data-hi="1"]');
       if (hiEl) { adminFocusUid = ""; setTimeout(() => hiEl.scrollIntoView({ behavior: "smooth", block: "center" }), 60); }
     };
@@ -1210,7 +1240,7 @@ const Gate = (() => {
     presRef.on("value", onPres);
     adminSubs.push([presRef, "value", onPres]);
 
-    // 허용된 기기 목록 구독
+    // 허용된 회원 · 통합 관리 (사람별 그룹화)
     const devRef = db().ref("game_devices");
     const onDev = snap => {
       const val = devVal = snap.val() || {};
@@ -1221,55 +1251,116 @@ const Gate = (() => {
       const cntEl = adminEl.querySelector("#bgDevCount");
       const listEl = adminEl.querySelector("#bgDevList");
       if (!cntEl || !listEl) return;
-      cntEl.textContent = `${devs.length}대`;
       if (!devs.length) {
+        cntEl.textContent = "0명";
         listEl.innerHTML = `<div class="bgate-meta">아직 허용된 기기가 없어요.</div>`;
         return;
       }
-      listEl.innerHTML = devs.map(d => {
+      const groupsMap = new Map();
+      for (const d of devs) {
+        const k = d.pid ? "pid:" + d.pid : "n:" + (profNameKey(d.name) || d.uid);
+        let g = groupsMap.get(k);
+        if (!g) { g = { key: k, pid: d.pid || "", name: d.name || "기기", devs: [] }; groupsMap.set(k, g); }
+        if (!g.pid && d.pid) g.pid = d.pid;
+        g.devs.push(d);
+      }
+      const groups = [...groupsMap.values()];
+      cntEl.textContent = `${groups.length}명 · ${devs.length}대`;
+
+      const devStatusOf = d => {
         const exp = Number(d.expiresAt || 0);
         const expired = exp > 0 && now() > exp;
         const st = expired ? "revoked" : (d.status || "active");
-        const stLabel = expired ? "끝남" : st === "active" ? "허용" : st === "paused" ? "멈춤" : "차단";
-        const expTxt = exp > 0 && !expired ? ` · ${leftTxt(exp)}` : "";
-        const selfTag = st === "active" && exp === 0 && d.pid ? ` · <span style="color:#86efac">♾️ 본인기기추가 ON</span>` : "";
+        return { exp, expired, st, stLabel: expired ? "끝남" : st === "active" ? "허용" : st === "paused" ? "멈춤" : "차단" };
+      };
+
+      listEl.innerHTML = groups.map(g => {
+        const statuses = g.devs.map(devStatusOf);
+        const actCnt = statuses.filter(x => x.st === "active").length;
+        const hasPerm = statuses.some(x => x.st === "active" && x.exp === 0);
+        const hasSelf = !!g.pid && g.devs.some(d => d.pid && devStatusOf(d).st === "active" && Number(d.expiresAt || 0) === 0);
+        const uidsJson = esc(JSON.stringify(g.devs.map(d => d.uid)));
+        const subRows = g.devs.map((d, idx) => {
+          const { exp, expired, st, stLabel } = statuses[idx];
+          const expTxt = exp > 0 && !expired ? ` · ${leftTxt(exp)}` : "";
+          const slotTxt = d.slot ? ` · 슬롯${d.slot}` : "";
+          return `
+            <div class="bgate-subrow">
+              <div style="display:grid;gap:2px">
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <span style="font-size:12.5px;color:#e2e8f0;font-weight:600">${esc(d.ua || "브라우저")}</span>
+                  <span class="bgate-pill ${st}">${stLabel}</span>
+                </div>
+                <div class="bgate-meta">${durLabel(exp)}${expTxt}${slotTxt} · 최근 ${fmtTimeAgo(d.lastSeen || d.t)}</div>
+              </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                ${st === "active"
+                  ? `<button class="bgate-btn ghost sm" data-dact="pause" data-uid="${esc(d.uid)}">⏸</button>`
+                  : `<button class="bgate-btn green sm" data-dact="resume" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">▶ 허용</button>`}
+                ${st === "active" && exp > 0 ? `<button class="bgate-btn ghost sm" data-dact="always" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">♾️</button>` : ""}
+                <button class="bgate-btn ghost sm" data-dact="24h" data-uid="${esc(d.uid)}" title="오늘만">⏳</button>
+                ${st !== "revoked" ? `<button class="bgate-btn ghost sm" data-dact="revoke" data-uid="${esc(d.uid)}" style="color:#fca5a5" title="차단">🚫</button>` : ""}
+                <button class="bgate-btn ghost sm" data-dact="del" data-uid="${esc(d.uid)}" style="color:#94a3b8" title="목록에서 완전 정리">🧹</button>
+              </div>
+            </div>`;
+        }).join("");
         return `
-          <div class="bgate-row">
-            <div>
-              <b>${esc(d.name || "기기")}</b>
-              <span class="bgate-pill ${st}">${stLabel}</span>
-              <div class="bgate-meta">${durLabel(exp)}${expTxt}${selfTag} · ${esc(d.ua || "브라우저")} · 최근 ${fmtTimeAgo(d.lastSeen || d.t)}</div>
+          <div class="bgate-pgrp" data-pgrp="${esc(g.key)}">
+            <div class="bgate-phdr">
+              <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                <b style="font-size:14.5px;color:#fff">👤 ${esc(g.name)}</b>
+                <span class="bgate-pill ${actCnt ? "active" : "revoked"}">${actCnt ? `${actCnt}/${g.devs.length}대 허용` : `${g.devs.length}대 꺼짐`}</span>
+                ${hasSelf ? `<span style="font-size:11.5px;color:#86efac">♾️ 본인기기추가 ON</span>` : ""}
+              </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                ${hasPerm && !hasSelf ? `<button class="bgate-btn ghost sm" data-gact="lifetime" data-uids="${uidsJson}" data-name="${esc(g.name)}">🔗 본인기기추가</button>` : ""}
+                ${actCnt
+                  ? `<button class="bgate-btn ghost sm" data-gact="pause" data-uids="${uidsJson}">⏸ 전체 멈춤</button>`
+                  : `<button class="bgate-btn green sm" data-gact="resume" data-uids="${uidsJson}" data-name="${esc(g.name)}">▶ 전체 허용</button>`}
+              </div>
             </div>
-            <div style="display:flex;gap:5px;flex-wrap:wrap">
-              ${st === "active"
-                ? `<button class="bgate-btn ghost sm" data-dact="pause" data-uid="${esc(d.uid)}">⏸ 멈춤</button>`
-                : `<button class="bgate-btn green sm" data-dact="resume" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">▶ 다시 허용 (계속)</button>`}
-              ${st === "active" && exp > 0 ? `<button class="bgate-btn ghost sm" data-dact="always" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">♾️ 계속으로</button>` : ""}
-              ${st === "active" && exp === 0 && !d.pid ? `<button class="bgate-btn ghost sm" data-dact="lifetime" data-uid="${esc(d.uid)}" data-name="${esc(d.name || "")}">🔗 본인기기추가</button>` : ""}
-              <button class="bgate-btn ghost sm" data-dact="24h" data-uid="${esc(d.uid)}">⏳ 오늘만</button>
-              <button class="bgate-btn ghost sm" data-dact="revoke" data-uid="${esc(d.uid)}" style="color:#fca5a5">🗑 차단</button>
-            </div>
-          </div>
-        `;
+            ${subRows}
+          </div>`;
       }).join("");
+      listEl.querySelectorAll("[data-gact]").forEach(b => {
+        b.onclick = async () => {
+          const { gact, name } = b.dataset;
+          const uids = JSON.parse(b.dataset.uids || "[]");
+          if (gact === "pause") {
+            await Promise.all(uids.map(u => updateDevice(u, { status: "paused" })));
+          } else if (gact === "resume" || gact === "lifetime") {
+            const foundPid = await findPidByName(name);
+            if (gact === "lifetime" && !foundPid) {
+              alert(`'${name}' 닉네임의 프로필(PIN)을 아직 못 찾았어요. 친구가 한 번 '👤 내 프로필'로 PIN을 정한 뒤 다시 눌러 주세요.`);
+              return;
+            }
+            for (const u of uids) {
+              const patch = { status: "active", role: "friend", expiresAt: 0 };
+              if (foundPid) {
+                const link = await linkLifetimeDevice(foundPid, name, u);
+                if (link) { patch.pid = link.pid; if (link.slot) patch.slot = link.slot; }
+              }
+              await updateDevice(u, patch);
+            }
+          }
+        };
+      });
       listEl.querySelectorAll("[data-dact]").forEach(b => {
         b.onclick = async () => {
           const { dact, uid, name } = b.dataset;
           if (dact === "pause") await updateDevice(uid, { status: "paused" });
-          else if (dact === "resume" || dact === "always" || dact === "lifetime") {
+          else if (dact === "resume" || dact === "always") {
             const foundPid = await findPidByName(name);
             const patch = { status: "active", role: "friend", expiresAt: 0 };
             if (foundPid) {
               const link = await linkLifetimeDevice(foundPid, name, uid);
               if (link) { patch.pid = link.pid; if (link.slot) patch.slot = link.slot; }
-            } else if (dact === "lifetime") {
-              alert(`'${name}' 닉네임의 프로필(PIN)을 아직 못 찾았어요. 친구가 한 번 '👤 내 프로필'로 PIN을 정한 뒤 다시 눌러 주세요.`);
-              return;
             }
             await updateDevice(uid, patch);
           }
           else if (dact === "24h") await updateDevice(uid, { status: "active", role: "temp24h", expiresAt: now() + DAY });
           else if (dact === "revoke") await removeDevice(uid);
+          else if (dact === "del") await deleteDevice(uid);
         };
       });
     };
