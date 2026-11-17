@@ -291,9 +291,10 @@ body.kua-body .seg .btn.active {
 
 /* ── 인게임 아쿠아 블루 아케이드 프레임 (#play) ── */
 .play {
-  max-width: 960px; margin: 0 auto; min-height: 100dvh;
-  display: flex; flex-direction: column; justify-content: center;
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+  max-width: 960px; margin: 0 auto;
+  display: flex; flex-direction: column; justify-content: safe center;
+  overflow-y: auto; overflow-x: hidden;
+  padding: calc(env(safe-area-inset-top, 0px) + 6px) 10px calc(env(safe-area-inset-bottom, 0px) + 6px);
   box-sizing: border-box; gap: 6px;
 }
 
@@ -446,41 +447,133 @@ body.dark .k-btn-bgm.off {
 .k-keyguide { text-align: center; font-size: 12px; color: #dbeafe; font-weight: 700; }
 
 /* 터치 패드: 실제 소형 터치 기기에서만 표시 (PC 데스크톱은 항상 숨김) */
-.k-tpad { display: none; justify-content: space-between; align-items: center; padding: 4px 6px; }
-@media (hover: none) and (pointer: coarse) and (max-width: 820px) {
-  .k-tpad { display: flex; }
-  .k-keyguide { display: none; }
-}
-
-@media (max-width: 820px) {
-  .k-lobby-body { grid-template-columns: 1fr; }
-  .k-room-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .k-chars { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .k-board-row { grid-template-columns: 1fr; }
-  .k-canvas-wrap { width: min(100%, calc((100dvh - 250px) * 15 / 13)); }
-  .k-hud { flex-direction: row; flex-wrap: wrap; }
-  .k-slot { flex: 1 1 130px; }
-}
-
+.k-tpad { display: none; justify-content: space-between; align-items: center; padding: 2px 6px; flex-shrink: 0; }
 .k-dpad {
-  display: grid; grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 38px); gap: 4px;
+  display: grid; grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 34px); gap: 4px;
 }
 .k-dpad .up { grid-column: 2; grid-row: 1; }
 .k-dpad .lt { grid-column: 1; grid-row: 2; }
 .k-dpad .rt { grid-column: 3; grid-row: 2; }
 .k-dpad .dn { grid-column: 2; grid-row: 3; }
 .k-pad-btn, .k-act-btn {
-  border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.22);
-  background: #1b2436; color: #f8fafc; font-weight: 800; cursor: pointer; touch-action: none;
+  border-radius: 10px; border: 1.5px solid rgba(255,255,255,0.28);
+  background: rgba(15, 36, 72, 0.9); color: #f8fafc; font-weight: 800; cursor: pointer; touch-action: none;
 }
 .k-actpad { display: flex; gap: 8px; }
 .k-act-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
-  width: 66px; height: 66px; font-size: 20px; border-radius: 50%;
+  width: 58px; height: 58px; font-size: 18px; border-radius: 50%;
 }
-.k-act-btn small { font-size: 11px; margin-top: 2px; }
+.k-act-btn small { font-size: 10.5px; margin-top: 1px; }
 .k-act-btn.bomb { background: #0284c7; border-color: #7dd3fc; }
 .k-act-btn.needle { background: #b45309; border-color: #fde68a; }
+
+@media (hover: none) and (pointer: coarse) and (max-width: 820px) {
+  .k-tpad { display: flex; }
+  .k-keyguide { display: none; }
+}
+
+@media (max-width: 820px) {
+  .k-menu-wrap { padding: 6px !important; box-sizing: border-box; }
+  .k-lobby-shell { padding: 8px; gap: 7px; border-width: 2px; border-radius: 14px; }
+  .k-lobby-head { gap: 6px; }
+  .k-tool-btn { padding: 4px 9px; font-size: 11px; }
+  .k-lobby-body { grid-template-columns: 1fr; gap: 7px; }
+  .k-room-slots { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .k-rslot { padding: 14px 2px 5px; }
+  .k-rslot-img, .k-rslot-empty-ic { width: 38px; height: 38px; }
+  .k-rslot-name { font-size: 10.5px; }
+  .k-chars { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .k-char-btn img { width: 28px; height: 28px; }
+  .k-char-btn { font-size: 10px; padding: 3px 1px; }
+  .k-map-preview { grid-template-columns: 96px minmax(0, 1fr); gap: 7px; }
+  #mapMiniCv { width: 96px; height: 84px; }
+
+  .play { padding: calc(env(safe-area-inset-top, 0px) + 4px) 6px calc(env(safe-area-inset-bottom, 0px) + 4px); gap: 4px; }
+  .k-arcade-shell { padding: 5px 6px 6px; gap: 4px; border-width: 2px; border-radius: 12px; }
+  .k-top-strip { padding: 0 2px; gap: 4px; }
+  .k-top-strip .lbl { font-size: 13px; margin-right: 4px; }
+  .k-top-strip .t { font-size: 11px; }
+  body.dark .k-btn-exit, body.dark .k-btn-snd, body.dark .k-btn-bgm {
+    padding: 3px 8px; font-size: 11px;
+  }
+  .k-board-row { grid-template-columns: 1fr; gap: 5px; }
+  .k-canvas-wrap {
+    width: min(100%, calc((100dvh - var(--gap-b, 0px) - 245px) * 15 / 13));
+    max-width: 100%; border-width: 2px; border-radius: 10px;
+  }
+  .k-side {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "timer item" "hud hud";
+    gap: 4px 6px; padding: 4px 6px; align-items: center;
+  }
+  .k-timer-box { grid-area: timer; padding: 3px 8px; gap: 4px; }
+  .k-timer-lbl { display: none; }
+  .k-timer-val { font-size: 15px; }
+  .k-item-box {
+    grid-area: item; padding: 3px 6px;
+    flex-direction: row; align-items: center; justify-content: space-between; gap: 4px; flex-wrap: nowrap;
+  }
+  .k-item-box .k-keycap { display: none; }
+  .k-needle-btn { padding: 2px 6px; font-size: 11px; white-space: nowrap; }
+  .k-item-box .k-perk-row { font-size: 10px; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
+  .k-hud { grid-area: hud; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; overflow: visible; }
+  .k-slot { grid-template-columns: 22px minmax(0, 1fr); gap: 3px; padding: 3px 4px; font-size: 9.5px; }
+  .k-av-img { width: 22px; height: 22px; border-radius: 5px; }
+  .k-slot-tag { display: none; }
+  .k-slot-st { gap: 2px; font-size: 9px; margin-top: 1px; }
+  .k-mini-ic { width: 10px; height: 10px; }
+  .k-dpad { grid-template-columns: repeat(3, 38px); grid-template-rows: repeat(3, 30px); gap: 3px; }
+  .k-act-btn { width: 54px; height: 54px; font-size: 17px; }
+}
+
+@media (max-width: 520px) {
+  .k-tiers-row { flex-direction: column; align-items: stretch; gap: 4px; }
+  .k-tiers-row .tiers.three { gap: 4px; }
+  body.kua-body .tiers .tier { padding: 4px 4px !important; }
+  .k-sfx-card { padding: 10px 12px; }
+  .k-sfx-row { grid-template-columns: 1fr auto; grid-template-areas: "lbl acts" "src src"; gap: 3px 6px; }
+  .k-sfx-lbl { grid-area: lbl; }
+  .k-sfx-acts { grid-area: acts; }
+  .k-sfx-src { grid-area: src; }
+}
+
+/* 스마트폰 가로모드 / 짧은 화면 (height <= 540px) — 상단바·보드·우측 HUD가 100dvh 내 100% 수납 */
+@media (max-height: 540px) {
+  .play { padding: 3px 8px; gap: 3px; justify-content: safe center; }
+  .k-arcade-shell { padding: 4px 6px; gap: 4px; border-width: 2px; border-radius: 12px; }
+  .k-top-strip { padding: 0 2px; }
+  .k-top-strip .lbl { font-size: 13px; }
+  .k-top-strip .t { font-size: 11px; }
+  body.dark .k-btn-exit, body.dark .k-btn-snd, body.dark .k-btn-bgm { padding: 2px 8px; font-size: 11px; }
+  .k-board-row { grid-template-columns: minmax(0, 1fr) 210px; gap: 6px; }
+  .k-canvas-wrap {
+    width: min(100%, calc((100dvh - var(--gap-b, 0px) - 58px) * 15 / 13));
+    border-width: 2px; border-radius: 9px;
+  }
+  .k-side { display: flex; flex-direction: column; gap: 4px; padding: 5px; }
+  .k-timer-box { padding: 3px 7px; }
+  .k-timer-lbl { display: inline; font-size: 10px; }
+  .k-timer-val { font-size: 15px; }
+  .k-hud { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; }
+  .k-slot { grid-template-columns: 24px 1fr; gap: 5px; padding: 2px 5px; font-size: 10px; }
+  .k-av-img { width: 24px; height: 24px; }
+  .k-item-box { padding: 4px 6px; flex-direction: column; align-items: stretch; gap: 3px; }
+  .k-keyguide { display: none; }
+}
+@media (hover: none) and (pointer: coarse) and (max-height: 540px) {
+  .k-side { padding-bottom: 58px; gap: 3px; }
+  .k-slot { padding: 1px 5px; }
+  .k-item-box { display: none; }
+  .k-tpad {
+    display: flex; position: fixed; inset: auto 8px calc(6px + var(--gap-b, 0px)) 8px;
+    pointer-events: none; z-index: 20; padding: 0;
+  }
+  .k-dpad, .k-actpad { pointer-events: auto; opacity: 0.88; }
+  .k-dpad { grid-template-columns: repeat(3, 36px); grid-template-rows: repeat(3, 28px); gap: 3px; }
+  .k-act-btn { width: 52px; height: 52px; font-size: 16px; }
+}
 
 /* 원작 음원 연결 모달 */
 .k-tool-btn.off {
