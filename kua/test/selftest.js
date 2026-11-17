@@ -305,11 +305,12 @@ test("7. 보급 비행기 공수 · 물줄기 끝단(tip) -> 중간(mid) 업그�
   assert(aliveBots >= 3, "초반 8초 내 AI 봇 자폭 방지로 최소 3명 이상 생존: alive=" + aliveBots);
 });
 
-test("8. 물줄기 잔상(FLAME_HAZARD_MIN_MS 이하) 아이템 진입 안전 판정", () => {
+test("8. 벽돌 파괴 직후 드랍 아이템 즉시 진입 안전 & 잔상 피격 검증", () => {
   const hazMin = Rules.TIMING.FLAME_HAZARD_MIN_MS;
   assert(hazMin > 0, "FLAME_HAZARD_MIN_MS 설정 확인");
 
-  const simFade = Core.createMatch({
+  // 실제 시나리오: (2,2)에 벽돌 B, (1,2)에 물풍선, 플레이어는 (2,1)에서 벽돌 깨지자마자 (2,2)로 즉시 돌진
+  const sim = Core.createMatch({
     seed: 31,
     mapId: "village10",
     players: [
@@ -317,17 +318,31 @@ test("8. 물줄기 잔상(FLAME_HAZARD_MIN_MS 이하) 아이템 진입 안전 �
       { id: "p1", name: "배찌", kind: "human", charId: "bazzi", team: 1 },
     ],
   });
-  simFade.warmupMs = 0;
-  simFade.grid[2][2] = ".";
-  simFade.players[0].x = 2 * 40 + 20;
-  simFade.players[0].y = 2 * 40 + 20;
-  simFade.flames.push({ c: 2, r: 2, kind: "c", dir: 0, ms: hazMin, owner: "p1" });
-  Core.step(simFade, {}, 16);
-  assert.strictEqual(simFade.players[0].state, "alive", "잔상 구간(ms <= FLAME_HAZARD_MIN_MS)에서는 갇히지 않음");
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) sim.grid[r][c] = ".";
+  sim.warmupMs = 0;
+  sim.grid[2][2] = "B";
+  sim.players[0].x = 2 * 40 + 20;
+  sim.players[0].y = 1 * 40 + 20;
+  sim.players[1].x = 12 * 40 + 20;
+  sim.players[1].y = 10 * 40 + 20;
+  sim.bombs.push({ id: 91, owner: "p1", c: 1, r: 2, x: 60, y: 100, power: 2, fuseMs: 10, vx: 0, vy: 0, airMs: 0 });
+  Core.step(sim, {}, 20);
+  assert.strictEqual(sim.grid[2][2], ".", "벽돌 B 정상 파괴");
+  sim.items.push({ id: 999, kind: "roller", c: 2, r: 2, spawnTick: sim.tick });
 
-  simFade.flames.push({ c: 2, r: 2, kind: "c", dir: 0, ms: hazMin + 80, owner: "p1" });
-  Core.step(simFade, {}, 16);
-  assert.strictEqual(simFade.players[0].state, "trapped", "활성 물줄기(ms > FLAME_HAZARD_MIN_MS)에서는 정상 피격");
+  // 폭발 직후 0ms부터 곧바로 아래(dir=3)로 (2,2) 아이템을 먹으러 걸어가도 갇히지 않고 획득
+  for (let f = 0; f < 16; f++) {
+    Core.step(sim, { p0: { dir: 3 } }, 16);
+    assert.strictEqual(sim.players[0].state, "alive", "벽돌 깨진 직후 아이템 진입 시 물줄기에 죽지 않음 (frame " + f + ")");
+  }
+  assert(sim.players[0].itemsPicked >= 1, "벽돌 자리 아이템 즉시 획득 완료");
+
+  // 열린 길 활성 물줄기(ms > hazMin)는 정상 피격
+  sim.flames.push({ c: 2, r: 3, kind: "c", dir: 0, ms: hazMin + 80, owner: "p1" });
+  sim.players[0].x = 2 * 40 + 20;
+  sim.players[0].y = 3 * 40 + 20;
+  Core.step(sim, {}, 16);
+  assert.strictEqual(sim.players[0].state, "trapped", "활성 물줄기(ms > FLAME_HAZARD_MIN_MS)에서는 정상 피격");
 });
 
 console.log(`✅ All ${passed} KuaCore tests passed!`);

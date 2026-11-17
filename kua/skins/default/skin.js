@@ -318,17 +318,13 @@
     const trapped = p.state === "trapped";
     const walking = !!p.dir && !trapped;
     const jitter = trapped && p.trapMs < 2400 ? Math.sin(nowMs * 0.05) * 1.8 : 0;
-    const hop = trapped
-      ? Math.sin(nowMs * 0.008) * 3.5
-      : (walking ? Math.abs(Math.sin(p.walkPhase)) * -4.2 : 0);
-    const tilt = walking ? Math.sin(p.walkPhase) * 0.068 : 0;
-    const strideSx = walking ? (1 + Math.sin(p.walkPhase * 2) * 0.045) : 1;
-    const strideSy = walking ? (1 - Math.sin(p.walkPhase * 2) * 0.045) : 1;
+    const hop = trapped ? Math.sin(nowMs * 0.008) * 3.5 : 0;
+    const legSw = walking ? Math.sin(p.walkPhase) : 0;
 
     ctx.save();
     // 발밑 작고 자연스러운 그림자 (통로 폭 안에 깔끔히 수납)
     ctx.fillStyle = "rgba(8, 15, 28, 0.28)";
-    ctx.beginPath(); ctx.ellipse(p.x, p.y + 13, 10.5, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(p.x + legSw * 0.6, p.y + 13, 10.5, 4, 0, 0, Math.PI * 2); ctx.fill();
 
     // 팀전일 때만 타일 내부에 얇은 구분 링 표시
     if (mode === "team") {
@@ -347,16 +343,29 @@
     const sprite = getImg(`ch_${id}_${suffix}.png`) || getImg(`ch_${id}_d.png`);
 
     ctx.save();
-    if (flipX) ctx.scale(-strideSx, strideSy);
-    else ctx.scale(strideSx, strideSy);
-    if (tilt) ctx.rotate(tilt);
+    if (flipX) ctx.scale(-1, 1);
     if (sprite) {
-      // 캐릭터 발을 p.y + 14 (타일 하단 6px 위)로 고정해 아래쪽 블록과 절대 겹치지 않게 배치
+      // 캐릭터 발을 p.y + 14 (타일 하단 6px 위)로 고정하고 상체는 고정, 걷기 시 하단 다리 영역만 살짝 교차
       const nearTop = (p.y + hop) < 26;
       const dw = nearTop ? 33 : 36;
       const dh = nearTop ? 35 : 39;
       const topY = nearTop ? Math.max(-23, -(p.y + hop) + 1) : -25;
-      ctx.drawImage(sprite, -dw * 0.5, topY, dw, dh);
+      if (walking && sprite.naturalWidth > 0 && sprite.naturalHeight > 0) {
+        const sw = sprite.naturalWidth;
+        const sh = sprite.naturalHeight;
+        const splitSrc = Math.round(sh * 0.80);
+        const splitDst = dh * 0.80;
+        // 상체(머리+몸통+팔): 벽에 막혀 걸어도 위아래 방방 뜀 0
+        ctx.drawImage(sprite, 0, 0, sw, splitSrc, -dw * 0.5, topY, dw, splitDst);
+        // 하체(다리/발): 걷기 위상에 맞춰 다리만 살짝 좌우 교차 (+2px 이음새 겹침으로 미세 틈 방지)
+        ctx.drawImage(
+          sprite,
+          0, Math.max(0, splitSrc - 2), sw, sh - splitSrc + 2,
+          -dw * 0.5 + legSw * 1.4, topY + splitDst - 0.8 - Math.abs(legSw) * 0.6, dw, dh - splitDst + 1
+        );
+      } else {
+        ctx.drawImage(sprite, -dw * 0.5, topY, dw, dh);
+      }
     } else {
       const ch = Rules.CHARS[id] || Rules.CHARS.dao;
       ctx.fillStyle = ch.color;
@@ -389,9 +398,7 @@
     const blink = p.invulnMs > 0 && Math.floor(nowMs / 75) % 2 === 0;
     if (blink) return;
     const trapped = p.state === "trapped";
-    const hop = trapped
-      ? Math.sin(nowMs * 0.008) * 3.5
-      : (p.dir ? Math.abs(Math.sin(p.walkPhase)) * -3.5 : 0);
+    const hop = trapped ? Math.sin(nowMs * 0.008) * 3.5 : 0;
 
     ctx.save();
     const nearTop = p.y < 44;

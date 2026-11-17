@@ -292,7 +292,7 @@
     const dt = dtMs / 1000;
     const spd = p.state === "trapped" ? TIMING.TRAPPED_SPEED_PX : speedPxPerSec(p.speed);
     const step = spd * dt;
-    p.walkPhase += step * 0.18;
+    const prevX = p.x, prevY = p.y;
 
     const dx = DIR_DX[dir], dy = DIR_DY[dir];
     const nx = clamp(p.x + dx * step, HALF, COLS * T - HALF);
@@ -301,6 +301,7 @@
     if (canStand(sim, p, nx, ny)) {
       p.x = nx;
       p.y = ny;
+      p.walkPhase += Math.hypot(p.x - prevX, p.y - prevY) * 0.16;
       p.pushTarget = null;
       p.pushMs = 0;
       return;
@@ -375,6 +376,8 @@
       p.pushTarget = null;
       p.pushMs = 0;
     }
+    const movedDist = Math.hypot(p.x - prevX, p.y - prevY);
+    p.walkPhase += movedDist > 0.05 ? movedDist * 0.16 : dtMs * 0.007;
   }
 
   function placeOrThrowBomb(sim, p) {
@@ -467,15 +470,15 @@
     return true;
   }
 
-  function addFlame(sim, c, r, owner, kind, dir) {
+  function addFlame(sim, c, r, owner, kind, dir, msOverride = TIMING.FLAME_MS) {
     const existing = sim.flames.find(f => f.c === c && f.r === r);
     if (existing) {
-      existing.ms = Math.max(existing.ms, TIMING.FLAME_MS);
+      existing.ms = Math.max(existing.ms, msOverride);
       if (kind === "c") { existing.kind = "c"; existing.dir = 0; }
       else if (existing.kind === "tip" && kind === "mid") { existing.kind = "mid"; existing.dir = dir; }
       return;
     }
-    sim.flames.push({ c, r, owner, kind, dir, ms: TIMING.FLAME_MS });
+    sim.flames.push({ c, r, owner, kind, dir, ms: msOverride });
   }
 
   function grantCellGrace(sim, b) {
@@ -528,7 +531,8 @@
               sim.items.push({ id: sim.nextId++, kind: drop, c: nc, r: nr, spawnTick: sim.tick });
               newlyDroppedCells.add(key);
             }
-            addFlame(sim, nc, nr, b.owner, "tip", d);
+            // 방금 부서진 벽돌(B/M)은 물줄기를 흡수하므로 시각적 물보라 잔상만 표시해 아이템을 바로 먹어도 갇히지 않게 처리
+            addFlame(sim, nc, nr, b.owner, "tip", d, TIMING.FLAME_HAZARD_MIN_MS);
             break;
           }
 
