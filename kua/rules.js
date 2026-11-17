@@ -53,37 +53,37 @@
     dizni: {
       id: "dizni", name: "디지니", code: "C01",
       bombs: 2, maxBombs: 7, power: 1, maxPower: 9, speed: 4, maxSpeed: 8,
-      color: "#ec4899", trim: "#fbcfe8", skinTone: "#fef2f2",
+      color: "#eab308", trim: "#38bdf8", skinTone: "#fef2f2",
       desc: "시작 풍선 2개 · 물줄기 최대 9칸 장거리형",
     },
     marid: {
       id: "marid", name: "마리드", code: "C04",
       bombs: 2, maxBombs: 9, power: 1, maxPower: 6, speed: 4, maxSpeed: 8,
-      color: "#38bdf8", trim: "#e0f2fe", skinTone: "#fef3c7",
+      color: "#ec4899", trim: "#fbcfe8", skinTone: "#fef3c7",
       desc: "시작 풍선 2개 · 최대 9개 초반 압박형",
     },
     uni: {
       id: "uni", name: "우니", code: "C02",
       bombs: 1, maxBombs: 6, power: 2, maxPower: 7, speed: 5, maxSpeed: 8,
-      color: "#a855f7", trim: "#fde047", skinTone: "#fef9c3",
+      color: "#4ade80", trim: "#facc15", skinTone: "#fef9c3",
       desc: "기본 물줄기 2 · 속도 5로 빠른 초반 파밍",
     },
     kepi: {
       id: "kepi", name: "케피", code: "C07",
       bombs: 1, maxBombs: 9, power: 2, maxPower: 8, speed: 4, maxSpeed: 8,
-      color: "#f97316", trim: "#fef08a", skinTone: "#ffedd5",
+      color: "#9333ea", trim: "#d8b4fe", skinTone: "#ffedd5",
       desc: "기본 물줄기 2 · 후반 9/8/8 올라운더",
     },
     ethi: {
       id: "ethi", name: "에띠", code: "C05",
       bombs: 1, maxBombs: 10, power: 1, maxPower: 8, speed: 4, maxSpeed: 8,
-      color: "#eab308", trim: "#1e293b", skinTone: "#fef3c7",
+      color: "#65a30d", trim: "#1e293b", skinTone: "#fef3c7",
       desc: "물풍선 10 · 물줄기 8 · 속도 8 대기만성형",
     },
     mos: {
       id: "mos", name: "모스", code: "C03",
       bombs: 1, maxBombs: 8, power: 1, maxPower: 5, speed: 5, maxSpeed: 8,
-      color: "#22c55e", trim: "#bbf7d0", skinTone: "#fef3c7",
+      color: "#f59e0b", trim: "#fef08a", skinTone: "#fef3c7",
       desc: "초기 속도 5의 경쾌한 근접 교전형",
     },
     rodumani: {
