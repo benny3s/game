@@ -281,6 +281,28 @@ test("7. 보급 비행기 공수 · 물줄기 끝단(tip) -> 중간(mid) 업그�
   const beforeItems = sim.items.length;
   for (let i = 0; i < 120; i++) Core.step(sim, {}, 25);
   assert(sim.items.length > beforeItems, "비행기 비행 후 빈 길에 아이템 자동 투하");
+
+  // 봇 초반 8초 자폭 없음 + 물줄기 스침(18px) 억울한 피격 없음 확인
+  assert.strictEqual(Rules.GRID.FLAME_HIT_PX, 17, "물줄기 피격 판정은 17px로 타일 경계 밖 억울한 스침 차단");
+  const botMatch = Core.createMatch({
+    seed: 99,
+    mapId: "village10",
+    mode: "free",
+    players: [
+      { id: "b0", name: "B0", kind: "ai", tier: "normal", charId: "dao", team: 0 },
+      { id: "b1", name: "B1", kind: "ai", tier: "normal", charId: "bazzi", team: 1 },
+      { id: "b2", name: "B2", kind: "ai", tier: "hard", charId: "dizni", team: 2 },
+      { id: "b3", name: "B3", kind: "ai", tier: "hard", charId: "marid", team: 3 },
+    ],
+  });
+  for (let t = 0; t < 480; t++) {
+    if (botMatch.winner) break;
+    const ins = {};
+    for (const p of botMatch.players) if (p.state !== "dead") ins[p.id] = Bots.decideBotInput(botMatch, p);
+    Core.step(botMatch, ins, 1000 / 60);
+  }
+  const aliveBots = botMatch.players.filter(p => p.state !== "dead").length;
+  assert(aliveBots >= 3, "초반 8초 내 AI 봇 자폭 방지로 최소 3명 이상 생존: alive=" + aliveBots);
 });
 
 console.log(`✅ All ${passed} KuaCore tests passed!`);

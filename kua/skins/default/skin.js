@@ -133,7 +133,7 @@
       const name = themeId === "pirate" ? "pirate_box.png" : (themeId === "camp" ? "camp_box.png" : (alt ? "brick_orange.png" : "brick_red.png"));
       const img = getImg(name);
       if (img) {
-        ctx.drawImage(img, x, y - 3, T, 44);
+        ctx.drawImage(img, x, y - 1, T, 41);
         return;
       }
       ctx.fillStyle = alt ? theme.boxA : theme.boxB;
@@ -144,8 +144,8 @@
       const name = themeId === "pirate" ? "crate_wood_hero.png" : (themeId === "camp" ? "crate_steel.png" : "crate_push.png");
       const img = getImg(name);
       if (img) {
-        if (themeId === "village") ctx.drawImage(img, x, y - 3, T, 44);
-        else ctx.drawImage(img, x - 2, y - 5, 44, 47);
+        if (themeId === "village") ctx.drawImage(img, x, y - 1, T, 41);
+        else ctx.drawImage(img, x - 1, y - 2, 42, 43);
         return;
       }
       ctx.fillStyle = theme.pushA;
@@ -320,19 +320,15 @@
     const strideSy = walking ? (1 - Math.sin(p.walkPhase * 2) * 0.045) : 1;
 
     ctx.save();
-    // 그림자
-    ctx.fillStyle = "rgba(8, 15, 28, 0.34)";
-    ctx.beginPath(); ctx.ellipse(p.x, p.y + 13, 13.5, 5, 0, 0, Math.PI * 2); ctx.fill();
+    // 발밑 작고 자연스러운 그림자 (통로 폭 안에 깔끔히 수납)
+    ctx.fillStyle = "rgba(8, 15, 28, 0.28)";
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 13, 10.5, 4, 0, 0, Math.PI * 2); ctx.fill();
 
-    // 발밑 팀/플레이어 링
+    // 팀전일 때만 타일 내부에 얇은 구분 링 표시
     if (mode === "team") {
       ctx.strokeStyle = p.team === 0 ? "#60a5fa" : "#f87171";
-      ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y + 12.5, 15, 6, 0, 0, Math.PI * 2); ctx.stroke();
-    } else if (isMe) {
-      ctx.strokeStyle = "#fde047";
-      ctx.lineWidth = 2.2;
-      ctx.beginPath(); ctx.ellipse(p.x, p.y + 12.5, 15, 6, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + 13, 12, 4.5, 0, 0, Math.PI * 2); ctx.stroke();
     }
 
     ctx.translate(p.x + jitter, p.y + hop);
@@ -349,10 +345,11 @@
     else ctx.scale(strideSx, strideSy);
     if (tilt) ctx.rotate(tilt);
     if (sprite) {
-      // 발바닥을 타일 하단에 맞추고, 맨 윗줄(row 0)에서는 모자 상단이 캔버스 위로 잘리지 않게 보정
-      const dw = 44, dh = 50;
-      const idealTop = -34;
-      const topY = Math.max(idealTop, -(p.y + hop) + 1);
+      // 캐릭터 발을 p.y + 14 (타일 하단 6px 위)로 고정해 아래쪽 블록과 절대 겹치지 않게 배치
+      const nearTop = (p.y + hop) < 26;
+      const dw = nearTop ? 33 : 36;
+      const dh = nearTop ? 35 : 39;
+      const topY = nearTop ? Math.max(-23, -(p.y + hop) + 1) : -25;
       ctx.drawImage(sprite, -dw * 0.5, topY, dw, dh);
     } else {
       const ch = Rules.CHARS[id] || Rules.CHARS.dao;
@@ -391,13 +388,13 @@
       : (p.dir ? Math.abs(Math.sin(p.walkPhase)) * -3.5 : 0);
 
     ctx.save();
-    const nearTop = p.y < 54;
-    const nameY = nearTop ? 25 : -38;
+    const nearTop = p.y < 44;
+    const nameY = nearTop ? 17 : -29;
     ctx.translate(p.x, p.y + hop);
 
-    ctx.font = "bold 10.5px 'IBM Plex Sans KR', sans-serif";
+    ctx.font = "bold 9.5px 'IBM Plex Sans KR', sans-serif";
     ctx.textAlign = "center";
-    ctx.lineWidth = 3.2;
+    ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(8,12,22,0.92)";
     ctx.strokeText(p.name, 0, nameY);
     ctx.fillStyle = isMe ? "#fde047" : "#f8fafc";
@@ -409,23 +406,23 @@
       ctx.lineWidth = 1.6;
       ctx.beginPath();
       if (nearTop) {
-        const ax = 20 + Math.sin(nowMs * 0.009) * 2;
-        ctx.moveTo(ax, -14);
-        ctx.lineTo(ax + 7, -19.5);
-        ctx.lineTo(ax + 7, -16);
-        ctx.lineTo(ax + 12, -16);
-        ctx.lineTo(ax + 12, -12);
-        ctx.lineTo(ax + 7, -12);
-        ctx.lineTo(ax + 7, -8.5);
+        const ax = 17 + Math.sin(nowMs * 0.009) * 1.8;
+        ctx.moveTo(ax, -10);
+        ctx.lineTo(ax + 6, -15);
+        ctx.lineTo(ax + 6, -12);
+        ctx.lineTo(ax + 11, -12);
+        ctx.lineTo(ax + 11, -8);
+        ctx.lineTo(ax + 6, -8);
+        ctx.lineTo(ax + 6, -5);
       } else {
-        const arrowY = -52 + Math.sin(nowMs * 0.009) * 2.5;
-        ctx.moveTo(0, arrowY + 8);
-        ctx.lineTo(-6.5, arrowY);
-        ctx.lineTo(-2.3, arrowY);
-        ctx.lineTo(-2.3, arrowY - 6);
-        ctx.lineTo(2.3, arrowY - 6);
-        ctx.lineTo(2.3, arrowY);
-        ctx.lineTo(6.5, arrowY);
+        const arrowY = -48 + Math.sin(nowMs * 0.009) * 2.2;
+        ctx.moveTo(0, arrowY + 7);
+        ctx.lineTo(-6, arrowY);
+        ctx.lineTo(-2, arrowY);
+        ctx.lineTo(-2, arrowY - 5);
+        ctx.lineTo(2, arrowY - 5);
+        ctx.lineTo(2, arrowY);
+        ctx.lineTo(6, arrowY);
       }
       ctx.closePath();
       ctx.fill(); ctx.stroke();

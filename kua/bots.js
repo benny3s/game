@@ -80,11 +80,12 @@
     });
     const speedPx = speedPxPerSec(p.speed);
     const msPerTile = (T / speedPx) * 1000;
-    const maxBudgetMs = TIMING.FUSE_MS - 360; // 안전 여유
+    // 코너 정렬 및 17px 히트박스 완전 이탈 여유(+320ms) 반영해 봇 자폭 방지
+    const maxBudgetMs = TIMING.FUSE_MS - 620;
 
     const visited = Array.from({ length: ROWS }, () => new Array(COLS).fill(Infinity));
-    visited[r][c] = 0;
-    const q = [[c, r, 0]];
+    visited[r][c] = 220;
+    const q = [[c, r, 220]];
     while (q.length) {
       const [cc, cr, tm] = q.shift();
       if (danger[cr][cc] === Infinity) return true;
@@ -94,7 +95,7 @@
         if (isWall(sim.grid[nr][nc])) continue;
         if (sim.bombs.some(b => b.airMs <= 0 && b.c === nc && b.r === nr && !(nc === c && nr === r))) continue;
         const ntm = tm + msPerTile;
-        if (ntm >= danger[nr][nc] - 180 || ntm > maxBudgetMs) continue;
+        if (ntm >= danger[nr][nc] - 280 || ntm > maxBudgetMs) continue;
         if (ntm < visited[nr][nc]) {
           visited[nr][nc] = ntm;
           q.push([nc, nr, ntm]);
@@ -187,12 +188,39 @@
       return { dir: outDir(dir), bomb: false, needle: useNd };
     }
 
-    // 1순위: 현재 위험 타일 탈출!
-    if (danger[pr][pc] < Infinity) {
+    // 1순위: 히트박스 반폭(±17px) 어느 쪽이든 위험 타일에 걸쳐 있으면 안전 칸 중심까지 확실히 탈출!
+    const pad = 17;
+    const c0 = Math.max(0, Math.floor((p.x - pad) / T)), c1 = Math.min(COLS - 1, Math.floor((p.x + pad) / T));
+    const r0 = Math.max(0, Math.floor((p.y - pad) / T)), r1 = Math.min(ROWS - 1, Math.floor((p.y + pad) / T));
+    let minDanger = danger[pr][pc];
+    for (let rr = r0; rr <= r1; rr++) {
+      for (let cc = c0; cc <= c1; cc++) {
+        if (danger[rr][cc] < minDanger) minDanger = danger[rr][cc];
+      }
+    }
+    if (minDanger < Infinity) {
+      if (danger[pr][pc] === Infinity) {
+        // 현재 타일은 안전하지만 몸통 일부가 위험 칸 경계에 걸려 있음 → 현재 안전 칸 중심(cx, cy)으로 당겨 빼기
+        const cx = pc * T + T * 0.5, cy = pr * T + T * 0.5;
+        const pull = Math.abs(p.x - cx) > Math.abs(p.y - cy)
+          ? (p.x < cx ? 2 : 4)
+          : (p.y < cy ? 3 : 1);
+        return { dir: outDir(pull), bomb: false, needle: false };
+      }
       const esc = bfsFirstDir(sim, p, pc, pr, (c, r) => danger[r][c] === Infinity, danger, false);
       if (esc) {
         return { dir: outDir(alignStepToCell(p, esc.dir)), bomb: false, needle: false };
       }
+      // 직통 안전 탈출로가 막혔더라도 폭발 시각이 가장 늦은 인접 칸으로 최선 회피
+      let bestD = 0, bestT = danger[pr][pc];
+      for (let d = 1; d <= 4; d++) {
+        const nc = pc + DX[d], nr = pr + DY[d];
+        if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS || isWall(sim.grid[nr][nc])) continue;
+        if (sim.bombs.some(b => b.airMs <= 0 && b.c === nc && b.r === nr)) continue;
+        if (danger[nr][nc] > bestT) { bestT = danger[nr][nc]; bestD = d; }
+      }
+      if (bestD) return { dir: outDir(alignStepToCell(p, bestD)), bomb: false, needle: false };
+      return { dir: 0, bomb: false, needle: false };
     }
 
     // 2순위: 갇힌 아군 구출 / 갇힌 적 처치
@@ -233,7 +261,7 @@
       }
     }
 
-    // 5순위: 적 또는 블록 근처로 전진
+    // 5순위: 적 또는 블록 근처로 전진 (안전하지 않은 방향 절대 진입 금지)
     let moveGoal = null;
     if (tier !== "easy") {
       moveGoal = bfsFirstDir(sim, p, pc, pr, (c, r) =>
@@ -254,8 +282,15 @@
       );
     }
 
-    const rawDir = moveGoal ? moveGoal.dir : ((Math.floor((sim.tick + p.slot * 7) / 14) % 4) + 1);
-    return { dir: outDir(alignStepToCell(p, rawDir)), bomb: false, needle: false };
+    if (moveGoal) return { dir: outDir(alignStepToCell(p, moveGoal.dir)), bomb: false, needle: false };
+    const safeDirs = [1, 2, 3, 4].filter(d => {
+      const nc = pc + DX[d], nr = pr + DY[d];
+      return nc >= 0 && nc < COLS && nr >= 0 && nr < ROWS &&
+        !isWall(sim.grid[nr][nc]) && danger[nr][nc] === Infinity &&
+        !sim.bombs.some(b => b.airMs <= 0 && b.c === nc && b.r === nr);
+    });
+    const fallback = safeDirs.length ? safeDirs[(Math.floor((sim.tick + p.slot * 7) / 14)) % safeDirs.length] : 0;
+    return { dir: fallback ? outDir(alignStepToCell(p, fallback)) : 0, bomb: false, needle: false };
   }
 
   return {
