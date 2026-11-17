@@ -763,10 +763,12 @@
       }
     }
 
-    // 5) 물줄기 피격 -> 물방울 갇힘
+    // 5) 물줄기 피격 -> 물방울 갇힘 (사라지는 잔상 구간 ms <= FLAME_HAZARD_MIN_MS 은 피격 제외)
+    const hazardMinMs = TIMING.FLAME_HAZARD_MIN_MS || 0;
     for (const p of sim.players) {
       if (p.state !== "alive" || p.invulnMs > 0) continue;
       const hitFlame = sim.flames.find(f =>
+        f.ms > hazardMinMs &&
         Math.abs(p.x - centerOf(f.c)) < GRID.FLAME_HIT_PX &&
         Math.abs(p.y - centerOf(f.r)) < GRID.FLAME_HIT_PX
       );

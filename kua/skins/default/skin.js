@@ -144,8 +144,7 @@
       const name = themeId === "pirate" ? "crate_wood_hero.png" : (themeId === "camp" ? "crate_steel.png" : "crate_push.png");
       const img = getImg(name);
       if (img) {
-        if (themeId === "village") ctx.drawImage(img, x, y - 1, T, 41);
-        else ctx.drawImage(img, x - 1, y - 2, 42, 43);
+        ctx.drawImage(img, x, y - 1, T, 41);
         return;
       }
       ctx.fillStyle = theme.pushA;
@@ -215,12 +214,19 @@
   function drawFlame(ctx, f, T, flameMax, nowMs = 0) {
     const x = f.c * T, y = f.r * T;
     const cx = x + T * 0.5, cy = y + T * 0.5;
+    const hazMin = (Rules && Rules.TIMING && Rules.TIMING.FLAME_HAZARD_MIN_MS) || 0;
+    const harmlessFade = f.ms <= hazMin;
+    const fadeRatio = hazMin > 0 ? Math.max(0, Math.min(1, f.ms / hazMin)) : 1;
     const life = Math.max(0, Math.min(1, f.ms / flameMax));
-    const swell = 0.88 + Math.sin((1 - life) * Math.PI) * 0.16;
+    const swell = harmlessFade
+      ? 0.55 + fadeRatio * 0.35
+      : 0.88 + Math.sin((1 - life) * Math.PI) * 0.16;
     const pulse = 1 + Math.sin(nowMs * 0.055 + f.c * 0.7 + f.r) * 0.04;
 
     ctx.save();
-    ctx.globalAlpha = Math.max(0.28, Math.min(1, life * 1.15));
+    ctx.globalAlpha = harmlessFade
+      ? Math.max(0.08, fadeRatio * 0.45)
+      : Math.max(0.45, Math.min(1, life * 1.15));
     ctx.translate(cx, cy);
 
     if (f.kind === "c") {

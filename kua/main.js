@@ -309,10 +309,29 @@
       else startSolo();
     };
     $("resCoachBtn").onclick = showPostMatchCoach;
+    const syncBgmBtn = () => {
+      const btn = $("bgmBtn");
+      if (!btn) return;
+      const on = Sound.isBgmEnabled && Sound.isBgmEnabled();
+      btn.textContent = on ? "🎵 켬" : "🎵 끔";
+      btn.classList.toggle("off", !on);
+    };
+    syncBgmBtn();
+    if ($("bgmBtn")) {
+      $("bgmBtn").onclick = () => {
+        const next = !(Sound.isBgmEnabled && Sound.isBgmEnabled());
+        if (Sound.setBgmEnabled) Sound.setBgmEnabled(next);
+        syncBgmBtn();
+        if (next && !Sound.isMuted() && !$("play").hidden && !resultShown) {
+          const mDef = Maps.getMap(selectedMap);
+          if (Sound.startBgm) Sound.startBgm(mDef.theme);
+        }
+      };
+    }
     $("sndBtn").onclick = () => {
       Sound.setMuted(!Sound.isMuted());
       $("sndBtn").textContent = Sound.isMuted() ? "🔇" : "🔊";
-      if (!Sound.isMuted() && !$("play").hidden && !resultShown) {
+      if (!Sound.isMuted() && Sound.isBgmEnabled && Sound.isBgmEnabled() && !$("play").hidden && !resultShown) {
         const mDef = Maps.getMap(selectedMap);
         if (Sound.startBgm) Sound.startBgm(mDef.theme);
       }

@@ -316,11 +316,16 @@ body.kua-body .seg .btn.active {
 }
 .k-top-strip .t { font-size: 12px; color: #dbeafe; font-weight: 700; }
 
-body.dark .k-btn-exit, body.dark .k-btn-snd {
+.k-top-strip-acts { display: flex; align-items: center; gap: 6px; }
+body.dark .k-btn-exit, body.dark .k-btn-snd, body.dark .k-btn-bgm {
   background: linear-gradient(180deg, #38bdf8, #0284c7);
   color: #ffffff; border: 2px solid #bae6fd; border-radius: 99px;
   font-weight: 800; font-size: 12px; padding: 4px 12px; cursor: pointer;
   width: auto; height: auto; box-shadow: 0 2px 0 #075985;
+}
+body.dark .k-btn-bgm.off {
+  background: linear-gradient(180deg, #1e3a5f, #0f2544);
+  color: #93c5fd; border-color: #38bdf8; box-shadow: 0 2px 0 #071934;
 }
 
 .k-board-row {

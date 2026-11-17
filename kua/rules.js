@@ -22,7 +22,8 @@
   const TIMING = {
     TICK_HZ: 60,            // 60Hz 부드러운 PC 아케이드 프레임 및 즉각 응답
     FUSE_MS: 2900,          // 물풍선 폭발 지연 (~2.9초 원작 3초대 리듬)
-    FLAME_MS: 540,          // 물줄기 지속 시간 (VBNB_116 실측 531~562ms, R-156)
+    FLAME_MS: 460,          // 물줄기 총 시각 지속 시간
+    FLAME_HAZARD_MIN_MS: 190, // 남은 시간이 190ms 이하(사라지는 물보라 잔상)일 땐 피격 안 됨 → 아이템 바로 줍기 쾌적!
     TRAP_DEATH_MS: 6350,    // 물방울 갇힘 -> 사망 시간 (VBNB_116 실측 6332~6355ms, R-159)
     TRAPPED_SPEED_PX: 17,   // 갇힘 상태 기어가기 속도 px/s (VBNB_116 실측 17 px/s, R-161)
     SPEED_PX_PER_LV: 35.0,  // 속도 1단계당 px/s (lv.5 = 175px/s ≈ 4.38칸/초, lv.9 = 315px/s ≈ 7.88칸/초)

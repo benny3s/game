@@ -305,4 +305,29 @@ test("7. 보급 비행기 공수 · 물줄기 끝단(tip) -> 중간(mid) 업그�
   assert(aliveBots >= 3, "초반 8초 내 AI 봇 자폭 방지로 최소 3명 이상 생존: alive=" + aliveBots);
 });
 
+test("8. 물줄기 잔상(FLAME_HAZARD_MIN_MS 이하) 아이템 진입 안전 판정", () => {
+  const hazMin = Rules.TIMING.FLAME_HAZARD_MIN_MS;
+  assert(hazMin > 0, "FLAME_HAZARD_MIN_MS 설정 확인");
+
+  const simFade = Core.createMatch({
+    seed: 31,
+    mapId: "village10",
+    players: [
+      { id: "p0", name: "다오", kind: "human", charId: "dao", team: 0 },
+      { id: "p1", name: "배찌", kind: "human", charId: "bazzi", team: 1 },
+    ],
+  });
+  simFade.warmupMs = 0;
+  simFade.grid[2][2] = ".";
+  simFade.players[0].x = 2 * 40 + 20;
+  simFade.players[0].y = 2 * 40 + 20;
+  simFade.flames.push({ c: 2, r: 2, kind: "c", dir: 0, ms: hazMin, owner: "p1" });
+  Core.step(simFade, {}, 16);
+  assert.strictEqual(simFade.players[0].state, "alive", "잔상 구간(ms <= FLAME_HAZARD_MIN_MS)에서는 갇히지 않음");
+
+  simFade.flames.push({ c: 2, r: 2, kind: "c", dir: 0, ms: hazMin + 80, owner: "p1" });
+  Core.step(simFade, {}, 16);
+  assert.strictEqual(simFade.players[0].state, "trapped", "활성 물줄기(ms > FLAME_HAZARD_MIN_MS)에서는 정상 피격");
+});
+
 console.log(`✅ All ${passed} KuaCore tests passed!`);

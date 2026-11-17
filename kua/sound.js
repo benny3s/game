@@ -1,7 +1,11 @@
-/* 베니 크아 — 140BPM 크아풍 폴리포닉 BGM + 레이어드 물풍선 SFX (kua/sound.js) */
+/* 베니 크아 — 깔끔한 물풍선 폴리 SFX + 선택형 소프트 BGM (kua/sound.js) */
 ((root) => {
   "use strict";
+  const BGM_KEY = "kua_bgm_on";
   let muted = false;
+  let bgmEnabled = (() => {
+    try { return root.localStorage && root.localStorage.getItem(BGM_KEY) === "1"; } catch (e) { return false; }
+  })();
   let actx = null;
   let master = null;
   let noiseBuf = null;
@@ -22,7 +26,7 @@
     }
     if (actx.state === "suspended") actx.resume().catch(() => {});
     if (!noiseBuf && actx) {
-      noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.4, actx.sampleRate);
+      noiseBuf = actx.createBuffer(1, actx.sampleRate * 0.5, actx.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     }
@@ -35,18 +39,25 @@
   }
   function isMuted() { return muted; }
 
-  function tone(ctx, f0, f1, dur, type = "sine", peak = 0.08, delay = 0, cutoff = 3200) {
+  function isBgmEnabled() { return bgmEnabled; }
+  function setBgmEnabled(v) {
+    bgmEnabled = !!v;
+    try { if (root.localStorage) root.localStorage.setItem(BGM_KEY, bgmEnabled ? "1" : "0"); } catch (e) {}
+    if (!bgmEnabled) stopBgm();
+  }
+
+  function tone(ctx, f0, f1, dur, type = "sine", peak = 0.08, delay = 0, cutoff = 2400) {
     const t = ctx.currentTime + delay;
     const o = ctx.createOscillator();
     const flt = ctx.createBiquadFilter();
     const g = ctx.createGain();
     o.type = type;
     o.frequency.setValueAtTime(f0, t);
-    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(36, f1), t + dur);
     flt.type = "lowpass";
     flt.frequency.setValueAtTime(cutoff, t);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(peak, t + Math.min(0.01, dur * 0.2));
+    g.gain.linearRampToValueAtTime(peak, t + Math.min(0.012, dur * 0.25));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     o.connect(flt); flt.connect(g); g.connect(master || ctx.destination);
     o.start(t); o.stop(t + dur + 0.025);
@@ -62,7 +73,8 @@
     flt.frequency.setValueAtTime(freq, t);
     flt.Q.setValueAtTime(q, t);
     const g = ctx.createGain();
-    g.gain.setValueAtTime(peak, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + 0.006);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(flt); flt.connect(g); g.connect(master || ctx.destination);
     src.start(t); src.stop(t + dur + 0.02);
@@ -75,123 +87,103 @@
       if (!ctx) return;
 
       if (kind === "bomb") {
-        // 말랑한 물풍선 놓기 ("퐁-뿟!")
-        tone(ctx, 210, 490, 0.065, "sine", 0.12, 0, 2200);
-        tone(ctx, 480, 320, 0.055, "triangle", 0.07, 0.035, 1800);
+        // 말랑한 고무 물풍선 안착 ("폭-퐁")
+        tone(ctx, 185, 92, 0.06, "sine", 0.12, 0, 1200);
+        tone(ctx, 290, 460, 0.055, "sine", 0.075, 0.025, 1800);
       } else if (kind === "pop") {
-        // 맑고 시원한 물폭탄 터짐 ("풍-솨아!")
-        tone(ctx, 240, 56, 0.18, "sine", 0.16, 0, 900);
-        tone(ctx, 420, 140, 0.13, "triangle", 0.09, 0.01, 1800);
-        noiseBurst(ctx, 950, 1.4, 0.16, 0.09);
-        noiseBurst(ctx, 2100, 2.2, 0.12, 0.04, 0.025);
+        // 물풍선 폭발 ("풍-솨아!") — 저음 펀치 + 물보라 노이즈
+        tone(ctx, 195, 44, 0.18, "sine", 0.17, 0, 720);
+        noiseBurst(ctx, 760, 1.1, 0.17, 0.11);
+        noiseBurst(ctx, 1750, 1.8, 0.13, 0.055, 0.02);
       } else if (kind === "item") {
-        tone(ctx, 659, 659, 0.07, "sine", 0.09, 0, 4000);
-        tone(ctx, 880, 880, 0.07, "sine", 0.09, 0.045, 4000);
-        tone(ctx, 1318, 1318, 0.13, "triangle", 0.09, 0.09, 4200);
+        // 맑은 크리스탈 벨 획득음
+        tone(ctx, 784, 784, 0.11, "sine", 0.075, 0, 3200);
+        tone(ctx, 1175, 1175, 0.16, "sine", 0.07, 0.045, 3600);
       } else if (kind === "devil") {
-        tone(ctx, 370, 195, 0.16, "triangle", 0.08, 0, 1400);
-        tone(ctx, 260, 155, 0.18, "sine", 0.07, 0.08, 1200);
+        tone(ctx, 240, 145, 0.14, "sine", 0.085, 0, 900);
+        tone(ctx, 180, 115, 0.18, "sine", 0.075, 0.075, 800);
       } else if (kind === "trap") {
-        // 보글보글 물방울 갇힘
-        tone(ctx, 340, 560, 0.07, "sine", 0.10, 0, 1800);
-        tone(ctx, 420, 680, 0.07, "sine", 0.09, 0.06, 2000);
-        tone(ctx, 510, 790, 0.09, "sine", 0.08, 0.12, 2200);
+        // 보글보글 물방울 감싸짐
+        noiseBurst(ctx, 640, 2.5, 0.16, 0.06);
+        tone(ctx, 320, 480, 0.09, "sine", 0.085, 0, 1400);
+        tone(ctx, 410, 620, 0.11, "sine", 0.075, 0.07, 1600);
       } else if (kind === "needle" || kind === "rescue") {
-        tone(ctx, 587, 1175, 0.10, "sine", 0.11, 0, 3600);
-        tone(ctx, 1046, 1568, 0.15, "triangle", 0.09, 0.055, 4000);
+        // 톡! 터지는 바늘 탈출 + 산뜻한 상승 화음
+        noiseBurst(ctx, 2600, 2.2, 0.045, 0.09);
+        tone(ctx, 587, 587, 0.11, "sine", 0.08, 0.01, 2800);
+        tone(ctx, 880, 880, 0.15, "sine", 0.075, 0.055, 3200);
       } else if (kind === "kick" || kind === "throw" || kind === "push") {
-        tone(ctx, 240, 460, 0.065, "sine", 0.08, 0, 2000);
+        noiseBurst(ctx, 520, 1.6, 0.055, 0.055);
+        tone(ctx, 220, 360, 0.06, "sine", 0.07, 0, 1400);
       } else if (kind === "plane") {
-        noiseBurst(ctx, 280, 2.5, 0.34, 0.035);
-        tone(ctx, 145, 165, 0.30, "triangle", 0.03, 0, 500);
+        noiseBurst(ctx, 310, 2.2, 0.34, 0.04);
       } else if (kind === "start") {
-        [523, 659, 784, 1046].forEach((f, i) => tone(ctx, f, f, 0.12, "triangle", 0.085, i * 0.07, 3200));
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(ctx, f, f, 0.18, "sine", 0.065, i * 0.065, 2400));
       } else if (kind === "die") {
-        tone(ctx, 580, 130, 0.25, "sine", 0.11, 0, 2400);
-        noiseBurst(ctx, 2000, 2.0, 0.07, 0.07);
+        noiseBurst(ctx, 2100, 1.8, 0.065, 0.085);
+        tone(ctx, 480, 115, 0.24, "sine", 0.10, 0.015, 1600);
       } else if (kind === "win") {
-        [523, 659, 784, 1046, 880, 1046].forEach((f, i) => tone(ctx, f, f, 0.20, "triangle", 0.09, i * 0.085, 3400));
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(ctx, f, f, 0.28, "sine", 0.07, i * 0.08, 2800));
       } else if (kind === "lose") {
-        [440, 392, 349, 262].forEach((f, i) => tone(ctx, f, f * 0.96, 0.20, "sine", 0.08, i * 0.10, 1800));
+        [392.0, 349.23, 329.63, 261.63].forEach((f, i) => tone(ctx, f, f * 0.98, 0.24, "sine", 0.07, i * 0.11, 1400));
       }
     } catch (e) {}
   }
 
-  // 140BPM 32스텝 경쾌한 스타카토 아케이드 멜로디 (C/F/G 다이아토닉 진행)
-  const TRACKS = {
-    village: {
-      // C - G - Am - F - C - G - F - G7 느낌의 통통 튀는 빌리지 32스텝 8분음표 루프
-      lead: [
-        523, 659, 784, 659, 880, 784, 659, 523,
-        587, 659, 698, 587, 659, 523, 392, 0,
-        523, 659, 784, 1046, 880, 784, 698, 659,
-        587, 698, 659, 587, 523, 0, 523, 0,
-      ],
-      bass: [
-        131, 262, 196, 262, 196, 392, 247, 392,
-        147, 294, 220, 294, 175, 349, 196, 392,
-        131, 262, 196, 262, 220, 440, 175, 349,
-        147, 294, 196, 392, 131, 262, 131, 0,
-      ],
-    },
-    pirate: {
-      lead: [
-        440, 523, 659, 523, 784, 659, 587, 523,
-        494, 587, 659, 494, 440, 392, 330, 0,
-        440, 523, 659, 880, 784, 659, 587, 523,
-        587, 659, 494, 392, 440, 0, 440, 0,
-      ],
-      bass: [
-        220, 330, 220, 330, 196, 294, 196, 294,
-        175, 262, 175, 262, 165, 247, 165, 247,
-        220, 330, 220, 330, 196, 294, 175, 262,
-        147, 220, 165, 247, 220, 330, 220, 0,
-      ],
-    },
-    camp: {
-      lead: [
-        587, 740, 880, 740, 988, 880, 740, 587,
-        659, 740, 784, 659, 587, 494, 440, 0,
-        587, 740, 880, 1175, 988, 880, 784, 740,
-        659, 784, 740, 659, 587, 0, 587, 0,
-      ],
-      bass: [
-        147, 294, 220, 294, 196, 392, 147, 294,
-        165, 330, 196, 392, 220, 440, 147, 294,
-        147, 294, 220, 294, 196, 392, 165, 330,
-        220, 440, 147, 294, 147, 294, 147, 0,
-      ],
-    },
+  // 선택형 배경음 (기본 끔): 로우패스 로즈 코드 패드 + 부드러운 서브베이스 그루브 (촌스러운 8비트 리드멜로디 제거)
+  const CHORD_GROOVES = {
+    village: [
+      { root: 130.81, chord: [261.63, 329.63, 392.0, 493.88] }, // Cmaj7
+      { root: 146.83, chord: [293.66, 349.23, 440.0, 523.25] }, // Dm7
+      { root: 123.47, chord: [246.94, 329.63, 392.0, 493.88] }, // Em7/B
+      { root: 196.00, chord: [293.66, 349.23, 440.0, 493.88] }, // G6/9
+    ],
+    pirate: [
+      { root: 110.00, chord: [220.00, 261.63, 329.63, 392.00] }, // Am7
+      { root: 174.61, chord: [261.63, 329.63, 392.00, 440.00] }, // Fmaj9
+      { root: 146.83, chord: [220.00, 293.66, 349.23, 440.00] }, // Dm7
+      { root: 164.81, chord: [246.94, 329.63, 392.00, 493.88] }, // Em7
+    ],
+    camp: [
+      { root: 146.83, chord: [293.66, 369.99, 440.00, 554.37] }, // Dmaj7
+      { root: 123.47, chord: [246.94, 293.66, 369.99, 440.00] }, // Bm7
+      { root: 196.00, chord: [293.66, 392.00, 493.88, 554.37] }, // Gmaj7#11
+      { root: 164.81, chord: [246.94, 329.63, 440.00, 493.88] }, // A9sus4
+    ],
   };
 
   function tickBgm() {
-    if (muted) { stopBgm(); return; }
+    if (muted || !bgmEnabled) { stopBgm(); return; }
     try {
       const ctx = ensureCtx();
       if (!ctx) return;
-      const pat = TRACKS[bgmTheme] || TRACKS.village;
-      const idx = bgmStep % pat.lead.length;
-      const l = pat.lead[idx], b = pat.bass[idx];
-      if (l) {
-        // 스타카토 마림바/플럭 멜로디 (따뜻한 로우패스 + 하모닉)
-        tone(ctx, l, l, 0.11, "triangle", 0.026, 0, 2400);
-        tone(ctx, l * 2, l * 2, 0.05, "sine", 0.008, 0, 3000);
+      const bars = CHORD_GROOVES[bgmTheme] || CHORD_GROOVES.village;
+      const stepInBar = bgmStep % 8;
+      const bar = bars[Math.floor(bgmStep / 8) % bars.length];
+
+      if (stepInBar === 0) {
+        // 따뜻한 일렉트릭 피아노 4성부 패드
+        bar.chord.forEach((f, idx) => tone(ctx, f, f, 1.35, "sine", 0.015, idx * 0.018, 1200));
+        tone(ctx, bar.root, bar.root, 0.42, "sine", 0.032, 0, 420);
+      } else if (stepInBar === 3 || stepInBar === 6) {
+        tone(ctx, bar.root * (stepInBar === 6 ? 1.5 : 1), bar.root, 0.22, "sine", 0.022, 0, 400);
       }
-      if (b) tone(ctx, b, b, 0.12, "sine", 0.032, 0, 700);
-      if (idx % 2 === 1) noiseBurst(ctx, 5200, 3.0, 0.028, 0.009);
+      if (stepInBar % 2 === 1) {
+        noiseBurst(ctx, 4800, 3.2, 0.022, 0.007);
+      }
       bgmStep++;
     } catch (e) {}
-    const stepMs = bgmHurry ? 148 : 190;
+    const stepMs = bgmHurry ? 185 : 230;
     bgmTimer = root.setTimeout(tickBgm, stepMs);
   }
 
   function startBgm(theme = "village") {
-    bgmTheme = TRACKS[theme] ? theme : "village";
+    bgmTheme = CHORD_GROOVES[theme] ? theme : "village";
     bgmHurry = false;
     stopBgm();
-    if (muted) return;
+    if (muted || !bgmEnabled) return;
     bgmStep = 0;
-    bgmTimer = root.setTimeout(tickBgm, 140);
+    bgmTimer = root.setTimeout(tickBgm, 160);
   }
 
   function setHurry(h) {
@@ -205,5 +197,7 @@
     }
   }
 
-  root.KuaSound = { play, setMuted, isMuted, startBgm, stopBgm, setHurry };
+  root.KuaSound = {
+    play, setMuted, isMuted, isBgmEnabled, setBgmEnabled, startBgm, stopBgm, setHurry,
+  };
 })(typeof window !== "undefined" ? window : globalThis);
