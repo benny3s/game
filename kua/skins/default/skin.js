@@ -319,12 +319,11 @@
     const walking = !!p.dir && !trapped;
     const jitter = trapped && p.trapMs < 2400 ? Math.sin(nowMs * 0.05) * 1.8 : 0;
     const hop = trapped ? Math.sin(nowMs * 0.008) * 3.5 : 0;
-    const legSw = walking ? Math.sin(p.walkPhase) : 0;
 
     ctx.save();
     // 발밑 작고 자연스러운 그림자 (통로 폭 안에 깔끔히 수납)
     ctx.fillStyle = "rgba(8, 15, 28, 0.28)";
-    ctx.beginPath(); ctx.ellipse(p.x + legSw * 0.6, p.y + 13, 10.5, 4, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 13, 10.5, 4, 0, 0, Math.PI * 2); ctx.fill();
 
     // 팀전일 때만 타일 내부에 얇은 구분 링 표시
     if (mode === "team") {
@@ -353,15 +352,25 @@
       if (walking && sprite.naturalWidth > 0 && sprite.naturalHeight > 0) {
         const sw = sprite.naturalWidth;
         const sh = sprite.naturalHeight;
-        const splitSrc = Math.round(sh * 0.80);
-        const splitDst = dh * 0.80;
-        // 상체(머리+몸통+팔): 벽에 막혀 걸어도 위아래 방방 뜀 0
+        const splitSrc = Math.round(sh * 0.81);
+        const splitDst = dh * 0.81;
+        const halfW = Math.round(sw * 0.5);
+        const halfDst = dw * 0.5;
+        const stepOsc = Math.sin(p.walkPhase);
+        const liftL = Math.max(0, stepOsc) * 1.8;
+        const liftR = Math.max(0, -stepOsc) * 1.8;
+        // 상체(머리+몸통+팔): 100% 고정 — 방방 뛰지 않음
         ctx.drawImage(sprite, 0, 0, sw, splitSrc, -dw * 0.5, topY, dw, splitDst);
-        // 하체(다리/발): 걷기 위상에 맞춰 다리만 살짝 좌우 교차 (+2px 이음새 겹침으로 미세 틈 방지)
+        // 하체 좌/우 다리: 크아처럼 차분하게 왼발·오른발만 교차 스텝
         ctx.drawImage(
           sprite,
-          0, Math.max(0, splitSrc - 2), sw, sh - splitSrc + 2,
-          -dw * 0.5 + legSw * 1.4, topY + splitDst - 0.8 - Math.abs(legSw) * 0.6, dw, dh - splitDst + 1
+          0, Math.max(0, splitSrc - 2), halfW, sh - splitSrc + 2,
+          -dw * 0.5, topY + splitDst - 0.8 - liftL, halfDst, dh - splitDst + 1
+        );
+        ctx.drawImage(
+          sprite,
+          halfW, Math.max(0, splitSrc - 2), sw - halfW, sh - splitSrc + 2,
+          0, topY + splitDst - 0.8 - liftR, dw - halfDst, dh - splitDst + 1
         );
       } else {
         ctx.drawImage(sprite, -dw * 0.5, topY, dw, dh);

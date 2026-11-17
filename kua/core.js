@@ -301,7 +301,7 @@
     if (canStand(sim, p, nx, ny)) {
       p.x = nx;
       p.y = ny;
-      p.walkPhase += Math.hypot(p.x - prevX, p.y - prevY) * 0.16;
+      p.walkPhase += Math.hypot(p.x - prevX, p.y - prevY) * 0.075;
       p.pushTarget = null;
       p.pushMs = 0;
       return;
@@ -377,7 +377,7 @@
       p.pushMs = 0;
     }
     const movedDist = Math.hypot(p.x - prevX, p.y - prevY);
-    p.walkPhase += movedDist > 0.05 ? movedDist * 0.16 : dtMs * 0.007;
+    p.walkPhase += movedDist > 0.05 ? movedDist * 0.075 : dtMs * 0.0055;
   }
 
   function placeOrThrowBomb(sim, p) {
