@@ -27,6 +27,7 @@
   let finishCutAt = 0;
   let rankRecorded = false;
   let coach = null;
+  let lobbyBgmStarted = false;
 
   // 온라인 친구랑 (ArenaUI)
   let arena = null;
@@ -310,24 +311,132 @@
     };
     $("resCoachBtn").onclick = showPostMatchCoach;
     const syncBgmBtn = () => {
-      const btn = $("bgmBtn");
-      if (!btn) return;
       const on = Sound.isBgmEnabled && Sound.isBgmEnabled();
-      btn.textContent = on ? "🎵 켬" : "🎵 끔";
-      btn.classList.toggle("off", !on);
+      ["bgmBtn", "lobbyBgmBtn"].forEach(id => {
+        const btn = $(id);
+        if (!btn) return;
+        btn.textContent = on ? "🎵 켬" : "🎵 끔";
+        btn.classList.toggle("off", !on);
+      });
     };
+    const syncSoundPackBtn = () => {
+      const btn = $("soundPackBtn");
+      if (!btn || !Sound.getCustomCount) return;
+      const n = Sound.getCustomCount();
+      btn.textContent = n > 0 ? `🎧 원작 음원 (${n})` : "🎧 원작 음원";
+      btn.classList.toggle("has-pack", n > 0);
+    };
+    const renderSoundPackSlots = () => {
+      const box = $("sfxSlotList");
+      if (!box || !Sound.getCustomStatus) return;
+      const list = Sound.getCustomStatus();
+      box.innerHTML = list.map(s => `
+        <div class="k-sfx-row" data-slot="${s.id}">
+          <span class="k-sfx-lbl">${s.label}</span>
+          <span class="k-sfx-src ${s.fileName ? "ok" : ""}">${s.fileName ? s.fileName : "내장 아케이드 합성음"}</span>
+          <span class="k-sfx-acts">
+            <button type="button" data-act="test" title="미리듣기">▶</button>
+            <button type="button" data-act="pick">파일</button>
+            ${s.fileName ? '<button type="button" class="del" data-act="clear" title="해제">×</button>' : ""}
+          </span>
+        </div>
+      `).join("");
+      syncSoundPackBtn();
+    };
+    const toggleBgm = () => {
+      const next = !(Sound.isBgmEnabled && Sound.isBgmEnabled());
+      if (Sound.setBgmEnabled) Sound.setBgmEnabled(next);
+      syncBgmBtn();
+      if (!next) { lobbyBgmStarted = false; return; }
+      if (Sound.isMuted()) return;
+      if (!$("play").hidden && !resultShown) {
+        const mDef = Maps.getMap(selectedMap);
+        if (Sound.startBgm) Sound.startBgm(mDef.theme);
+      } else if (!$("menu").hidden && $("sfxOv") && $("sfxOv").hidden) {
+        lobbyBgmStarted = true;
+        if (Sound.startBgm) Sound.startBgm("lobby");
+      }
+    };
+
     syncBgmBtn();
-    if ($("bgmBtn")) {
-      $("bgmBtn").onclick = () => {
-        const next = !(Sound.isBgmEnabled && Sound.isBgmEnabled());
-        if (Sound.setBgmEnabled) Sound.setBgmEnabled(next);
-        syncBgmBtn();
-        if (next && !Sound.isMuted() && !$("play").hidden && !resultShown) {
-          const mDef = Maps.getMap(selectedMap);
-          if (Sound.startBgm) Sound.startBgm(mDef.theme);
+    if (Sound.ready) Sound.ready().then(syncSoundPackBtn);
+    if ($("bgmBtn")) $("bgmBtn").onclick = toggleBgm;
+    if ($("lobbyBgmBtn")) $("lobbyBgmBtn").onclick = toggleBgm;
+
+    // 대기실 첫 클릭 시 대기실 BGM 자동 시작 (BGM ON일 때)
+    $("menu").addEventListener("pointerdown", (e) => {
+      if (lobbyBgmStarted || Sound.isMuted() || !(Sound.isBgmEnabled && Sound.isBgmEnabled())) return;
+      if (e.target && e.target.closest && (e.target.closest("#lobbyBgmBtn") || e.target.closest("#soundPackBtn") || e.target.closest("#startBtn"))) return;
+      if ($("sfxOv") && !$("sfxOv").hidden) return;
+      lobbyBgmStarted = true;
+      if (Sound.startBgm) Sound.startBgm("lobby");
+    });
+
+    // 🎧 원작 음원 연결 모달
+    if ($("soundPackBtn") && $("sfxOv")) {
+      $("soundPackBtn").onclick = async () => {
+        if (Sound.stopBgm) Sound.stopBgm();
+        lobbyBgmStarted = false;
+        if (Sound.ready) await Sound.ready();
+        renderSoundPackSlots();
+        $("sfxOv").hidden = false;
+      };
+      $("sfxCloseBtn").onclick = () => { $("sfxOv").hidden = true; };
+      $("sfxOv").onclick = (e) => { if (e.target === $("sfxOv")) $("sfxOv").hidden = true; };
+
+      const handleImport = async (fileList) => {
+        if (!fileList || !fileList.length || !Sound.importCustomFiles) return;
+        const res = await Sound.importCustomFiles(fileList);
+        renderSoundPackSlots();
+        Cozy.toast(res.matched.length
+          ? `${res.matched.length}개 원작 음원 자동 연결 완료!`
+          : "자동 매칭된 이름이 없어요. 아래 항목별 [파일] 버튼으로 지정해 주세요.");
+      };
+      $("sfxPickMultiBtn").onclick = () => $("sfxMultiInput").click();
+      $("sfxPickDirBtn").onclick = () => $("sfxDirInput").click();
+      $("sfxMultiInput").onchange = (e) => { handleImport(e.target.files); e.target.value = ""; };
+      $("sfxDirInput").onchange = (e) => { handleImport(e.target.files); e.target.value = ""; };
+      $("sfxClearAllBtn").onclick = async () => {
+        if (Sound.clearAllCustom) await Sound.clearAllCustom();
+        renderSoundPackSlots();
+        Cozy.toast("원작 음원 연결을 모두 초기화했어요");
+      };
+
+      const dz = $("sfxDropZone");
+      dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("drag"); });
+      dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+      dz.addEventListener("drop", e => {
+        e.preventDefault();
+        dz.classList.remove("drag");
+        if (e.dataTransfer && e.dataTransfer.files) handleImport(e.dataTransfer.files);
+      });
+
+      $("sfxSlotList").onclick = (e) => {
+        const btn = e.target && e.target.closest && e.target.closest("button[data-act]");
+        if (!btn) return;
+        const row = btn.closest("[data-slot]");
+        const slotId = row && row.dataset.slot;
+        if (!slotId) return;
+        const act = btn.dataset.act;
+        if (act === "test") {
+          if (Sound.testSlot) Sound.testSlot(slotId);
+        } else if (act === "clear") {
+          if (Sound.clearCustomSlot) Sound.clearCustomSlot(slotId).then(renderSoundPackSlots);
+        } else if (act === "pick") {
+          const inp = document.createElement("input");
+          inp.type = "file";
+          inp.accept = "audio/*";
+          inp.onchange = async () => {
+            if (inp.files && inp.files[0] && Sound.setCustomSlot) {
+              await Sound.setCustomSlot(slotId, inp.files[0]);
+              renderSoundPackSlots();
+            }
+          };
+          inp.click();
         }
       };
     }
+
     $("sndBtn").onclick = () => {
       Sound.setMuted(!Sound.isMuted());
       $("sndBtn").textContent = Sound.isMuted() ? "🔇" : "🔊";
@@ -340,6 +449,7 @@
 
   // ── 게임 시작 / 종료 ──
   function enterPlay() {
+    lobbyBgmStarted = false;
     $("menu").hidden = true;
     $("play").hidden = false;
     $("resultOv").hidden = true;
@@ -366,6 +476,7 @@
 
   function leaveGame() {
     stopLoop();
+    lobbyBgmStarted = false;
     if (Sound.stopBgm) Sound.stopBgm();
     if (Render.clearVfx) Render.clearVfx();
     arenaOffs.forEach(f => { try { f(); } catch (e) {} });

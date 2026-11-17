@@ -481,3 +481,50 @@ body.dark .k-btn-bgm.off {
 .k-act-btn small { font-size: 11px; margin-top: 2px; }
 .k-act-btn.bomb { background: #0284c7; border-color: #7dd3fc; }
 .k-act-btn.needle { background: #b45309; border-color: #fde68a; }
+
+/* 원작 음원 연결 모달 */
+.k-tool-btn.off {
+  background: linear-gradient(180deg, #1e3a5f, #0f2544);
+  color: #93c5fd; border-color: #38bdf8; box-shadow: 0 2px 0 #071934;
+}
+.k-tool-btn.has-pack {
+  background: linear-gradient(180deg, #34d399, #059669);
+  border-color: #a7f3d0; box-shadow: 0 2px 0 #065f46;
+}
+.k-sfx-card {
+  width: min(560px, 94vw); max-height: 86vh; display: flex; flex-direction: column; gap: 10px;
+  background: linear-gradient(180deg, #0b3a80, #07224d);
+  border: 3px solid #60a5fa; border-radius: 16px; padding: 14px 16px; color: #f8fafc;
+}
+.k-sfx-hdr { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.k-sfx-hdr h2 { margin: 0; font-size: 16px; color: #fde047; }
+.k-sfx-close { padding: 3px 10px; font-size: 14px; }
+.k-sfx-desc { margin: 0; font-size: 12px; color: #cbd5e1; line-height: 1.45; }
+.k-sfx-drop {
+  border: 2px dashed #38bdf8; border-radius: 12px; padding: 10px 12px;
+  background: rgba(5, 25, 58, 0.55); text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; color: #bae6fd;
+}
+.k-sfx-drop.drag { background: rgba(14, 165, 233, 0.25); border-color: #fde047; }
+.k-sfx-drop-btns { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.k-sfx-drop-btns .btn { font-size: 12px; padding: 5px 10px; }
+.k-sfx-grid {
+  overflow-y: auto; display: flex; flex-direction: column; gap: 5px;
+  padding-right: 4px; max-height: 44vh;
+}
+.k-sfx-row {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr) auto;
+  align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(148, 163, 184, 0.2);
+}
+.k-sfx-lbl { font-size: 12px; font-weight: 800; color: #f1f5f9; }
+.k-sfx-src {
+  font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.k-sfx-src.ok { color: #6ee7b7; font-weight: 700; }
+.k-sfx-acts { display: flex; gap: 4px; }
+.k-sfx-acts button {
+  padding: 3px 7px; font-size: 11px; border-radius: 6px;
+  border: 1px solid rgba(186, 230, 253, 0.4); background: #0f3a7a; color: #e0f2fe; cursor: pointer; font-weight: 700;
+}
+.k-sfx-acts button.del { background: #7f1d1d; border-color: #fca5a5; color: #fecaca; }

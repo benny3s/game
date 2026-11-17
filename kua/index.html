@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="../common/cozy.css?v=14">
 <script src="../common/fit.js?v=1"></script>
 <script src="../common/backnav.js?v=3"></script>
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body class="dark kua-body">
 <div class="wrap k-menu-wrap" id="menu">
@@ -28,6 +28,8 @@
         <button class="btn" id="tabWatch" aria-pressed="false">AI 관전</button>
       </div>
       <div class="k-head-tools">
+        <button type="button" class="k-tool-btn" id="soundPackBtn">🎧 원작 음원</button>
+        <button type="button" class="k-tool-btn" id="lobbyBgmBtn">🎵 켬</button>
         <button type="button" class="k-tool-btn" id="helpBtn">❓ 하는 법</button>
         <button type="button" class="k-tool-btn" id="rankBtn">🏆 랭킹</button>
         <a class="k-tool-btn k-home-link" href="../">나가기</a>
@@ -131,7 +133,7 @@
         <span class="t" id="playSub">03:00 · 개인전</span>
       </div>
       <div class="k-top-strip-acts">
-        <button class="pill k-btn-bgm off" id="bgmBtn" aria-label="배경음">🎵 끔</button>
+        <button class="pill k-btn-bgm" id="bgmBtn" aria-label="배경음">🎵 켬</button>
         <button class="pill k-btn-snd" id="sndBtn" aria-label="소리">🔊</button>
       </div>
     </div>
@@ -185,6 +187,29 @@
   <div class="k-keyguide" id="keyGuide">⌨️ <b>방향키</b> 이동(코너 선입력 · 미끄러짐) · <b>Space</b> 물풍선 설치/던지기 · <b>Ctrl</b> (또는 Z) 바늘 탈출</div>
 </section>
 
+<div class="overlay" id="sfxOv" hidden>
+  <div class="modal k-sfx-card" role="dialog" aria-modal="true" aria-labelledby="sfxModalTitle">
+    <div class="k-sfx-hdr">
+      <h2 id="sfxModalTitle">🎧 원작 음원 연결 (내 PC 전용)</h2>
+      <button type="button" class="btn ghost k-sfx-close" id="sfxCloseBtn" aria-label="닫기">✕</button>
+    </div>
+    <p class="k-sfx-desc">
+      소장 중인 크아 <b>.mp3 / .wav / .ogg</b> 파일을 올리면 <b>내 브라우저(IndexedDB)에만 영구 저장</b>되어 원작 BGM·효과음 그대로 재생됩니다. (서버 업로드 없음 · 비어 있는 항목은 내장 아케이드 합성음 사용)
+    </p>
+    <div class="k-sfx-drop" id="sfxDropZone">
+      <span>📂 여기에 원작 음원 파일 여러 개를 끌어다 놓거나</span>
+      <div class="k-sfx-drop-btns">
+        <button type="button" class="btn primary" id="sfxPickMultiBtn">파일 여러 개 선택</button>
+        <button type="button" class="btn" id="sfxPickDirBtn">폴더 통째로 선택</button>
+        <button type="button" class="btn ghost" id="sfxClearAllBtn">전체 초기화</button>
+      </div>
+      <input type="file" id="sfxMultiInput" accept="audio/*" multiple hidden>
+      <input type="file" id="sfxDirInput" webkitdirectory multiple hidden>
+    </div>
+    <div class="k-sfx-grid" id="sfxSlotList"></div>
+  </div>
+</div>
+
 <script src="../common/glog.js?v=8"></script>
 <script src="../common/cozy.js?v=14"></script>
 <script src="../common/me.js?v=19"></script>
@@ -200,8 +225,8 @@
 <script src="bots.js?v=4"></script>
 <script src="skins/default/skin.js?v=7"></script>
 <script src="render.js?v=4"></script>
-<script src="sound.js?v=4"></script>
+<script src="sound.js?v=5"></script>
 <script src="tutorial.js?v=1"></script>
-<script src="main.js?v=6"></script>
+<script src="main.js?v=7"></script>
 </body>
 </html>

@@ -30,6 +30,30 @@ U.main(async T => {
   T.ok(await p.evaluate(() => !!document.querySelector("#tutTry.ok")), "베니 크아 튜토리얼 바늘 탈출 연습 완료");
   await p.click(".tut-x");
 
+  // 원작 음원 모달 & IndexedDB 파일명 매칭 검증
+  await p.click("#soundPackBtn");
+  await wait(p, () => !document.getElementById("sfxOv").hidden && document.querySelectorAll("#sfxSlotList .k-sfx-row").length === 14);
+  const sfxPackOk = await p.evaluate(async () => {
+    const f1 = new File(["a"], "bomb_pop.mp3", { type: "audio/mpeg" });
+    const f2 = new File(["b"], "village_bgm.mp3", { type: "audio/mpeg" });
+    const f3 = new File(["c"], "bomb_set.wav", { type: "audio/wav" });
+    const res = await KuaSound.importCustomFiles([f1, f2, f3]);
+    const map = Object.fromEntries(res.matched.map(m => [m.file, m.slotId]));
+    const cnt = KuaSound.getCustomCount();
+    await KuaSound.clearAllCustom();
+    return {
+      slots: document.querySelectorAll("#sfxSlotList .k-sfx-row").length,
+      popSlot: map["bomb_pop.mp3"],
+      vilSlot: map["village_bgm.mp3"],
+      bombSlot: map["bomb_set.wav"],
+      cntAfter: cnt,
+      cleared: KuaSound.getCustomCount(),
+    };
+  });
+  T.ok(sfxPackOk.slots === 14 && sfxPackOk.popSlot === "pop" && sfxPackOk.vilSlot === "bgm_village" && sfxPackOk.bombSlot === "bomb" && sfxPackOk.cntAfter === 3 && sfxPackOk.cleared === 0, "원작 음원 연결 모달 14슬롯 & 파일명 우선순위 자동 매칭 검증");
+  await p.click("#sfxCloseBtn");
+  await wait(p, () => document.getElementById("sfxOv").hidden);
+
   // 캐릭터 선택 후 시작!
   const lobbyOk = await p.evaluate(() => {
     const slots = document.querySelectorAll("#lobbySlots .k-rslot").length;
