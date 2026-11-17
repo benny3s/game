@@ -212,19 +212,95 @@
     ctx.restore();
   }
 
-  function drawFlame(ctx, f, T, flameMax) {
+  function drawFlame(ctx, f, T, flameMax, nowMs = 0) {
     const x = f.c * T, y = f.r * T;
-    const alpha = Math.max(0.28, Math.min(1, f.ms / flameMax));
-    const isH = f.dir === 2 || f.dir === 4;
-    const img = getImg(f.kind === "c" ? "flame_c.png" : (isH ? "flame_h.png" : "flame_v.png"));
+    const cx = x + T * 0.5, cy = y + T * 0.5;
+    const life = Math.max(0, Math.min(1, f.ms / flameMax));
+    const swell = 0.88 + Math.sin((1 - life) * Math.PI) * 0.16;
+    const pulse = 1 + Math.sin(nowMs * 0.055 + f.c * 0.7 + f.r) * 0.04;
+
     ctx.save();
-    ctx.globalAlpha = 0.94 * alpha;
-    if (img) {
-      ctx.drawImage(img, x, y, T, T);
-    } else {
-      ctx.fillStyle = "#38bdf8";
-      ctx.fillRect(x + 4, y + 4, T - 8, T - 8);
+    ctx.globalAlpha = Math.max(0.28, Math.min(1, life * 1.15));
+    ctx.translate(cx, cy);
+
+    if (f.kind === "c") {
+      ctx.scale(swell * pulse, swell * pulse);
+      const cImg = getImg("flame_c.png");
+      if (cImg) ctx.drawImage(cImg, -T * 0.5, -T * 0.5, T, T);
+      // 중앙 십자 물보라 하이라이트
+      ctx.fillStyle = "rgba(255, 255, 255, 0.78)";
+      for (let i = 0; i < 4; i++) {
+        ctx.save();
+        ctx.rotate((i * Math.PI) / 2);
+        ctx.beginPath(); ctx.ellipse(0, -10, 4, 8, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+      ctx.restore();
+      return;
     }
+
+    // 방향 회전 (기본 오른쪽 = dir 2 -> 0도 기준으로 그려서 회전)
+    const rotMap = { 2: 0, 3: Math.PI * 0.5, 4: Math.PI, 1: -Math.PI * 0.5 };
+    ctx.rotate(rotMap[f.dir] || 0);
+
+    if (f.kind === "tip") {
+      ctx.scale(swell, swell * pulse);
+      const grad = ctx.createLinearGradient(-T * 0.5, 0, T * 0.45, 0);
+      grad.addColorStop(0, "#0ea5e9");
+      grad.addColorStop(0.6, "#38bdf8");
+      grad.addColorStop(1, "#bae6fd");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.moveTo(-T * 0.5, -14);
+      ctx.quadraticCurveTo(T * 0.45, -13, T * 0.46, 0);
+      ctx.quadraticCurveTo(T * 0.45, 13, -T * 0.5, 14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(240, 249, 255, 0.85)";
+      ctx.beginPath();
+      ctx.ellipse(-2, 0, 12, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.scale(1, swell * pulse);
+      const hImg = getImg("flame_h.png");
+      if (hImg) {
+        ctx.drawImage(hImg, -T * 0.5, -T * 0.5, T, T);
+      } else {
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillRect(-T * 0.5, -14, T, 28);
+      }
+      ctx.fillStyle = "rgba(255, 255, 255, 0.48)";
+      ctx.fillRect(-T * 0.5, -4, T, 8);
+    }
+    ctx.restore();
+  }
+
+  function drawAirplane(ctx, pl, T, nowMs) {
+    const py = pl.r * T + T * 0.45;
+    const px = pl.x;
+    ctx.save();
+    // 지상 그림자
+    ctx.fillStyle = "rgba(8, 18, 42, 0.28)";
+    ctx.beginPath(); ctx.ellipse(px - 6, py + 24, 24, 9, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.translate(px, py - 18 + Math.sin(nowMs * 0.012) * 3);
+    // 프로펠러 보급 비행기
+    ctx.fillStyle = "#0284c7";
+    ctx.strokeStyle = "#082f49";
+    ctx.lineWidth = 2;
+    // 날개
+    ctx.beginPath(); ctx.roundRect(-8, -28, 16, 56, 6); ctx.fill(); ctx.stroke();
+    // 동체
+    ctx.fillStyle = "#fde047";
+    ctx.beginPath(); ctx.ellipse(0, 0, 24, 11, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // 조종석 유리
+    ctx.fillStyle = "#7dd3fc";
+    ctx.beginPath(); ctx.ellipse(6, 0, 7, 5, 0, 0, Math.PI * 2); ctx.fill();
+    // 프로펠러 블레이드 회전
+    const ph = Math.abs(Math.sin(nowMs * 0.08)) * 14 + 2;
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(25, -ph); ctx.lineTo(25, ph); ctx.stroke();
     ctx.restore();
   }
 
@@ -235,10 +311,13 @@
 
     const trapped = p.state === "trapped";
     const walking = !!p.dir && !trapped;
+    const jitter = trapped && p.trapMs < 2400 ? Math.sin(nowMs * 0.05) * 1.8 : 0;
     const hop = trapped
       ? Math.sin(nowMs * 0.008) * 3.5
-      : (walking ? Math.abs(Math.sin(p.walkPhase)) * -3.5 : 0);
-    const tilt = walking ? Math.sin(p.walkPhase) * 0.055 : 0;
+      : (walking ? Math.abs(Math.sin(p.walkPhase)) * -4.2 : 0);
+    const tilt = walking ? Math.sin(p.walkPhase) * 0.068 : 0;
+    const strideSx = walking ? (1 + Math.sin(p.walkPhase * 2) * 0.045) : 1;
+    const strideSy = walking ? (1 - Math.sin(p.walkPhase * 2) * 0.045) : 1;
 
     ctx.save();
     // 그림자
@@ -256,7 +335,7 @@
       ctx.beginPath(); ctx.ellipse(p.x, p.y + 12.5, 15, 6, 0, 0, Math.PI * 2); ctx.stroke();
     }
 
-    ctx.translate(p.x, p.y + hop);
+    ctx.translate(p.x + jitter, p.y + hop);
 
     // 4방향 PNG 스프라이트 선택 (trapped면 앞면)
     const id = Rules.CHARS[p.charId] ? p.charId : "dao";
@@ -266,7 +345,8 @@
     const sprite = getImg(`ch_${id}_${suffix}.png`) || getImg(`ch_${id}_d.png`);
 
     ctx.save();
-    if (flipX) ctx.scale(-1, 1);
+    if (flipX) ctx.scale(-strideSx, strideSy);
+    else ctx.scale(strideSx, strideSy);
     if (tilt) ctx.rotate(tilt);
     if (sprite) {
       // 발바닥을 타일 하단에 맞추고, 맨 윗줄(row 0)에서는 모자 상단이 캔버스 위로 잘리지 않게 보정
@@ -381,6 +461,7 @@
     drawItem,
     drawBomb,
     drawFlame,
+    drawAirplane,
     drawCharacter,
     drawCharacterOverlay,
   };

@@ -126,6 +126,8 @@
       bombs: [],
       flames: [],
       items: [],
+      planes: [],
+      planeTimerMs: TIMING.AIRPLANE_FIRST_MS || 22000,
       nextId: 1,
       tick: 0,
       elapsedMs: 0,
@@ -470,6 +472,7 @@
     if (existing) {
       existing.ms = Math.max(existing.ms, TIMING.FLAME_MS);
       if (kind === "c") { existing.kind = "c"; existing.dir = 0; }
+      else if (existing.kind === "tip" && kind === "mid") { existing.kind = "mid"; existing.dir = dir; }
       return;
     }
     sim.flames.push({ c, r, owner, kind, dir, ms: TIMING.FLAME_MS });
@@ -517,6 +520,7 @@
           if (tile === "B" || tile === "M") {
             sim.grid[nr][nc] = ".";
             brokenThisChain.add(key);
+            sim.events.push({ t: "block", c: nc, r: nr, kind: tile });
             const ownerP = sim.players.find(p => p.id === b.owner);
             if (ownerP) ownerP.crates++;
             const drop = rollDrop(sim._rng);
@@ -659,6 +663,47 @@
     }
   }
 
+  function stepAirplanes(sim, dtMs) {
+    sim.planeTimerMs -= dtMs;
+    if (sim.planeTimerMs <= 0 && sim.timeLeftMs > 15000) {
+      sim.planeTimerMs = TIMING.AIRPLANE_EVERY_MS || 25000;
+      const candRows = [2, 4, 6, 8, 10];
+      const r = candRows[Math.floor(sim._rng() * candRows.length)];
+      const openCols = [];
+      for (let c = 1; c < COLS - 1; c++) {
+        if (sim.grid[r][c] === "." && !bombAt(sim, c, r) && !sim.items.some(i => i.c === c && i.r === r)) {
+          openCols.push(c);
+        }
+      }
+      if (openCols.length) {
+        const pool = ["bomb", "fluid", "roller", "needle", "shoe", "glove", "ultra"];
+        const drops = [];
+        for (let i = 0; i < Math.min(3, openCols.length); i++) {
+          const pickIdx = Math.floor(sim._rng() * openCols.length);
+          const col = openCols.splice(pickIdx, 1)[0];
+          const kind = pool[Math.floor(sim._rng() * pool.length)];
+          drops.push({ c: col, kind, done: false });
+        }
+        sim.planes.push({ r, x: -T * 2, vx: 320, drops });
+        sim.events.push({ t: "plane", r });
+      }
+    }
+    const dt = dtMs / 1000;
+    for (const pl of sim.planes) {
+      pl.x += pl.vx * dt;
+      for (const d of pl.drops) {
+        if (!d.done && pl.x >= centerOf(d.c)) {
+          d.done = true;
+          if (sim.grid[pl.r][d.c] === "." && !bombAt(sim, d.c, pl.r) && !sim.items.some(i => i.c === d.c && i.r === pl.r)) {
+            sim.items.push({ id: sim.nextId++, kind: d.kind, c: d.c, r: pl.r, spawnTick: sim.tick });
+            sim.events.push({ t: "airdrop", c: d.c, r: pl.r, kind: d.kind });
+          }
+        }
+      }
+    }
+    sim.planes = sim.planes.filter(pl => pl.x <= COLS * T + T * 3);
+  }
+
   // 고정 틱 1회 전진 (inputs: { [pid]: { dir, bomb, needle } })
   function step(sim, inputs = {}, dtMs = 1000 / TIMING.TICK_HZ) {
     if (sim.winner) return sim;
@@ -667,11 +712,13 @@
 
     if (sim.warmupMs > 0) {
       sim.warmupMs = Math.max(0, sim.warmupMs - dtMs);
+      if (sim.warmupMs === 0) sim.events.push({ t: "start" });
       return sim;
     }
 
     sim.elapsedMs += dtMs;
     sim.timeLeftMs = Math.max(0, sim.timeLeftMs - dtMs);
+    stepAirplanes(sim, dtMs);
 
     // 1) 타이머 갱신 + 이동 + 액션 처리
     for (const p of sim.players) {
@@ -824,6 +871,7 @@
       })),
       fl: sim.flames.map(f => ({ c: f.c, r: f.r, k: f.kind, d: f.dir, ms: Math.round(f.ms) })),
       it: sim.items.map(i => ({ id: i.id, k: i.kind, c: i.c, r: i.r })),
+      pl: (sim.planes || []).map(pl => ({ r: pl.r, x: Math.round(pl.x) })),
       win: sim.winner,
       ev: sim.events,
     };

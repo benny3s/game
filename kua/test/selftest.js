@@ -243,7 +243,7 @@ test("6. 60Hz · 집 타일(H) 충돌/차폐 · 2키 선입력 코너턴(chooseL
     Core.step(sim, { p0: { dir: d } }, 1000 / 60);
     if (p.y > 0 * 40 + 24) break;
   }
-  assert(p.y > 24 && Math.abs(p.x - (2 * 40 + 20)) <= 12, "교차로 도달 즉시 아래쪽으로 자연 코너턴: x=" + p.x + ", y=" + p.y);
+  assert(p.y > 24 && Math.abs(p.x - (2 * 40 + 20)) <= Rules.GRID.CORNER_ASSIST_PX + 1, "교차로 도달 즉시 아래쪽으로 자연 코너턴: x=" + p.x + ", y=" + p.y);
 
   // 집(H) 파괴 불가 & 물줄기 차폐 검증
   sim.bombs.push({ id: 55, owner: "p0", c: 2, r: 1, x: 100, y: 60, power: 4, fuseMs: 10, vx: 0, vy: 0, airMs: 0 });
@@ -251,6 +251,36 @@ test("6. 60Hz · 집 타일(H) 충돌/차폐 · 2키 선입력 코너턴(chooseL
   Core.step(sim, {}, 20);
   assert.strictEqual(sim.grid[1][3], "H", "집 타일(H)은 물풍선에 부서지지 않음");
   assert.strictEqual(sim.players[1].state, "alive", "집 타일(H) 뒤 플레이어는 물줄기 피격 안 됨");
+});
+
+test("7. 보급 비행기 공수 · 물줄기 끝단(tip) -> 중간(mid) 업그레이드 & 파괴 이벤트 검증", () => {
+  const sim = Core.createMatch({
+    seed: 21,
+    mapId: "village10",
+    players: [
+      { id: "p0", name: "다오", kind: "human", charId: "dao", team: 0 },
+      { id: "p1", name: "배찌", kind: "human", charId: "bazzi", team: 1 },
+    ],
+  });
+  for (let r = 0; r < 5; r++) for (let c = 0; c < 10; c++) sim.grid[r][c] = ".";
+  sim.players[0].x = 20; sim.players[0].y = 20;
+  sim.players[1].x = 20; sim.players[1].y = 180;
+
+  // 블록 B 파괴 시 block 이벤트 발행 및 tip 물줄기 확인
+  sim.grid[2][5] = "B";
+  sim.bombs.push({ id: 77, owner: "p0", c: 3, r: 2, x: 140, y: 100, power: 2, fuseMs: 10, vx: 0, vy: 0, airMs: 0 });
+  Core.step(sim, {}, 20);
+  assert(sim.events.some(e => e.t === "block" && e.c === 5 && e.r === 2), "블록 파괴 이벤트 발행");
+  const tipFlame = sim.flames.find(f => f.c === 1 && f.r === 2);
+  assert(tipFlame && tipFlame.kind === "tip", "사거리 끝 칸은 tip 물줄기로 판정");
+
+  // 보급 비행기 타임어 만료 시 비행기 스폰 + 비행 중 빈 칸에 아이템 공수
+  sim.planeTimerMs = 10;
+  Core.step(sim, {}, 20);
+  assert(sim.planes.length >= 1, "보급 비행기 출격");
+  const beforeItems = sim.items.length;
+  for (let i = 0; i < 120; i++) Core.step(sim, {}, 25);
+  assert(sim.items.length > beforeItems, "비행기 비행 후 빈 길에 아이템 자동 투하");
 });
 
 console.log(`✅ All ${passed} KuaCore tests passed!`);

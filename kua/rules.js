@@ -14,7 +14,7 @@
     ROWS: 13,
     TILE_PX: 40,
     HALF_BOX_PX: 13,        // 캐릭터 충돌 반폭 (R-107)
-    CORNER_ASSIST_PX: 12,   // 모서리 걸치기 자동 미끄러짐 허용 폭 (R-107)
+    CORNER_ASSIST_PX: 14,   // 모서리 걸치기 자동 미끄러짐 허용 폭 (고속 튜닝)
     TOUCH_DIST_PX: 28,      // 갇힘 구출 / 처치 판정 거리 (R-108)
     FLAME_HIT_PX: 24,       // 물줄기 피격 판정 (중심 기준 ±24px)
   };
@@ -34,6 +34,8 @@
     DEVIL_MS: 7000,         // 마귀(방향 반전) 지속 시간
     MATCH_MS: 180000,       // 기본 경기 제한 시간 (3분)
     WARMUP_MS: 800,         // 라운드 시작 카운트다운 연출
+    AIRPLANE_FIRST_MS: 22000, // 아이템 비행기 첫 출격 시각
+    AIRPLANE_EVERY_MS: 25000, // 이후 비행기 주기
   };
 
   // KR00967 Client CharacterTable (census.json C00..C07, C14) 기반 캐릭터 9종

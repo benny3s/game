@@ -24,6 +24,7 @@
   let lastFrameMs = 0;
   let accMs = 0;
   let resultShown = false;
+  let finishCutAt = 0;
   let rankRecorded = false;
   let coach = null;
 
@@ -311,6 +312,10 @@
     $("sndBtn").onclick = () => {
       Sound.setMuted(!Sound.isMuted());
       $("sndBtn").textContent = Sound.isMuted() ? "🔇" : "🔊";
+      if (!Sound.isMuted() && !$("play").hidden && !resultShown) {
+        const mDef = Maps.getMap(selectedMap);
+        if (Sound.startBgm) Sound.startBgm(mDef.theme);
+      }
     };
   }
 
@@ -320,7 +325,11 @@
     $("play").hidden = false;
     $("resultOv").hidden = true;
     resultShown = false;
+    finishCutAt = 0;
     rankRecorded = false;
+    if (Render.clearVfx) Render.clearVfx();
+    const mDef = Maps.getMap(selectedMap);
+    if (Sound.startBgm) Sound.startBgm(mDef.theme);
     spaceHeld = false;
     pendingBomb = false;
     pendingNeedle = false;
@@ -338,6 +347,8 @@
 
   function leaveGame() {
     stopLoop();
+    if (Sound.stopBgm) Sound.stopBgm();
+    if (Render.clearVfx) Render.clearVfx();
     arenaOffs.forEach(f => { try { f(); } catch (e) {} });
     arenaOffs = [];
     const a = arena;
@@ -488,7 +499,7 @@
         Core.step(sim, inputs, stepMs);
         if (sim.events.length) {
           pendingEvents.push(...sim.events);
-          playEvents(sim.events);
+          playEvents(sim.events, sim);
         }
       }
 
@@ -515,13 +526,17 @@
     rafId = requestAnimationFrame(frame);
   }
 
-  function playEvents(events) {
+  function playEvents(events, stateLike) {
     if (!events || !events.length) return;
+    if (Render.pushEvents) Render.pushEvents(events, stateLike || sim || remoteSnap);
     for (const ev of events) {
       if (ev.t === "pop") Sound.play("pop");
+      else if (ev.t === "start") Sound.play("start");
+      else if (ev.t === "plane") Sound.play("plane");
       else if (ev.t === "bomb" && ev.pid === myId) Sound.play("bomb");
-      else if (ev.t === "item" && ev.pid === myId) Sound.play("item");
-      else if (ev.t === "trap") Sound.play("trap");
+      else if (ev.t === "item" && ev.pid === myId) {
+        Sound.play((ev.kind === "devil" || ev.kind === "green_devil") ? "devil" : "item");
+      } else if (ev.t === "trap") Sound.play("trap");
       else if (ev.t === "needle" || ev.t === "rescue") Sound.play("needle");
       else if (ev.t === "kick" || ev.t === "throw" || ev.t === "push") Sound.play(ev.t);
       else if (ev.t === "die") Sound.play("die");
@@ -533,9 +548,33 @@
     const ctx = cv.getContext("2d");
     const mapId = stateLike.mapId || selectedMap;
     const mode = stateLike.mode || gameMode;
-    Render.renderMatch(ctx, stateLike, { mapId, mode, myId, nowMs });
+    const win = stateLike.win !== undefined ? stateLike.win : stateLike.winner;
+    const plist = stateLike.p || stateLike.players || [];
+
+    let finishBanner = null, finishColor = "#fde047";
+    if (win && !resultShown) {
+      if (!finishCutAt) {
+        finishCutAt = nowMs;
+        if (Sound.stopBgm) Sound.stopBgm();
+        const meObj = plist.find(q => q.id === myId);
+        const won = win.type === "player"
+          ? win.id === myId
+          : (win.type === "team" && meObj ? (meObj.tm != null ? meObj.tm : meObj.team) === win.id : false);
+        if (playMode !== "watch") Sound.play(win.type === "draw" ? "lose" : (won ? "win" : "lose"));
+        else Sound.play("win");
+      }
+      const meObj = plist.find(q => q.id === myId);
+      const won = win.type === "player"
+        ? win.id === myId
+        : (win.type === "team" && meObj ? (meObj.tm != null ? meObj.tm : meObj.team) === win.id : false);
+      finishBanner = win.type === "draw" ? "DRAW!" : (playMode === "watch" ? "FINISH!" : (won ? "WIN!" : "LOSE..."));
+      finishColor = win.type === "draw" ? "#cbd5e1" : (won || playMode === "watch" ? "#fde047" : "#fca5a5");
+    }
+
+    Render.renderMatch(ctx, stateLike, { mapId, mode, myId, nowMs, finishBanner, finishColor });
 
     const leftMs = stateLike.tm != null ? stateLike.tm : stateLike.timeLeftMs;
+    if (Sound.setHurry) Sound.setHurry(leftMs <= 30000);
     const mapName = (Maps.MAP_BY_ID[mapId] && Maps.MAP_BY_ID[mapId].name) || "빌리지 10";
     const tStr = fmtTime(leftMs);
     $("playTitle").textContent = mapName;
@@ -544,8 +583,6 @@
     const timerBox = $("timerBox");
     if (timerVal) timerVal.textContent = tStr;
     if (timerBox) timerBox.classList.toggle("urgent", leftMs <= 30000);
-
-    const plist = stateLike.p || stateLike.players || [];
     const hudHtml = plist.map(p => {
       const id = p.id, nm = p.n || p.name, stt = p.s || p.state;
       const tm = p.tm != null ? p.tm : p.team;
@@ -616,15 +653,13 @@
       }
     }
 
-    const win = stateLike.win !== undefined ? stateLike.win : stateLike.winner;
-    if (win && !resultShown) {
+    if (win && !resultShown && finishCutAt && (nowMs - finishCutAt >= 850)) {
       resultShown = true;
       showResult(stateLike, win);
     }
   }
 
   function showResult(stateLike, win) {
-    Sound.play("win");
     $("resTitle").textContent = win.label || "경기 종료!";
     const plist = (stateLike.p || stateLike.players || []).map(p => ({
       id: p.id, name: p.n || p.name, state: p.s || p.state,
@@ -759,7 +794,9 @@
           } else if (msg.t === "snap" && !isHost) {
             if (!msg.s.win && resultShown) {
               resultShown = false;
+              finishCutAt = 0;
               rankRecorded = false;
+              if (Render.clearVfx) Render.clearVfx();
               $("resultOv").hidden = true;
               if (coach) { coach.destroy(); coach = null; }
               $("coachSlot").innerHTML = "";
@@ -767,7 +804,7 @@
             remoteSnap = msg.s;
             remoteSnap.mapId = msg.mapId;
             remoteSnap.mode = msg.mode;
-            playEvents(msg.s.ev);
+            playEvents(msg.s.ev, msg.s);
           }
         };
 
@@ -822,7 +859,11 @@
     finalSent = false;
     $("resultOv").hidden = true;
     resultShown = false;
+    finishCutAt = 0;
     rankRecorded = false;
+    if (Render.clearVfx) Render.clearVfx();
+    const mDef = Maps.getMap(sim.mapId);
+    if (Sound.startBgm) Sound.startBgm(mDef.theme);
     if (coach) { coach.destroy(); coach = null; }
     $("coachSlot").innerHTML = "";
     startLoop();
