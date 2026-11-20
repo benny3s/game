@@ -41,6 +41,36 @@
       PRELOAD_LIST.push(`port_${id}.png`, `ch_${id}_d.png`, `ch_${id}_l.png`, `ch_${id}_u.png`);
     }
   }
+  // 원작 스프라이트 시트 (orig/<char>_<color>.png, 64px 셀 24칸: pd0-4 · pl0-4 · pr0-4 · pu0-4 · t1-4)
+  const ORIG_CHARS = { bazzi: 1, dao: 1, marid: 1, kepi: 1 };
+  const ORIG_COLORS = ["red", "blue", "green", "yellow", "purple", "orange", "sky", "pink"];
+  for (const cid in ORIG_CHARS) for (const cn of ORIG_COLORS) PRELOAD_LIST.push(`orig/${cid}_${cn}.png`);
+  function origColor(p, mode) {
+    if (mode === "team") return p.team === 0 ? "blue" : "red";
+    const DEF = { bazzi: "red", dao: "blue", marid: "pink", kepi: "green" };
+    if (DEF[p.charId]) return DEF[p.charId];
+    let s = p.slot;
+    if (s == null) { const m = /(\d+)/.exec(String(p.id || "")); s = m ? +m[1] : 0; }
+    return ORIG_COLORS[((s % ORIG_COLORS.length) + ORIG_COLORS.length) % ORIG_COLORS.length];
+  }
+  function drawOrigCharacter(ctx, p, T, mode, nowMs, sheet) {
+    const trapped = p.state === "trapped";
+    const walking = !!p.dir && !trapped;
+    const dir = p.faceDir || 3;
+    let frame;
+    if (trapped) {
+      const remRatio = Math.max(0, Math.min(1, p.trapMs / (p.trapDeathMs || 6350)));
+      frame = remRatio < 0.28 ? 20 + (Math.floor(nowMs / 90) % 2 ? 3 : 2) : 20 + Math.floor(nowMs / 220) % 3;
+    } else {
+      const base = dir === 1 ? 15 : dir === 2 ? 5 : dir === 4 ? 10 : 0;
+      frame = base + (walking ? 1 + (Math.floor(p.walkPhase * 1.2) % 4 + 4) % 4 : 0);
+    }
+    const k = T / 40; // 원작: 타일 40px 기준 캐릭터 44x56
+    const S = 64 * k;
+    const footY = trapped ? T * 0.5 + 2 : T * 0.42;
+    const topY = Math.max(-T * 0.18, p.y + footY - S); // 맨 윗줄에서 머리가 잘리지 않게
+    ctx.drawImage(sheet, frame * 64, 0, 64, 64, p.x - S / 2, topY, S, S);
+  }
   if (typeof Image !== "undefined") PRELOAD_LIST.forEach(getImg);
 
   const THEMES = {
@@ -319,6 +349,23 @@
     const walking = !!p.dir && !trapped;
     const jitter = trapped && p.trapMs < 2400 ? Math.sin(nowMs * 0.05) * 1.8 : 0;
     const hop = trapped ? Math.sin(nowMs * 0.008) * 3.5 : 0;
+
+    if (ORIG_CHARS[p.charId]) {
+      const sheet = getImg(`orig/${p.charId}_${origColor(p, mode)}.png`);
+      if (sheet) {
+        ctx.save();
+        ctx.fillStyle = "rgba(8, 15, 28, 0.28)";
+        ctx.beginPath(); ctx.ellipse(p.x, p.y + 13, 10.5, 4, 0, 0, Math.PI * 2); ctx.fill();
+        if (mode === "team") {
+          ctx.strokeStyle = p.team === 0 ? "#60a5fa" : "#f87171";
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(p.x, p.y + 13, 12, 4.5, 0, 0, Math.PI * 2); ctx.stroke();
+        }
+        drawOrigCharacter(ctx, p, T, mode, nowMs, sheet);
+        ctx.restore();
+        return;
+      }
+    }
 
     ctx.save();
     // 발밑 작고 자연스러운 그림자 (통로 폭 안에 깔끔히 수납)

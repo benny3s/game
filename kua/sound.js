@@ -83,8 +83,20 @@
     return dbReadyPromise;
   }
 
-  // 부팅 시 조용히 IndexedDB 메타/바이너리 로딩
-  loadAllFromDb();
+  // 부팅 시 조용히 IndexedDB 메타/바이너리 로딩 → 비어 있는 슬롯은 동봉 원작 음원(audio/<slot>.mp3)으로 채움
+  const BUNDLED_BASE = "audio/";
+  const BUNDLED_IDS = ["bgm_village", "bgm_pirate", "bgm_camp", "bgm_lobby", "bomb", "pop", "item", "start", "win", "lose"];
+  loadAllFromDb().then(() => {
+    if (typeof fetch === "undefined") return;
+    BUNDLED_IDS.forEach(id => {
+      if (customRaw.has(id)) return;
+      fetch(BUNDLED_BASE + id + ".mp3").then(r => r.ok ? r.arrayBuffer() : null).then(buf => {
+        if (buf && buf.byteLength > 1000 && !customRaw.has(id)) {
+          customRaw.set(id, { id, name: "원작 " + id + ".mp3", type: "audio/mpeg", buf, bundled: true });
+        }
+      }).catch(() => {});
+    });
+  });
 
   function buildImpulse(ctx) {
     const len = Math.floor(ctx.sampleRate * 0.18);
@@ -689,7 +701,9 @@
   }
 
   function getCustomCount() {
-    return customRaw.size;
+    let n = 0;
+    customRaw.forEach(r => { if (!r.bundled) n++; });
+    return n;
   }
 
   async function testSlot(slotId) {
