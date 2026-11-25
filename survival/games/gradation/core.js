@@ -237,7 +237,7 @@
     const samples = []; for (let s = 0; s < S; s++) samples.push(sampleOpp(V.rev[opp], r));
     const freeOpp = []; for (let k = 0; k < SLOTS; k++) if (!V.used[opp][k]) freeOpp.push(k);
     const needRound = V.rounds - V.round;
-    let best = null;
+    let best = null; const all = [];
     for (const k of free) {
       const v = mine[k], rank = free.filter(x => mine[x] < v).length;       // 더 작은 내 통이 몇 개 남았나
       let win = 0, lose = 0;
@@ -255,9 +255,10 @@
       // 앞서고 있는지에 따라 이기는 값을 조금 더 / 덜
       const behind = V.pts[opp] - V.pts[me];
       const sc = (pw - pl) * (1 + 0.1 * behind) - cost + r() * 0.01;
+      all.push({ sc, k, pw, pl, v });
       if (!best || sc > best.sc) best = { sc, k, pw, pl, v };
     }
-    best.follow = follow; best.oppPos = oppPos;
+    best.follow = follow; best.oppPos = oppPos; best.all = all;
     return best;
   }
 

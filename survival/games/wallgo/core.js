@@ -281,7 +281,14 @@
     }
     return L.sort((a, b) => b.e - a.e);
   }
-  function pickPlace(V, me, tier, r) {
+  // 벽 칠 수 있는 면마다 평가 (복기 · AI 가 같이 씀)
+  function wallEvals(S, me) {
+    const L = [];
+    for (const d of sides(S, S.moved)) { const T = cloneS(S), P = T.pieces[T.moved]; setWall(T, P.r, P.c, d, true); L.push({ d, e: evalS(T, me) }); }
+    return L.sort((a, b) => b.e - a.e);
+  }
+  // 말 놓기 후보와 평가 (내림차순) — 무작위 흔들림 r 을 쓴다
+  function placeOpts(V, me, r) {
     const S = fromView(V), opts = [];
     for (const k of (V.variant === "ii" ? ["sq", "ci"] : ["sq"])) if (V.pool[me][k]) for (let rr = 0; rr < R; rr++) for (let c = 0; c < R; c++) {
       if (pieceAt(S, rr, c) >= 0) continue;
@@ -289,7 +296,10 @@
       const e = evalS(S, me) + (k === "ci" ? 0.05 : 0) - (Math.abs(rr - 3) + Math.abs(c - 3)) * 0.04 + r() * 0.15;
       S.pieces.pop(); opts.push({ k, r: rr, c, e });
     }
-    opts.sort((a, b) => b.e - a.e);
+    return opts.sort((a, b) => b.e - a.e);
+  }
+  function pickPlace(V, me, tier, r) {
+    const opts = placeOpts(V, me, r);
     const top = tier === "easy" ? Math.min(14, opts.length) : tier === "normal" ? Math.min(3, opts.length) : 1;
     const o = opts[Math.floor(r() * top)];
     return { t: "place", k: o.k, r: o.r, c: o.c };
@@ -353,5 +363,5 @@
     return { opp, mine, rec: `${DN[g.d]}쪽에 벽`, why: "이 면에 벽을 세우면 내가 먼저 닿는 영역은 지키고 상대가 파고들 길은 막아요. 구역을 가르면 말이 있는 구역의 칸 수 합으로 끝나니, 끝났을 때 내가 더 넓은지 늘 세어 봐요." };
   }
 
-  return { id: "wallgo", R, FIX, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, moves, allMoves, areas, terr, regions, coord, wall, fromView, cloneS, doMove, sides, evalS, DN };
+  return { id: "wallgo", R, FIX, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, moves, allMoves, areas, terr, regions, coord, wall, fromView, cloneS, doMove, sides, evalS, DN, candMoves, wallEvals, placeOpts };
 });

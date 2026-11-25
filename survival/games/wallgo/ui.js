@@ -245,6 +245,29 @@
       if (a.t === "wall") return `${DN[a.d]}쪽에 벽`;
       return "—";
     },
+    // 🎞️ 복기: 내 수 vs 고급 AI 수 — 두고 난 뒤 (내가 먼저 닿는 칸 − 가장 센 상대) 차이. 갈라졌으면 실제 순위 규칙으로 ±60
+    review: (V, seat, myA, bestA, info) => {
+      if (!V || !myA) return null;
+      const rng = s => { let a = (s >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+      const rr = rng(((info && info.seed) | 0) + (V.round | 0) * 7 + seat * 131 + (V.t | 0));
+      const DN = ["위", "오른쪽", "아래", "왼쪽"], f = x => (x >= 0 ? "+" : "") + x.toFixed(1);
+      const out = (mine, best, what) => ({ sev: Math.max(0, Math.min(100, Math.round((best.e - mine.e) * 20))), why: `${what} 평가값 (내가 먼저 닿는 칸 수 − 가장 센 상대의 칸 수, 구역이 갈라지면 승패 ±60 가산) — 내 수 ${f(mine.e)} / 고급 AI 수 ${f(best.e)}` });
+      if (V.phase === "move" && myA.t === "move") {
+        const L = W.candMoves(W.fromView(V), seat, rr, 0), same = (x, a) => a && x.mv.p === a.p && String(x.mv.dirs) === String(a.dirs) && (x.mv.brk ?? null) === (a.brk ?? null);
+        const mine = L.find(x => same(x, myA)), best = (bestA && L.find(x => same(x, bestA))) || L[0];
+        return mine && best ? out(mine, best, "움직인 뒤 가장 좋은 벽까지 쳤을 때") : null;
+      }
+      if (V.phase === "wall" && myA.t === "wall") {
+        const L = W.wallEvals(W.fromView(V), seat), mine = L.find(x => x.d === myA.d), best = (bestA && L.find(x => x.d === bestA.d)) || L[0];
+        return mine && best ? out(mine, best, `${DN[myA.d]}쪽 벽 vs ${DN[best.d]}쪽 벽`) : null;
+      }
+      if (V.phase === "place" && myA.t === "place") {
+        const L = W.placeOpts(V, seat, rr), same = (x, a) => a && (!a.k || x.k === a.k) && x.r === a.r && x.c === a.c;
+        const mine = L.find(x => same(x, myA)), best = (bestA && L.find(x => same(x, bestA))) || L[0];
+        return mine && best ? out(mine, best, "말을 놓은 자리") : null;
+      }
+      return null;
+    },
     coach: (V, me, since, names) => W.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => W.ai(V, me, "easy", rnd),

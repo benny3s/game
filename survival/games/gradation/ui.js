@@ -251,6 +251,17 @@
     render, result,
     // 🎞️ 복기: 행동 한 줄 글
     actText: (a) => (a && a.t === "setup" ? `큐브 배치 ${(a.v || []).join(" · ")}` : a && a.t === "play" ? `${a.k + 1}번째 통을 냄` : "—"),
+    // 🎞️ 복기: 내 통 vs 고급 AI 통 — 상대 숨은 큐브를 140번 추정해서 이길 · 질 확률 (대결 중 공개된 값은 반영)
+    review: (V, seat, myA, bestA, info) => {
+      if (!V || !myA || V.phase !== "play" || myA.t !== "play" || !V.mine || !(V.duel || []).includes(seat)) return null;
+      const rng = s => { let a = (s >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+      const rr = rng(((info && info.seed) | 0) + (V.match | 0) * 17 + (V.round | 0) * 7 + seat * 131);
+      const P = G.choosePlay(V, seat, "hard", rr), all = P.all || [];
+      const mine = all.find(o => o.k === myA.k), best = (bestA && all.find(o => o.k === bestA.k)) || all.find(o => o.k === P.k);
+      if (!mine || !best) return null;
+      const pc = x => Math.round(x * 100) + "%", tx = o => `${o.k + 1}번째 통(값 ${o.v}) 이길 ${pc(o.pw)} · 질 ${pc(o.pl)}`;
+      return { sev: Math.max(0, Math.min(100, Math.round((best.sc - mine.sc) * 100))), why: `상대 숨은 큐브를 140번 추정 — 내 선택 ${tx(mine)} / 고급 AI 선택 ${tx(best)}` };
+    },
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),

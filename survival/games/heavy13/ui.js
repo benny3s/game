@@ -230,6 +230,29 @@
       if (a.t === "pass") return "패스 (맨 나중에 놓기)";
       return "—";
     },
+    // 🎞️ 복기: 내 수 vs 고급 AI 수 — 이번 라운드 기대 벌점 차이 (남은 카드 · 칩에서 남들이 무작위로 낸다고 보고 흉내)
+    review: (V, seat, myA, bestA, info) => {
+      if (!V || !myA) return null;
+      const rng = s => { let a = (s >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+      const rr = rng(((info && info.seed) | 0) + (V.round | 0) * 7 + seat * 131);
+      const CN = ["빨강", "초록", "파랑", "무지개"], PN = ["빨강", "초록", "파랑"];
+      if (V.phase === "choose" && myA.t === "pick") {
+        const L = H.evalChoose(V, seat, 60, rr), mine = L.find(o => o.card === myA.card && o.chip === myA.chip);
+        const best = (bestA && L.find(o => o.card === bestA.card && o.chip === bestA.chip)) || L[0];
+        if (!mine || !best) return null;
+        const tx = o => `바위 ${o.card} · ${CN[o.chip]} 칩`;
+        return { sev: Math.max(0, Math.min(100, Math.round((mine.e - best.e) * 60))), why: `남들이 남은 카드 · 칩을 무작위로 낸다고 보고 60번 흉내 낸 이번 라운드 기대 벌점 — 내 선택 ${tx(mine)} ${mine.e.toFixed(2)}개 / 고급 AI 선택 ${tx(best)} ${best.e.toFixed(2)}개` };
+      }
+      if (V.phase === "place" && (myA.t === "put" || myA.t === "pass")) {
+        const L = H.evalPlace(V, seat), chip = V.picks && V.picks[seat] ? V.picks[seat].chip : -1;
+        const match = a => o => (a.t === "pass" ? o.kind === "pass" : o.kind === "put" && (chip !== 3 || o.pi === a.ped));
+        const mine = L.find(match(myA)), best = (bestA && L.find(match(bestA))) || L[0];
+        if (!mine || !best) return null;
+        const tx = o => o.kind === "pass" ? "패스" : chip === 3 ? `${PN[o.pi]} 받침대에 놓기` : "놓기";
+        return { sev: Math.max(0, Math.min(100, Math.round((mine.e - best.e) * 40))), why: `남은 차례를 끝까지 흉내 낸 내 벌점 — 내 선택(${tx(mine)}) ${mine.e}개 / 고급 AI 선택(${tx(best)}) ${best.e}개` };
+      }
+      return null;
+    },
     coach: (V, me, since, names) => H.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => H.ai(V, me, "easy", rnd),
