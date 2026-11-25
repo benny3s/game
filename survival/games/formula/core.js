@@ -6,7 +6,8 @@
    · 같으면: 하이는 가장 큰 숫자 카드, 로우는 가장 작은 숫자 카드로 (숫자 → 색)
    · 판돈: 하이 승자 · 로우 승자가 반씩 (홀수 칩은 하이). 스윙은 두 쪽 다 이겨야 다 가져가고, 못 이기면 빈손
    · 한 판에 거는 칩은 그 판에 남은 사람 중 가장 적은 칩까지 (나눠 갖는 판돈이 생기지 않게)
-   우리 판 다듬기: 칩 20개로 5판(또는 8판) · 레이즈는 한 베팅에 3번까지 · ×를 받으면 버릴 기호는 식 만들 때 고름 (방송은 받자마자 버림) */
+   · 식 시간: 방송은 90초, 넘으면 패 → 옵션 limit(기본 끔, 켜면 LIMIT 초): 화면이 시계를 재고 넘으면 {t:"eq", late:true} 를 대신 냄 → 그 판은 접은 것으로 침 (옛 기록은 limit 값이 없어 그대로 재생)
+   우리 판 다듬기: 칩 20개(방송은 피스 1개 = 칩 5개로 바꿔 시작해 사람마다 시작 칩이 다름 — 우리는 피스 4개 = 칩 20개로 같게)로 5판(또는 8판) · 레이즈는 한 베팅에 3번까지 · ×를 받으면 버릴 기호는 식 만들 때 고름 (방송은 받자마자 버림) */
 (function (root, factory) {
   const m = factory();
   if (typeof module === "object" && module.exports) module.exports = m;
@@ -15,7 +16,7 @@
   "use strict";
   const COLORS = ["금", "은", "동", "흑"];
   const NUMS = 44, ROOT0 = 44, MUL0 = 48, DECK = 52;
-  const START = 20, ANTE = 1, MAXRAISE = 3;
+  const START = 20, ANTE = 1, MAXRAISE = 3, LIMIT = 90;   // LIMIT: 옵션 limit 를 켰을 때 식 만드는 초 (시계는 화면이 재고, 넘으면 {t:"eq", late:true} 를 대신 냄)
   const isNum = c => c >= 0 && c < NUMS;
   const val = c => c % 11;
   const col = c => Math.floor(c / 11);
@@ -118,7 +119,7 @@
 
   // ── 판 진행 ───────────────────────────────────────────────
   function init({ n, seed, cfg }) {
-    const st = { n, rs: (seed >>> 0) || 1, R: Math.max(1, Math.min(12, (cfg && +cfg.rounds) || 5)), hand: 0, chips: Array(n).fill(START), dealer: 0, log: [], seq: 0, phase: "", over: false, res: null, H: [], deck: [] };
+    const st = { n, rs: (seed >>> 0) || 1, R: Math.max(1, Math.min(12, (cfg && +cfg.rounds) || 5)), limit: cfg && +cfg.limit >= 1 ? LIMIT : 0, hand: 0, chips: Array(n).fill(START), dealer: 0, log: [], seq: 0, phase: "", over: false, res: null, H: [], deck: [] };
     st.dealer = Math.floor(rnd(st) * n);
     startHand(st);
     return st;
@@ -151,7 +152,7 @@
     st.hand++;
     st.dealer = nextOf(st, st.dealer, i => st.chips[i] > 0);
     st.deck = shuffle(() => rnd(st), Array.from({ length: DECK }, (_, k) => k));
-    st.H = Array(st.n).fill(null); st.folded = Array(st.n).fill(true);
+    st.H = Array(st.n).fill(null); st.folded = Array(st.n).fill(true); st.late = Array(st.n).fill(false);
     st.eqH = Array(st.n).fill(null); st.eqL = Array(st.n).fill(null); st.decl = Array(st.n).fill(null);
     st.pot = 0; st.res = null; st.bet = Array(st.n).fill(0); st.cur = 0;
     for (const i of al) { st.chips[i] -= ANTE; st.pot += ANTE; st.folded[i] = false; st.H[i] = { hid: drawNum(st), open: [], sym: [], muls: 0, roots: 0 }; }
@@ -270,6 +271,14 @@
     }
     if (st.phase === "build") {
       if (a.t !== "eq") return { ok: false, err: "식을 만들어 주세요" };
+      if (a.late) {   // 방송처럼 90초 안에 식을 못 냄 → 그 판은 패 (접은 것으로 침, 이미 건 칩은 판돈에 남음)
+        if (!st.limit) return { ok: false, err: "이 판은 식 시간 제한이 없어요" };
+        st.folded[seat] = true; st.late[seat] = true;
+        push(st, { k: "late", s: seat });
+        if (live(st).length < 2) { foldWin(st); return { ok: true }; }
+        if (!needs(st).length) startBet(st, 2);
+        return { ok: true };
+      }
       const H = st.H[seat], e1 = checkEq(H, a.h), e2 = checkEq(H, a.l);
       if (e1) return { ok: false, err: "하이 식: " + e1 };
       if (e2) return { ok: false, err: "로우 식: " + e2 };
@@ -313,7 +322,7 @@
     const hands = st.H.map((H, i) => H ? { hid: sees(i) ? H.hid : -1, open: H.open.slice(), sym: H.sym.slice(), muls: H.muls, roots: H.roots } : null);
     const pubObj = { h: st.hand, p: st.phase, c: st.chips, f: st.folded, pot: st.pot, b: st.bet, cur: st.cur, t: st.turn, o: hands.map(x => x && [x.open, x.sym]), bu: st.eqH.map(Boolean), de: st.decl.map(Boolean), r: st.res && st.res.gain, ov: st.over };
     return {
-      n: st.n, R: st.R, hand: st.hand, phase: st.phase, chips: st.chips.slice(), folded: st.folded.slice(), pot: st.pot,
+      n: st.n, R: st.R, limit: st.limit || 0, late: (st.late || []).slice(), hand: st.hand, phase: st.phase, chips: st.chips.slice(), folded: st.folded.slice(), pot: st.pot,
       bet: st.bet.slice(), cur: st.cur, cap: st.cap, raises: st.raises, maxRaise: MAXRAISE, turn: st.turn, dealer: st.dealer,
       hands, built: st.eqH.map(Boolean), declared: st.decl.map(Boolean),
       eqH: st.eqH.map((e, i) => (sees(i) ? e : null)), eqL: st.eqL.map((e, i) => (sees(i) ? e : null)), decl: st.decl.map((d, i) => (sees(i) ? d : null)),
@@ -478,7 +487,7 @@
   }
 
   return {
-    id: "formula", COLORS, START, ANTE, MAXRAISE, isNum, isRoot, isMul, val, col, cardName, OPN,
+    id: "formula", COLORS, START, ANTE, MAXRAISE, LIMIT, isNum, isRoot, isMul, val, col, cardName, OPN,
     init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach,
     evalEq, eqText, checkEq, search, chances, fmt, keyHi, keyLo,
   };

@@ -63,6 +63,7 @@
 .fx-show .r .g{font:900 14px var(--round);color:#4ade80}
 .fx-show .r .e{grid-column:1/-1;color:var(--soft);font-variant-numeric:tabular-nums}
 .fx-show .r .e em{font-style:normal;color:#fde68a}
+.fx-cdw{display:grid;gap:3px}.fx-cdw .t{display:flex;justify-content:space-between;font:800 12.5px var(--round);color:#fde68a}.fx-cdw .t.low{color:#fca5a5}.fx-cdw .bar{height:5px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}.fx-cdw .bar b{display:block;height:100%;width:100%;background:#fbbf24;transition:width .25s linear}.fx-cdw .t.low+.bar b{background:#f87171}
 .fx-tut{display:grid;gap:8px;justify-items:center}
 .fx-tut .fx-toks{gap:5px}`;
   let styled = false;
@@ -83,6 +84,7 @@
     if (e.k === "bet") return `${nm(e.s)} ${e.a === "raise" ? `레이즈 ${e.to}칩` : e.a === "call" ? "콜" : e.a === "check" ? "체크" : "폴드"}`;
     if (e.k === "deal") return `${nm(e.s)} ${F.cardName(e.c)} 받음`;
     if (e.k === "built") return `${nm(e.s)} 식 완성`;
+    if (e.k === "late") return `⏰ ${nm(e.s)} 식 시간 초과 — 접음`;
     if (e.k === "declared") return `${nm(e.s)} 선언 완료`;
     if (e.k === "hand") return `${e.h}번째 판 시작`;
     return "";
@@ -149,6 +151,27 @@
     B.sel = { side, k, i };
   }
 
+  // 식 시간 (옵션 limit): 화면이 재고, 넘으면 {t:"eq", late:true} 를 대신 냄 (규칙 자체는 시계가 없음 · mazesum 과 같은 방식)
+  let TM = { key: "", id: 0, t0: 0, limit: 0, ctx: null };
+  const stopTm = () => { if (TM.id) clearInterval(TM.id); TM = { key: "", id: 0, t0: 0, limit: 0, ctx: null }; };
+  function paintTm(stage) {
+    const left = TM.limit - (Date.now() - TM.t0) / 1000, cd = stage.querySelector(".fx-cd"), bar = stage.querySelector(".fx-cdw .bar b"), tt = stage.querySelector(".fx-cdw .t");
+    if (cd) cd.textContent = `${Math.max(0, Math.ceil(left))}초`;
+    if (bar) bar.style.width = `${Math.max(0, Math.min(100, left / TM.limit * 100))}%`;
+    if (tt) tt.classList.toggle("low", left <= 15);
+    return left;
+  }
+  function tickTm(stage) {
+    if (!document.body.contains(stage) || !stage.querySelector(".fx-cd")) { stopTm(); return; }
+    if (paintTm(stage) <= 0) { const c = TM.ctx; stopTm(); if (c && c.canAct) c.act({ t: "eq", late: true }); }
+  }
+  function timers(stage, V, ctx) {
+    if (!(V.limit && V.phase === "build" && ctx.canAct && ctx.me >= 0 && ctx.mode !== "watch")) { stopTm(); return; }
+    const key = `${ctx.g}|${V.hand}|${ctx.me}`;
+    if (TM.key !== key) { stopTm(); TM = { key, id: 0, t0: Date.now(), limit: V.limit, ctx }; TM.id = setInterval(() => tickTm(stage), 250); }
+    TM.ctx = ctx; paintTm(stage);
+  }
+
   function render(stage, V, ctx) {
     style();
     const me = ctx.me, myH = me >= 0 ? V.hands[me] : null;
@@ -158,12 +181,12 @@
     h += `<div class="fx-opps${opps.length >= 4 ? " cmp" : ""}">${opps.map(i => {
       const H = V.hands[i];
       if (!H) return `<div class="fx-opp fold"><div class="hd"><b>${esc(nameOf(ctx, i))}</b><i>쉼</i></div></div>`;
-      const st = V.folded[i] ? "폴드" : V.phase.startsWith("bet") ? (V.bet[i] ? `건 ${V.bet[i]}` : "") : V.phase === "build" ? (V.built[i] ? "✓ 식" : "…") : V.phase === "declare" ? (V.declared[i] ? "✓ 선언" : "…") : V.decl[i] ? { H: "🔼하이", L: "🔽로우", S: "↕스윙" }[V.decl[i]] : "";
+      const st = V.late && V.late[i] ? "⏰ 시간 초과" : V.folded[i] ? "폴드" : V.phase.startsWith("bet") ? (V.bet[i] ? `건 ${V.bet[i]}` : "") : V.phase === "build" ? (V.built[i] ? "✓ 식" : "…") : V.phase === "declare" ? (V.declared[i] ? "✓ 선언" : "…") : V.decl[i] ? { H: "🔼하이", L: "🔽로우", S: "↕스윙" }[V.decl[i]] : "";
       const turn = V.needs.includes(i) && V.phase.startsWith("bet");
       return `<div class="fx-opp${V.folded[i] ? " fold" : ""}${turn ? " turn" : ""}"><div class="hd"><b>${esc(nameOf(ctx, i))}</b><i>${st}</i></div><div class="fx-cards">${cardHtml(H.hid)}${H.open.map(c => cardHtml(c)).join("")}${H.sym.map(c => cardHtml(c)).join("")}</div></div>`;
     }).join("")}</div>`;
     if (myH && !(V.phase === "build" && ctx.canAct)) {
-      h += `<div class="fx-me"><div class="hd"><span>내 카드 ${V.folded[me] ? "· 폴드" : ""}</span><span>기호 ${["+", "-", "/"].map(o => F.OPN[o]).join(" ")}${myH.muls ? " · ×" + myH.muls : ""}${myH.roots ? " · √" + myH.roots : ""}</span></div>
+      h += `<div class="fx-me"><div class="hd"><span>내 카드 ${V.late && V.late[me] ? "· ⏰ 시간 초과" : V.folded[me] ? "· 폴드" : ""}</span><span>기호 ${["+", "-", "/"].map(o => F.OPN[o]).join(" ")}${myH.muls ? " · ×" + myH.muls : ""}${myH.roots ? " · √" + myH.roots : ""}</span></div>
         <div class="fx-row fx-big">${cardHtml(myH.hid, " hid")}${myH.open.map(c => cardHtml(c)).join("")}${myH.sym.map(c => cardHtml(c)).join("")}</div></div>`;
     }
     // 아래 행동 칸
@@ -184,7 +207,7 @@
         if (ctx.canAct) {
           const b = builderFor(V, me, ctx.g);
           void b;
-          acts = `<div class="fx-bs">${rowHtml(V, me, "H")}${rowHtml(V, me, "L")}<div class="note">같은 종류 두 개를 차례로 누르면 자리가 바뀌어요</div></div><button class="btn primary big" data-a="eq">✔ 식 두 개 내기</button>`;
+          acts = `${V.limit ? `<div class="fx-cdw"><div class="t"><span>⏱ 식 시간 ${V.limit}초 (넘으면 이번 판은 져요)</span><span class="fx-cd">${V.limit}초</span></div><div class="bar"><b></b></div></div>` : ""}<div class="fx-bs">${rowHtml(V, me, "H")}${rowHtml(V, me, "L")}<div class="note">같은 종류 두 개를 차례로 누르면 자리가 바뀌어요</div></div><button class="btn primary big" data-a="eq">✔ 식 두 개 내기</button>`;
           bld = true;
         } else acts = `<div class="note">다른 사람이 식을 만드는 중… (${V.built.filter(Boolean).length}/${V.hands.filter((x, i) => x && !V.folded[i]).length})</div>`;
       } else if (V.phase === "declare") {
@@ -196,12 +219,13 @@
             <button class="btn" data-a="decl" data-d="S">↕ 스윙</button></div>`;
         } else acts = `<div class="note">다른 사람 선언을 기다려요… (${V.declared.filter(Boolean).length}/${V.hands.filter((x, i) => x && !V.folded[i]).length})</div>`;
       }
-    } else if (myH && V.folded[me]) acts = `<div class="note">이번 판은 접었어요 · 다음 판을 기다려요</div>`;
+    } else if (myH && V.folded[me]) acts = `<div class="note">${V.late && V.late[me] ? "⏰ 식 시간이 지나서 이번 판은 졌어요" : "이번 판은 접었어요"} · 다음 판을 기다려요</div>`;
     else if (watchAll && V.phase !== "show") acts = `<div class="note">${V.needs.length ? V.needs.map(i => esc(nameOf(ctx, i))).join(" · ") + " 생각 중…" : ""}</div>`;
     h += `<div class="fx-acts${bld ? " bld" : ""}">${acts}</div>`;
     const oldBs = stage.querySelector(".fx-bs"), sy = oldBs ? oldBs.scrollTop : 0;   // 토큰을 눌러 다시 그려도 스크롤 자리 유지
     stage.innerHTML = h;
     if (sy) { const nb = stage.querySelector(".fx-bs"); if (nb) nb.scrollTop = sy; }
+    timers(stage, V, ctx);
     stage.onclick = e => {
       const t = e.target.closest("[data-side]");
       if (t && B) {
@@ -388,9 +412,9 @@
 
   window.SVUI = window.SVUI || {};
   window.SVUI.formula = {
-    actText: a => !a ? "—" : a.t === "decl" ? ({ H: "하이", L: "로우", S: "스윙" }[a.d] || "선언") : a.t === "eq" ? "식 두 개(하이용 · 로우용)를 냄" : a.t === "raise" ? `레이즈 → ${a.to}칩` : a.t === "call" ? "콜" : a.t === "check" ? "체크" : a.t === "fold" ? "폴드" : "행동",   // 🎞️ 복기 행동 글
+    actText: a => !a ? "—" : a.t === "decl" ? ({ H: "하이", L: "로우", S: "스윙" }[a.d] || "선언") : a.t === "eq" ? (a.late ? "⏰ 식 시간 초과 — 접음" : "식 두 개(하이용 · 로우용)를 냄") : a.t === "raise" ? `레이즈 → ${a.to}칩` : a.t === "call" ? "콜" : a.t === "check" ? "체크" : a.t === "fold" ? "폴드" : "행동",   // 🎞️ 복기 행동 글
     name: "수식 하이 로우", emoji: "🧮", short: "식으로 1 · 20 맞히기 + 칩", min: 2, max: 6, defN: 4, board: false,
-    opts: [{ k: "rounds", label: "판 수", items: [[5, "5판"], [8, "8판"]], def: 5 }],
+    opts: [{ k: "rounds", label: "판 수", items: [[5, "5판"], [8, "8판"]], def: 5 }, { k: "limit", label: "식 만드는 시간", items: [[0, "제한 없음"], [90, "방송처럼 90초"]], def: 0 }],
     howto: [
       "숫자 카드 4장과 <b>+ − ÷</b>(가끔 √ · ×)로 식을 만들어 <b>20(하이)</b>이나 <b>1(로우)</b>에 가깝게",
       "숨긴 1장 + 공개 3장, 카드 사이사이 <b>두 번 베팅</b> (체크 · 콜 · 레이즈 · 폴드)",

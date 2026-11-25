@@ -98,7 +98,38 @@ async function tutPolicy(page, i, k) {
   if (k >= seq.length) return false;
   return page.evaluate(p => { const b = document.getElementById('tutStage').querySelector(`[data-p="${p}"]`); if (!b) return false; b.click(); return true; }, seq[k]);
 }
+// 3) 옵션 '방송처럼 90초' (cfg_limit=90): 식 만들기 화면에 시계가 있고, 시간이 넘으면 화면이 대신 late 를 내 그 판은 접음
+let lateDone = 0, cdSeen = 0;
+async function policyLimit(page, c) {
+  const ph = await page.evaluate(() => window.__h.view().phase);
+  if (ph === 'build') {
+    nok((await page.locator('.fx-cd').count()) === 1, '90초 옵션인데 식 만들기 화면에 시계가 없음');
+    nok(/90초/.test(await page.locator('.fx-cdw').innerText()), '시계 글에 90초가 없음');
+    cdSeen++;
+    if (lateDone < 2) {
+      lateDone++;
+      await page.evaluate(() => { window.__dn0 = window.__dn0 || Date.now.bind(Date); Date.now = () => window.__dn0() + 200000; });   // 시간이 지난 것처럼
+      await page.waitForFunction(() => { const V = window.__h.view(); return V.late && V.late[window.__h.ME]; }, null, { timeout: 4000 }).catch(() => {});
+      await page.evaluate(() => { Date.now = window.__dn0; });
+      nok(await page.evaluate(() => !!window.__h.view().late[window.__h.ME]), '시간이 넘었는데 화면이 식 시간 초과를 대신 내지 않음');
+      return true;
+    }
+  }
+  return policy(page, c);
+}
+// run() 은 끝나면 프로세스를 닫으므로, 90초 옵션 시험은 끝날 때 한 번 더 이 파일을 --limit 로 돌림
+const LIMIT = process.argv.includes('--limit');
 (async () => {
-  await run('formula', policy, { runs: 5, ns: [2, 4, 6, 3, 5], tutPolicy, allShots: false });
+  if (LIMIT) await run('formula', policyLimit, { runs: 3, ns: [3, 2, 4], tutPolicy, allShots: false, query: () => 'cfg_limit=90' });
+  else await run('formula', policy, { runs: 5, ns: [2, 4, 6, 3, 5], tutPolicy, allShots: false });
 })().catch(e => { console.error(e); process.exit(1); });
-process.on('exit', code => { if (bad && !code) process.exitCode = 1; });
+process.on('exit', code => {
+  if (bad && !code) process.exitCode = 1;
+  if (LIMIT) {
+    if (!(lateDone === 2 && cdSeen >= 2)) { console.error(`FAIL: 90초 옵션 시험을 다 못 겪음 (late ${lateDone}, 시계 ${cdSeen})`); process.exitCode = 1; }
+    else console.log(`  90초 옵션: 시계 ${cdSeen}번 · 시간 초과 ${lateDone}번 확인`);
+    return;
+  }
+  const r = require('child_process').spawnSync(process.execPath, [__filename, '--limit'].concat(process.argv.slice(2).filter(x => x !== '--limit')), { stdio: 'inherit' });
+  if (r.status) process.exitCode = r.status;
+});

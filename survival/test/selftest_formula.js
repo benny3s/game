@@ -172,5 +172,58 @@ playOut(4, 777, ['hard'], 5);
   ok(allOk, '0 0 0 7 손 — 쉬운 AI 도 늘 낼 수 있는 식을 냄');
 }
 
+// 8) 방송처럼 90초 옵션 (cfg.limit): 화면이 시계를 재고 넘으면 {t:'eq', late:true} — 그 판은 패(접은 것으로 침), 칩 합은 그대로
+{
+  const toBuild = st => { for (let g = 0; g < 40 && st.phase === 'bet1'; g++) { const a = F.legal(st, st.turn).find(x => x.t === 'check' || x.t === 'call'); F.apply(st, st.turn, a); } };
+  // 기본은 끔: late 를 내도 받지 않음, view 에도 limit 0
+  const s0 = F.init({ n: 3, seed: 41, cfg: {} }); toBuild(s0);
+  ok(s0.phase === 'build' && F.view(s0, 0).limit === 0, '옵션을 안 켜면 limit 0');
+  const r0 = F.apply(s0, 0, { t: 'eq', late: true });
+  ok(!r0.ok && s0.phase === 'build' && !s0.folded[0], '제한이 없는 판은 late 를 안 받음 ' + JSON.stringify(r0));
+  ok(F.init({ n: 2, seed: 1, cfg: { limit: 0 } }).limit === 0 && F.init({ n: 2, seed: 1, cfg: { limit: '90' } }).limit === 90 && F.init({ n: 2, seed: 1, cfg: { limit: 90 } }).limit === F.LIMIT, 'limit 값 읽기 (0 / "90" / 90)');
+  // 켜면: 3명 중 한 명이 시간 초과 → 접은 것으로 치고, 나머지가 식을 내면 2차 베팅으로
+  const s1 = F.init({ n: 3, seed: 41, cfg: { limit: 90 } }); toBuild(s1);
+  ok(s1.phase === 'build' && F.view(s1, 0).limit === 90, '옵션을 켜면 limit 90');
+  const T1 = s1.chips.reduce((a, b) => a + b, 0) + s1.pot;
+  const rl = F.apply(s1, 0, { t: 'eq', late: true });
+  ok(rl.ok && s1.folded[0] && s1.late[0] && s1.phase === 'build' && !F.needs(s1).includes(0), '시간 초과 → 접음 · 나머지는 계속 식 만들기');
+  ok(F.view(s1, 1).late[0] === true && F.view(s1, 1).late[1] === false && F.view(s1, -1).log.some(e => e.k === 'late' && e.s === 0), 'view 에 late · 기록');
+  ok(!F.apply(s1, 0, { t: 'eq', late: true }).ok, '이미 접은 자리가 또 내면 안 받음');
+  for (const seat of F.needs(s1).slice()) { const a = F.ai(F.view(s1, seat), seat, 'easy', () => 0.5); ok(F.apply(s1, seat, a).ok, '남은 사람 식 내기'); }
+  ok(s1.phase === 'bet2' && !F.needs(s1).includes(0) && s1.cap === Math.min(...[1, 2].map(i => s1.chips[i])), '모두 식을 냈거나 접으면 2차 베팅 (접은 사람은 빼고 최대 베팅 계산)');
+  ok(s1.chips.reduce((a, b) => a + b, 0) + s1.pot === T1, '시간 초과 때도 칩 합 그대로');
+  // 이미 낸 사람은 late 로 못 바꿈
+  const s2 = F.init({ n: 3, seed: 41, cfg: { limit: 90 } }); toBuild(s2);
+  F.apply(s2, 0, F.ai(F.view(s2, 0), 0, 'easy', () => 0.5));
+  ok(!F.apply(s2, 0, { t: 'eq', late: true }).ok && !s2.late[0], '식을 낸 뒤 late 는 안 받음');
+  // 둘만 남은 판에서 한 명이 늦으면 다른 사람이 판돈을 바로 가져감
+  const s3 = F.init({ n: 2, seed: 9, cfg: { limit: 90 } }); toBuild(s3);
+  const pot3 = s3.pot, c3 = s3.chips[1];
+  F.apply(s3, 0, { t: 'eq', late: true });
+  ok(s3.phase === 'show' && s3.res && s3.res.fold && s3.res.win[0] === 1 && s3.chips[1] === c3 + pot3 && s3.pot === 0, '둘 중 하나가 늦으면 다른 쪽이 판돈을 가져감 ' + JSON.stringify(s3.res));
+  // 전원이 늦으면 마지막 한 명이 남으니 그 사람이 가져감 (모두 늦은 판은 없음)
+  const s4 = F.init({ n: 4, seed: 12, cfg: { limit: 90 } }); toBuild(s4);
+  for (const seat of F.needs(s4).slice()) if (F.needs(s4).includes(seat) && s4.phase === 'build') F.apply(s4, seat, { t: 'eq', late: true });
+  ok(s4.phase === 'show' && s4.res.fold && s4.chips.reduce((a, b) => a + b, 0) === 80, '여럿이 늦어도 칩 합 80 · 끝까지 감');
+  // 끝까지: 아무 때나 늦는 사람이 섞여도 규칙 어김 · 칩 새는 것 없이 끝남
+  for (const seed of [3, 5, 8]) {
+    const st = F.init({ n: 4, seed, cfg: { limit: 90, rounds: 4 } });
+    let r = seed, rr = () => { r = (r * 1664525 + 1013904223) >>> 0; return r / 4294967296; }, steps = 0;
+    while (!F.over(st) && steps < 3000) {
+      const need = F.needs(st);
+      if (!need.length) { F.advance(st); steps++; continue; }
+      for (const seat of need) {
+        if (!F.needs(st).includes(seat)) continue;
+        const late = st.phase === 'build' && rr() < 0.25;
+        const res = F.apply(st, seat, late ? { t: 'eq', late: true } : F.ai(F.view(st, seat), seat, 'normal', rr));
+        ok(res.ok, `late 섞인 판 규칙 어김 ${st.phase} ${res.err || ''}`);
+        ok(st.chips.reduce((a, b) => a + b, 0) + st.pot === 80, 'late 섞인 판 칩 합 80');
+        steps++;
+      }
+    }
+    ok(F.over(st), `late 섞인 판이 끝남 (seed ${seed})`);
+  }
+}
+
 console.log(`수식 하이 로우 selftest · 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);
