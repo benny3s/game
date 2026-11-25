@@ -318,7 +318,7 @@
       return { g: best || sample(r, "normal"), n: 0, why: "first" };
     }
     const use = tier === "easy" ? hist.slice(-2) : hist;
-    const want = tier === "hard" ? 30 : 1, att = tier === "hard" ? 60000 : tier === "normal" ? 45000 : 12000;
+    const want = tier === "hard" ? 30 : 1, att = tier === "hard" ? 8000 : tier === "normal" ? 45000 : 12000;
     const c = findCands(use, r, want, att);
     if (!c.length) return { g: bestEffort(use, r), n: 0, why: "none" };
     return { g: want > 1 ? bestSplit(c, r) : c[0], n: c.length, why: "cand" };
