@@ -167,7 +167,7 @@
   function posterior(V, me, tier) {
     const opp = 1 - me, y = V.cards[opp], sh = V.shared;
     const cnt = Array(11).fill(0); for (let r = 1; r <= 10; r++) cnt[r] = 4;
-    for (const c of V.used) cnt[c]--;
+    if (tier !== "easy") for (const c of V.used) cnt[c]--;   // 초급은 지나간 카드를 세지 않아요
     for (const c of sh) cnt[c]--;
     if (y > 0) cnt[y]--;
     const w = cnt.map(x => Math.max(0, x));
@@ -216,8 +216,47 @@
     }
     return { a, why, P, evCall, evFold, need };
   }
+  // 고급: 폴드 · 콜 · 여러 크기의 레이즈마다 '내 카드가 무엇일지(확률) × 상대가 받아 칠 모습(상대 눈에 보이는 것만으로 초급·보통이 두는 대로)'을 어림해 기대 칩이 가장 큰 수를 골라요
+  function oppView(V, me, x, X) {   // 상대 시점의 가상 화면: 상대는 내 카드 x 와 공유카드를 보고, 자기 카드는 못 봄
+    const contrib = V.contrib.slice(); contrib[me] = X;
+    const cards = [-1, -1]; cards[me] = x;
+    return { n: 2, phase: "bet", chips: V.chips.map((c, i) => (i === me ? Math.max(0, c - (X - V.contrib[me])) : c)), contrib, carry: V.carry, cur: X, cap: V.cap, canRaise: V.cap > X, used: V.used, shared: V.shared, doublePen: V.doublePen, cards, turn: 1 - me,
+      log: [{ k: "round", i: 0 }, { k: "bet", s: me, a: "raise", to: X, i: 1 }] };
+  }
+  function planEV(V, me, r) {
+    const opp = 1 - me, y = V.cards[opp], sh = V.shared, P = posterior(V, me, "hard"), m = V.contrib[me], q = V.contrib[opp], carry = V.carry, need = V.cur - m;
+    const room = V.cap - V.cur, cands = [{ t: "fold" }];
+    if (need <= V.chips[me]) cands.push({ t: "call" });
+    if (V.canRaise) { const seen = new Set(); for (const f of [0.15, 0.35, 0.6, 1]) { const to = Math.min(V.cap, V.cur + Math.max(1, Math.round(room * f))); if (!seen.has(to)) { seen.add(to); cands.push({ t: "raise", to }); } } }
+    const penOf = (x, chips) => { const c = cat(sh, x); return Math.min(chips, c >= 2 ? 10 : c === 1 ? V.doublePen : 0); };
+    const penOpp = penOf(y, V.chips[opp]), K = 6, base = Math.floor(r() * 1e9);
+    const rg = i => { let a = (base + i * 7919) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+    const show = (x, fin) => { const c = cmp(sh, x, y); return c > 0 ? fin + carry : c < 0 ? -fin : 0; };
+    let best = null;
+    for (const a of cands) {
+      let ev = 0, rf = 0, rc = 0;
+      for (let x = 1; x <= 10; x++) {
+        const px = P.p[x]; if (!(px > 0)) continue;
+        const penMe = penOf(x, V.chips[me]);
+        if (a.t === "fold") { ev += px * (-m - penMe); continue; }
+        if (a.t === "call") { ev += px * show(x, V.cur); continue; }
+        let sum = 0;
+        for (let k = 0; k < K; k++) {
+          const rr = rg(k * 31 + x), pl = plan(oppView(V, me, x, a.to), opp, k % 2 ? "normal" : "easy", rr).a;
+          if (pl.t === "fold") sum += q + carry + penOpp;
+          else if (pl.t === "call") sum += show(x, a.to);
+          else { rf += px * (-a.to - penMe) / K; rc += px * show(x, Math.min(V.cap, pl.to || a.to)) / K; }
+        }
+        ev += px * sum / K;
+      }
+      if (a.t === "raise") ev += Math.max(rf, rc);
+      if (!best || ev > best.ev + 1e-9) best = { a, ev };
+    }
+    return { a: best.a, ev: best.ev, P, need };
+  }
   function ai(V, me, tier, r) {
     if (V.phase !== "bet" || !V.needs.includes(me)) return null;
+    if (tier === "hard") return planEV(V, me, r).a;
     return plan(V, me, tier, r).a;
   }
 
@@ -241,11 +280,12 @@
     const mineTxt = `공유 ${sh[0]}·${sh[1]} (간격 ${gap} → ${risky ? "조합이 나올 수 있어요" : "조합이 안 나와 숫자 싸움"}) · 칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]} · 판돈 ${V.pot} · 이길 확률 ${pc(P.win)} · 무승부 ${pc(P.draw)}`;
     let rec = "상대 차례를 기다려요", why = "";
     if (V.needs.includes(me)) {
-      const pl = plan(V, me, "hard", () => 0.5), t = pl.a.t;
+      const pl = planEV(V, me, () => 0.5), t = pl.a.t;
       rec = t === "fold" ? "폴드하기" : t === "call" ? (pl.need > 0 ? `콜 (${pl.need}칩)` : "콜 (바로 공개)") : `레이즈 → ${pl.a.to}칩`;
       if (t === "fold") why = `이길 확률 ${pc(P.win)}라 콜의 기대값이 낮아요. 단, 내가 스트레이트 · 트리플일 확률 ${pc(P.pStrong)} 때문에 폴드 페널티 기대값(약 ${P.penE.toFixed(1)}칩)도 계산했어요.`;
       else if (t === "raise") why = `이길 확률이 ${pc(P.win)}라 판돈을 키워요.${risky ? " 공유카드가 가까워 상대도 조합일 수 있으니 조심!" : ""}`;
       else why = pl.need > 0 ? `이길 확률 ${pc(P.win)}로 ${pl.need}칩을 내고 맞서 볼 만해요.` : `더 걸 만큼 앞서지 않아요 (${pc(P.win)}). 공개해도 손해는 기본 베팅뿐이에요.`;
+      why += ` 이 수의 기대 칩은 ${pl.ev >= 0 ? "+" : ""}${pl.ev.toFixed(1)} (상대가 보이는 카드로 두는 대로 가정해 계산).`;
       if (!risky) why += V.doublePen ? ` 공유카드 간격이 3 이상이면 스트레이트 · 트리플이 안 나와 큰 페널티(10칩)는 없어요 (더블이면 ${V.doublePen}칩).` : " 공유카드 간격이 3 이상이면 조합이 안 나와 폴드해도 페널티가 없어요.";
     }
     return { opp: oppTxt, mine: mineTxt, rec, why };

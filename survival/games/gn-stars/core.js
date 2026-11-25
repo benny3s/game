@@ -189,7 +189,7 @@
     }
     return { swaps: out, hold: h, bag: b };
   }
-  const TIER = { easy: { K: 12, temp: 1.4, rnd: 0.2, hist: false, rot: false }, normal: { K: 60, temp: 0.5, rnd: 0.04, hist: true, rot: false }, hard: { K: 140, temp: 0.28, rnd: 0, hist: true, rot: true } };
+  const TIER = { easy: { K: 8, temp: 2, rnd: 0.35, hist: false, rot: false }, normal: { K: 40, temp: 0.9, rnd: 0.12, hist: true, rot: false }, hard: { K: 140, temp: 0.06, rnd: 0, hist: true, rot: true } };
   function oppDist(V, j, T) {
     const w = [1, 1, 1, 1, 1];
     if (T.hist) {
@@ -242,12 +242,12 @@
     if (!V.needs.includes(me)) return null;
     const T = TIER[tier] ? tier : "normal";
     if (V.phase === "card") {
-      const sp = planSwaps(V.hold[me], V.bag, T), V2 = Object.assign({}, V, { hold: V.hold.map((x, i) => (i === me ? sp.hold : x)) });
+      const sp = T === "easy" && r() < 0.5 ? { swaps: [], hold: V.hold[me].slice(), bag: V.bag.slice() } : planSwaps(V.hold[me], V.bag, T), V2 = Object.assign({}, V, { hold: V.hold.map((x, i) => (i === me ? sp.hold : x)) });
       const a = { t: "card", c: cardPlan(V2, me, T, r).c }; if (sp.swaps.length) a.swaps = sp.swaps; return a;
     }
     if (V.phase === "pick") {
       let take = pickTake(V, me);
-      if (T === "easy" && r() < 0.25) { const t = [...V.table, V.tbomb], tk = [0, 0, 0, 0, 0]; for (let i = 0; i < V.pickK; i++) { const av = [0, 1, 2, 3, 4].filter(q => t[q] > 0); const q = av[Math.floor(r() * av.length)]; t[q]--; tk[q]++; } take = tk; }
+      if (T === "easy" && r() < 0.4) { const t = [...V.table, V.tbomb], tk = [0, 0, 0, 0, 0]; for (let i = 0; i < V.pickK; i++) { const av = [0, 1, 2, 3, 4].filter(q => t[q] > 0); const q = av[Math.floor(r() * av.length)]; t[q]--; tk[q]++; } take = tk; }
       const h = V.hold[me].map((v, c) => v + take[c]), sp = planSwaps(h, V.bag, T), a = { t: "take", take };
       if (sp.swaps.length) a.swaps = sp.swaps; return a;
     }

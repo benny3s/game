@@ -166,12 +166,72 @@
     }
     return best;
   }
+  // ── 초급: 처음 하는 사람처럼 — 열지 교환할지, 어느 카드 · 어느 사람인지 거의 마음 가는 대로 (좋은 카드를 지키려는 생각 없음) ──
+  function easyAI(V, r) {
+    const R = V.rules, U = [0, 1, 2, 3].filter(i => !V.mine[i].o), nOpen = 4 - U.length, pick = a => a[Math.floor(r() * a.length)];
+    if (R.peek && !V.peekUsed) return { t: "peek", g: Math.floor(r() * G) };
+    const free = [...Array(G).keys()].filter(g => !V.gex[g]), canSwap = nOpen >= 1 && R.maxEx - V.nEx > 0 && free.length > 0;
+    const lastLocked = R.mustAll && U.length === 1 && V.nEx < G;
+    if (nOpen === 0 || !canSwap) return { t: "open", c: pick(U) };
+    if (!lastLocked && r() < 0.45) return { t: "open", c: pick(U) };
+    return { t: "swap", c: pick(U), g: pick(free) };
+  }
+  // ── 고급: 가능한 수마다 앞으로의 교환을 여러 번 가상으로 끝까지 해 보고(몬테카를로) 콰트로가 될 확률 · 합이 가장 좋은 수를 골라요 ──
+  // 모르는 관전 플레이어의 카드는 아직 안 보인 카드에서 무작위로 나눠 가정해요 (상대의 가려진 카드는 쓰지 않음)
+  const UB = 10, UW = 8;   // 콰트로면 UB + UW × 합 점, 아니면 0 점 (합이 큰 쪽이 이기므로 합도 값어치가 있어요)
+  const utilQ = (h, zl) => (zl && h.includes(0) ? 0 : isQ(h) ? UB + UW * sumOf(h) : 0);
+  function contSim(S, thr) {
+    const R = S.rules;
+    for (let guard = 0; guard < 40; guard++) {
+      const U = [0, 1, 2, 3].filter(i => !S.o[i]), nOpen = 4 - U.length;
+      if (!U.length) break;
+      const freeG = S.gUsed.findIndex(x => !x), canSwap = nOpen >= 1 && R.maxEx - S.nEx > 0 && freeG >= 0;
+      const best = bestSub(S.h, R.zeroLoses), keepU = U.filter(i => best.includes(i)).sort((a, b) => num(S.h[b]) - num(S.h[a]));
+      const mustSwap = R.mustAll && U.length === 1 && S.nEx < G;
+      if (nOpen === 0) { S.o[keepU.length ? keepU[0] : U.slice().sort((a, b) => num(S.h[b]) - num(S.h[a]))[0]] = true; continue; }
+      if (!mustSwap && keepU.length && U.length >= 2 && num(S.h[keepU[0]]) >= thr && canSwap) { S.o[keepU[0]] = true; continue; }
+      if (!canSwap) { for (const i of U) S.o[i] = true; break; }
+      const out = U.filter(i => !best.includes(i)).sort((a, b) => num(S.h[a]) - num(S.h[b]));
+      const w = out.length ? out[0] : U.slice().sort((a, b) => num(S.h[a]) - num(S.h[b]))[0];
+      const gh = S.gh[freeG], k = guestPick(gh, S.h.filter((_, i) => S.o[i]), R.zeroLoses), got = gh[k];
+      gh[k] = S.h[w]; S.h[w] = got; S.gUsed[freeG] = true; S.nEx++;
+    }
+    return S.h;
+  }
+  function mcPlan(V, r, K) {
+    const R = V.rules, zl = R.zeroLoses, H = V.mine.map(x => x.c);
+    const U = [0, 1, 2, 3].filter(i => !V.mine[i].o), nOpen = 4 - U.length;
+    const exLeft = R.maxEx - V.nEx, freeGs = [...Array(G).keys()].filter(g => !V.gex[g]);
+    const pg = V.peeked && !V.gex[V.peeked.g] ? V.peeked.g : -1, acts = [];
+    if (!(R.mustAll && U.length === 1 && V.nEx < G)) for (const i of U) acts.push({ t: "open", c: i });
+    if (nOpen >= 1 && exLeft > 0 && freeGs.length) {
+      const gG = freeGs.find(g => g !== pg);
+      for (const i of U) { if (gG !== undefined) acts.push({ t: "swap", c: i, g: gG }); if (pg >= 0) acts.push({ t: "swap", c: i, g: pg }); }
+      if (!acts.some(a => a.t === "swap") && freeGs.length) for (const i of U) acts.push({ t: "swap", c: i, g: freeGs[0] });
+    }
+    if (!acts.length) return null;
+    const pool = unseen(V), sc = acts.map(() => ({ u: 0, q: 0, s: 0 }));
+    for (let k = 0; k < K; k++) {
+      const p2 = pool.slice(); for (let i = p2.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p2[i], p2[j]] = [p2[j], p2[i]]; }
+      let off = 0; const gh0 = Array.from({ length: G }, (_, g) => (g === pg ? V.peeked.cards.slice() : [p2[off++], p2[off++], p2[off++]]));
+      acts.forEach((a, ai) => {
+        const S = { h: H.slice(), o: V.mine.map(x => x.o), nEx: V.nEx, gUsed: V.gex.slice(), gh: gh0.map(x => x.slice()), rules: R };
+        if (a.t === "open") S.o[a.c] = true;
+        else { const gh = S.gh[a.g], kk = guestPick(gh, S.h.filter((_, i) => S.o[i]), zl), got = gh[kk]; gh[kk] = S.h[a.c]; S.h[a.c] = got; S.gUsed[a.g] = true; S.nEx++; }
+        const fin = contSim(S, 6), u = utilQ(fin, zl); sc[ai].u += u; if (u > 0) { sc[ai].q++; sc[ai].s += sumOf(fin); }
+      });
+    }
+    let bi = 0; for (let i = 1; i < acts.length; i++) if (sc[i].u > sc[bi].u) bi = i;
+    return { act: acts[bi], q: sc[bi].q / K, sum: sc[bi].q ? sc[bi].s / sc[bi].q : 0 };
+  }
   const TIER = { easy: { thr: 8, rnd: 0.3, keepMin: 8, keepA: 8, K: 12 }, normal: { thr: 2, rnd: 0.05, keepMin: 6, keepA: 5, K: 30 }, hard: { thr: 0.5, rnd: 0, keepMin: 5, keepA: 0, K: 50 } };
   function ai(V, me, tier, r) {
     if (!V.needs.includes(me)) return null;
     const T = TIER[tier] || TIER.normal, zl = V.rules.zeroLoses, H = V.mine.map(x => x.c);
     const U = [0, 1, 2, 3].filter(i => !V.mine[i].o), nOpen = 4 - U.length;
+    if (tier === "easy") return easyAI(V, r);
     if (V.rules.peek && !V.peekUsed) return { t: "peek", g: Math.floor(r() * G) };
+    if (tier === "hard") { const m = mcPlan(V, r, 24); if (m) return m.act; }
     if (T.rnd && r() < T.rnd && V.legal && V.legal.length) return V.legal[Math.floor(r() * V.legal.length)];
     const ma = V.rules.mustAll, can4 = !ma || V.nEx >= G;   // 판 a 는 교환이 안 끝났으면 마지막(4번째) 카드를 못 열어요
     const exLeft = V.rules.maxEx - V.nEx, canSwap = nOpen >= 1 && exLeft > 0 && V.gex.some(x => !x);
@@ -220,11 +280,12 @@
     const oppTxt = `상대가 공개한 카드: ${openOpp.length ? openOpp.map(cname).join(" ") : "아직 없어요"}${openOpp.length ? ` — 상대에게 아직 없는 색: ${NEEDC(openOpp).join(" · ") || "없음"}` : ""}. 상대 교환 ${V.nExs[1 - me]}번.`;
     const mineTxt = `내 카드 ${V.mine.map(x => `${cname(x.c)}${x.o ? "(공개)" : ""}`).join(" ")} · 최선 조합 ${keep.length}장${keep.length < 4 ? ` — 필요한 색: ${missing.join(" · ")}` : " — 콰트로예요!"} · 교환 ${V.nEx}/${V.rules.maxEx}번`;
     if (V.turn !== me) return { opp: oppTxt, mine: mineTxt, rec: "상대 차례예요", why: "기다려요." };
-    const a = ai(V, me, "hard", sampler(V.log.length * 31 + 5));
+    const sd = sampler(V.log.length * 31 + 5), mp = V.rules.peek && !V.peekUsed ? null : mcPlan(V, sd, 24), a = mp ? mp.act : ai(V, me, "hard", sd);
     let rec = "카드를 열어요", why = "";
     if (a && a.t === "peek") { rec = "관전 플레이어 한 명 엿보기"; why = "관전 플레이어의 카드 3장을 확인하면, 필요한 카드를 가진 사람과 교환할 수 있어요. 차례는 쓰지 않아요."; }
     else if (a && a.t === "open") { rec = `${cname(myh[a.c])} 카드 열기`; why = V.mine.every(x => !x.o) ? "교환을 시작하려면 카드를 1장 먼저 열어야 해요. 관전 플레이어는 열린 카드와 안 겹치는 가장 큰 카드를 줘요 — 가장 확실한 카드부터 열어요." : "열어 두면 그 카드와 안 겹치는 카드를 받을 수 있어요. 열린 카드는 바꿀 수 없다는 점은 조심해요."; }
     else if (a && a.t === "swap") { rec = `${cname(myh[a.c])} 카드를 ${V.peeked && V.peeked.g === a.g ? `엿본 ${a.g + 1}번 관전 플레이어` : `${a.g + 1}번 관전 플레이어`}와 교환`; why = `내 손에서 가장 쓸모없는 카드예요. 관전 플레이어는 열린 카드(${V.mine.filter(x => x.o).map(x => cname(x.c)).join(" ") || "없음"})와 안 겹치는 가장 큰 카드를 줘요${V.peeked && V.peeked.g === a.g ? " — 엿본 3장 중에서 정확히 받을 수 있어요" : ""}.${V.rules.zeroLoses ? " (0 은 받지 않아요)" : ""}`; }
+    if (mp) why += ` 이 수를 둔 뒤 끝까지 가상으로 해 보면 콰트로가 될 확률은 약 ${Math.round(mp.q * 100)}%${mp.q ? `, 이때 합은 평균 ${mp.sum.toFixed(0)}` : ""}예요.`;
     return { opp: oppTxt, mine: mineTxt, rec, why };
   }
 
