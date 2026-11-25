@@ -293,20 +293,32 @@
     }
     return best || sample(r, "normal");
   }
-  function bestSplit(c, r) {
+  function bestSplit(c, r, pool) {
     if (c.length <= 2) return pick(c, r);
-    let best = null, bs = -1;
-    for (const x of c) { const set = new Set(); for (const y of c) if (y !== x) set.add(feedback(x, y)); const sc = set.size + r() * 0.01; if (sc > bs) { bs = sc; best = x; } }
+    // 후보들을 가장 잘게 가르는 추측 — 같은 힌트로 묶이는 후보 수의 제곱합이 작을수록 좋음 (맞을 가능성이 있는 후보는 약간 가산)
+    const P = pool || c;
+    let best = null, bs = Infinity;
+    for (const x of c) {
+      const m = new Map();
+      for (const y of P) { const f = feedback(x, y); m.set(f, (m.get(f) || 0) + 1); }
+      let ss = 0; for (const v of m.values()) ss += v * v;
+      const sc = ss / P.length - (P.includes(x) ? 0.5 : 0) + r() * 0.01;
+      if (sc < bs) { bs = sc; best = x; }
+    }
     return best;
   }
   function nextGuess(hist, r, tier) {
     if (!hist.length) {                                          // 첫 추측: 글자가 골고루 섞인 수식
+      if (tier === "hard") {                                     // 후보 40개를 가장 잘게 가르는 첫 추측
+        const pool = []; for (let t = 0; t < 40; t++) { const s = tryGenN(r); if (s) pool.push(s); }
+        if (pool.length > 4) return { g: bestSplit(pool, r, pool), n: 0, why: "first" };
+      }
       const k = tier === "hard" ? 12 : tier === "normal" ? 5 : 1; let best = null, bs = -1;
       for (let t = 0; t < k; t++) { const s = tryGenN(r); if (!s) continue; const sc = distinct(s) + r() * 0.3; if (sc > bs) { bs = sc; best = s; } }
       return { g: best || sample(r, "normal"), n: 0, why: "first" };
     }
-    const use = tier === "easy" ? hist.slice(-3) : hist;
-    const want = tier === "hard" ? 14 : 1, att = tier === "hard" ? 60000 : tier === "normal" ? 45000 : 12000;
+    const use = tier === "easy" ? hist.slice(-2) : hist;
+    const want = tier === "hard" ? 30 : 1, att = tier === "hard" ? 60000 : tier === "normal" ? 45000 : 12000;
     const c = findCands(use, r, want, att);
     if (!c.length) return { g: bestEffort(use, r), n: 0, why: "none" };
     return { g: want > 1 ? bestSplit(c, r) : c[0], n: c.length, why: "cand" };

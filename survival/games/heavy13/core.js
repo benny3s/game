@@ -257,12 +257,14 @@
         const o = pool[Math.floor(r() * pool.length)];
         return { t: "pick", card: o.card, chip: o.chip };
       }
-      const o = evalChoose(V, me, tier === "hard" ? 60 : 16, r)[0];
+      const L = evalChoose(V, me, tier === "hard" ? 60 : 16, r);
+      const o = tier === "normal" && L.length > 1 && r() < 0.3 ? L[1 + Math.floor(r() * Math.min(2, L.length - 1))] : L[0];     // 중급: 가끔 차선 · 3순위
       return { t: "pick", card: o.card, chip: o.chip };
     }
     if (V.phase !== "place") return null;
     const opts = evalPlace(V, me);
     if (tier === "easy" && r() < 0.4) { const o = opts[Math.floor(r() * opts.length)]; return o.a; }
+    if (tier === "normal" && opts.length > 1 && r() < 0.12) return opts[1].a;
     return opts[0].a;
   }
 

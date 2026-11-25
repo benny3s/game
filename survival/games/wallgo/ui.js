@@ -236,6 +236,15 @@
     sub: V => (V.over ? "끝" : `${V.round}라운드 · ${V.phase === "place" ? "말 놓기" : V.phase === "move" ? "말 이동" : "벽 세우기"}`),
     chip: (V, i) => { const act = V.ord.includes(i); return { t: V.over ? (V.ranks[i] === 0 ? "🏆" : V.ranks[i] === 1 ? "2등" : "탈락") : !act ? "생존 ✓" : V.cur === i ? "내 차례" : "", on: V.cur === i && !V.over, out: V.over ? V.ranks[i] === 2 : false }; },
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글
+    actText: (a, V) => {
+      const DN = ["위", "오른쪽", "아래", "왼쪽"];
+      if (!a) return "—";
+      if (a.t === "place") return `${W.coord(a.r, a.c)} 에 ${a.k === "ci" ? "원형" : "사각"} 말 놓음`;
+      if (a.t === "move") { const P = V && V.pieces && V.pieces[a.p]; return `${P ? W.coord(P.r, P.c) + " 말 이동: " : "말 이동: "}${(a.dirs || []).map(d => DN[d]).join(" → ")}${a.brk != null ? " (벽 부수기)" : ""}`; }
+      if (a.t === "wall") return `${DN[a.d]}쪽에 벽`;
+      return "—";
+    },
     coach: (V, me, since, names) => W.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => W.ai(V, me, "easy", rnd),

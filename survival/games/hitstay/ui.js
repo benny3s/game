@@ -169,6 +169,34 @@
     sub: V => (V.over ? "끝" : `${V.hand}라운드 · 한계 ${V.L} · ${PH[V.phase] || ""}`),
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over && V.phase !== "reveal", out: !V.alive[i] }),
     render,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (HIT/STAY 는 이길 확률, 베팅은 콜 기대값)
+    actText: (a, V) => {
+      if (!a) return "—";
+      const sp = V && V.seat != null ? V.seat : -1;
+      if (a.t === "reveal") { const raw = V && V.hands && sp >= 0 && V.hands[sp] && V.hands[sp].raw; return raw ? `카드 ${raw[a.k]} 공개` : `${a.k + 1}번째 카드 공개`; }
+      if (a.t === "check") return "체크";
+      if (a.t === "call") return V && sp >= 0 && V.bet ? `콜 ${Math.max(0, V.cur - V.bet[sp])}칩` : "콜";
+      if (a.t === "raise") return `레이즈 → ${a.to}칩`;
+      if (a.t === "fold") return "폴드";
+      if (a.t === "hit") return "HIT (카드 한 장 더)";
+      if (a.t === "stay") return "STAY";
+      return "—";
+    },
+    review: (V, seat, myA, bestA, info) => {
+      const rng = s => { let a = (s >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+      if (!V || !myA) return null;
+      const rr = rng(((info && info.seed) | 0) + (V.hand | 0) * 7 + seat * 131 + (V.deckN | 0)), pct = x => Math.round(x * 100) + "%";
+      if (V.phase === "hit" && (myA.t === "hit" || myA.t === "stay")) {
+        const p = H.hitPlan(V, seat, "hard", rr), mine = myA.t === "hit" ? p.hit : p.stay, best = Math.max(p.hit, p.stay);
+        return { sev: Math.min(100, Math.round((best - mine) * 400)), why: `합 ${p.cur}/${V.L} · HIT 하면 이길 확률 ${pct(p.hit)} · STAY 면 ${pct(p.stay)} · 뽑으면 한계를 넘을 위험 ${pct(p.bustRisk)}` };
+      }
+      if ((V.phase === "bet1" || V.phase === "bet2") && ["check", "call", "raise", "fold"].includes(myA.t)) {
+        const p = H.betPlan(V, seat, "hard", rr), ev = p.p * p.potAfter - p.toCall;
+        const loss = myA.t === "fold" ? Math.max(0, ev) : (p.toCall > 0 ? Math.max(0, -ev) : 0);
+        return { sev: Math.min(100, Math.round(loss * 25)), why: `이길 확률 ${pct(p.p)} · 걸린 칩 ${p.potAfter} · 콜 비용 ${p.toCall} → 콜 기대값 ${ev >= 0 ? "+" : ""}${ev.toFixed(1)}칩${myA.t === "fold" ? " (기대값이 플러스면 폴드는 손해)" : ""}` };
+      }
+      return null;
+    },
     coach: (V, me, since, names) => H.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => H.ai(V, me, "easy", rnd),

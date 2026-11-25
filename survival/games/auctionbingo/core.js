@@ -219,11 +219,30 @@
     return e;
   }
   const myCoinValue = V => SUMV(COINS.filter((v, k) => V.coins[k]));
+  // 남은 라운드에 받을 만큼으로 빙고가 가장 많아지는 도형 구성(목표) — 받을 타일이 7개쯤이면 ○2 △3 ☆2 (5줄)
+  const TARGETS = (() => { const L = []; for (let a = 0; a <= 4; a++) for (let b = 0; b <= 3; b++) for (let c = 0; c <= 2; c++) { const p = place([a, b, c]); L.push({ t: [a, b, c], tot: a + b + c, lines: p.lines }); } return L; })();
+  function planTarget(est, roundsLeft, q) {
+    const proj = SUMV(est) + roundsLeft * q;
+    let best = null;
+    for (const c of TARGETS) {
+      if (c.tot > proj + 0.5) continue;
+      if (c.t.some((x, s) => x < Math.min(CAP[s], Math.floor(est[s] + 0.01)))) continue;
+      const sc = c.lines * 100 + c.tot;
+      if (!best || sc > best.sc) best = { sc, t: c.t };
+    }
+    return best ? best.t : [0, 1, 2].map(s => Math.max(CAP[s], 0));
+  }
+  const needOf = (V, est, tier) => {
+    if (tier === "easy") return [0, 1, 2].map(s => Math.max(0, CAP[s] - est[s]));
+    const T = planTarget(est, ROUNDS - V.round + 1, tier === "hard" ? 1.5 : 1.0);
+    return [0, 1, 2].map(s => Math.max(0, T[s] - est[s]));
+  };
   function pickScores(V, me, tier, r) {
     const est = estTiles(V), left = V.n - 1 - V.order.indexOf(me);   // 내 뒤에 고를 사람 수
-    const w = [1.0, 1.1, 1.35];
+    const w = tier === "easy" ? [1.0, 1.1, 1.35] : [1, 1, 1];
+    const needs_ = needOf(V, est, tier);
     return [0, 1, 2].map(s => {
-      const need = Math.max(0, CAP[s] - est[s]);
+      const need = needs_[s];
       const early = V.picks.filter(x => x === s).length;
       const exp = early + left / 3;                                  // 나 말고 들어올 사람 수 (짐작)
       const stake = Math.min(need, early + 1 + left / 3);
@@ -252,7 +271,7 @@
     const val = myCoinValue(V), nHave = V.coins.filter(Boolean).length;
     const mustKeep = roundsLeft - 1;
     const est = estTiles(V);
-    const need = Math.max(0, CAP[sh] - est[sh]);
+    const need = needOf(V, est, tier)[sh];
     const useful = Math.min(need, cntNow);
     let target;
     if (cntNow === 1) target = 1;
@@ -284,35 +303,37 @@
   function coach(V, me, since, names) {
     const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
     const nm = i => esc((names && names[i]) || `${i + 1}번`);
+    const SN = ["동그라미", "세모", "별"], eun = s => (s === 2 ? "은" : "는");      // 방송에서 쓰는 도형 이름 (글에서는 ○ △ ☆ 대신)
     if (V.over) { const f = V.final.rows[me]; return { opp: "7라운드가 끝났어요.", mine: `빙고 ${f.lines}줄 · ${f.fill}칸 · 남은 코인 ${f.coins}개 → ${V.ranks[me] + 1}등`, rec: "한 판 더 해 봐요!", why: "" }; }
     const r = (() => { let a = 777 + V.round * 31 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; })();
     const est = estTiles(V), have = SUMV(est);
     // 👀 상대 흐름
-    const picked = V.order.filter(i => V.picks[i] >= 0 && i !== me).map(i => `${nm(i)} ${SHAPES[V.picks[i]]}`);
+    const picked = V.order.filter(i => V.picks[i] >= 0 && i !== me).map(i => `${nm(i)} ${SN[V.picks[i]]}`);
     const last = V.hist[V.hist.length - 1];
     let opp = picked.length ? `이번 라운드 · ${picked.join(" · ")}` : "아직 아무도 상자에 넣지 않았어요";
     if (last) {
-      const ps = [0, 1, 2].filter(s => last.cnt[s]).map(s => `${SHAPES[s]} ${last.secret[s] ? "시크릿" : last.price[s] + "원"}(${last.cnt[s]}명)`);
+      const ps = [0, 1, 2].filter(s => last.cnt[s]).map(s => `${SN[s]} ${last.secret[s] ? "시크릿" : last.price[s] + "원"}(${last.cnt[s]}명)`);
       opp += ` / 지난 라운드 낙찰가 ${ps.join(" · ")}`;
       const sec = [0, 1, 2].find(s => last.secret[s]);
-      if (sec != null) opp += ` — ${SHAPES[sec]} 는 가장 비싸서 가격이 숨겨졌어요 (누군가 크게 썼어요)`;
+      if (sec != null) opp += ` — ${SN[sec]}${eun(sec)} 가장 비싸서 가격이 숨겨졌어요 (누군가 크게 썼어요)`;
     }
     // 📊 내 흐름
-    const need = [0, 1, 2].map(s => Math.max(0, CAP[s] - est[s]));
+    const T = planTarget(est, ROUNDS - V.round + 1, 1.5), need = [0, 1, 2].map(s => Math.max(0, T[s] - est[s]));
+    const tgtTxt = `목표 동그라미 ${T[0]} · 세모 ${T[1]} · 별 ${T[2]} → 빙고 ${place(T).lines}줄`;
     const doneBingo = place(est.map(x => Math.round(x)));
-    let mine = `${V.round}/${ROUNDS}라운드 · 내 코인 ${V.coinCnt[me]}개(${SUMV(COINS.filter((v, k) => V.coins[k]))}원) · 받았을 타일 약 ${Math.round(have * 10) / 10}개 (○${Math.round(est[0] * 10) / 10} △${Math.round(est[1] * 10) / 10} ☆${Math.round(est[2] * 10) / 10}) · 지금 짐작 빙고 ${doneBingo.lines}줄`;
+    let mine = `${V.round}/${ROUNDS}라운드 · 내 코인 ${V.coinCnt[me]}개(${SUMV(COINS.filter((v, k) => V.coins[k]))}원) · 받았을 타일 약 ${Math.round(have * 10) / 10}개 (동그라미 ${Math.round(est[0] * 10) / 10} · 세모 ${Math.round(est[1] * 10) / 10} · 별 ${Math.round(est[2] * 10) / 10}) · 지금 짐작 빙고 ${doneBingo.lines}줄`;
     // 💡 추천 + 👉 의미
     let rec = "상대 차례를 기다려요", why = "";
     const mine_ = V.needs.includes(me);
     if (V.phase === "pick" && mine_) {
       const sc = pickScores(V, me, "hard", r), s = sc.indexOf(Math.max(...sc));
       const early = V.picks.filter(x => x === s).length;
-      rec = `${SHAPES[s]} 에 넣기`;
-      why = early ? `${SHAPES[s]} 에 이미 ${early}명이 들어갔어요 — 이긴다면 타일이 ${early + 1}개 걸린 셈이에요 (${SHAPES[s]} 은 아직 ${Math.round(need[s] * 10) / 10}칸 더 필요).` : `${SHAPES[s]} 은 아직 ${Math.round(need[s] * 10) / 10}칸이 필요한데 경쟁자가 없어요 — 혼자면 1원만 내고도 받아요.`;
+      rec = `${SN[s]}에 넣기`;
+      why = need[s] < 0.5 ? `${SN[s]}${eun(s)} 목표를 이미 채웠어요 — 다른 도형은 경쟁이 더 심해서 여기 넣어 코인을 아껴요 (${tgtTxt}).` : early ? `${SN[s]}에 이미 ${early}명이 들어갔어요 — 이긴다면 타일이 ${early + 1}개 걸린 셈이에요 (${SN[s]}${eun(s)} 아직 ${Math.round(need[s] * 10) / 10}개 더 필요 · ${tgtTxt}).` : `${SN[s]}${eun(s)} 아직 ${Math.round(need[s] * 10) / 10}개가 필요한데 경쟁자가 없어요 — 혼자면 1원만 내고도 받아요 (${tgtTxt}).`;
     } else if (V.phase === "bid" && !V.bidDone[me]) {
       const p = bidPlan(V, me, "hard", r), b = bestSubset(V, p.target, p.mustKeep, r, "hard");
       rec = `코인 ${b.pick.map(k => COINS[k]).join("+")} = ${b.v}원`;
-      why = p.cntNow === 1 ? "이 도형엔 나 혼자라 1원이면 충분해요. 남는 코인은 다음 라운드와 마지막 동점 가림에 써요." : `${SHAPES[p.sh]} 에 ${p.cntNow}명 — 타일 ${p.cntNow}개가 걸렸고 내게 필요한 건 약 ${Math.round(p.need * 10) / 10}칸. 남은 ${p.roundsLeft}라운드에 쓸 값(${p.val}원)을 나눠 이 정도를 내요.${p.roundsLeft === 1 ? " 마지막이라 남은 코인은 다 써도 돼요." : ""}`;
+      why = p.cntNow === 1 ? "이 도형엔 나 혼자라 1원이면 충분해요. 남는 코인은 다음 라운드와 마지막 동점 가림에 써요." : `${SN[p.sh]}에 ${p.cntNow}명 — 타일 ${p.cntNow}개가 걸렸고 내게 필요한 건 약 ${Math.round(p.need * 10) / 10}개. 남은 ${p.roundsLeft}라운드에 쓸 값(${p.val}원)을 나눠 이 정도를 내요.${p.roundsLeft === 1 ? " 마지막이라 남은 코인은 다 써도 돼요." : ""}`;
     } else if (V.phase === "bid") rec = "다른 사람 입찰을 기다려요";
     else if (V.phase === "show") rec = "결과를 확인하고 다음 라운드를 준비해요";
     return { opp, mine, rec, why };

@@ -249,6 +249,8 @@
     sub: V => (V.over ? "끝" : `대결 ${V.match} · ${V.phase === "setup" ? "큐브 넣기" : `${V.round}/${V.rounds} 라운드`}`),
     chip: (V, i) => ({ t: V.sit === i && !V.over ? "💤" : `${V.pts[i]}점${V.wins[i] ? " 🏅" + V.wins[i] : ""}`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글
+    actText: (a) => (a && a.t === "setup" ? `큐브 배치 ${(a.v || []).join(" · ")}` : a && a.t === "play" ? `${a.k + 1}번째 통을 냄` : "—"),
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),

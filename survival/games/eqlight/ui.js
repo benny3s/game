@@ -215,6 +215,15 @@ button.eql-c{cursor:pointer}
     sub: V => (V.over ? "끝" : V.phase === "set" ? "수식 만들기" : `${V.round}/${V.maxRound}라운드`),
     chip: (V, i) => ({ t: V.phase === "set" ? (V.secretSet[i] ? "준비 ✓" : "만드는 중") : `${V.guesses[i].length}번 추측`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (힌트와 어긋나는 추측인지)
+    actText: (a) => (a && a.t === "set" ? `비밀 수식 ${a.eq}` : a && a.t === "guess" ? `추측 ${a.g}` : "—"),
+    review: (V, seat, myA) => {
+      if (!V || !myA || myA.t !== "guess" || !V.guesses || !V.guesses[seat] || !V.guesses[seat].length) return null;
+      const hist = V.guesses[seat], ok = H.consistent(myA.g, hist);
+      if (ok) return { sev: 0, why: "앞 힌트와 모두 맞는 수식이에요 — 고급 AI 는 남은 후보를 더 잘게 가르는 추측을 골라요" };
+      const n = H.findCands(hist, H.mkr(hist.length * 977 + 5), 40, 30000).length;
+      return { sev: 50, why: `앞 힌트와 어긋나는 수식이라 정답일 수 없어요 — 힌트와 맞는 후보는 ${n}${n >= 40 ? "개 이상" : "개"} 남아 있었어요` };
+    },
     coach: (V, me, since, names) => H.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => H.ai(V, me, "easy", rnd),

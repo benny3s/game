@@ -221,6 +221,15 @@
     sub: V => (V.over ? "끝" : `${V.round}/${V.rounds}라운드 · ${PH[V.phase] || ""}`),
     chip: (V, i) => ({ t: `벌점 ${V.pen[i]}`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글
+    actText: (a) => {
+      const CN = ["빨강", "초록", "파랑", "무지개"], PN = ["빨강", "초록", "파랑"];
+      if (!a) return "—";
+      if (a.t === "pick") return `바위 ${a.card} · ${CN[a.chip]} 칩`;
+      if (a.t === "put") return a.ped != null ? `${PN[a.ped]} 받침대에 놓음` : "바위를 놓음";
+      if (a.t === "pass") return "패스 (맨 나중에 놓기)";
+      return "—";
+    },
     coach: (V, me, since, names) => H.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => H.ai(V, me, "easy", rnd),

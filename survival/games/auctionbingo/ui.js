@@ -161,9 +161,9 @@
   function tutorial() {
     style();
     return [
-      { tag: "STEP 1 · 판", title: "빙고판을 도형으로 채워요", body: "9칸짜리 판에 <b>○ 4칸 · △ 3칸 · ☆ 2칸</b>이 정해져 있어요. 7라운드 동안 도형 타일을 모아 <b>빙고 줄이 가장 많은 사람</b>이 이겨요.",
+      { tag: "STEP 1 · 판", title: "빙고판을 도형으로 채워요", body: "9칸짜리 판에 <b>동그라미(○) 4칸 · 세모(△) 3칸 · 별(☆) 2칸</b>이 정해져 있어요. 7라운드 동안 도형 타일을 모아 <b>빙고 줄이 가장 많은 사람</b>이 이겨요.",
         boardHtml: `<div class="ab-tut">${boardHtml(null)}<small>가로 · 세로 · 대각선 한 줄이면 빙고 (8줄)</small></div>`, ms: 5400 },
-      { tag: "STEP 2 · 선택", title: "티켓을 도형 상자에 넣어요", body: "라운드마다 티켓 1장을 <b>○ △ ☆ 중 한 상자</b>에 넣어요. 이긴 사람은 그 상자에 들어간 <b>티켓 수만큼</b> 타일을 받아요. 앞사람이 넣은 곳이 보여서 눈치싸움이 돼요.",
+      { tag: "STEP 2 · 선택", title: "티켓을 도형 상자에 넣어요", body: "라운드마다 티켓 1장을 <b>동그라미 · 세모 · 별 중 한 상자</b>에 넣어요. 이긴 사람은 그 상자에 들어간 <b>티켓 수만큼</b> 타일을 받아요. 앞사람이 넣은 곳이 보여서 눈치싸움이 돼요.",
         boardHtml: `<div class="ab-tut"><div class="ab-boxes" style="width:100%"><span class="ab-box"><span class="sh">○</span><span class="who">🙂🐱</span><span class="tl">타일 2개</span></span><span class="ab-box"><span class="sh">△</span><span class="who">🐯</span><span class="tl">타일 1개</span></span><span class="ab-box"><span class="sh">☆</span><span class="who"></span><span class="tl">비어 있음</span></span></div></div>`, ms: 5600 },
       { tag: "STEP 3 · 입찰", title: "직접 해 봐요: 코인으로 이기기", body: "같은 상자에 든 사람끼리 <b>코인을 많이 낸 쪽</b>이 이겨요. 낸 코인은 이기든 지든 사라지고, 코인은 쪼갤 수 없어요. 상대가 <b>3원</b>을 냈어요 — 코인을 눌러 <b>4원 이상</b>을 만들어 보세요!",
         interactive: { hint: "👆 코인을 눌러 합이 4원 이상이 되게", doneText: "✅ 이겼어요! 하지만 코인이 줄었어요" },
@@ -189,7 +189,7 @@
     name: "경매 빙고", emoji: "🎯", short: "도형을 경매로 모아 빙고", min: 3, max: 8, defN: 5, board: false,
     opts: [],
     howto: [
-      "7라운드, 라운드마다 티켓 1장을 <b>○ △ ☆</b> 상자 중 한 곳에 넣어요 (앞사람이 넣는 게 보여요)",
+      "7라운드, 라운드마다 티켓 1장을 <b>동그라미 · 세모 · 별</b> 상자 중 한 곳에 넣어요 (앞사람이 넣는 게 보여요)",
       "코인을 <b>비공개</b>로 내서 같은 상자 안에서 가장 많이 낸 사람이 <b>그 상자 티켓 수만큼 타일</b>을 가져가요 (동률이면 나눠요)",
       "낙찰가만 공개되고 가장 비싼 상자는 <b>시크릿</b> · 누가 받았는지는 마지막에 공개",
       "빙고 줄 수 → 채운 칸 → 남은 코인 순으로 순위",
@@ -198,6 +198,24 @@
     sub: V => (V.over ? "끝" : `${V.round} / ${V.rounds}라운드 · ${PH[V.phase] || ""}`),
     chip: (V, i) => ({ t: V.over && V.final ? `${V.final.rows[i].lines}줄` : `🪙${V.coinCnt[i]}`, on: V.needs.includes(i) && !V.over }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 의 점수와 견줌)
+    actText: (a, V) => (a && a.t === "pick" ? `${["동그라미", "세모", "별"][a.s]} 상자에 넣음` : a && a.t === "bid" ? `코인 ${a.c.map(k => A.COINS[k]).join("+")} = ${A.bidValue(a.c)}원 입찰` : "—"),
+    review: (V, seat, myA, bestA) => {
+      const SN = ["동그라미", "세모", "별"], r0 = () => 0.5;
+      if (!V || !myA || !bestA) return null;
+      if (V.phase === "pick" && myA.t === "pick" && bestA.t === "pick") {
+        const sc = A.pickScores(V, seat, "hard", r0), mx = Math.max(...sc), cnt = s => V.picks.filter(x => x === s).length;
+        const sev = Math.round(100 * Math.max(0, sc[bestA.s] - sc[myA.s]) / Math.max(mx, 0.3));
+        return { sev, why: `${SN[bestA.s]}: 이미 ${cnt(bestA.s)}명 · 점수 ${sc[bestA.s].toFixed(1)} / ${SN[myA.s]}: 이미 ${cnt(myA.s)}명 · 점수 ${sc[myA.s].toFixed(1)} (점수 = 필요한 타일 ÷ 몰릴 사람 수)` };
+      }
+      if (V.phase === "bid" && myA.t === "bid" && bestA.t === "bid") {
+        const p = A.bidPlan(V, seat, "hard", r0), vm = A.bidValue(myA.c), vb = A.bidValue(bestA.c);
+        const contested = p.cntNow > 1 && p.useful > 0;
+        const sev = contested ? (vm < vb ? Math.min(100, (vb - vm) * 14) : Math.min(60, (vm - vb) * 6)) : (vm > vb ? Math.min(100, (vm - vb) * 12) : 0);
+        return { sev: Math.round(sev), why: contested ? `${SN[p.sh]}에 ${p.cntNow}명 — 타일 ${p.cntNow}개가 걸렸어요. 고급 AI 는 ${vb}원, 내 입찰 ${vm}원 (남은 코인 ${p.val}원 · ${p.roundsLeft}라운드)` : `이 도형엔 나 혼자(또는 더 필요 없음)라 ${vb}원이면 충분해요. 내 입찰 ${vm}원 (남은 코인 ${p.val}원)` };
+      }
+      return null;
+    },
     coach: (V, me, since, names) => A.coach(V, me, since, names),
     tutorial,
     qa: (V, me, rnd) => (V.phase === "pick" ? { t: "pick", s: Math.floor(rnd() * 3) } : A.ai(V, me, "easy", rnd)),

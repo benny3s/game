@@ -265,15 +265,24 @@
   const pc = x => Math.round(x * 100) + "%";
   function coach(V, me, since, names) {
     const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
-    const nm = i => esc((names && names[i]) || `${i + 1}번`);
+    const raw = i => String((names && names[i]) || `${i + 1}번`), nm = i => esc(raw(i));
+    // 이름 뒤 조사 (받침 · 숫자 읽기 · '나' 는 내가/나의/나와)
+    const jo = (i, k) => {
+      const s = raw(i);
+      if (s === "나") return k === "가" ? "내가" : k === "의" ? "나의" : "나와";
+      const core = s.replace(/[^0-9A-Za-z가-힣]+$/, "") || s, ch = core[core.length - 1], c = ch.charCodeAt(0);    // 끝의 괄호 · 기호는 건너뜀
+      const has = c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : /[013678lmnrLMNR]/.test(ch);       // 숫자 · 영문은 읽는 소리 기준 (영문은 ㄹㅁㄴ 으로 끝나는 것만 받침 있음으로 봄)
+      const P = { 가: ["이", "가"], 와: ["과", "와"], 의: ["의", "의"] }[k];
+      return esc(s) + P[has ? 0 : 1];
+    };
     if (V.over) return { opp: "결승 진출자가 가려졌어요.", mine: `대결 승 ${V.wins[me]}번`, rec: V.ranks[me] === 0 ? "🏆 2연승!" : "한 번 더 도전해 봐요!", why: "" };
-    if (!V.duel.includes(me)) return { opp: `${nm(V.duel[0])} 와 ${nm(V.duel[1])} 가 대결 중이에요.`, mine: `나는 쉬는 중 — 이긴 사람과 다음에 겨뤄요 (대결 승 ${V.wins[me]})`, rec: "두 사람의 큐브 값이 어떻게 나오는지 눈여겨봐요.", why: "공개되는 값으로 상대 배치를 짐작하는 연습이 돼요." };
+    if (!V.duel.includes(me)) return { opp: `${jo(V.duel[0], "와")} ${jo(V.duel[1], "가")} 대결 중이에요.`, mine: `나는 쉬는 중 — 이긴 사람과 다음에 겨뤄요 (대결 승 ${V.wins[me]})`, rec: "두 사람의 큐브 값이 어떻게 나오는지 눈여겨봐요.", why: "공개되는 값으로 상대 배치를 짐작하는 연습이 돼요." };
     const opp = V.duel.find(x => x !== me);
     const r = (() => { let a = 99 + V.match * 13 + V.round * 7 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; })();
     const revs = V.rev[opp].map((v, k) => (v == null ? null : `${k + 1}번 통=${v}`)).filter(Boolean);
     const lastRes = V.res || null;
-    let oppTxt = `${nm(opp)} 의 공개된 값: ${revs.length ? revs.join(" · ") : "아직 없어요"}`;
-    if (V.phase === "play" && V.lead === opp && V.sub[opp] >= 0) oppTxt = `${nm(opp)} 가 ${V.sub[opp] + 1}번째 통(색)을 냈어요 — ${V.sub[opp] <= 1 ? "아주 어두워서 작은 수일 거예요" : V.sub[opp] >= 5 ? "아주 밝아서 큰 수일 거예요" : "중간 색이에요"}. ` + oppTxt;
+    let oppTxt = `${jo(opp, "의")} 공개된 값: ${revs.length ? revs.join(" · ") : "아직 없어요"}`;
+    if (V.phase === "play" && V.lead === opp && V.sub[opp] >= 0) oppTxt = `${jo(opp, "가")} ${V.sub[opp] + 1}번째 통(색)을 냈어요 — ${V.sub[opp] <= 1 ? "아주 어두워서 작은 수일 거예요" : V.sub[opp] >= 5 ? "아주 밝아서 큰 수일 거예요" : "중간 색이에요"}. ` + oppTxt;
     if (lastRes) oppTxt = `방금: 선 ${nm(lastRes.lead)} ${lastRes.vl} vs ${lastRes.vf} → ${lastRes.win < 0 ? "무승부" : nm(lastRes.win) + " 승"}. ` + oppTxt;
     const usedMine = V.used[me].filter(Boolean).length;
     const mineTxt = V.mine ? `이번 대결 ${V.pts[me]} : ${V.pts[opp]} (${V.round}/7라운드) · 내 남은 통 ${V.mine.map((v, k) => (V.used[me][k] ? null : `${k + 1}번=${v}`)).filter(Boolean).join(" ")}` : "큐브를 고르는 중";

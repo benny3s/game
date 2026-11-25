@@ -243,8 +243,8 @@
         const h = V.hands[j]; let sum = SUMV(h.open), n = h.open.length;
         const hidN = h.hidN || 2;
         for (let g = 0; g < hidN; g++) { sum += take(); n++; }
-        // 상대는 한계에서 4 이상 모자라면 한 장 더 뽑는다고 봄
-        if (V.phase === "bet1" && sum <= L - 4 && top) { sum += take(); n++; }
+        // 아직 STAY 안 한 상대는 한계에서 3 이상 모자라면 (STAY 할 때까지) 한 장씩 더 뽑는다고 봄 (2차 베팅부터는 이미 끝)
+        if ((V.phase === "bet1" || V.phase === "hit") && !(V.stay && V.stay[j])) for (let g = 0; g < 3 && top && sum <= L - 3; g++) { sum += take(); n++; }
         const bust = sum > L, d = Math.abs(sum - L);
         const cur = { bust, d, n, over: Math.max(0, sum - L) };
         if (!best) best = cur;
@@ -280,7 +280,7 @@
     let a;
     const canRaise = V.cap > V.cur, room = Math.min(V.cap, V.cur + Math.max(1, Math.round(V.pot / 3)));
     if (toCall > 0 && share * potAfter < toCall * 0.95) a = { t: "fold" };
-    else if (canRaise && share > (tier === "hard" ? 0.5 : 0.58)) a = { t: "raise", to: share > 0.72 ? room : Math.min(V.cap, V.cur + 1) };
+    else if (canRaise && share > (tier === "hard" ? 0.5 : 0.58)) a = { t: "raise", to: tier === "hard" && share > 0.82 ? V.cap : share > 0.7 ? room : Math.min(V.cap, V.cur + 1) };
     else a = toCall > 0 ? { t: "call" } : { t: "check" };
     return { a, p, toCall, potAfter };
   }
@@ -293,6 +293,7 @@
     }
     if (V.phase === "bet1" || V.phase === "bet2") {
       let a = betPlan(V, me, tier, r).a;
+      if (tier === "normal" && r() < 0.18) a = a.t === "fold" ? { t: "call" } : a.t === "raise" ? (V.cur > V.bet[me] ? { t: "call" } : { t: "check" }) : a;      // 중급: 가끔 뻔한 실수 (폴드할 판에서 콜 · 레이즈할 판에서 소극적)
       if (tier === "easy") {
         if (a.t === "fold" && r() < 0.5) a = { t: "call" };
         if (a.t === "raise" && r() < 0.5) a = V.cur > V.bet[me] ? { t: "call" } : { t: "check" };
