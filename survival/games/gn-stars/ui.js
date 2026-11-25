@@ -13,7 +13,11 @@
 .st-tab .it small{font:700 10px var(--round);color:var(--soft)}
 .st-tab .it.z{opacity:.35}
 .st-tab .it.b b{filter:none}
-.c0{color:#f87171}.c1{color:#facc15}.c2{color:#60a5fa}.c3{color:#4ade80}
+.c0{color:#f87171}.c1{color:#facc15}.c2{color:#60a5fa}.c3{color:#4ade80}.cw{color:#f8fafc;text-shadow:0 0 5px rgba(255,255,255,.75)}
+.st-tab.w6{grid-template-columns:repeat(6,1fr);gap:4px;padding:7px 5px}.st-tab.w6 .it{font-size:17px}
+.st-p .cs em{font-style:normal}
+.st-pls.w .st-p{grid-template-columns:44px 28px 1fr auto 22px;gap:3px}.st-pls.w .cs{gap:2px}.st-pls.w .cs i{font-size:11.5px;padding:1px 3px}
+.st-p .cs{overflow:hidden}
 .st-pls{flex:none;display:grid;gap:3px}
 .st-p{display:grid;grid-template-columns:54px 30px 1fr auto 24px;gap:4px;align-items:center;padding:3px 6px;border-radius:10px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12);font:700 12px var(--round);color:var(--soft)}
 .st-p.me{border-color:#fde68a;background:rgba(253,230,138,.1)}
@@ -48,6 +52,10 @@
 .st-pick .c button:disabled{opacity:.3;cursor:default}
 .st-pick .c .n{min-width:14px;text-align:center;color:#fde68a;font-size:17px}
 .st-pick .c.z{opacity:.3}
+.st-pick.w6{grid-template-columns:repeat(3,1fr);gap:4px}
+.st-pick.w6 .c{display:flex;align-items:center;justify-content:space-between;gap:2px;padding:2px 6px;font-size:16px}
+.st-pick.w6 .c .l{display:grid;justify-items:center;line-height:1.05}
+.st-pick.w6 .c button{width:22px;height:22px;font-size:14px}
 .st-res{flex:none;display:flex;flex-wrap:wrap;gap:4px;justify-content:center}
 .st-res span{padding:2px 8px;border-radius:99px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);font:800 12px var(--round);color:#e2e8f0;white-space:nowrap}
 .st-res span.x{color:#fca5a5;border-color:rgba(252,165,165,.4)}
@@ -62,22 +70,31 @@
   let RS = null;
   const rs = (V, ctx) => {
     const key = `${ctx.g}|${V.round}|${V.phase}|${V.picker}`;
-    if (!RS || RS.key !== key) RS = { key, sel: 0, take: [0, 0, 0, 0, 0] };
+    if (!RS || RS.key !== key) RS = { key, sel: 0, take: Array(V.white ? 6 : 5).fill(0) };
     return RS;
   };
+  const sumA = a => a.reduce((s, x) => s + x, 0);
   const stars = (x, c) => (x > 0 ? `<b class="c${c}">${"★".repeat(Math.min(x, 6))}${x > 6 ? x : ""}</b>` : "");
-  const takeTxt = t => t.map((x, c) => (x > 0 ? (c < 4 ? stars(x, c) : `💣${x > 1 ? x : ""}`) : "")).filter(Boolean).join("") || "빈손";
+  const takeTxt = t => t.map((x, c) => (x > 0 ? (c < 4 ? stars(x, c) : c === 4 ? `💣${x > 1 ? x : ""}` : stars(x, "w")) : "")).filter(Boolean).join("") || "빈손";
+  // 테이블 · 가져가기 줄의 칸 순서: 색 4 · (흰 별) · 폭탄 — 값 번호는 take 배열 그대로 (0~3 색, 4 폭탄, 5 흰 별)
+  const ORD = V => (V.white ? [0, 1, 2, 3, 5, 4] : [0, 1, 2, 3, 4]);
+  const tabCnt = (V, t) => (t < 4 ? V.table[t] : t === 4 ? V.tbomb : V.tw);
   function tableHtml(V) {
-    const cell = c => `<div class="it c${c} ${V.table[c] ? "" : "z"}"><b>★</b>${V.table[c]}<small>${COL[c]}</small></div>`;
-    return `<div class="st-tab">${[0, 1, 2, 3].map(cell).join("")}<div class="it b ${V.tbomb ? "" : "z"}"><b>💣</b>${V.tbomb}<small>폭탄</small></div></div>`;
+    const cell = t => (t < 4 ? `<div class="it c${t} ${V.table[t] ? "" : "z"}"><b>★</b>${V.table[t]}<small>${COL[t]}</small></div>`
+      : t === 4 ? `<div class="it b ${V.tbomb ? "" : "z"}"><b>💣</b>${V.tbomb}<small>폭탄</small></div>`
+        : `<div class="it cw ${V.tw ? "" : "z"}"><b>★</b>${V.tw}<small>흰 별</small></div>`);
+    return `<div class="st-tab ${V.white ? "w6" : ""}">${ORD(V).map(cell).join("")}</div>`;
   }
+  // 별자리 칸: 색 별 n개 (+ 흰 별로 채운 만큼 ★) / 필요한 수 — 흰 별로 완성이 되면 테두리 · 아직 쓸 자리가 없는 흰 별은 따로 한 칸
+  const chipHtml = (V, i, c) => { const h = V.hold[i][c], u = V.use ? V.use[i][c] : 0; return `<i class="c${c} ${h + u >= NEED[c] ? "dn" : ""}">★${h}${u ? `<em class="cw">+${u <= 2 ? "★".repeat(u) : u + "★"}</em>` : ""}<small>/${NEED[c]}</small></i>`; };
   function playersHtml(V, ctx, me) {
     const shown = V.rev;
-    return `<div class="st-pls">${[...Array(V.n).keys()].map(i => {
+    return `<div class="st-pls ${V.white ? "w" : ""}">${[...Array(V.n).keys()].map(i => {
       let cd = "·", cls = "";
       if (shown) { cd = shown.cards[i]; cls = shown.elim[i] ? "x" : ""; }
       else if (V.phase === "card") { if (i === me && V.mine) { cd = V.mine; cls = "ok"; } else if (V.cards && V.cards[i]) { cd = V.cards[i]; } else cd = V.done[i] ? "✅" : "⏳"; }
-      const stars4 = [0, 1, 2, 3].map(c => `<i class="c${c} ${V.hold[i][c] >= NEED[c] ? "dn" : ""}">★${V.hold[i][c]}<small>/${NEED[c]}</small></i>`).join("");
+      const rest = V.white ? V.hw[i] - sumA(V.use[i]) : 0;
+      const stars4 = [0, 1, 2, 3].map(c => chipHtml(V, i, c)).join("") + (rest > 0 ? `<i class="cw" title="아직 쓸 자리가 없는 흰 별">★${rest}</i>` : "");
       return `<div class="st-p ${i === me ? "me" : ""} ${V.needs.includes(i) && !V.over ? "on" : ""} ${V.bombs[i] >= 3 ? "out" : ""}"><span class="nm">${i === me ? "나" : esc(nameOf(ctx, i))}</span><span class="cd ${cls}">${cd}</span><span class="cs">${stars4}</span><span class="bm">${V.bombs[i] ? "💣".repeat(V.bombs[i]) : ""}</span><span class="pt" title="승점">${V.points[i]}</span></div>`;
     }).join("")}</div>`;
   }
@@ -88,15 +105,15 @@
     return `<div class="st-res">${V.rev.takes.map(t => `<span class="${t.s === me ? "me" : ""}">${nm(t.s)} <small>(${t.k})</small> ➜ ${takeTxt(t.take)}</span>`).join("")}${ex.length ? `<span class="x">겹쳐서 제외: ${ex.map(i => `${nm(i)}(${V.rev.cards[i]})`).join(" ")}</span>` : ""}</div>`;
   }
   function swapHtml(V, me) {
-    const rows = [0, 1, 2, 3].filter(x => G.freeOf(V.hold[me], x) >= 3).map(x => `<div class="row"><b class="c${x}">★</b> ${COL[x]} 3개 ➜ ${[0, 1, 2, 3].filter(y => y !== x && V.bag[y] > 0).map(y => `<button data-sw="${x}-${y}" class="c${y}">★</button>`).join("")}</div>`);
+    const rows = [0, 1, 2, 3].filter(x => G.freeOf(V.hold[me], x, V.hw ? V.hw[me] : 0) >= 3).map(x => `<div class="row"><b class="c${x}">★</b> ${COL[x]} 3개 ➜ ${[0, 1, 2, 3].filter(y => y !== x && V.bag[y] > 0).map(y => `<button data-sw="${x}-${y}" class="c${y}">★</button>`).join("")}</div>`);
     return rows.length ? `<div class="st-swap"><div>🔄 같은 색 3개 = 원하는 색 1개 (눌러서 교환)</div>${rows.join("")}</div>` : "";
   }
   function render(stage, V, ctx) {
     style();
     const me = ctx.me, watch = ctx.mode === "watch" || me < 0, S = rs(V, ctx);
     const mine = !watch && ctx.canAct && V.needs.includes(me);
-    const left = V.bag.reduce((a, b) => a + b, 0);
-    let h = `<div class="st-top"><span class="st-rd">${V.round}라운드</span><span class="st-bg">별 ${left}개 남음 · 별자리 3개 완성 · 폭탄 3개면 끝</span></div>`;
+    const left = V.bag.reduce((a, b) => a + b, 0) + (V.bw | 0);
+    let h = `<div class="st-top"><span class="st-rd">${V.round}라운드</span><span class="st-bg">별 ${left}개 남음${V.white ? ` (흰 별 ${V.bw}개 포함)` : ""} · 별자리 3개 완성 · 폭탄 3개면 끝</span></div>`;
     h += tableHtml(V);
     h += playersHtml(V, ctx, watch ? -1 : me);
     let acts = "";
@@ -112,8 +129,10 @@
       if (mine && V.picker === me) {
         const sum = S.take.reduce((a, b) => a + b, 0);
         h += `<div class="st-info">내 차례! 테이블에서 <b>${V.pickK}개</b>를 골라요 (지금 ${sum}개) — 폭탄은 되도록 피해요</div>`;
-        const tb = [...V.table, V.tbomb];
-        acts = `<div class="st-acts">${swapHtml(V, me)}<div class="st-pick">${tb.map((tc, t) => `<div class="c ${tc ? "" : "z"} ${t < 4 ? "c" + t : ""}"><b>${t < 4 ? "★" : "💣"}</b><div class="stp"><button data-m="${t}" ${S.take[t] > 0 ? "" : "disabled"}>−</button><span class="n">${S.take[t]}</span><button data-p="${t}" ${S.take[t] < tc && sum < V.pickK ? "" : "disabled"}>+</button></div><small>테이블 ${tc}</small></div>`).join("")}</div><button class="btn big primary" data-a="take" ${sum === V.pickK ? "" : "disabled"}>${sum === V.pickK ? "이대로 가져가기" : `${V.pickK - sum}개 더 골라요`}</button></div>`;
+        const glyph = t => (t < 4 ? "★" : t === 4 ? "💣" : "★"), cl = t => (t < 4 ? "c" + t : t === 5 ? "cw" : "");
+        const stp = (t, tc) => `<div class="stp"><button data-m="${t}" ${S.take[t] > 0 ? "" : "disabled"}>−</button><span class="n">${S.take[t]}</span><button data-p="${t}" ${S.take[t] < tc && sum < V.pickK ? "" : "disabled"}>+</button></div>`;
+        const cells = ORD(V).map(t => { const tc = tabCnt(V, t); return V.white ? `<div class="c ${tc ? "" : "z"} ${cl(t)}"><div class="l"><b>${glyph(t)}</b><small>테이블 ${tc}</small></div>${stp(t, tc)}</div>` : `<div class="c ${tc ? "" : "z"} ${cl(t)}"><b>${glyph(t)}</b>${stp(t, tc)}<small>테이블 ${tc}</small></div>`; }).join("");
+        acts = `<div class="st-acts">${swapHtml(V, me)}<div class="st-pick ${V.white ? "w6" : ""}">${cells}</div><button class="btn big primary" data-a="take" ${sum === V.pickK ? "" : "disabled"}>${sum === V.pickK ? "이대로 가져가기" : `${V.pickK - sum}개 더 골라요`}</button></div>`;
       } else h += `<div class="st-info">${V.picker === me && !watch ? "" : `<b>${esc(nameOf(ctx, V.picker))}</b>가 ${V.pickK}개를 고르는 중이에요…`}</div>`;
     } else {
       h += resHtml(V, ctx, watch ? -1 : me);
@@ -147,9 +166,11 @@
         boardHtml: `<div class="st-tut"><div class="st-pls">${row("나", 5, "me", [1, 0, 1, 0], "💣💣", 1)}</div></div>`, ms: 6400 },
       { tag: "STEP 4 · 교환", title: "같은 색 별 3개 = 원하는 색 1개", body: "같은 색 별이 <b>3개 있으면 원하는 색 별 1개</b>로 바꿀 수 있어요 (언제든). 쓸모없는 색을 모아 필요한 색으로 바꾸는 게 요령이에요. 별이나 폭탄을 다른 사람과 주고받을 수는 없어요.",
         boardHtml: `<div class="st-tut"><div class="st-swap"><div>🔄 같은 색 3개 = 원하는 색 1개</div><div class="row"><b class="c0">★</b> 빨강 3개 ➜ <button class="c2">★</button></div></div></div>`, ms: 6000 },
-      { tag: "STEP 5 · 끝", title: "언제 끝나요?", body: "<b>① 누가 폭탄 3개를 받으면</b> 끝(그 사람이 탈락후보, 승점 1등이 우승) · <b>② 누가 별자리 3개를 완성하면</b> 끝(승점 1등이 우승, 꼴찌가 탈락후보) · <b>③ 별이 바닥나면</b> 승점 비교 (우리 판의 안전장치). 낮은 숫자는 폭탄을 피하기 쉽지만 같은 숫자끼리 부딪히기 쉬워요. 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
+      { tag: "STEP 5 · 흰 별", title: "흰 별은 어느 별자리에나 써요", body: "주머니에는 색깔 별 말고 <b>흰 별 5개</b>도 섞여 있어요. 흰 별은 <b>원하는 별자리 어디든 자유롭게 쓸 수 있는 특수별</b>이에요 — 양자리에 빨간 별이 2개뿐이어도 흰 별 1개가 있으면 완성이에요! 우리 판은 흰 별을 <b>점수가 가장 높아지는 별자리에 저절로</b> 써 줘요. 단, 같은 색 3개 교환에는 흰 별을 쓸 수 없어요.",
+        boardHtml: `<div class="st-tut"><div class="st-tab w6" style="width:100%"><div class="it c0"><b>★</b>2<small>빨강</small></div><div class="it c1 z"><b>★</b>0<small>노랑</small></div><div class="it c2 z"><b>★</b>0<small>파랑</small></div><div class="it c3 z"><b>★</b>0<small>초록</small></div><div class="it cw"><b>★</b>1<small>흰 별</small></div><div class="it b z"><b>💣</b>0<small>폭탄</small></div></div><div class="st-pls"><div class="st-p me"><span class="nm">나</span><span class="cd">·</span><span class="cs"><i class="c0 dn">★2<em class="cw">+★</em><small>/3</small></i><i class="c1">★0<small>/4</small></i><i class="c2">★0<small>/5</small></i><i class="c3">★0<small>/6</small></i></span><span class="bm"></span><span class="pt">2</span></div></div></div>`, ms: 7600 },
+      { tag: "STEP 6 · 끝", title: "언제 끝나요?", body: "<b>① 누가 폭탄 3개를 받으면</b> 끝(그 사람이 탈락후보, 승점 1등이 우승) · <b>② 누가 별자리 3개를 완성하면</b> 끝(승점 1등이 우승, 꼴찌가 탈락후보) · <b>③ 별이 바닥나면</b> 승점 비교 (우리 판의 안전장치). 낮은 숫자는 폭탄을 피하기 쉽지만 같은 숫자끼리 부딪히기 쉬워요. 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
         boardHtml: `<div class="st-tut"><div class="st-pls">${row("가", 4, "", [3, 4, 5, 0], "💣", 10)}${row("나", 2, "me", [3, 0, 1, 6], "", 9)}</div></div>`, ms: 7600 },
-      { tag: "STEP 6 · 직접", title: "이번 라운드에서 제외되는 숫자는?", body: "다섯 명이 <b>2 · 3 · 3 · 4 · 5</b> 카드를 냈어요. 같은 숫자를 낸 사람은 전부 제외돼요. 제외되는 숫자를 눌러요!",
+      { tag: "STEP 7 · 직접", title: "이번 라운드에서 제외되는 숫자는?", body: "다섯 명이 <b>2 · 3 · 3 · 4 · 5</b> 카드를 냈어요. 같은 숫자를 낸 사람은 전부 제외돼요. 제외되는 숫자를 눌러요!",
         interactive: { hint: "👆 제외되는 숫자를 눌러요", doneText: "✅ 3을 낸 두 명이 겹쳐서 제외! 남은 2 · 4 · 5가 낮은 숫자부터 가져가요." },
         render(stage, ctrl) {
           stage.innerHTML = `<div class="st-tut"><div class="st-pls">${row("가", 2, "", [0, 0, 0, 0], "", 0)}${row("나", 3, "me", [0, 0, 0, 0], "", 0)}${row("다", 3, "", [0, 0, 0, 0], "", 0)}${row("라", 4, "", [0, 0, 0, 0], "", 0)}${row("마", 5, "", [0, 0, 0, 0], "", 0)}</div><div class="st-cards" style="width:100%;grid-template-columns:repeat(4,1fr)">${[2, 3, 4, 5].map(c => `<button data-w="${c}">${c}</button>`).join("")}</div></div>`;
@@ -162,7 +183,7 @@
   const CEM = G.CEM, pcT = x => Math.round(x * 100) + "%", sgnT = x => ((x = Math.round(x * 10) / 10) >= 0 ? "+" : "−") + Math.abs(x).toFixed(1);
   const swTxt = s => `${CEM[s.from]}3개 → ${CEM[s.to]}1개 교환`;
   const swapsTxt = a => (a && Array.isArray(a.swaps) && a.swaps.length ? ` (${a.swaps.filter(s => s && CEM[s.from] && CEM[s.to]).map(swTxt).join(", ")})` : "");
-  const takeStr = t => (Array.isArray(t) ? t.map((x, i) => (x > 0 ? `${i < 4 ? CEM[i] : "💣"}${x}` : "")).filter(Boolean).join(" ") : "") || "빈손";
+  const takeStr = t => (Array.isArray(t) ? t.map((x, i) => (x > 0 ? `${i < 4 ? CEM[i] : i === 4 ? "💣" : "⚪"}${x}` : "")).filter(Boolean).join(" ") : "") || "빈손";
   function actText(a, V, names) {
     if (!a || typeof a !== "object") return "—";
     if (a.t === "card") return Number.isInteger(a.c) ? `${a.c}번 카드 내기${swapsTxt(a)}` : "—";
@@ -183,7 +204,8 @@
       return { sev, why: `교환하면 별자리 진행 점수 ${m.from.toFixed(1)} → ${m.to.toFixed(1)} (${sgnT(m.ev)})${inBest ? " · 고급 AI 도 같은 교환을 해요" : m.ev > 0.05 ? "" : " · 이 교환은 점수를 올리지 못해요"}` };
     }
     if (myA.t !== bestA.t) return null;
-    if (myA.t === "card" ? myA.c === bestA.c && sameSw(myA, bestA) : JSON.stringify(myA.take) === JSON.stringify(bestA.take) && sameSw(myA, bestA)) return null;   // 같은 수
+    const nt = a => (Array.isArray(a.take) && V.white && a.take.length === 5 ? [...a.take, 0] : a.take);   // 흰 별 판에서 5칸으로 온 수는 흰 별 0
+    if (myA.t === "card" ? myA.c === bestA.c && sameSw(myA, bestA) : JSON.stringify(nt(myA)) === JSON.stringify(nt(bestA)) && sameSw(myA, bestA)) return null;   // 같은 수
     const r = G.evalActs(V, seat, [myA, bestA], seed), m = r[0], b = r[1];
     if (!m || !b) return null;
     const gap = b.ev - m.ev;
@@ -191,7 +213,7 @@
     if (info && info.same) sev = Math.min(sev, 20);   // 고급 AI 도 가끔 두는 수
     sev = Math.max(0, Math.min(100, Math.round(sev)));
     const stat = e => (e.kind === "card" ? `겹칠 확률 ${pcT(e.col)} · 기대 점수 ${sgnT(e.ev)}${e.swapGain ? ` (교환 ${sgnT(e.swapGain)} 포함)` : ""}`
-      : `별자리 진행 ${sgnT(e.prog)}${e.pen ? ` · 폭탄 벌점 −${e.pen.toFixed(1)} (폭탄 ${e.b1}개)` : ""} → 합계 ${sgnT(e.ev)}`);
+      : `별자리 진행 ${sgnT(e.prog)}${e.wn ? ` (흰 별 ${e.wn}개 포함)` : ""}${e.pen ? ` · 폭탄 벌점 −${e.pen.toFixed(1)} (폭탄 ${e.b1}개)` : ""} → 합계 ${sgnT(e.ev)}`);
     const tail = gap >= 0.15 ? ` — 기대 점수 ${gap.toFixed(1)} 차이` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 상대 카드 추정까지 봐요)" : " — 거의 같아요";
     return { sev, why: `고급 AI 수 (${actText(bestA, V, info && info.names)}): ${stat(b)} / 내 수 (${actText(myA, V, info && info.names)}): ${stat(m)}${tail}` };
   }
@@ -200,15 +222,15 @@
   window.SVUI["gn-stars"] = {
     name: "별자리 게임", emoji: "🌟", short: "카드로 별을 가져가요 · 같은 숫자는 제외 · 폭탄은 피해요", min: 4, max: 7, defN: 7, board: false,
     show: "더 지니어스 · 시즌 3 · 별자리 게임", season: "시즌 3 블랙가넷",
-    opts: [],
-    diff: "방송은 7명(별 7개 + 폭탄 1개) — 우리는 4~7명이고 테이블의 별 수는 인원만큼이에요 · 별자리는 별이 모이면 자동 완성돼요 (방송은 별자리 판에 색을 맞춰 넣어요) · 방송 규칙에는 주머니에 흰 별(원하는 별자리에 쓰는 특수별 5개)이 더해지는데 우리 판은 흰 별을 뺐어요 · 방송의 거래 · 약속(말로 하는 교섭)은 없어요 · 방송 규칙 화면의 끝나는 경우는 폭탄 3개 · 별자리 3개 둘뿐이에요 — 30라운드가 넘거나 별이 바닥나면 승점 비교로 끝나는 건 우리 판의 안전장치예요",
+    opts: [{ k: "white", label: "흰 별 (주머니에 5개 추가)", items: [[5, "넣기 (방송처럼)"], [0, "빼기"]], def: 5 }],
+    diff: "방송은 7명(별 7개 + 폭탄 1개) — 우리는 4~7명이고 테이블의 별 수는 인원만큼이에요 · 별자리는 별이 모이면 자동 완성돼요 (방송은 별자리 판에 색을 맞춰 넣어요) · 흰 별(방송: 주머니에 5개 추가, 원하는 별자리 어디든 쓰는 특수별)도 넣었어요 — 방송은 별자리 판에 직접 놓지만 우리 판은 점수가 가장 높아지는 별자리에 저절로 써요 · 흰 별을 같은 색 3개 교환에 쓸 수 있는지는 방송 규칙 화면에 없어서 우리 판은 못 쓰게 했어요 (우리가 정한 처리) · 방송 본 경기에서는 흰 별이 한 번도 안 나왔어요 (나무위키 기준) · 흰 별 없는 판은 옵션 '흰 별: 빼기'예요 · 방송의 거래 · 약속(말로 하는 교섭)은 없어요 · 방송 규칙 화면의 끝나는 경우는 폭탄 3개 · 별자리 3개 둘뿐이에요 — 30라운드가 넘거나 별이 바닥나면 승점 비교로 끝나는 건 우리 판의 안전장치예요",
     howto: [
       "<b>최대한 많은 별자리</b>를 완성해 승점을 모아요 — 🔴 양자리 3개=2점 · 🟡 화살자리 4개=3점 · 🔵 카시오페아 5개=5점 · 🟢 거문고자리 6개=7점 (별이 모이면 자동 완성)",
-      "라운드마다 색깔별 7개 + 폭탄 1개 공개 (우리 판은 인원만큼의 별) · 모두 <b>숫자카드 1~5 한 장</b>을 비밀로 내고 동시 공개 — <b>같은 숫자는 선택에서 제외</b>",
-      "남은 사람은 <b>낮은 숫자부터</b> 별과 폭탄 중 <b>그 숫자만큼</b> 가져가요 (모자라면 남은 것 전부) · 같은 색 별 3개 = 원하는 색 1개 교환",
+      "라운드마다 주머니에서 무작위로 뽑은 별 7개 + 폭탄 1개 공개 (우리 판은 인원만큼의 별) — 주머니에는 색깔 별 말고 <b>흰 별 5개</b>도 섞여 있어요 · 모두 <b>숫자카드 1~5 한 장</b>을 비밀로 내고 동시 공개 — <b>같은 숫자는 선택에서 제외</b>",
+      "남은 사람은 <b>낮은 숫자부터</b> 별과 폭탄 중 <b>그 숫자만큼</b> 가져가요 (모자라면 남은 것 전부) · 같은 색 별 3개 = 원하는 색 1개 교환 (<b>흰 별</b>은 원하는 별자리 어디든 쓰는 특수별 — 저절로 점수가 가장 높은 별자리에 써요 · 교환에는 못 써요)",
       "<b>폭탄 3개</b>를 받으면 그 사람이 <b>탈락후보</b> · <b>별자리 3개</b>가 완성되면 끝(승점 꼴찌 탈락후보) · 둘 다 즉시 끝, 승점 1등이 우승",
     ],
-    sub: V => (V.over ? "끝" : `${V.round}라운드 · 별 ${V.bag.reduce((a, b) => a + b, 0)}개 남음`),
+    sub: V => (V.over ? "끝" : `${V.round}라운드 · 별 ${V.bag.reduce((a, b) => a + b, 0) + (V.bw | 0)}개 남음`),
     chip: (V, i) => ({ t: `${V.points[i]}점${V.bombs[i] ? ` 💣${V.bombs[i]}` : ""}`, on: V.needs.includes(i) && !V.over, out: V.bombs[i] >= 3 }),
     render, result,
     actText, review,

@@ -45,7 +45,7 @@
   { id: "gn-betrps", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "베팅 가위바위보", emoji: "✌️", v: 3,
     short: "증인의 표식 · 승부 또는 베팅 · 1:1 심리전",
     src: "더 지니어스 시즌 3 베팅 가위바위보 · 12화 결승 3회전 · 시즌 4 그랜드 파이널 3화 데스매치 · 디글 클래식 「[#더지니어스3] 결승 3R 베팅 가위바위보」 · 「[더지니어스4] 베팅 가위바위보 01」 규칙 설명 확인" },
-  { id: "gn-stars", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "별자리 게임", emoji: "🌟", v: 4,
+  { id: "gn-stars", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "별자리 게임", emoji: "🌟", v: 5,
     short: "카드로 별을 가져가요 · 같은 숫자는 제외 · 폭탄은 피해요",
     src: "더 지니어스 시즌 3 별자리 게임 · 7화 메인 매치 · 디글 클래식 블랙가넷 7화 별자리 게임 규칙 설명 확인" },
   { id: "gn-invest", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "투자와 기부", emoji: "💰", v: 2,

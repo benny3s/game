@@ -1,5 +1,6 @@
 // 별자리 게임 규칙 시험 (node survival/test/gn-stars_selftest.js)
 // 방송 7화 1라운드 벡터 · 겹침 제외 · 낮은 숫자부터 가져가기 · 폭탄 3개 · 별자리 3개 · 교환 · 별 보존 · 숨은 정보 · AI 무작위 판
+// + 흰 별(주머니 5개 · 원하는 별자리에 쓰는 특수별) 규칙 · 흰 별 없는 옛 판 고정 시험(옛 복기 호환) · 흰 별 AI · 선생님
 'use strict';
 const G = require('../games/gn-stars/core.js');
 let pass = 0, fail = 0;
@@ -187,6 +188,160 @@ const cards = (st, arr) => arr.forEach((c, i) => ap(st, i, { t: 'card', c }));
   const avg = t => +(sc[t] / cnt[t]).toFixed(2);
   console.log('  평균 순위 (낮을수록 좋음) easy', avg('easy'), 'normal', avg('normal'), 'hard', avg('hard'));
   ok(avg('hard') <= avg('easy') + 0.15, '어려운 AI 가 쉬운 AI 보다 크게 나쁘지 않아요');
+}
+// 12) 흰 별 (cfg.white = 5): 주머니 105개 · 테이블에 섞여 나옴 · 가져가기 6칸 · 어느 별자리에나 쓰는 특수별
+const tot5 = st => st.bag.reduce((a, b) => a + b, 0) + st.table.reduce((a, b) => a + b, 0) + st.hold.reduce((s, h) => s + h.reduce((a, b) => a + b, 0), 0) + (st.bw | 0) + (st.tw | 0) + (st.hw ? st.hw.reduce((a, b) => a + b, 0) : 0);
+{
+  const WC = (n, seed, extra) => G.init({ n, seed, cfg: Object.assign({ white: 5 }, extra || {}) });
+  const st0 = WC(7, 31);
+  ok(st0.white === 5 && st0.bw + st0.tw === 5 && tot5(st0) === 105, `흰 별 판: 주머니에 흰 별 5개가 더해져 별이 모두 105개 (${tot5(st0)})`);
+  ok(st0.table.reduce((a, b) => a + b, 0) + st0.tw === 7 && st0.tbomb === 1, '테이블은 별 7개(흰 별 포함) + 폭탄 1개');
+  const v0 = G.view(st0, 0);
+  ok(v0.white === 5 && v0.hw.length === 7 && v0.use.length === 7 && v0.bw + v0.tw === 5, 'view 에 흰 별 칸 (white · tw · bw · hw · use)');
+  ok(G.init({ n: 5, seed: 31, cfg: { white: true } }).white === 5 && G.init({ n: 5, seed: 31, cfg: { white: 0 } }).white === undefined, 'white:true 는 5개 · white:0 은 흰 별 없는 옛 규칙');
+  // 흰 별이 실제로 섞여 나와요 (300판 첫 테이블의 흰 별 비율 ≈ 5/105 ≈ 4.8%)
+  let wsum = 0, items = 0;
+  for (let g = 0; g < 300; g++) { const s = WC(7, 500 + g); wsum += s.tw; items += 7; }
+  ok(wsum > 0 && wsum / items > 0.025 && wsum / items < 0.075, `테이블 별 중 흰 별 비율 ${(wsum / items * 100).toFixed(1)}% (기대 약 4.8%)`);
+  // 가져가기: 흰 별 6번째 칸 · 5칸으로 보내도 흰 별 0
+  const st = WC(3, 32, { table: [1, 1, 0, 0], bomb: 1, tw: 2 });
+  ok(tot5(st) === 105 && st.tw === 2 && st.bw === 3, '시험용 테이블: 색 2 + 흰 별 2 + 폭탄 1');
+  cards(st, [3, 4, 4]);   // 0번만 남음 → 3개 고름 (색 2 · 흰 2 · 폭탄 1 중)
+  ok(G.needs(st).join() === '0' && st.pickK === 3, '3번 카드 한 명만 남아 3개를 골라요');
+  ok(!G.apply(st, 0, { t: 'take', take: [0, 0, 0, 0, 0, 3] }).ok, '흰 별은 테이블에 2개뿐이라 3개는 거절');
+  ok(!G.apply(st, 0, { t: 'take', take: [1, 1, 0, 0, 0] }).ok, '합이 3 이 아니면 거절 (5칸)');
+  ok(!G.apply(st, 0, { t: 'take', take: [1, 0, 0, 0, 0, 1, 1] }).ok, '7칸은 거절');
+  ok(ap(st, 0, { t: 'take', take: [1, 0, 0, 0, 0, 2] }).ok && st.hw[0] === 2 && st.hold[0][0] === 1 && st.tw === 0, '빨강 1 + 흰 별 2 가져감 (6칸)');
+  ok(tot5(st) === 105, '가져간 뒤에도 별 보존');
+  ok(G.view(st, 0).points[0] === 2 && G.view(st, 0).use[0].join() === '2,0,0,0', '빨강 1 + 흰 별 2 = 양자리 완성 (흰 별 2개를 양자리에) → 승점 2');
+  // 5칸으로 보내도 받아요 (흰 별 0)
+  const s5 = WC(3, 33, { table: [3, 0, 0, 0], bomb: 1, tw: 1 });
+  cards(s5, [2, 5, 5]);
+  ok(G.needs(s5).join() === '0', '2번 카드 한 명이 2개를 골라요');
+  ok(ap(s5, 0, { t: 'take', take: [2, 0, 0, 0, 0] }).ok && s5.hw[0] === 0 && s5.hold[0][0] === 2, '5칸 take 는 흰 별 0 으로 받아요');
+  // 남은 것이 모자라면 흰 별까지 전부 · 종류가 하나뿐이면 바로
+  const s2 = WC(3, 34, { table: [0, 0, 0, 0], bomb: 0, tw: 2 });
+  cards(s2, [1, 2, 3]);
+  ok(s2.hw[0] === 1 && s2.hw[1] === 1 && s2.tw === 0, '흰 별만 남으면 고르지 않고 바로 가져가요 (1번 1개 · 2번 1개)');
+  const s3 = WC(3, 35, { table: [0, 0, 0, 0], bomb: 1, tw: 1 });
+  cards(s3, [3, 1, 2]);   // 1번(카드 1) 이 먼저 1개 고름: 흰 별 or 폭탄
+  ok(G.needs(s3).join() === '1', '카드 1 의 주인이 흰 별 · 폭탄 중 고름');
+  ap(s3, 1, { t: 'take', take: [0, 0, 0, 0, 0, 1] });
+  ok(s3.hw[1] === 1 && s3.bombs[2] + s3.bombs[0] === 1 && s3.phase === 'rev', '고른 뒤 남은 폭탄은 다음 사람 몫 (모자라면 전부)');
+}
+// 13) 흰 별 계산: 점수가 가장 높은 별자리에 자동으로 · 완성 판정 · 교환 잠금
+{
+  const P = (h, w) => G.ptsOf(h, w), C = (h, w) => G.consOf(h, w);
+  ok(P([2, 0, 0, 0], 0) === 0 && P([2, 0, 0, 0], 1) === 2 && C([2, 0, 0, 0], 1) === 1, '빨강 2 + 흰 별 1 = 양자리');
+  ok(P([2, 3, 5, 0], 1) === 8 && C([2, 3, 5, 0], 1) === 2, '빨강 2 · 노랑 3 · 파랑 5 + 흰 별 1 → 점수가 더 높은 화살자리(3점)에 써서 8점 (양자리가 아니라)');
+  ok(P([2, 3, 5, 0], 2) === 10 && C([2, 3, 5, 0], 2) === 3, '흰 별 2 면 별자리 3개 10점');
+  ok(P([0, 0, 0, 0], 3) === 2 && P([0, 0, 0, 0], 5) === 5, '별이 하나도 없어도 흰 별 3개=양자리 2점 · 5개=카시오페아 5점');
+  ok(P([0, 0, 0, 0], 6) === 7 && P([0, 0, 0, 0], 9) === 9, '흰 별 6개면 거문고자리 7점 · 9개면 거문고 + 양자리 9점');
+  ok(P([3, 0, 0, 0], 2) === 2 && P([3, 4, 0, 0], 0) === 5, '쓸 곳이 없는 흰 별은 점수를 안 올려요 (이미 완성이면 그대로)');
+  const pl = G.plan([2, 0, 0, 0], 1); ok(pl.k === 1 && pl.cost === 1, 'plan: 별자리 1개 · 흰 별 1개 사용');
+  ok(G.useOf([2, 3, 5, 0], 1).join() === '0,1,0,0' && G.useOf([2, 0, 0, 0], 0).join() === '0,0,0,0', 'useOf: 어느 별자리에 몇 개 쓰는지');
+  ok(C([3, 4, 5, 0], 0) === 3 && C([0, 0, 0, 0], 12) === 2 && P([0, 0, 0, 0], 12) === 12, '별자리 개수 판정 — 점수가 가장 높은 쪽으로 써요 (흰 별 12개: 3개 10점보다 카시오페아 + 거문고자리 2개 12점)');
+  // 교환: 흰 별로 완성한 별자리의 색 별은 잠겨요 · 흰 별은 교환에 못 써요
+  ok(G.freeOf([2, 0, 0, 0], 0, 1) === 0 && G.freeOf([2, 0, 0, 0], 0, 0) === 2, '빨강 2 + 흰 별 1 로 완성한 양자리의 빨강 2개는 잠겨요');
+  ok(G.freeOf([5, 0, 0, 0], 0, 1) === 2 && G.freeOf([5, 0, 0, 0], 0, 0) === 2, '빨강 5 면 양자리는 색 별로 완성 → 남는 2개 교환 가능');
+  const st = G.init({ n: 3, seed: 40, cfg: { white: 5 } }); st.hold[0] = [3, 0, 0, 0]; st.bag[0] -= 3; st.hw[0] = 5;
+  ok(!G.apply(st, 0, { t: 'swap', from: 0, to: 2 }).ok, '완성한 양자리 별 3개는 흰 별이 있어도 교환 못 해요');
+  st.hold[0] = [6, 0, 0, 0]; st.bag[0] -= 3;
+  ok(G.apply(st, 0, { t: 'swap', from: 0, to: 2 }).ok && st.hold[0].join() === '3,0,1,0' && st.hw[0] === 5, '남는 3개는 교환 · 흰 별 수는 그대로');
+  // 별자리 3개 → 즉시 종료 (색 별로 · 흰 별로)
+  const e = G.init({ n: 3, seed: 41, cfg: { white: 5, table: [0, 0, 1, 0], bomb: 0, tw: 0 } });
+  e.hold[0] = [3, 4, 4, 0]; e.bag[0] -= 3; e.bag[1] -= 4; e.bag[2] -= 4 + 1;
+  cards(e, [1, 4, 5]);
+  ok(e.over && e.why === 'cons', '파랑 4 → 5 로 별자리 3개 → 끝');
+  const e2 = G.init({ n: 3, seed: 42, cfg: { white: 5, table: [0, 0, 0, 0], bomb: 0, tw: 1 } });
+  e2.hold[0] = [3, 4, 4, 0]; e2.bag[0] -= 3; e2.bag[1] -= 4; e2.bag[2] -= 4;
+  cards(e2, [1, 4, 5]);
+  ok(e2.over && e2.why === 'cons' && e2.hw[0] === 1 && G.view(e2, 0).points[0] === 10, '흰 별 1개로 카시오페아를 채워 별자리 3개 → 즉시 끝 (승점 10)');
+  ok(G.ranks(e2)[0] === 0 && G.view(e2, 0).cons[0] === 3, '완성한 사람이 1등 · 별자리 3개');
+}
+// 14) 흰 별 판: 숨은 정보 · 무작위 판(끝까지 · 별 105개 보존 · AI 가 안 막힘) · AI 가 흰 별을 챙김 · 선생님
+{
+  const mk = (c1, c2) => { const st = G.init({ n: 5, seed: 23, cfg: { white: 5 } }); ap(st, 1, { t: 'card', c: c1 }); ap(st, 2, { t: 'card', c: c2 }); return st; };
+  const a = mk(1, 4), b = mk(5, 2);
+  ok(JSON.stringify(G.view(a, 0).pub) === JSON.stringify(G.view(b, 0).pub), '흰 별 판: 남이 낸 카드가 달라도 공개 지문은 같아요');
+  const mkR = () => { let s = 5; return () => { s = (s * 1103515245 + 12345) >>> 0; return (s >>> 8) / 16777216; }; };
+  for (const tier of ['easy', 'normal', 'hard']) ok(JSON.stringify(G.ai(G.view(a, 0), 0, tier, mkR())) === JSON.stringify(G.ai(G.view(b, 0), 0, tier, mkR())), `흰 별 판 ${tier} AI 는 남의 숨은 카드에 따라 달라지지 않아요`);
+  ok(JSON.stringify(G.coach(G.view(a, 0), 0, 0, null)) === JSON.stringify(G.coach(G.view(b, 0), 0, 0, null)), '흰 별 판 선생님도 남의 숨은 카드를 쓰지 않아요');
+  const Vf = G.view(a, 0), snap = JSON.stringify(Vf); G.ai(Vf, 0, 'hard', mkR()); G.coach(Vf, 0, 0, null);
+  ok(JSON.stringify(Vf) === snap, 'ai · coach 가 받은 view 를 안 바꿔요');
+  const R = seed => { let s = seed >>> 0 || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return (s >>> 8) / 16777216; }; };
+  let games = 0, rounds = 0, why = { bomb: 0, cons: 0, out: 0 }, whiteTaken = 0, usedEnd = 0;
+  for (let g = 0; g < 160; g++) {
+    const n = 3 + (g % 5), st = G.init({ n, seed: 700 + g, cfg: { white: 5 } }), rr = R(g * 9 + 2), tiers = ['easy', 'normal', 'hard'];
+    let guard = 0;
+    while (!G.over(st) && guard++ < 4000) {
+      const nd = G.needs(st);
+      if (!nd.length) { if (G.auto(st) === null) { ok(false, `흰 별 판 멈춤 ${g}`); break; } G.advance(st); continue; }
+      for (const seat of nd.slice()) {
+        if (!G.needs(st).includes(seat)) continue;
+        const V = G.view(st, seat), act = G.ai(V, seat, tiers[(seat + g) % 3], rr);
+        let r = act ? G.apply(st, seat, act) : { ok: false };
+        if (!r.ok) { const l = G.legal(st, seat); r = G.apply(st, seat, l[0]); ok(false, `흰 별 판 AI 가 거절당함 ${g} ${JSON.stringify(act)}`); }
+      }
+      if (tot5(st) !== 105) { ok(false, `흰 별 판 별 보존 깨짐 ${g} (${tot5(st)})`); break; }
+    }
+    ok(G.over(st), `흰 별 판 ${g}번째가 끝남 (n=${n})`);
+    games++; rounds += st.round; why[st.why]++; whiteTaken += st.hw.reduce((x, y) => x + y, 0); if (st.hw.some(w => w > 0)) usedEnd++;
+    const rk = G.ranks(st); ok(rk.includes(0) && rk.every(x => x >= 0 && x < n), '흰 별 판 순위 범위');
+  }
+  console.log(`  흰 별 무작위 ${games}판: 평균 ${(rounds / games).toFixed(1)}라운드 · 끝난 이유`, JSON.stringify(why), `· 판당 가져간 흰 별 ${(whiteTaken / games).toFixed(2)}개 · 흰 별을 가져간 판 ${usedEnd}`);
+  ok(usedEnd > games / 3, '흰 별이 실제로 가져가져요 (세 판 중 한 판 넘게)');
+  // AI 는 테이블에 흰 별이 있으면 먼저 가져가요
+  const pk = G.init({ n: 3, seed: 60, cfg: { white: 5, table: [2, 1, 1, 0], bomb: 1, tw: 1 } });
+  cards(pk, [2, 5, 5]);   // 0번만 남아 2개
+  ok(G.needs(pk).join() === '0', '시험 준비: 0번이 2개를 고름');
+  const ta = G.ai(G.view(pk, 0), 0, 'hard', () => 0.5);
+  ok(ta.t === 'take' && ta.take.length === 6 && ta.take[5] === 1, `고급 AI 는 흰 별부터 가져가요 (${JSON.stringify(ta.take)})`);
+  ok(ap(pk, 0, ta).ok, 'AI 가 고른 수가 통해요');
+  // 가져가기 평가에 흰 별 값이 들어가요 (흰 별 1개 ≥ 색 별 1개)
+  const g0 = G.init({ n: 3, seed: 61, cfg: { white: 5, table: [1, 0, 0, 0], bomb: 1, tw: 1 } }); cards(g0, [1, 5, 5]);
+  const Vp = G.view(g0, 0), gW = G.takeGain(Vp, 0, [0, 0, 0, 0, 0, 1], []), gR = G.takeGain(Vp, 0, [1, 0, 0, 0, 0, 0], []);
+  ok(gW && gR && gW.ev >= gR.ev && gW.wn === 1, `takeGain: 흰 별 1개(${gW && gW.ev.toFixed(2)})가 색 별 1개(${gR && gR.ev.toFixed(2)})보다 같거나 나아요`);
+  // 선생님 글에 흰 별이 나와요
+  const cs = G.init({ n: 4, seed: 62, cfg: { white: 5, table: [1, 1, 0, 0], bomb: 1, tw: 1 } }); cs.hold[0] = [2, 0, 0, 0]; cs.hw[0] = 1; cs.bag[0] -= 2;
+  const cc = G.coach(G.view(cs, 0), 0, 0, null);
+  ok(/흰 별/.test(cc.mine) && /양자리/.test(cc.mine) && /흰 별/.test(cc.why), `선생님: 내 별에 흰 별 · 쓰는 별자리가 나옴 (${cc.mine})`);
+}
+// 15) 옛 규칙 고정 시험: white 옵션이 없는(또는 0 인) 판은 흰 별이 생기기 전 core 와 판 상태 전체가 같아요 → 옛 복기가 그대로 재생
+// 옛 규칙 고정 시험: 흰 별 옵션이 없는 판은 이 core 가 나오기 전(흰 별 없던 core)과 같은 판이 나와야 해요 (옛 복기 호환).
+// 행동은 core 의 AI 가 아니라 씨앗 난수로 고르고, 매 걸음 판 상태 전체(JSON)의 지문을 이어 붙인 값을 옛 core 가 내던 값(GOLD)과 견줘요.
+function goldRun(G, g) {
+  const R = seed => { let s = seed >>> 0 || 1; return () => { s = (s * 1664525 + 1013904223) >>> 0; return (s >>> 8) / 16777216; }; };
+  const fnv = (h, s) => { for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
+  const n = 3 + (g % 5), rr = R(g * 31 + 5), st = G.init({ n, seed: 4000 + g * 11, cfg: g % 2 ? {} : { white: 0 } });
+  let h = 2166136261, steps = 0;
+  const tk = k => { const t = [...st.table, st.tbomb], r = [0, 0, 0, 0, 0]; for (let i = 0; i < k; i++) { const av = [0, 1, 2, 3, 4].filter(q => t[q] > 0); if (!av.length) break; const q = av[Math.floor(rr() * av.length)]; t[q]--; r[q]++; } return r; };
+  while (!G.over(st) && steps++ < 3000) {
+    const nd = G.needs(st);
+    if (!nd.length) { G.advance(st); h = fnv(h, JSON.stringify(st)); continue; }
+    for (const seat of nd.slice()) {
+      if (!G.needs(st).includes(seat)) continue;
+      let a;
+      if (st.phase === 'card') { a = { t: 'card', c: 1 + Math.floor(rr() * 5) }; if (rr() < 0.4) a.swaps = [{ from: Math.floor(rr() * 4), to: Math.floor(rr() * 4) }]; }
+      else { a = { t: 'take', take: tk(st.pickK) }; if (rr() < 0.4) a.swaps = [{ from: Math.floor(rr() * 4), to: Math.floor(rr() * 4) }]; }
+      let r = G.apply(st, seat, a);
+      if (!r.ok) r = G.apply(st, seat, G.legal(st, seat)[0]);
+      h = fnv(h, (r.ok ? 'o' : 'x') + JSON.stringify(st));
+    }
+  }
+  return h.toString(36) + ':' + st.round + ':' + st.why;
+}
+{
+  const GOLD = ["kpvqag:12:bomb","yf3y62:12:bomb","1cjrnm7:13:bomb","17xv3du:8:bomb","5jcgyw:10:cons","vh0ixr:11:bomb","bq61r8:9:bomb","1o2vdko:9:bomb","1bayl1f:11:bomb","84nbij:15:bomb","7t2pgi:8:bomb","otkm5i:5:bomb","1bgwd6d:3:bomb","1hclnvs:14:bomb","1gejnnh:15:bomb","q8x1wt:5:bomb"];
+  const got = GOLD.map((_, g) => goldRun(G, g));
+  ok(got.every((x, g) => x === GOLD[g]), `흰 별 없는 판 ${GOLD.length}판이 옛 core 와 같은 판 상태(지문 · 라운드 · 끝난 이유) — 다른 것: ${got.map((x, g) => (x === GOLD[g] ? null : `${g}:${x}≠${GOLD[g]}`)).filter(Boolean).join(' ')}`);
+  const o = G.init({ n: 5, seed: 77 }), o2 = G.init({ n: 5, seed: 77, cfg: { white: 0 } });
+  ok(!('tw' in o) && !('hw' in o) && !('bw' in o) && !('white' in o), '흰 별 없는 판의 st 에는 흰 별 칸이 아예 없어요 (옛 판 상태와 같은 모양)');
+  ok(!('hw' in o2) && JSON.stringify(Object.assign({}, o2, { cfg: 0 })) === JSON.stringify(Object.assign({}, o, { cfg: 0 })), 'white:0 도 같은 판');
+  ok(G.view(o, 0).white === 0 && G.view(o, 0).hw.every(x => x === 0) && G.view(o, 0).tw === 0, '흰 별 없는 판의 view 는 흰 별 0');
+  const q = G.init({ n: 3, seed: 78, cfg: { table: [2, 1, 1, 0], bomb: 1 } });
+  cards(q, [3, 5, 5]);
+  ok(!G.apply(q, 0, { t: 'take', take: [1, 1, 1, 0, 0, 0] }).ok && ap(q, 0, { t: 'take', take: [1, 1, 1, 0, 0] }).ok, '흰 별 없는 판: 6칸 take 는 거절 · 5칸은 그대로');
 }
 console.log(`별자리 게임 시험: 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);
