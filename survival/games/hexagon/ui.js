@@ -171,7 +171,7 @@
       if (o.pick) cls += " pick"; if (si >= 0) cls += " sel";
       if (hl[i]) cls += " " + hl[i];
       const inner = face ? `<span class="lt">${LET[i]}</span><span class="v">${V.board[i]}</span>` : `<span class="l">${LET[i]}</span>${peek ? `<span class="v">${V.board[i]}</span>` : ""}`;
-      return `<button type="button" class="${cls}" data-c="${i}"${si >= 0 ? ` data-n="${si + 1}"` : ""}${o.pick ? "" : ' tabindex="-1"'} style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%" aria-label="${LET[i]} 칸"><i>${inner}</i></button>`;
+      return `<button type="button" class="${cls}" data-c="${i}"${si >= 0 ? ` data-n="${si + 1}"` : ""}${o.pick ? "" : ' tabindex="-1" disabled'} style="left:${p.x.toFixed(2)}%;top:${p.y.toFixed(2)}%" aria-label="${LET[i]} 칸"><i>${inner}</i></button>`;
     }).join("")}${svg}</div>`;
   }
 
