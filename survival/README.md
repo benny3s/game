@@ -51,7 +51,7 @@
 | core 한 게임 | `node survival/test/<id>_selftest.js` |
 | ui 한 게임 (가상 틀) | `node survival/test/<id>_ui.js [--shots <임시 폴더>]` |
 | 껍데기 + 모든 게임 혼자(AI) 끝까지 | `node survival/test/shell_ui.js [--prog blood] [--only id,id] [--shots <폴더>]` |
-| 아케이드 QA | `node test/qa/run.js --quick --no-selftest --games survival` |
+| 아케이드 QA | `node test/qa/run.js --quick --no-selftest --games survival` — 어댑터(`test/qa/adapters/survival.js`)가 `list/*.js` 를 읽어 **목록 전 항목**을 하나씩 (방송 칸 → 시즌 칸 → 카드 → 혼자 → 시작 → 끝까지), 폰 375×667 · 판 화면은 한 화면(세로 스크롤 없음) · 콘솔 오류 0. 새 게임은 목록에만 올리면 자동으로 검사에 들어옴 |
 
 시험은 소리를 끄고(`--mute-audio`), 빈 포트를 잡고(8860 부터), 끝나면 브라우저와 서버를 닫아요. 시험 손잡이: `window.__survival` (`ready` · `LIST` · `ORDER` · `ensure(id)` · `pick(id, tab)` · `fast` · `pause` · `autoAct` · `probe` · `fp` · `round`).
 

@@ -1,0 +1,94 @@
+// 베니 서바이벌 어댑터 — 공용 틀(survival/index.html + shell.js) 로 목록(list/*.js)의 게임을 하나씩 고르고 '혼자(AI)' 로 끝까지.
+//  · 게임 목록은 survival/list/*.js 를 그대로 읽어 만듦 (shell 과 같은 순서 · 같은 검사) → 새 게임이 목록에 올라오면 자동으로 검사에 들어옴
+//  · 한 게임 = 모드 하나 ('solo:<id>'): 방송 칸 → 시즌 칸 → 카드를 진짜로 눌러 고르고(게임 파일은 그때 불러옴) → [혼자] → [시작] → 내 차례마다 ui.qa(없으면 core.ai) 로 둠 → 결과 창
+//  · 폰 검사는 375×667 (phoneViewport) · 판 화면은 한 화면(세로 스크롤 없음, oneScreen) · 콘솔 오류 0 은 공통 검사(absorb)
+//  · 손잡이: window.__survival — ready · LIST · pick · fast · pause · autoAct · probe · fp · round · canAct
+//  · 친구랑(온라인)은 아케이드 mock 으로 아직 안 붙임 — 껍데기 시험 survival/test/*_ui.js 가 가상 틀로 확인
+'use strict';
+const fs = require('fs'), path = require('path'), vm = require('vm');
+
+const LIST_DIR = path.join(__dirname, '..', '..', '..', 'survival', 'list');
+const FILES = ['devil', 'devil-s3', 'genius', 'blood'];            // shell.js 의 LIST_FILES 와 같은 순서
+const PROGS = ['devil', 'genius', 'blood'];
+const READ_ERRS = [];
+const readList = () => {
+  const out = [], seen = new Set();
+  for (const f of FILES) {
+    const file = path.join(LIST_DIR, f + '.js');
+    if (!fs.existsSync(file)) continue;
+    const sb = {}; sb.window = sb;                                  // shell 도 파일마다 window.SVList 를 새로 비우고 읽음
+    try { vm.runInNewContext(fs.readFileSync(file, 'utf8'), sb, { timeout: 2000 }); } catch (e) { READ_ERRS.push(f + ': ' + String(e.message).slice(0, 80)); continue; }   // 깨진 목록 파일은 shell 도 건너뜀 (보고서에는 남김)
+    for (const e of Array.isArray(sb.SVList) ? sb.SVList : []) {
+      if (!e || typeof e !== 'object' || !/^[A-Za-z0-9_-]{1,40}$/.test(e.id || '') || !e.title || !PROGS.includes(e.prog) || seen.has(e.id) || e.link) continue;
+      seen.add(e.id); out.push({ id: e.id, prog: e.prog, season: String(e.season || ''), title: e.title });
+    }
+  }
+  return out;
+};
+
+const ENTRIES = readList();
+const withArg = (fn, arg) => new Function('seed', 'return (' + fn.toString() + ')(seed, ' + JSON.stringify(arg) + ');');
+
+// 카드를 눌러 고르고 [혼자] → [시작] (브라우저 안). 게임 파일을 못 불러오면 예외
+const startOf = e => withArg(async (seed, E) => {
+  const S = window.__survival, qa = window.__qa, sleep = ms => new Promise(r => setTimeout(r, ms));
+  await S.ready;
+  const until = async (f, ms) => { const end = Date.now() + ms; while (Date.now() < end) { if (f()) return true; await sleep(60); } return false; };
+  const q = s => document.querySelector(s);
+  const click = el => { if (el) el.click(); return !!el; };
+  if (!q('#play').hidden || !q('#resOv').hidden) throw new Error('첫 화면이 아님');
+  if (!click(q(`#progTabs .prog[data-p="${E.prog}"]`))) throw new Error('방송 칸이 없음: ' + E.prog);
+  click(q(`#seasonBar .ssn[data-s="${CSS.escape(E.season)}"]`));           // 시즌 칸이 하나뿐이면 없을 수도 있음
+  if (!await until(() => q(`#gameCards .g-card[data-g="${E.id}"]`), 4000)) throw new Error('카드가 없음: ' + E.id);
+  click(q(`#gameCards .g-card[data-g="${E.id}"]`));
+  if (!await until(() => !q('#panel').hidden && window.SVUI && window.SVUI[E.id] && window.SVCores && window.SVCores[E.id], 15000)) {
+    throw new Error('게임을 못 불러옴: ' + E.id + ' — ' + (q('#gameLoad') ? q('#gameLoad').textContent.trim().slice(0, 60) : ''));
+  }
+  S.fast(1); S.pause(false);
+  click(q('#tabSolo'));
+  await sleep(120);
+  const b = q('#startBtn');
+  if (!b || b.disabled) throw new Error('시작 단추가 없거나 꺼져 있음');
+  b.click();
+  if (!await until(() => !!S.ses, 6000)) throw new Error('시작해도 판이 안 열림');
+  window.__qaCoach = 0;
+  return true;
+}, e);
+
+const modes = {};
+for (const e of ENTRIES) modes['solo:' + e.id] = { timeout: 120000, stuckMs: 30000, start: startOf(e) };
+const keys = Object.keys(modes);
+
+module.exports = {
+  id: 'survival',
+  path: 'survival/',
+  query: '',
+  hookName: 'window.__survival',
+  phoneViewport: { width: 375, height: 667 },
+  oneScreen: true,
+  entries: ENTRIES,
+  ready: () => !!window.__survival && !!window.__qa && !!window.__survival.LIST && window.__survival.LIST.length > 0 && !!document.querySelector('#gameCards .g-card'),
+  menu: () => document.getElementById('play').hidden && document.getElementById('resOv').hidden,
+  home: () => {
+    const q = id => document.getElementById(id);
+    if (!q('resOv').hidden) { const b = q('resBox').querySelector('[data-r="home"], [data-r="leave"]'); if (b) { b.click(); return; } }
+    if (!q('play').hidden) { q('backBtn').click(); q('backBtn').click(); return; }       // 두 번 눌러야 나감 (backGuard)
+    location.reload();
+  },
+  setup: () => { window.__qaCoach = 0; if (window.__survival) { window.__survival.fast(1); window.__survival.pause(false); } },
+  modes,
+  quickModes: keys,                         // 빠른 모드도 목록 전 항목 (한 게임이 몇 초)
+  monkeyStart: keys.includes('solo:bloodrps') ? 'solo:bloodrps' : keys[0],
+  onlineGap: '친구랑(온라인)은 아케이드 mock 에 안 붙임 — 껍데기 시험 survival/test/*_ui.js (가상 틀)로 확인',
+  gaps: (ENTRIES.length ? [] : ['survival/list/*.js 에 게임이 하나도 없음 — 검사할 판이 없음']).concat(READ_ERRS.map(s => '목록 파일을 못 읽음 (그 파일 게임은 검사에서 빠짐) — ' + s)),
+  reproHint: (mode, seed) => `${mode.replace('solo:', '')}: 첫 화면에서 방송 칸 → 시즌 칸 → 카드 선택 → [혼자] → [시작] 후 내 차례마다 __survival.autoAct()`,
+  probe: () => window.__survival.probe(),
+  drive: () => {
+    const S = window.__survival, qa = window.__qa;
+    if (qa.clickText(/^알겠어요$/)) return;
+    let n = 0;
+    for (let i = 0; i < 6; i++) { if (S.autoAct()) n++; else break; }
+    // 곁가지: AI 선생님 단추를 판마다 한 번 눌러 봄 (coach 가 예외 없이 그려지나)
+    if (n && !window.__qaCoach) { window.__qaCoach = 1; qa.click('#coachBtn'); }
+  },
+};

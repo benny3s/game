@@ -121,6 +121,11 @@ class GameRun {
       const sticky = lay.scrollH > lay.H + 1;
       this.issue({ sev: sticky ? 'info' : 'low', title: `${where}: 다른 요소에 가려진 단추${sticky ? ' (스크롤하면 보일 수 있음)' : ''}`, detail: lay.covered.join(' | '), kind: 'layout', shot: await this.shot(page, where + '_covered') });
     }
+    // 한 화면 게임(어댑터 oneScreen): 폰에서 판 화면이 세로로 스크롤되면 안 됨 (첫 메뉴 화면은 제외)
+    if (this.A.oneScreen && phone && where !== 'menu' && lay.scrollH > lay.H + 1) {
+      bad = true; notes.push(`한 화면 넘침 ${lay.scrollH}>${lay.H}`);
+      this.issue({ sev: 'medium', title: `${where}: 한 화면에 안 들어감 (세로 스크롤 ${lay.scrollH}px > ${lay.H}px)`, detail: `폰 ${lay.W}×${lay.H} 에서 판 화면이 세로로 스크롤됨`, kind: 'layout', shot: await this.shot(page, where + '_onescreen') });
+    }
     if (lay.toasted && lay.toasted.length) this.issue({ sev: 'low', title: `${where}: 알림(토스트)이 떠 있는 동안 단추를 덮어 누름을 막음`, detail: lay.toasted.join(' | ') + ' — 토스트에 pointer-events:none 이 없으면 그 사이 누른 손가락이 먹힘', kind: 'layout' });
     if (lay.clipped.length) {
       notes.push(`글자 잘림 ${lay.clipped.length}`);

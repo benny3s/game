@@ -29,7 +29,7 @@ const CHROME = [
 ];
 // (11-06) Claude 앱 안에서 깐 브라우저는 앱 전용 폴더에만 생김 — 앱 밖(작업 스케줄러 밤 점검)에서는 위 자리에 없어 'Executable doesn't exist'
 const PW_APP = process.env.LOCALAPPDATA + '/Packages/Claude_pzs8sxrjxfjjc/LocalCache/Local/ms-playwright';
-const ALL = ['portal', 'gostop', 'seotda', 'poker', 'baduk', 'omok', 'cube', 'chess', 'janggi', 'yut', 'billiards', 'volley', 'land', 'onecard', 'nyang', 'snake', 'sc', 'draw', 'catch'];
+const ALL = ['portal', 'gostop', 'seotda', 'poker', 'baduk', 'omok', 'cube', 'chess', 'janggi', 'yut', 'billiards', 'volley', 'land', 'onecard', 'nyang', 'snake', 'sc', 'draw', 'catch', 'survival'];
 
 // ── 인자
 const argv = process.argv.slice(2);
@@ -202,7 +202,8 @@ async function pool(tasks, n) {
     const monkeyMs = OPT.monkeyMs || (OPT.quick ? 15000 : 20000);
     const unit = (engine, vp, plan) => tasks.push(async () => {
       if (!engines[engine]) return;
-      const ctx = await engines[engine].newContext(env.ctxOpts(vp, engine));
+      // 어댑터가 폰 화면 크기를 따로 정하면(survival = 375×667) 폰 검사에 그 크기를 씀
+      const ctx = await engines[engine].newContext(Object.assign(env.ctxOpts(vp, engine), vp === 'phone' && A.phoneViewport ? { viewport: A.phoneViewport } : {}));
       await env.guard(ctx);
       await ctx.addInitScript(P.HELPERS);
       if (!OPT.live) await ctx.addInitScript({ path: path.join(ROOT, 'common', 'arena-mock.js') });

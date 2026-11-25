@@ -1,7 +1,7 @@
 /* 베니 아케이드 — 오프라인(비행기 모드) 지원 Service Worker
    · 온라인일 때는 항상 서버에서 최신 파일을 먼저 받고(Network-first) 캐시를 갱신해 배포가 밀리지 않게 함
    · 비행기 모드·통신 음영 지역 등 오프라인일 때는 캐시된 화면·퍼즐 은행으로 즉시 열림 */
-const CACHE = "benny-arcade-v34";
+const CACHE = "benny-arcade-v35";
 const CORE = [
   "./",
   "./index.html",
@@ -51,6 +51,14 @@ const CORE = [
   "./genius/core.js",
   "./genius/tutorial.js",
   "./genius/main.js",
+  "./survival/",                       // 베니 서바이벌: 껍데기 + 목록만 미리 (게임 파일은 고를 때 받아 캐시에 쌓임)
+  "./survival/index.html",
+  "./survival/style.css",
+  "./survival/shell.js",
+  "./survival/list/devil.js",
+  "./survival/list/devil-s3.js",
+  "./survival/list/genius.js",
+  "./survival/list/blood.js",
   "./brain/",
   "./brain/index.html",
   "./brain/style.css",

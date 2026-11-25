@@ -1332,6 +1332,25 @@ button { font: inherit; cursor: pointer; }
           </g>
           <text x="200" y="176" font-family="sans-serif" font-size="14" font-weight="800" fill="#fbbf24" text-anchor="middle">흑과 백 · 결! 합! · 십이장기</text>
         </svg>`;
+      case "survival":
+        return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+          <defs><linearGradient id="svBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1a0b12"/><stop offset="1" stop-color="#2b1020"/></linearGradient></defs>
+          <rect width="400" height="200" fill="url(#svBg)"/>
+          <circle cx="200" cy="92" r="84" fill="#dc2626" opacity=".14"/>
+          <g transform="translate(36,44)">
+            <rect width="92" height="92" rx="14" fill="#1f1020" stroke="#a78bfa" stroke-width="2.5"/>
+            <text x="46" y="60" font-size="46" text-anchor="middle">😈</text>
+          </g>
+          <g transform="translate(154,34)">
+            <rect width="92" height="92" rx="14" fill="#0d1729" stroke="#fbbf24" stroke-width="2.5"/>
+            <text x="46" y="62" font-size="46" text-anchor="middle">🧠</text>
+          </g>
+          <g transform="translate(272,44)">
+            <rect width="92" height="92" rx="14" fill="#2a0a12" stroke="#ef4444" stroke-width="2.5"/>
+            <text x="46" y="60" font-size="46" text-anchor="middle">🩸</text>
+          </g>
+          <text x="200" y="168" font-family="sans-serif" font-size="14" font-weight="800" fill="#fca5a5" text-anchor="middle">데블스 플랜 · 더 지니어스 · 피의 게임</text>
+        </svg>`;
       case "brain":
         return `<svg viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
           <defs><linearGradient id="brBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1729"/><stop offset="1" stop-color="#152b44"/></linearGradient></defs>
@@ -1475,7 +1494,7 @@ button { font: inherit; cursor: pointer; }
     gostop: "card", poker: "card", seotda: "card", onecard: "card",
     yut: "boardparty", cube: "boardparty", catch: "boardparty", draw: "boardparty",
     volley: "action", land: "action", snake: "action", billiards: "action", sc: "action", kua: "action",
-    nyang: "brain", genius: "brain", brain: "brain", escape: "brain",
+    nyang: "brain", genius: "brain", survival: "brain", brain: "brain", escape: "brain",
   };
   const COLLECTIONS = [
     { id: "col_trad", group: "trad", name: "전통 전략 모음", emoji: "♟️", sub: "바둑 · 오목 · 체스 · 장기", players: "1~2명 · 👀구경" },
@@ -1826,7 +1845,7 @@ button { font: inherit; cursor: pointer; }
     const grid = $("grid");
     if (activeCat === "groups" && !searchQ) {
       const byId = Object.fromEntries(games.map(g => [g.id, g]));
-      const standalone = ["nyang", "gostop", "genius", "brain", "escape"].map(id => byId[id]).filter(Boolean);
+      const standalone = ["nyang", "gostop", "genius", "survival", "brain", "escape"].map(id => byId[id]).filter(Boolean);
       const colHtml = COLLECTIONS.map(col => {
         const items = games.filter(g => col.group === "card" ? ["poker", "seotda", "onecard"].includes(g.id) : GROUP_OF[g.id] === col.group);
         if (!items.length) return "";

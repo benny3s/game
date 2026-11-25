@@ -23,7 +23,7 @@ function freePort(start) {
 }
 
 async function serve(root, startPort = 8830) {
-  const port = await freePort(startPort);
+  let port = await freePort(startPort);
   const missing = [];                       // { path, referer }
   const srv = http.createServer((q, r) => {
     let rel;
@@ -42,7 +42,18 @@ async function serve(root, startPort = 8830) {
       r.end(d);
     });
   });
-  await new Promise(ok => srv.listen(port, '127.0.0.1', ok));
+  // 빈 포트를 찾은 뒤 실제로 붙기 전에 다른 시험이 먼저 잡아도(동시에 여러 시험을 돌릴 때) 다음 포트로 다시 시도
+  for (let tries = 0; ; tries++) {
+    try {
+      await new Promise((ok, bad) => {
+        const onErr = e => { srv.removeListener('listening', onOk); bad(e); };
+        const onOk = () => { srv.removeListener('error', onErr); ok(); };
+        srv.once('error', onErr); srv.once('listening', onOk);
+        srv.listen(port, '127.0.0.1');
+      });
+      break;
+    } catch (e) { if (e.code !== 'EADDRINUSE' || tries >= 20) throw e; port = await freePort(port + 1); }
+  }
   return { port, base: `http://127.0.0.1:${port}/`, missing, close: () => new Promise(ok => srv.close(() => ok())) };
 }
 
