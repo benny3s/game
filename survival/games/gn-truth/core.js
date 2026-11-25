@@ -299,7 +299,7 @@
 
   // ── 보이는 것 ─────────────────────────────────────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), me = typeof seat === "number" && seat >= 0 ? seat : -1;
+    const all = seat === "all", me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const items = { first: st.first, dbl: st.have.dbl.slice(), ex: st.have.ex.slice(), nul: st.have.nul.slice(), usedDbl: st.used.dbl.slice(), usedEx: st.used.ex.slice(), usedNul: st.used.nul.slice() };
     const hist = st.hist.map(e => (e.g !== undefined ? { i: e.i, by: e.by, g: e.g, ok: e.ok } : { i: e.i, by: e.by, q: e.q, v: e.v, rang: e.rang, rev: e.rev, exu: e.exu, nul: e.nul }));
     const pubObj = { p: st.phase, t: st.turn, a: st.acts, d: st.doubled, it: items, pq: st.pend, np: st.nulPend, h: hist, k: st.known, c: st.codes.map(c => (c === null ? 0 : 1)), o: st.over, w: st.winner };
