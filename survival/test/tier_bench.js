@@ -23,6 +23,7 @@ const LUCK = {
   bloodrps: '가위바위보 + 카드 — 읽기 싸움',
   blindbet: '모르는 상대 베팅을 읽는 심리 싸움',
   hilo: '숨긴 카드 · 점수 카드 공개 순서가 운',
+  gemmarket: '최종 점수 = 내 점수 × 모르는 마니또의 점수라 내 점수만 올려서는 못 이김 (내 점수만 비교하면 고급 승률 63~68%)',
 };
 
 const argv = process.argv.slice(2);
