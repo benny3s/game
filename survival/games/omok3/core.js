@@ -49,6 +49,7 @@
   for (const L of LINES) for (let k = 0; k + 5 <= L.length; k++) WIN5.push(L.slice(k, k + 5));
   const TRIS = [];                                                           // 서로 이웃한 세 칸
   for (let i = 0; i < NP; i++) for (const j of NB[i]) if (j > i) for (const k of NB[i]) if (k > j && NB[j].includes(k)) TRIS.push([i, j, k]);
+  const T3F = new Int16Array(TRIS.length * 3); TRIS.forEach((t, i) => { for (let k = 0; k < 3; k++) T3F[i * 3 + k] = t[k]; });
   const dist = (a, b) => { const dq = Math.abs(PTS[a][0] - PTS[b][0]), dy = Math.abs(PTS[a][1] - PTS[b][1]); return Math.max(dq, (dq + dy) / 2); };
   const NEAR2 = PTS.map((_, i) => { const o = []; for (let j = 0; j < NP; j++) if (j !== i && dist(i, j) <= 2) o.push(j); return o; });
   // 칸 이름: 가로 A~K(왼쪽부터) + 그 세로선 맨 아래가 1
@@ -82,10 +83,12 @@
         else { if (c && run === 5) { m |= c; if (kinds) kinds[c].line = true; } c = t; run = t ? 1 : 0; }
       }
     }
-    const n3 = [0, 0, 0];
-    for (let i = 0; i < NP; i++) if (B.h[i] === 3) n3[tp[i]]++;
-    for (const c of [1, 2]) if (n3[c] >= 5) { m |= c; if (kinds) kinds[c].tower5 = true; }
-    for (const [a, b, d] of TRIS) {
+    let t1 = 0, t2 = 0;
+    for (let i = 0; i < NP; i++) if (B.h[i] === 3) { if (tp[i] === 1) t1++; else t2++; }
+    if (t1 >= 5) { m |= 1; if (kinds) kinds[1].tower5 = true; }
+    if (t2 >= 5) { m |= 2; if (kinds) kinds[2].tower5 = true; }
+    if (t1 >= 3 || t2 >= 3) for (let q = 0, nt = T3F.length; q < nt; q += 3) {
+      const a = T3F[q], b = T3F[q + 1], d = T3F[q + 2];
       if (B.h[a] === 3 && B.h[b] === 3 && B.h[d] === 3 && tp[a] === tp[b] && tp[a] === tp[d]) { m |= tp[a]; if (kinds) kinds[tp[a]].tri3 = true; }
     }
     return m;
@@ -261,26 +264,29 @@
   // ── 읽기 (AI · 선생님) ─────────────────────────────────────
   // 점수 (한 칸 = 1점 단위): 5칸 창 · 이웃 세 칸 · 3층 · 높이
   const LW = [0, 2, 10, 60, 380, 0], TW = [0, 150, 55, 22, 9, 4, 2], HB = [0, 0, 5, 14], T5W = [0, 6, 16, 40, 120, 0];
+  // 평평한 표 (읽기 속도용: 같은 계산을 배열 안 만들고 숫자 칸으로)
+  const W5F = new Int16Array(WIN5.length * 5); WIN5.forEach((w, i) => { for (let k = 0; k < 5; k++) W5F[i * 5 + k] = w[k]; });
+  const EV = [0, 0, 0];
   function evalE(B) {
-    const E = [0, 0, 0], tp = B.tp, h = B.h;
-    for (const w of WIN5) {
+    let e1 = 0, e2 = 0;
+    const tp = B.tp, h = B.h;
+    for (let w = 0, nw = W5F.length; w < nw; w += 5) {
       let a = 0, b = 0;
-      for (let k = 0; k < 5; k++) { const t = tp[w[k]]; if (t === 1) a++; else if (t === 2) b++; }
-      if (a && !b) E[1] += LW[a]; else if (b && !a) E[2] += LW[b];
+      for (let k = 0; k < 5; k++) { const t = tp[W5F[w + k]]; if (t === 1) a++; else if (t === 2) b++; }
+      if (a) { if (!b) e1 += LW[a]; } else if (b) e2 += LW[b];
     }
-    for (const tr of TRIS) {
-      let n1 = 0, n2 = 0, k1 = 0, k2 = 0;
+    for (let q = 0, nt = T3F.length; q < nt; q += 3) {
+      let n = 0, k1 = 0, k2 = 0;
       for (let k = 0; k < 3; k++) {
-        const i = tr[k], hh = h[i], t = tp[i];
-        if (hh === 3) { if (t === 1) k2 = 1; else k1 = 1; } else { n1 += 3 - hh; n2 += 3 - hh; }
+        const i = T3F[q + k], hh = h[i];
+        if (hh === 3) { if (tp[i] === 1) k2 = 1; else k1 = 1; } else n += 3 - hh;
       }
-      if (!k1 && n1 <= 6) E[1] += TW[n1];
-      if (!k2 && n2 <= 6) E[2] += TW[n2];
+      if (n <= 6) { if (!k1) e1 += TW[n]; if (!k2) e2 += TW[n]; }
     }
-    const n3 = [0, 0, 0];
-    for (let i = 0; i < NP; i++) { const hh = h[i]; if (hh >= 2) { E[tp[i]] += HB[hh]; if (hh === 3) n3[tp[i]]++; } }
-    E[1] += T5W[Math.min(5, n3[1])]; E[2] += T5W[Math.min(5, n3[2])];
-    return E;
+    let c1 = 0, c2 = 0;
+    for (let i = 0; i < NP; i++) { const hh = h[i]; if (hh >= 2) { if (tp[i] === 1) e1 += HB[hh]; else e2 += HB[hh]; if (hh === 3) { if (tp[i] === 1) c1++; else c2++; } } }
+    e1 += T5W[c1 > 5 ? 5 : c1]; e2 += T5W[c2 > 5 ? 5 : c2];
+    EV[1] = e1; EV[2] = e2; return EV;
   }
   const evalS = (B, s) => { const E = evalE(B); return s ? E[2] - E[1] : E[1] - E[2]; };
 
@@ -305,7 +311,7 @@
   // depth = 앞으로 읽을 수 (1 = 내 수 하나 + 정적 점수) · beam[d] = d 번째 수에서 살펴볼 후보 수
   function search(B, depth, s, alpha, beta, ply, beam) {
     if (B.stop) return 0;
-    if (B.nodes > B.limit) { B.stop = 1; return 0; }
+    if (B.nodes > B.limit || (B.dl && Date.now() > B.dl)) { B.stop = 1; return 0; }
     const rk = ranked(B, s, ply + 1, true);
     if (!rk.length) return -(WINV - ply);
     if (depth <= 1 || rk[0][0] >= WINV - 200) return rk[0][0];
@@ -327,13 +333,14 @@
   const TIER = {
     easy: { depth: 1, root: 0, beam: [0, 0], nodes: 4000, noise: 70, rand: 0.3, slack: 0 },
     normal: { depth: 3, root: 8, beam: [0, 0, 5, 5], nodes: 8000, noise: 10, rand: 0.04, slack: 0 },
-    hard: { depth: 5, root: 8, beam: [0, 0, 4, 5, 5, 5], nodes: 60000, noise: 1, rand: 0, slack: 2 },
-    coach: { depth: 5, root: 12, beam: [0, 0, 5, 6, 6, 6], nodes: 100000, noise: 0, rand: 0, slack: 45 },
+    hard: { depth: 5, root: 8, beam: [0, 0, 4, 5, 5, 5], nodes: 4000, noise: 1, rand: 0, slack: 2, ms: 140 },
+    coach: { depth: 5, root: 12, beam: [0, 0, 5, 6, 6, 6], nodes: 100000, noise: 0, rand: 0, slack: 45, ms: 170 },
   };
   // 지금 차례의 수들과 값 [[수, 값, 정확한가]] (큰 값부터). include = 꼭 같이 볼 수(들)
   function scoreRoot(x, s, cfg, include) {
     const B = boardOf(x.stk, x.hand);
     B.limit = cfg.nodes * 6;
+    B.dl = cfg.ms ? Date.now() + cfg.ms : 0;      // 시간 예산: 이 PC 에서 한 번 150ms · 선생님 200ms 안 (폰은 더 느려 마감이 먼저 올 수 있음)
     const ply = x.ply || 0;
     const rk = ranked(B, s, ply + 1, false);
     if (!rk.length) return null;
@@ -448,12 +455,16 @@
     unmake(B, m, me);
     return { tags, kind: wm & (me + 1) ? kindOf(kinds[me + 1]) : "", oppBefore: oc0, oppAfter: oc1, mineAfter: mc1, line: [line0, line1], tri: [tri0, tri1], floor: tgtH + 1 };
   }
+  // 💡 추천 = 고급 AI 의 수 그대로 (같은 단계 · 고정 난수라 늘 같은 수). 값 v 는 선생님 단계(더 깊게)로 따로 읽지 않고 고급 AI 가 읽은 값
+  const RECR = () => 0.5;
   function recommend(V, me) {
     if (V.over || V.phase !== "play" || V.turn !== me) return null;
-    const sc = scoreRoot(V, me, TIER.coach);
+    const cfg = TIER.hard, sc = scoreRoot(V, me, cfg);
     if (!sc || !sc.length) return null;
-    const a = toAct(sc[0][0]);
-    return Object.assign({ a, v: sc[0][1] }, explain(V, me, a));
+    let bm = sc[0][0], bv = -Infinity;
+    for (const [m, v, ex] of sc) { const z = (ex ? v : v - 5) + RECR() * cfg.noise; if (z > bv) { bv = z; bm = m; } }
+    const a = toAct(bm);
+    return Object.assign({ a, v: bv }, explain(V, me, a));
   }
   // 복기: 내 수 · 고급 AI 수의 값 (같은 깊이로 읽은 값, 칸 하나 영향 = 10점쯤)
   function judge(V, seat, a, b) {
@@ -472,7 +483,7 @@
   }
 
   return {
-    id: "omok3", NP, MEN, CAPPLY, PTS, NB, CENTER, LINES, TRIS, LBL, WINV, DIRS,
+    id: "omok3", TIER, NP, MEN, CAPPLY, PTS, NB, CENTER, LINES, TRIS, LBL, WINV, DIRS,
     init, needs, apply, view, over, ranks, legal, auto, advance, ai,
     boardOf, winFull, winStones, genMoves, winMoves, winCells, bestLine, triNeed, stats, explain, recommend, analyze, judge, setupCells, scoreRoot, evalS, TIER, toAct, toMove,
   };

@@ -331,5 +331,29 @@ const winOf = st => { const k = [null, {}, {}], m = C.winFull(C.boardOf(st.stk, 
   console.log('끝난 판 종류', J(kinds));
 }
 
+// 💡 추천 = 고급 AI 의 수 · 시간 예산 (이 PC: ai 한 번 150ms · 선생님 계산 200ms 안)
+{
+  const ms0 = C.TIER.hard.ms, G = QUICK ? 3 : 6; let n = 0, diff = 0; const ta = [], tc = [];
+  for (let g = 0; g < G; g++) {
+    const st = C.init({ n: 2, seed: 300 + g, cfg: { bo: 1 } }), r = mul(g + 5); let steps = 0;
+    while (!C.over(st) && steps++ < 300) {
+      const need = C.needs(st); if (!need.length) { C.advance(st); continue; }
+      const s = need[0], V = C.view(st, s);
+      let t0 = performance.now(); const a = C.ai(V, s, 'hard', r); ta.push(performance.now() - t0);
+      if (V.phase === 'play') {
+        t0 = performance.now(); const A = C.analyze(V, s); tc.push(performance.now() - t0);
+        C.TIER.hard.ms = 0;   // 마감 없이 같은 읽기 (마감은 느린 기기용 안전장치라 같은 수가 아닐 수 있음)
+        const h = C.ai(V, s, 'hard', () => 0.5); C.TIER.hard.ms = ms0;
+        n++; if (J(h) !== J(A.rec.a)) diff++;
+      }
+      C.apply(st, s, a);
+    }
+  }
+  ok(n > 40 && diff === 0, `추천 = 고급 AI (같은 고정 난수) — 다른 수 ${diff}/${n}`);
+  const q = (arr, p) => arr.slice().sort((x, y) => x - y)[Math.min(arr.length - 1, Math.floor(arr.length * p))];
+  ok(q(ta, 0.99) <= 150 && q(tc, 0.99) <= 200, `시간: ai 99% ${Math.round(q(ta, 0.99))}ms (≤150) · 선생님 계산 99% ${Math.round(q(tc, 0.99))}ms (≤200)`);
+  ok(Math.max(...ta) <= 220 && Math.max(...tc) <= 300, `시간 최대(느린 PC 여유): ai ${Math.round(Math.max(...ta))}ms · 선생님 ${Math.round(Math.max(...tc))}ms`);
+}
+
 console.log(`omok3 core: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);
