@@ -14,7 +14,7 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
   const si = global.setInterval, ci = global.clearInterval; global.setInterval = () => 1; global.clearInterval = () => {};
   require(path.join(ROOT, 'games/pyramid/ui.js'));
   const U = global.window.SVUI.pyramid;
-  nok(U.src && /^방송: 피의 게임 시즌3 · 피라미드 넘버/.test(U.src) && U.diff && /^방송과 다른 점: /.test(U.diff), 'ui.src / ui.diff');
+  nok(U.src && /^방송: 피의 게임 시즌X · 피라미드 넘버/.test(U.src) && U.diff && /^방송과 다른 점: /.test(U.diff), 'ui.src / ui.diff');
   nok(U.howto[U.howto.length - 2] === U.src && U.howto[U.howto.length - 1] === '※ ' + U.diff, 'howto 끝 두 줄 = 방송 출처 · ※ 방송과 다른 점');
   nok(U.min === 2 && U.max === 2 && U.defN === 2 && U.board === true && U.fitCoach === true, '2명 고정 · board:true · fitCoach');
   nok(U.howto.length >= 7 && /목표/.test(U.howto[0]) && /준비물/.test(U.howto[1]) && /진행/.test(U.howto[2]) && /승패/.test(U.howto[3]) && /특수/.test(U.howto[4]), 'howto 방송 순서(목표 → 준비물 → 진행 → 승패 → 특수)');
@@ -25,7 +25,7 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
   const draw = (V, me, mode, canAct) => { const stage = { innerHTML: '', onclick: null, querySelector: () => null }; U.render(stage, V, { me, act() {}, canAct: canAct != null ? canAct : me >= 0 && V.needs.includes(me) && !V.over, seats, mode, fast: false, coachOn: false, g: 1, wait: false, sfx() {}, toast() {} }); return stage.innerHTML; };
   const clone = o => JSON.parse(JSON.stringify(o));
   const names = ['한솔', '두리'];
-  let n = 0, specN = 0, phases = new Set(), jo = { 가: 0, 이: 0 }, rv = 0, rvSev = 0, kinds = new Set();
+  let hintN = 0, hintAns = 0, n = 0, specN = 0, phases = new Set(), jo = { 가: 0, 이: 0 }, rv = 0, rvSev = 0, kinds = new Set();
   for (let k = 0; k < 40; k++) {
     const st = core.init({ n: 2, seed: 500 + k, cfg: k % 5 === 0 ? { rounds: 5 } : {} });
     let rs = k + 7; const r = () => { rs = (rs * 1664525 + 1013904223) >>> 0; return rs / 4294967296; };
@@ -36,6 +36,14 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
         const V = core.view(st, s), c1 = U.coach(V, s, -1, names);
         nok(c1 && c1.opp && c1.mine && c1.rec && c1.why && !/undefined|NaN|null/.test(JSON.stringify(c1)), `선생님 글 이상 (${ph}) ` + JSON.stringify(c1).slice(0, 200));
         if (/두리가/.test(c1.opp + c1.why)) jo.가++; if (/한솔이/.test(c1.opp + c1.why)) jo.이++;
+        // 💡 추천 = 고급 AI 의 수, 처음엔 식을 안 보여 줌 (단계 힌트)
+        if (V.needs.includes(s) && ph !== 'show') {
+          const ha = core.ai(clone(V), s, 'hard', () => 0.5); hintN++;
+          if (ha.t === 'ans') { hintAns++; const t = core.table(V).find(x => x.v === ha.tv), full = core.infix(t.rpn, V.ops);
+            nok(c1.rec.includes(`<b>${ha.tv}</b>`) && c1.rec.includes(`${t.f}층`), `추천 = 고급 AI 의 목표 (${ph}) ${c1.rec}`);
+            nok(!c1.rec.includes(full) && !c1.why.includes(full) && /data-pyhint/.test(c1.why), `처음 💡 는 식을 숨기고 '한 번 더' 단추 (${ph})`); }
+          else nok(ha.t === 'imp' ? /불가능/.test(c1.rec) : /넘기기|포기/.test(c1.rec), `추천 = 고급 AI 의 ${ha.t} (${ph}) ${c1.rec}`);
+        }
         // 숨은 것(정답 목록)을 바꿔도 선생님 글 같음 (라운드 중)
         if (ph !== 'show') { const alt = clone(st); for (const kk of Object.keys(alt.sol)) { alt.sol[kk].rpn = ['0', '1', '2', '+', '+']; alt.sol[kk].f = 1; } nok(JSON.stringify(c1) === JSON.stringify(U.coach(core.view(alt, s), s, -1, names)), `선생님 글이 숨은 정보로 바뀜 (${ph})`); }
         const html = draw(V, s, 'solo');
@@ -81,6 +89,7 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
   nok(n > 400 && specN > 400 && ['open', 'raise', 'imp', 'show'].every(p => phases.has(p)), `시험 횟수 ${n} · 구경 화면 ${specN} · 단계 ${[...phases]}`);
   nok(jo.가 > 0 && jo.이 > 0, `조사: 두리가 ${jo.가}번 · 한솔이 ${jo.이}번 (둘 다 나와야 함)`);
   nok(rv > 200 && rvSev > 20 && kinds.size >= 5, `복기 글 ${rv}번 · 아쉬운 수(sev≥60) ${rvSev}번 · 종류 ${[...kinds].join(',')}`);
+  nok(hintN > 100 && hintAns > 30, `추천 시험이 충분히 돎 (${hintN} · 정답 ${hintAns})`);
   console.log(`  선생님 글 · 복기 글 시험: 글 ${n}번 · 구경 화면 ${specN}번 · 복기 ${rv}번(아쉬운 ${rvSev}) · 조사(두리가 ${jo.가} · 한솔이 ${jo.이}) 통과`);
   // 이름 받침 (조사)
   {
