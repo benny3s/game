@@ -195,6 +195,24 @@ function lastScene() {
   ok(U.sub(C.view(st, 0)) === '경매 3/19' && U.sub(VE) === '끝', '부제');
   c = U.coach(VE, 0, -1, names); ok(/피스/.test(c.opp) && /1등/.test(c.mine), '끝난 뒤 선생님');
   ok(U.coach(C.view(st, -1), -1, -1, names).rec === '—', '구경꾼 선생님');
+  // 💡 추천 = 고급 AI 의 수 + 시간 예산 (ai 한 번 150ms · 선생님 200ms 안)
+  {
+    let cmp = 0, bad = 0, mx = 0, cmx = 0;
+    for (const sd of [3, 8]) {
+      const s2 = C.init({ n: 6, seed: sd }), rr = mul(sd);
+      for (let g = 0; g < 8 && !C.over(s2); g++) {
+        const need = C.needs(s2); if (!need.length) { if (C.auto(s2) != null) C.advance(s2); else break; continue; }
+        const s = need[0], V = C.view(s2, s);
+        let t0 = Date.now(); const a = C.ai(V, s, 'hard', U.coachRng(V, s)); mx = Math.max(mx, Date.now() - t0);
+        t0 = Date.now(); const cc = U.coach(V, s, -1, names); cmx = Math.max(cmx, Date.now() - t0);
+        const want = a.d === 0 ? /^이번엔 포기/ : new RegExp('^' + (a.d / 10).toFixed(1).replace('.', '\.') + '초까지 쥐고 떼기');
+        cmp++; if (!want.test(cc.rec)) { bad++; console.error('추천 어긋남', cc.rec, J(a)); }
+        for (const q of need) if (C.needs(s2).includes(q)) C.apply(s2, q, C.ai(C.view(s2, q), q, 'normal', rr));
+      }
+    }
+    ok(cmp >= 8 && bad === 0, `💡 추천 = 고급 AI (${cmp}곳 중 어긋남 ${bad})`);
+    ok(mx <= 400 && cmx <= 600, `시간 예산 (ai ${mx}ms · 선생님 ${cmx}ms — 느린 PC 여유 포함 기준 400/600)`);
+  }
   const T = U.tutorial(); ok(T.length === 6 && T.filter(x => x.interactive).length === 1, '1분 규칙 6쪽 · 직접 해 보기 1쪽');
   ok(U.opts[0].k === 'spd' && U.howto.length >= 7 && /데스룸/.test(U.src), '설명 · 옵션');
 }

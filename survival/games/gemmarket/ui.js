@@ -61,7 +61,8 @@
 .gm-tut{display:grid;gap:8px;justify-items:center;width:100%}
 .gm-tut .gm-board{width:100%}
 .gm-opts{display:flex;gap:10px;justify-content:center}
-.gm-opts button{min-width:62px}`;
+.gm-opts button{min-width:62px}
+@media (max-height:700px){.gm-top{gap:6px}.gm-board{gap:5px}.gm-card{min-height:52px;padding:3px 2px}.gm-card .em{font-size:19px}.gm-card .nm{font-size:13px}.gm-players{grid-template-columns:repeat(5,1fr);gap:4px}.gm-pl{padding:3px 1px}.gm-pl .e{font-size:16px}.gm-pl .s{font-size:9.5px}.gm-mine{gap:8px}.gm-mine .gm-card{width:72px;min-height:60px}.gm-mine .tx{font-size:11.5px;gap:1px}.gm-acts{gap:5px}.gm-acts .btn.big{min-height:44px;padding:6px 6px;font-size:13.5px}.gm-acts .note{font-size:11.5px}}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats[i] && ctx.seats[i].name) || `${i + 1}번`;
@@ -142,8 +143,8 @@
     else if (V.phase === "swap") {
       if (myTurn) {
         const can = sel.to >= 0;
-        acts = `<div class="row2"><button class="btn primary big" data-a="swap" ${can ? "" : "disabled"}>${can ? `↔ ${esc(toLabel(sel.to, ctx))} 와 교환` : "바꿀 곳을 눌러요"}</button><button class="btn big${sel.peek ? " primary" : ""}" data-a="peek" ${V.peeked ? "disabled" : ""}>${V.peeked ? "👁 이미 봤어요" : sel.peek ? "👁 볼 칸을 눌러요" : "👁 몰래 보기 (한 번)"}</button></div>
-          <div class="note">${sel.peek ? "구매자 칸이나 휴지통을 누르면 그 카드를 한 번 볼 수 있어요" : "교환은 꼭 해야 해요 · 사람 카드는 어떤 카드인지 모르는 채로 바꿔요"}</div>`;
+        acts = `<div class="row2"><button class="btn primary big" data-a="swap" ${can ? "" : "disabled"}>${can ? `↔ ${esc(toLabel(sel.to, ctx))} 와 교환` : "바꿀 곳을 눌러요"}</button><button class="btn big${sel.peek ? " primary" : ""}" data-a="peek" ${V.peeked ? "disabled" : ""}>${V.peeked ? "👁 이미 봤어요" : sel.peek ? "👁 볼 칸을 눌러요" : "👁 몰래 보기"}</button></div>
+          <div class="note">${sel.peek ? "구매자 칸이나 휴지통을 누르면 그 카드를 볼 수 있어요" : `교환은 꼭 해야 해요 · 사람 카드는 모르는 채로 바꿔요${V.peeked ? "" : " · 몰래 보기는 게임 중 한 번"}`}</div>`;
       } else acts = `<div class="note">${watch ? "AI 들이 교환하는 중…" : turnSeat >= 0 ? `${esc(nameOf(ctx, turnSeat))} 차례예요…` : ""}</div>`;
     }
     h += `<div class="gm-acts">${acts}</div>`;
@@ -208,9 +209,9 @@
     name: "보석 암시장", emoji: "💎", short: "카드를 바꿔 구매자에게 팔고, 마니또 점수와 곱해요", min: 4, max: 9, defN: 9, board: false,
     opts: [],
     howto: [
-      "3라운드, 사람마다 <b>뒷면 카드 1장</b> · 가운데 구매자 칸 3개 + 휴지통 — 내 카드는 내 차례에만 볼 수 있어요",
+      "3라운드, 사람마다 <b>뒷면 카드 1장</b> · 가운데 구매자 칸 3개 + 휴지통 — 내 카드는 <b>처음 받을 때 한 번</b>, 그 뒤엔 내 차례에만 볼 수 있어요 (교환으로 받은 카드는 내 다음 차례에 봐요)",
       "내 차례에 내 카드를 <b>사람 · 구매자 칸 · 휴지통</b> 카드와 꼭 바꿔요 (정순 한 바퀴 → 역순 한 바퀴) · <b>폭탄</b>은 사람과만 바꿀 수 있어요",
-      "끝나면 내 보석과 같은 종류의 <b>구매자 칸마다 숫자만큼</b> 점수 · 폭탄은 깎임 · 누가 내 폭탄을 가져가면 <b>+3</b>",
+      "끝나면 내 보석과 같은 종류의 <b>구매자 칸마다 숫자만큼</b> 점수 · 폭탄은 깎임 · 누가 내 폭탄을 가져가면 <b>+3</b> · 다음 라운드 선은 <b>−6 폭탄</b>을 든 사람 → 없으면 <b>−4 폭탄</b>을 든 사람 → 없으면 그대로",
       "최종 점수 = <b>내 점수 × 내 마니또의 점수</b> (나는 내가 누구의 마니또인지만 알아요) · 높은 순서가 순위",
     ],
     note: "방송과 다른 점: 4~9명 (방송은 9명, 빈 자리는 AI), 피스가 없어서 구매자 · 휴지통 카드 몰래 보기는 게임 중 한 번 공짜, 3분 제한 · 대화 없음 (방송은 대화로 서로의 마니또를 알아내지만 여기서는 내 마니또를 끝까지 몰라요 — 고급 AI · 선생님은 공개된 점수와 '내가 누구의 마니또인지'만으로 계산해요), 첫 선은 무작위, 점수가 같으면 내 점수가 높은 쪽이 위.",

@@ -425,6 +425,8 @@
 
   // ── AI 선생님 (보이는 것만 읽음) ────────────────────────────
   const pc = x => Math.round(x * 100) + "%";
+  // 추천 = 고급 AI 의 수 (같은 고정 난수로 ai(hard) 를 그대로 부름 — 시험도 같은 함수로 비교)
+  const coachRng = (V, me) => { let a = 777 + V.hand * 31 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; };
   function coach(V, me, since, names) {
     const nm = i => (names && names[i]) || `${i + 1}번`;
     const r = (() => { let a = 12345 + V.hand * 31 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; })();
@@ -461,12 +463,12 @@
     const myTurn = V.needs.includes(me);
     if (V.phase === "bet1" || V.phase === "bet2") {
       if (myTurn) {
-        const p = betPlan(V, me, "hard", r);
-        const t = p.a.t;
-        rec = t === "fold" ? "폴드" : t === "call" ? `콜 (${p.toCall}칩)` : t === "check" ? "체크" : `레이즈 → ${p.a.to}칩까지`;
+        const p = betPlan(V, me, "hard", coachRng(V, me)), A = ai(V, me, "hard", coachRng(V, me));
+        const t = A.t;
+        rec = t === "fold" ? "폴드" : t === "call" ? `콜 (${p.toCall}칩)` : t === "check" ? "체크" : `레이즈 → ${A.to}칩까지`;
         const share = Math.round(p.eq * 100);
         if (t === "fold") why = `콜에 ${p.toCall}칩인데 이 판돈에서 기대 몫이 ${share}% 쯤이라 손해가 커요 — 상대가 센 쪽을 노리는 것 같아요.`;
-        else if (t === "raise") why = `내 쪽이 앞서요 (기대 몫 ${share}%). 판돈을 키우면 따라오는 상대에게서 더 받아요.`;
+        else if (t === "raise") why = p.a.t === "raise" ? `내 쪽이 앞서요 (기대 몫 ${share}%). 판돈을 키우면 따라오는 상대에게서 더 받아요.` : `기대 몫 ${share}% 로 앞선 건 아니지만 살짝 올려 상대를 떠봐요 (허세 — 가끔 섞어야 읽히지 않아요).`;
         else if (t === "call") why = `${p.toCall}칩으로 판돈 ${V.pot + p.toCall}칩을 노려요 — 기대 몫 ${share}% 면 따라갈 만해요.`;
         else why = `걸 만큼 앞서지는 않아요 (기대 몫 ${share}%). 공짜로 다음 카드를 봐요.`;
       } else rec = "상대 베팅을 기다려요 — 누가 레이즈하는지 보세요";
@@ -475,9 +477,9 @@
       else rec = "다른 사람이 식을 만드는 중이에요";
     } else if (V.phase === "declare") {
       if (myTurn) {
-        const d = c.pB > 0.85 ? "S" : c.pH >= c.pL ? "H" : "L";
+        const d = ai(V, me, "hard", coachRng(V, me)).d, cc = chances(V, me, SAMPLES.hard, coachRng(V, me));
         rec = d === "S" ? "↕ 스윙 (둘 다)" : d === "H" ? "🔼 하이" : "🔽 로우";
-        why = d === "S" ? "두 쪽 다 이길 확률이 높아 판돈을 다 노려요. 하나라도 지면 빈손이에요." : `${d === "H" ? "하이" : "로우"} 쪽 확률(${pc(d === "H" ? c.pH : c.pL)})이 더 높아요. 다른 사람이 많이 노리는 쪽을 피하면 반은 챙겨요.`;
+        why = d === "S" ? "두 쪽 다 이길 확률이 높아 판돈을 다 노려요. 하나라도 지면 빈손이에요." : `${d === "H" ? "하이" : "로우"} 쪽 확률(${pc(d === "H" ? cc.pH : cc.pL)})이 ${d === "H" ? (cc.pH >= cc.pL ? "더 높아요" : "조금 낮지만 상대가 로우 쪽을 많이 노려서 피해요") : (cc.pL >= cc.pH ? "더 높아요" : "조금 낮지만 상대가 하이 쪽을 많이 노려서 피해요")}. 다른 사람이 많이 노리는 쪽을 피하면 반은 챙겨요.`;
       } else rec = "다른 사람의 선언을 기다려요";
     } else if (V.phase === "show") {
       rec = "결과를 보고 다음 판을 준비해요";
@@ -488,7 +490,7 @@
 
   return {
     id: "formula", COLORS, START, ANTE, MAXRAISE, LIMIT, isNum, isRoot, isMul, val, col, cardName, OPN,
-    init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach,
+    init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, coachRng,
     evalEq, eqText, checkEq, search, chances, fmt, keyHi, keyLo,
   };
 });

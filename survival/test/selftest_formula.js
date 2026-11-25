@@ -4,6 +4,7 @@ const F = require('../games/formula/core.js');
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.error('FAIL:', m); } };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
+function mulb(a) { return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const card = (color, v) => color * 11 + v;   // 0 금 1 은 2 동 3 흑
 
 // 1) 식 계산 (곱셈 · 나눗셈 먼저)
@@ -223,6 +224,25 @@ playOut(4, 777, ['hard'], 5);
     }
     ok(F.over(st), `late 섞인 판이 끝남 (seed ${seed})`);
   }
+}
+
+// 💡 추천 = 고급 AI 의 수 (같은 고정 난수로 ai(hard) 를 부른 결과와 글이 같아야 함)
+{
+  let cmp = 0, bad = 0;
+  for (let seed = 1; seed <= 8; seed++) {
+    const st = F.init({ n: 4, seed }), rr = mulb(seed);
+    for (let g = 0; g < 400 && !F.over(st); g++) {
+      const need = F.needs(st); if (!need.length) { if (F.auto(st) != null) F.advance(st); else break; continue; }
+      const s = need[0], V = F.view(st, s);
+      if (st.phase === 'bet1' || st.phase === 'bet2' || st.phase === 'declare') {
+        const a = F.ai(V, s, 'hard', F.coachRng(V, s)), rec = F.coach(V, s, -1, null).rec;
+        const want = a.t === 'fold' ? /^폴드/ : a.t === 'call' ? /^콜/ : a.t === 'check' ? /^체크/ : a.t === 'raise' ? new RegExp('레이즈 → ' + a.to + '칩') : a.d === 'S' ? /스윙/ : a.d === 'H' ? /하이/ : /로우/;
+        cmp++; if (!want.test(rec)) { bad++; console.error('추천 어긋남', rec, JSON.stringify(a)); }
+      }
+      F.apply(st, s, F.ai(V, s, 'normal', rr));
+    }
+  }
+  ok(cmp > 40 && bad === 0, '💡 추천 = 고급 AI (' + cmp + '곳 중 어긋남 ' + bad + ')');
 }
 
 console.log(`수식 하이 로우 selftest · 통과 ${pass} · 실패 ${fail}`);

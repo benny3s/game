@@ -226,6 +226,8 @@
   let CC = { key: "", out: null };
   const seedOf = key => { let s = 2166136261; for (const ch of key) { s ^= ch.charCodeAt(0); s = Math.imul(s, 16777619); } return s >>> 0; };
   const rngOf = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const coachKey = (V, me) => `${V.pub}|${me}|${V.bank[me]}|${V.bid[me]}`;
+  const coachRng = (V, me) => rngOf(seedOf(coachKey(V, me)));     // 추천 = 고급 AI 의 수 (같은 고정 난수로 decide(hard))
   function coach(V, me, since, names) {
     const rawN = i => (names && names[i]) || `${i + 1}번`, nm = i => esc(rawN(i));
     if (me == null || me < 0 || !V || !V.marks) return { opp: "구경 중이에요. 자리에 앉으면 경매마다 알려 드려요.", mine: "표식과 낙찰 시간을 지켜보고 있어요.", rec: "—", why: "" };
@@ -233,7 +235,7 @@
       const F = V.fin;
       return { opp: `피스 ${F.piece >= 0 ? nm(F.piece) : "없음"} · 탈락 ${nm(F.elim)} — 표식 ${F.rows.map(x => x.m).join(" · ")}`, mine: F.elim === me ? "표식이 가장 적어 탈락했어요." : `나는 ${(V.ranks ? V.ranks[me] : 0) + 1}등 · ★${V.marks[me]} · 남은 시간 ${fmt(V.bank[me])}`, rec: "다시 한 판 해 볼까요?", why: "진 경매에 쓴 시간이 아까웠다면, 시세보다 조금 높게 짧게 끝내는 연습을 해 봐요." };
     }
-    const key = `${V.pub}|${me}|${V.bank[me]}|${V.bid[me]}`;
+    const key = coachKey(V, me);
     if (CC.key === key && CC.out) return CC.out;
     const others = []; for (let i = 0; i < V.n; i++) if (i !== me) others.push(i);
     // 👀 상대 흐름
@@ -253,7 +255,7 @@
     if (V.phase === "show") { out.rec = "곧 다음 경매예요."; out.why = V.res && V.res.w === me ? "낙찰! 표식 1개를 얻었어요." : V.res && V.res.my > 0 ? "진 경매에 쓴 시간은 돌아오지 않아요 — 시세를 보고 다시 판단해요." : ""; }
     else if (!V.needs.includes(me)) { out.rec = V.bid[me] === 0 ? "이번 경매는 포기했어요." : `${sec(V.bid[me] || 0)} 쥐었어요 — 결과를 기다려요.`; }
     else {
-      const r = rngOf(seedOf(key)), d = K.decide(V, me, "coach", r), mk = K.market(V, me, rngOf(seedOf(key) ^ 0x5bd1e995), 240);
+      const r = coachRng(V, me), d = K.decide(V, me, "hard", r), mk = K.market(V, me, rngOf(seedOf(key) ^ 0x5bd1e995), 240);
       if (d) {
         const best = d.list[0], pass = d.list.find(x => x.d === 0), alt = d.list.find(x => x !== best && x.d !== 0 && x.k > 0);
         out.rec = best.d === 0 ? "이번엔 포기 (안 누르기)" : `${sec(best.d)}까지 쥐고 떼기`;
@@ -332,7 +334,7 @@
     ],
     sub: V => (V.over ? "끝" : `경매 ${V.round}/${V.R}`),
     chip: (V, i) => ({ t: V.fin && V.fin.elim === i ? "❌" : V.fin && V.fin.piece === i ? `🧩★${V.marks[i]}` : `★${V.marks[i]}`, on: i === V.seat && V.needs.includes(i) && !V.over, out: !!(V.fin && V.fin.elim === i) }),
-    render, coach, result, tutorial, review, actText,
+    render, coach, coachRng, result, tutorial, review, actText,
     qa: (V, me, rnd) => K.ai(V, me, "easy", rnd),
   };
 })();

@@ -188,5 +188,24 @@ for (let n = 3; n <= 8; n++) for (let k = 0; k < 4; k++) {
   ok(d.won === null && d.sure === 0 && d.maybe === 2, '시크릿이면 이겼는지부터 모름');
 }
 
+// 💡 추천 = 고급 AI 의 수 (같은 고정 난수로 ai(hard) 를 부른 결과와 글이 같아야 함)
+{
+  const mulb = a => () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  let cmp = 0, bad = 0;
+  for (let seed = 1; seed <= 10; seed++) {
+    const st = A.init({ n: 4, seed }), rr = mulb(seed);
+    for (let g = 0; g < 500 && !A.over(st); g++) {
+      const need = A.needs(st); if (!need.length) { if (A.auto(st) != null) A.advance(st); else break; continue; }
+      for (const s of need) {
+        const V = A.view(st, s), a = A.ai(V, s, 'hard', A.coachRng(V, s)), rec = A.coach(V, s, -1, null).rec;
+        const want = a.t === 'pick' ? { test: x => x.startsWith(['동그라미', '세모', '별'][a.s] + '에 넣기') } : { test: x => x.startsWith('코인 ' + a.c.map(k => A.COINS[k]).join('+') + ' = ') };
+        cmp++; if (!want.test(rec)) { bad++; console.error('추천 어긋남', rec, JSON.stringify(a)); }
+        A.apply(st, s, A.ai(V, s, 'normal', rr));
+      }
+    }
+  }
+  ok(cmp > 30 && bad === 0, '💡 추천 = 고급 AI (' + cmp + '곳 중 어긋남 ' + bad + ')');
+}
+
 console.log(`경매 빙고 시험: 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);

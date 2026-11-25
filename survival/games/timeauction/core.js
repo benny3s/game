@@ -240,11 +240,12 @@
     return list.map(c => ({ d: c.d, a: c.a, v: c.v, win: c.win / c.k, k: c.k }));
   }
   const ENV = k => (typeof process !== "undefined" && process.env && process.env[k]) || "";
-  const TIER = { hard: { B: +ENV("TA_B") || 800 }, coach: { B: 900 } };
+  // 이 PC 에서 ai() 한 번 150ms 안 (폰은 3~4배) — 굴려 보는 횟수 B · 짐작한 세계 수 W 를 줄임, 추천은 고급 AI 와 같은 값(hard)을 씀
+  const TIER = { hard: { B: +ENV("TA_B") || 320, W: +ENV("TA_W") || 64 } };
   function decide(V, me, tier, r) {
     if (!V || V.phase !== "bid" || !V.needs.includes(me)) return null;
     const T = TIER[tier] || TIER.hard, wE = mixOf(V);
-    const worlds = []; for (let k = 0; k < 160; k++) worlds.push(sampleWorld(V, me, r, wE));
+    const worlds = []; for (let k = 0; k < T.W; k++) worlds.push(sampleWorld(V, me, r, wE));
     const cands = candsOf(V, me, worlds, r);
     if (cands.length === 1) return { a: { t: "bid", d: cands[0] }, list: [{ d: cands[0], a: { t: "bid", d: cands[0] }, v: 0, win: 0, k: 0 }] };
     const list = mcScore(V, me, cands, T.B, r);

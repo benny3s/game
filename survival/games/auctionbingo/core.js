@@ -300,6 +300,8 @@
   }
 
   // ── AI 선생님 (모두에게 보인 것 + 내 코인 · 내 입찰만 읽음) ────────────
+  // 추천 = 고급 AI 의 수 (같은 고정 난수로 ai(hard) 를 그대로 부름 — 시험도 같은 함수로 비교)
+  const coachRng = (V, me) => { let a = 777 + V.round * 31 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; };
   function coach(V, me, since, names) {
     const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
     const nm = i => esc((names && names[i]) || `${i + 1}번`);
@@ -326,12 +328,14 @@
     let rec = "상대 차례를 기다려요", why = "";
     const mine_ = V.needs.includes(me);
     if (V.phase === "pick" && mine_) {
-      const sc = pickScores(V, me, "hard", r), s = sc.indexOf(Math.max(...sc));
+      const s = ai(V, me, "hard", coachRng(V, me)).s;
       const early = V.picks.filter(x => x === s).length;
       rec = `${SN[s]}에 넣기`;
       why = need[s] < 0.5 ? `${SN[s]}${eun(s)} 목표를 이미 채웠어요 — 다른 도형은 경쟁이 더 심해서 여기 넣어 코인을 아껴요 (${tgtTxt}).` : early ? `${SN[s]}에 이미 ${early}명이 들어갔어요 — 이긴다면 타일이 ${early + 1}개 걸린 셈이에요 (${SN[s]}${eun(s)} 아직 ${Math.round(need[s] * 10) / 10}개 더 필요 · ${tgtTxt}).` : `${SN[s]}${eun(s)} 아직 ${Math.round(need[s] * 10) / 10}개가 필요한데 경쟁자가 없어요 — 혼자면 1원만 내고도 받아요 (${tgtTxt}).`;
     } else if (V.phase === "bid" && !V.bidDone[me]) {
-      const p = bidPlan(V, me, "hard", r), b = bestSubset(V, p.target, p.mustKeep, r, "hard");
+      const rr = coachRng(V, me), p = bidPlan(V, me, "hard", rr), b0 = bestSubset(V, p.target, p.mustKeep, rr, "hard");
+      const pk = ai(V, me, "hard", coachRng(V, me)).c, b = { pick: pk, v: SUMV(pk.map(k => COINS[k])) };
+      void b0;
       rec = `코인 ${b.pick.map(k => COINS[k]).join("+")} = ${b.v}원`;
       why = p.cntNow === 1 ? "이 도형엔 나 혼자라 1원이면 충분해요. 남는 코인은 다음 라운드와 마지막 동점 가림에 써요." : `${SN[p.sh]}에 ${p.cntNow}명 — 타일 ${p.cntNow}개가 걸렸고 내게 필요한 건 약 ${Math.round(p.need * 10) / 10}개. 남은 ${p.roundsLeft}라운드에 쓸 값(${p.val}원)을 나눠 이 정도를 내요.${p.roundsLeft === 1 ? " 마지막이라 남은 코인은 다 써도 돼요." : ""}`;
     } else if (V.phase === "bid") rec = "다른 사람 입찰을 기다려요";
@@ -341,7 +345,7 @@
 
   return {
     id: "auctionbingo", SHAPES, BOARD, CELLS, CAP, LINES, COINS, ROUNDS,
-    init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach,
+    init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, coachRng,
     place, checkBid, bidValue, estTiles, pickScores, bidPlan, bestSubset, inferMine,
   };
 });

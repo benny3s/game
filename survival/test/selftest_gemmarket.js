@@ -150,8 +150,26 @@ for (const n of [4, 5, 7, 9]) for (const tier of ['easy', 'normal', 'hard']) for
   }
   eq(same, tot, `고급 AI 는 숨은 마니또 배치를 안 봄 (${same}/${tot})`);
   // 9-4) 선생님(고급과 같은 평가) 글에 몫(%)이 나오고 깨진 값이 없음
-  const st = G.init({ n: 5, seed: 12 }), me = G.needs(st)[0], c = G.coach(G.view(st, me), me, -1, ['나', 'A', 'B', 'C', 'D']);
+  const st = G.init({ n: 5, seed: 12 }), me = G.needs(st)[0];
+  G.apply(st, me, { t: 'peek', loc: 0 });      // 몰래 보기를 쓴 뒤라야 교환 추천(%)이 나옴
+  const c = G.coach(G.view(st, me), me, -1, ['나', 'A', 'B', 'C', 'D']);
   ok(/%/.test(c.why) && !/undefined|NaN/.test(JSON.stringify(c)), '선생님 글에 최종 순위 몫(%)');
 }
+// 💡 추천 = 고급 AI 의 수 (같은 고정 난수로 ai(hard) 를 부른 결과와 글이 같아야 함)
+{
+  let cmp = 0, bad = 0;
+  for (const n of [4, 7]) for (let seed = 1; seed <= 6; seed++) {
+    const st = G.init({ n, seed }), r = mb(seed);
+    for (let g = 0; g < 200 && !G.over(st); g++) {
+      const need = G.needs(st); if (!need.length) { if (G.auto(st) != null) G.advance(st); else break; continue; }
+      const s = need[0], V = G.view(st, s), a = G.ai(V, s, 'hard', G.coachRng(V, s)), rec = G.coach(V, s, -1, null).rec;
+      const want = a.t === 'peek' ? '구매자 ' + (a.loc + 1) + '칸 몰래 보기' : G.toText(a.to, null, V) + ' 와 교환';
+      cmp++; if (!rec.startsWith(want)) { bad++; console.error('추천 어긋남', rec, JSON.stringify(a)); }
+      G.apply(st, s, G.ai(V, s, 'normal', r));
+    }
+  }
+  ok(cmp > 30 && bad === 0, '💡 추천 = 고급 AI (' + cmp + '곳 중 어긋남 ' + bad + ')');
+}
+
 console.log(`보석 암시장 시험: 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);

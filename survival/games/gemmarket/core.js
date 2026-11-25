@@ -312,7 +312,7 @@
     const bomb = V.mine != null && isBomb(V.mine), n = V.n;
     const randTo = () => { const c = []; for (let to = 0; to < TO_P + n; to++) if (to !== TO_P + me && !(bomb && to < TO_P)) c.push(to); return c[Math.floor(r() * c.length)]; };
     if (tier === "easy") return r() < 0.12 && !V.peeked ? { t: "peek", loc: Math.floor(r() * 4) } : { t: "swap", to: randTo() };
-    if (!V.peeked && V.step < n && tier === "hard" && r() < 0.8) return { t: "peek", loc: peekPick(V, me, r) };
+    if (!V.peeked && V.step < n && tier === "hard") return { t: "peek", loc: peekPick(V, me, r) };
     if (tier === "normal" && r() < 0.15) return { t: "swap", to: randTo() };
     const S = TIER[tier] || TIER.normal, L = (tier === "hard" ? evalRank : evalMoves)(V, me, S, r);
     if (!L.length) return { t: "swap", to: randTo() };
@@ -326,6 +326,8 @@
     const nm = i => (names && names[i]) || `${i + 1}번`;
     return to < 3 ? `구매자 ${to + 1}칸` : to === TO_TRASH ? "휴지통" : nm(to - TO_P);
   }
+  // 추천 = 고급 AI 의 수 (같은 고정 난수로 ai(hard) 를 그대로 부름 — 시험도 같은 함수로 비교)
+  const coachRng = (V, me) => { let a = 4242 + V.round * 31 + V.step * 7 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; };
   function coach(V, me, since, names) {
     const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
     const nm = i => esc((names && names[i]) || `${i + 1}번`);
@@ -343,8 +345,12 @@
     else if (V.seen) mine += ` · 마지막으로 본 내 카드: ${cn(V.seen.c)} (그 뒤 바뀌었을 수 있어요)`;
     let rec = "상대 차례를 기다려요", why = "";
     if (V.phase === "swap" && V.needs.includes(me)) {
-      const r = (() => { let a = 4242 + V.round * 31 + V.step * 7 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; })();
-      const L = evalRank(V, me, 120, r), best = L[0];
+      const A = ai(V, me, "hard", coachRng(V, me));
+      if (A && A.t === "peek") {
+        rec = `구매자 ${A.loc + 1}칸 몰래 보기 (👁, 한 번)`;
+        why = `교환하기 전에 먼저 한 칸을 확인하는 게 이득이에요 — 카드 종류가 가장 고르게 갈려 가장 모르는 칸(${A.loc + 1}번)을 골랐어요. 보고 나서 다시 추천해요.`;
+      }
+      const L = A && A.t === "swap" ? evalRank(V, me, TIER.hard, coachRng(V, me)) : [], best = A && A.t === "swap" ? L.find(x => x.to === A.to) || { to: A.to, win: 0, pts: 0 } : null;
       if (best) {
         rec = `${esc(toText(best.to, names))} 와 교환`;
         const sg = x => (x >= 0 ? "+" : "") + x.toFixed(1);
@@ -358,7 +364,7 @@
 
   return {
     id: "gemmarket", CARDS, KN, ROUNDS, TO_TRASH, TO_P, STEAL,
-    init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach,
+    init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, coachRng,
     buyerCount, gainOf, checkTo, samples, evalMoves, evalRank, cycleSample, toText, peekPick,
   };
 });
