@@ -179,5 +179,170 @@ const bidAll = (st, f) => { for (const s of G.needs(st).slice()) ap(st, s, { t: 
   ok(avg('normal') > avg('easy') + 5, '보통 AI 가 쉬운 AI 보다 점수가 높아요');
   ok(avg('hard') > avg('easy') + 5, '어려운 AI 도 쉬운 AI 보다 높아요');
 }
+// ═══ 방송대로 판 (cfg.ver = "b") · 옛 복기 호환 ═══════════════════════════════════════════
+const mkB = (seed, extra) => mk(seed, Object.assign({ ver: 'b' }, extra || {}));
+const apB = (st, s, n) => ap(st, s, n === 0 ? { t: 'stop' } : { t: 'draw', n });
+
+// 10) 방송 설명 그래픽의 정산 숫자 (tvN D ENT 「광부게임 1편」 규칙 설명 · 1조 채굴 장면)
+{
+  const mi = [0, 1, 2];
+  let r = G.settle({ 3: 1, 4: 7, 5: 10, 6: 8, 7: 13, 8: 11 }, mi, 76, 0);   // 방송 규칙 예시: 1+7+10+8+13+11 = 50 / 광물 76점
+  ok(r.kind === 'ok' && r.S === 50 && r.d[0] === 8 && r.d[1] === 8 && r.d[2] === 8 && r.d[3] === 1 && r.d[4] === 7 && r.d[5] === 10 && r.d[6] === 8 && r.d[7] === 13 && r.d[8] === 11, '방송 예시: M 76 ≥ S 50 → 제시자는 제시한 점수, 광부는 (76−50)÷3 = +8 (나머지 2는 버려요)');
+  r = G.settle({ 3: 1, 4: 8, 5: 10, 6: 25, 7: 50, 8: 15 }, mi, 76, 0);   // S = 109 > 76
+  ok(r.kind === 'short' && r.S === 109 && r.d[0] === 25 && r.d[1] === 25 && r.d[7] === -50 && r.d[3] === 50 && r.d[4] === 0 && r.d[8] === 0, '방송 예시: M 76 < S 109 → 제시자 0 · 광부 76÷3 = +25 · 최고 50 은 −50, 최저 1 이 +50');
+  r = G.settle({ 3: 1, 4: 48, 5: 10, 6: 25, 7: 1, 8: 50 }, mi, 40, 3);
+  ok(r.kind === 'bomb' && r.d[0] === 0 && r.d[4] === 48 && r.d[8] === 50 && r.d[3] === 1, '방송 예시: 폭탄 3개 → 광부 0 · 제시자는 제시한 그대로');
+  // 정산 순서: ① M ≥ S 먼저가 아니라 폭탄 3개가 먼저 (아래 둘은 같은 광물 점수)
+  r = G.settle({ 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5 }, mi, 60, 3);
+  ok(r.kind === 'bomb' && r.d[0] === 0, '폭탄 3개는 M 이 S 보다 커도 광부 0점');
+  r = G.settle({ 3: 5, 4: 5, 5: 5, 6: 5, 7: 5, 8: 5 }, mi, 60, 2);
+  ok(r.kind === 'ok' && r.d[0] === 10, '폭탄이 2개면 M 60 ≥ S 30 → 광부 +10');
+  // 방송 1조: 4개 → 1개 → 8개 (💎1 💣2 🟤2 ⚪3 🟡5) = (15+6+2)×2 = 46
+  ok(G.tally(['d', 'b', 'b', 'c', 'c', 's', 's', 's', 'g', 'g', 'g', 'g', 'g']).M === 46, '방송 1조가 꺼낸 💎1 💣2 🟤2 ⚪3 🟡5 → (15+6+2)×2 = 46');
+  r = G.settle({ 3: 15, 4: 3, 5: 13, 6: 5, 7: 9, 8: 1 }, mi, 46, 2);
+  ok(r.kind === 'ok' && r.S === 46 && r.d[0] === 0 && r.d[3] === 15 && r.d[7] === 9, 'M 46 = S 46 → 광부 0점 · 제시자는 제시한 점수 (M ≥ S 쪽, 제시 값은 예시)');
+}
+// 11) 방송대로: 한 번에 여러 개 · 개수 검사 · 폭탄 3개 이상 · 차례
+{
+  const st = mkB(41); bidAll(st, 3);
+  ok(st.cfg.ver === 'b' && Array.isArray(st.grabs) && st.grabs.length === 0 && st.phase === 'mine', '방송대로 판이 시작돼요 (grabs 칸)');
+  const m = st.miners; st.bag = ['c', 'b', 'g', 's', 'g', 'c', 'g', 's', 'd'];   // 꺼내는 순서(뒤에서부터): d → s → g → c → g → s → g → b → c
+  ok(!apB(st, m[1], 3).ok && !apB(st, 3, 2).ok, '내 차례가 아니면 못 꺼내요');
+  const bad = [0, -2, 1.5, '3', null, 10, NaN, Infinity].map(n => ap(st, m[0], { t: 'draw', n }).ok);
+  ok(bad.every(x => !x), '개수는 1 이상 정수 · 광산에 남은 만큼까지 (0 · 음수 · 소수 · 글자 · null · 남은 것보다 많이 · NaN · 무한은 거절)');
+  ok(st.drawn.length === 0 && st.bag.length === 9 && st.cur === 0 && st.grabs.length === 0, '거절된 꺼내기는 상태를 안 바꿔요');
+  ok(apB(st, m[0], 3).ok, '한 번에 3개 꺼내기');
+  ok(st.drawn.join() === 'd,s,g' && st.grabs.length === 1 && st.grabs[0].s === m[0] && st.grabs[0].xs.join() === 'd,s,g' && st.cur === 1, '꺼낸 순서대로 쌓이고 다음 광부로 넘어가요');
+  const lg = st.log.filter(x => x.k === 'draw'); ok(lg.length === 1 && lg[0].n === 3 && lg[0].xs.join() === 'd,s,g' && lg[0].s === m[0], '로그에 개수와 꺼낸 것이 남아요');
+  const V = G.view(st, 5); ok(V.ver === 'b' && V.grabs.length === 1 && V.grabs[0].xs.length === 3 && V.M === 10 && V.bagN === 46 && V.left.d === 1 && V.left.g === 13 && V.left.s === 13, '모두에게 꺼낸 것이 보여요 (💎1 ⚪1 🟡1 = (3+2)×2 = 10)');
+  const pubBefore = G.view(st, 5).pub; ok(ap(st, m[1], { t: 'draw' }).ok, 'n 을 안 적으면 1개');
+  ok(st.drawn.length === 4 && st.grabs[1].xs.length === 1 && G.view(st, 5).pub !== pubBefore, '꺼내면 지문(pub)이 바뀌어요');
+  ok(apB(st, m[2], 2).ok && st.drawn.length === 6 && st.cur === 0, '세 번째 광부 2개 → 다시 첫 광부 차례 (돌아가며)');
+  const lgl = G.legal(st, m[0]); ok(lgl.length === 2 && lgl[0].t === 'stop' && lgl[1].t === 'draw' && lgl[1].n === 1 && G.legal(st, m[1]).length === 0, '시간이 다 되면 첫 수(스톱) · legal 은 스톱과 1개');
+  ok(apB(st, m[0], 0).ok && st.hist.length === 1 && st.hist[0].why === 'stop' && st.hist[0].grabs.length === 3 && st.hist[0].grabs[0].xs.join() === 'd,s,g' && G.view(st, 0).hist[0].grabs.length === 3, '스톱하면 바로 정산 · 기록에 꺼낸 순서(grabs)');
+  ok(st.turn === 1 && st.grabs.length === 0 && st.phase === 'bid', '다음 조에서 grabs 가 새로 시작');
+}
+{
+  // 폭탄이 한 번에 4개 — 그 차례는 끝까지 꺼내고 바로 끝 (방송: 한 사람이 한 번에 집은 것 안에서 폭탄 4개)
+  const st = mkB(42); bidAll(st, s => s - 2); const m = st.miners;
+  st.bag = ['g', 'g', 'b', 'b', 'b', 'b', 'c'];   // 뒤에서부터 c b b b b g g → 5개 꺼내면 폭탄 4개
+  ok(apB(st, m[0], 5).ok, '한 번에 5개 꺼내기 (폭탄 4개 포함)');
+  ok(st.hist.length === 1 && st.hist[0].kind === 'bomb' && st.hist[0].B === 4 && st.hist[0].why === 'bomb' && st.hist[0].drawn.length === 5 && st.hist[0].d[m[0]] === 0 && st.hist[0].d[3] === 1 && st.hist[0].d[8] === 6, '폭탄 4개 → 광부 0점 · 제시자는 제시한 점수 · 그 차례에 꺼낸 5개가 다 기록');
+  const st3 = mkB(43); bidAll(st3, 5); const m3 = st3.miners; st3.bag = ['b', 'b', 'g', 'g', 'b', 'c', 'c'];   // 꺼내는 순서: c c b g g b b
+  apB(st3, m3[0], 3);   // c c b → 폭탄 1
+  ok(st3.hist.length === 0 && st3.cur === 1, '폭탄 1개까지는 계속');
+  apB(st3, m3[1], 4);   // g g b b → 폭탄 3 → 끝
+  ok(st3.hist.length === 1 && st3.hist[0].B === 3 && st3.hist[0].kind === 'bomb' && st3.hist[0].grabs.length === 2 && st3.hist[0].drawn.length === 7, '둘째 광부가 한 번에 꺼내다 폭탄이 3개가 되면 그 자리에서 끝');
+  // 광산이 비면 끝
+  const st4 = mkB(44); bidAll(st4, 2); st4.bag = ['g', 'c']; ok(apB(st4, st4.miners[0], 2).ok && st4.hist.length === 1 && st4.hist[0].why === 'empty', '광산이 비면 끝 · 남은 만큼 다 꺼낼 수 있어요');
+  const st5 = mkB(45); bidAll(st5, 2); st5.bag = ['g', 'c', 'c'];
+  const s5 = JSON.stringify(st5); ok(!apB(st5, st5.miners[0], 4).ok && JSON.stringify(st5) === s5 && apB(st5, st5.miners[0], 3).ok && st5.hist[0].why === 'empty', '남은 것(3개)보다 많이는 못 꺼내고(상태 그대로) 3개는 돼요');
+  // 정산: 7개(🟡) = 21 ≥ S 18
+  const st6 = mkB(46); bidAll(st6, () => 3); const m6 = st6.miners; st6.bag = Array(14).fill('g');
+  apB(st6, m6[0], 7); apB(st6, m6[1], 0);
+  ok(st6.hist[0].M === 21 && st6.hist[0].S === 18 && st6.hist[0].kind === 'ok' && st6.hist[0].d[m6[0]] === 1 && st6.score[3] === 3 && st6.score[m6[2]] === 1, '7개(🟡) = 21 ≥ S 18 → 광부 +1씩 · 제시자 +3씩');
+}
+// 12) 방송대로: 한 판 끝까지 · 같은 씨앗 같은 판 · AI 거절 없음
+{
+  const sum = { easy: 0, normal: 0, hard: 0 }, cnt = { easy: 0, normal: 0, hard: 0 }; let grabsTot = 0, multi = 0;
+  for (let g = 0; g < 16; g++) {
+    const run = () => {
+      const st = G.init({ n: 9, seed: 700 + g * 7, cfg: { ver: 'b' } }), T = [...Array(9).keys()].map(i => ['hard', 'normal', 'easy'][(i + g) % 3]), rr = G.sampler(g * 3 + 1), acts = [];
+      let guard = 0, mut = 0, rej = 0;
+      while (!G.over(st) && guard++ < 3000) {
+        const s = G.needs(st)[0], V = G.view(st, s), V0 = JSON.stringify(V), a = G.ai(V, s, T[s], rr);
+        if (JSON.stringify(V) !== V0) mut++;
+        const r = ap(st, s, a); acts.push([s, a]);
+        if (!r.ok) { rej++; ap(st, s, G.legal(st, s)[0]); }
+      }
+      return { st, T, acts, mut, rej };
+    };
+    const A1 = run(), A2 = run();
+    ok(A1.rej === 0 && A1.mut === 0, `ver b ${g}판: AI 가 거절당한 적 없고 받은 view 를 안 바꿔요 (거절 ${A1.rej} · 변경 ${A1.mut})`);
+    ok(G.over(A1.st) && A1.st.hist.length === 9 && A1.st.hist.every(h => h.S >= 6 && h.M >= 0), `ver b ${g}판 끝남`);
+    ok(JSON.stringify(A1.st) === JSON.stringify(A2.st), `ver b ${g}판: 같은 씨앗 + 같은 AI = 같은 판`);
+    const re = G.init({ n: 9, seed: 700 + g * 7, cfg: { ver: 'b' } }); for (const [s, a] of A1.acts) ap(re, s, JSON.parse(JSON.stringify(a)));
+    ok(JSON.stringify(re) === JSON.stringify(A1.st), `ver b ${g}판: 행동 기록 재생 = 같은 판`);
+    let sumOk = true;
+    for (const h of A1.st.hist) { grabsTot += h.grabs.length; multi += h.grabs.filter(x => x.xs.length > 1).length; if (h.grabs.reduce((a, x) => a + x.xs.length, 0) !== h.drawn.length) sumOk = false; }
+    ok(sumOk, `ver b ${g}판: 꺼낸 개수의 합 = 그 조에서 나온 광물 수`);
+    for (let i = 0; i < 9; i++) { cnt[A1.T[i]]++; sum[A1.T[i]] += A1.st.score[i]; }
+  }
+  ok(multi > grabsTot * 0.3, `AI 광부가 한 번에 여러 개를 꺼내요 (${multi}/${grabsTot})`);
+  const avg = t => sum[t] / cnt[t];
+  console.log(`  [방송대로] 평균 점수 hard ${avg('hard').toFixed(1)} · normal ${avg('normal').toFixed(1)} · easy ${avg('easy').toFixed(1)}`);
+  // 섞인 판은 운이 커서 점수 차가 작아요 (hard ≈ normal > easy 정도) — 강약은 '어려운 1 : 쉬운 8' 로 재요 (tier_bench 와 같은 모양)
+  let hs = 0, es = 0, hn = 0, en = 0;
+  for (let g = 0; g < 24; g++) {
+    const st = G.init({ n: 9, seed: 1300 + g * 17, cfg: { ver: 'b' } }), hard = g % 9, rr = G.sampler(g + 4); let guard = 0;
+    while (!G.over(st) && guard++ < 3000) { const s = G.needs(st)[0]; ap(st, s, G.ai(G.view(st, s), s, s === hard ? 'hard' : 'easy', rr)); }
+    for (let i = 0; i < 9; i++) { if (i === hard) { hs += st.score[i]; hn++; } else { es += st.score[i]; en++; } }
+  }
+  console.log(`  [방송대로] 어려운 1 : 쉬운 8 평균 점수 ${(hs / hn).toFixed(1)} : ${(es / en).toFixed(1)}`);
+  ok(hs / hn > es / en + 20, '방송대로: 어려운 AI 1명이 쉬운 AI 8명보다 훨씬 높아요');
+}
+{
+  // 숨은 정보: 남의 제시 · 광산에 남은 순서를 바꿔도 보이는 것 · AI · 선생님 · 복기 비교가 같아요
+  const base = mkB(53); bidAll(base, s => 2 + s % 5); apB(base, base.miners[0], 3);
+  ok(base.phase === 'mine' && base.hist.length === 0, '(숨은 정보 시험 준비: 아직 채굴 중)');
+  const pres = 4, alt = clone(base); alt.bag.reverse(); for (const s of Object.keys(alt.bids)) if (+s !== pres) alt.bids[s] = 50 - alt.bids[s];
+  const cur = G.needs(base)[0], va = G.view(base, cur), vb = G.view(alt, cur);
+  ok(va.pub === vb.pub && JSON.stringify(va.left) === JSON.stringify(vb.left) && va.bids === null && vb.bids === null, '방송대로 광부: 광산 순서 · 제시 점수가 달라도 보이는 것은 같아요');
+  for (const tier of ['easy', 'normal', 'hard']) ok(JSON.stringify(G.ai(va, cur, tier, G.sampler(9))) === JSON.stringify(G.ai(vb, cur, tier, G.sampler(9))), `방송대로 광부 ${tier} AI 는 보이는 것만 써요`);
+  ok(JSON.stringify(G.coach(va, cur, 0, null)) === JSON.stringify(G.coach(vb, cur, 0, null)), '방송대로 광부 선생님도 같아요');
+  const wait = base.miners.find(s => s !== cur);
+  for (const seat of [wait, pres]) ok(JSON.stringify(G.coach(G.view(base, seat), seat, 0, null)) === JSON.stringify(G.coach(G.view(alt, seat), seat, 0, null)), `${seat}번 선생님(기다림)도 남의 제시 · 광산 순서에 영향받지 않아요`);
+  const cmpA = G.compareMineB(va, cur, { t: 'draw', n: 5 }, { t: 'stop' }, 77, 300), cmpB = G.compareMineB(vb, cur, { t: 'draw', n: 5 }, { t: 'stop' }, 77, 300);
+  ok(cmpA && JSON.stringify(cmpA) === JSON.stringify(cmpB), '복기 비교(5개 vs 스톱)도 보이는 것만 써요');
+  ok(G.compareMineB(va, cur, { t: 'draw', n: 2 }, { t: 'draw', n: 2 }, 1, 100) === null && G.compareMineB(va, cur, { t: 'draw', n: 99 }, { t: 'stop' }, 1, 100) === null && G.compareMineB(va, cur, { t: 'bid', v: 3 }, { t: 'stop' }, 1, 100) === null && G.compareMineB(G.view(base, wait), wait, { t: 'draw', n: 2 }, { t: 'stop' }, 1, 100) === null, '같은 수 · 못 두는 수 · 내 차례 아님은 null');
+  ok(G.pBust(49, 5, 1, 3) === 0 && Math.abs(G.pBust(49, 5, 49, 3) - 1) < 1e-9 && Math.abs(G.pBust(10, 3, 1, 1) - 0.3) < 1e-9 && G.pBust(49, 5, 3, 3) > 0.0005 && G.pBust(49, 5, 3, 3) < 0.0015, '폭탄이 3개 이상 될 확률(초기하분포) 계산');
+  // 선생님: 내 차례 추천은 'N개 꺼내요' 또는 스톱 + 폭탄 확률
+  const cc = G.coach(va, cur, 0, null); ok(/꺼내|스톱/.test(cc.rec) && /폭탄/.test(cc.why) && /득실/.test(cc.why), '방송대로 선생님: 추천 · 폭탄 확률 · 득실');
+  ok(/꺼냈어요|꺼냈/.test(cc.opp), '방송대로 선생님: 방금 꺼낸 것을 보여줘요');
+}
+// 13) 옛 복기 호환 — cfg 에 ver 가 없으면 옛 core 와 같은 seed · 같은 행동으로 같은 판 (상태 전체 JSON 같음)
+{
+  const Old = require('./gn-miner_legacy_core.js');
+  const strip = st => JSON.stringify(st, (k, v) => (k === 'cfg' ? undefined : v));
+  let steps = 0, aiSame = 0, coachSame = 0, games = 0;
+  for (const [label, cfgOld, cfgNew, exact] of [['cfg 없음', undefined, undefined, true], ['cfg {}', {}, {}, true], ['cfg groups', { groups: GR }, { groups: GR }, true], ['ver "a"', { groups: GR }, { groups: GR, ver: 'a' }, false], ['ver 다른 값', {}, { ver: 'x' }, false]]) {
+    for (let g = 0; g < 8; g++) {
+      const seed = 300 + g * 31, stO = Old.init({ n: 9, seed, cfg: cfgOld ? clone(cfgOld) : cfgOld }), stN = G.init({ n: 9, seed, cfg: cfgNew ? clone(cfgNew) : cfgNew });
+      const T = [...Array(9).keys()].map(i => ['hard', 'normal', 'easy'][(i + g) % 3]), rr = Old.sampler(g * 7 + 3);
+      const same = () => (exact ? JSON.stringify(stO) === JSON.stringify(stN) : strip(stO) === strip(stN));
+      let bad = '', guard = 0;
+      if (!same()) bad = '처음 상태가 달라요';
+      while (!bad && !Old.over(stO) && guard++ < 3000) {
+        if (JSON.stringify(Old.needs(stO)) !== JSON.stringify(G.needs(stN))) { bad = 'needs 다름'; break; }
+        const s = Old.needs(stO)[0], VO = Old.view(stO, s), VN = G.view(stN, s);
+        if (VO.pub !== VN.pub) { bad = 'pub 지문이 달라요'; break; }
+        if (JSON.stringify(Old.legal(stO, s)) !== JSON.stringify(G.legal(stN, s))) { bad = 'legal 다름'; break; }
+        if (guard % 4 === 0) for (const tier of ['easy', 'normal']) { const ao = Old.ai(VO, s, tier, Old.sampler(guard + g)), an = G.ai(VN, s, tier, G.sampler(guard + g)); if (JSON.stringify(ao) !== JSON.stringify(an)) bad = `${tier} AI 가 옛 core 와 달라요`; else aiSame++; }
+        if (guard % 9 === 0) { const ao = Old.ai(VO, s, 'hard', Old.sampler(guard * 3 + g)), an = G.ai(VN, s, 'hard', G.sampler(guard * 3 + g)); if (JSON.stringify(ao) !== JSON.stringify(an)) bad = 'hard AI 가 옛 core 와 달라요'; else aiSame++; }
+        if (guard % 11 === 0) { const co = JSON.stringify(Old.coach(VO, s, 0, null)), cn = JSON.stringify(G.coach(VN, s, 0, null)); if (co !== cn) bad = '선생님 글이 옛 core 와 달라요'; else coachSame++; }
+        if (bad) break;
+        // 엉뚱한 행동(거절)도 결과 · 상태가 같아요
+        for (const wrong of [{ t: 'draw', n: 3 }, { t: 'bid', v: 99 }, { t: 'stop' }, { t: 'wat' }, null]) {
+          const snap = JSON.stringify(stN), ro = Old.apply(stO, (s + 4) % 9, wrong), rn = G.apply(stN, (s + 4) % 9, wrong);
+          if (JSON.stringify(ro) !== JSON.stringify(rn)) { bad = `엉뚱한 행동 결과 달라요 ${JSON.stringify(wrong)}`; break; }
+          if (!same()) { bad = '엉뚱한 행동 뒤 상태가 달라요'; break; }
+          if (!ro.ok && JSON.stringify(stN) !== snap) { bad = '거절된 행동이 상태를 바꿨어요'; break; }
+        }
+        if (bad) break;
+        const a = Old.ai(VO, s, T[s], rr), ro = Old.apply(stO, s, JSON.parse(JSON.stringify(a))), rn = G.apply(stN, s, JSON.parse(JSON.stringify(a)));
+        steps++;
+        if (JSON.stringify(ro) !== JSON.stringify(rn)) { bad = `apply 결과가 달라요 ${JSON.stringify(a)}`; break; }
+        if (!same()) { bad = `${steps}수 뒤 상태가 달라요`; break; }
+      }
+      ok(!bad && G.over(stN) && Old.over(stO) && JSON.stringify(Old.ranks(stO)) === JSON.stringify(G.ranks(stN)) && same(), `${label} ${g}판: 옛 core 와 같은 판 (${bad || '끝 상태 · 순위까지'})`);
+      games++;
+    }
+  }
+  console.log(`  [옛 복기 호환] ${games}판 · ${steps}수 같음 · AI ${aiSame}번 같음 · 선생님 ${coachSame}번 같음`);
+  const sN = G.init({ n: 9, seed: 5, cfg: {} }); ok(!('grabs' in sN) && G.view(sN, 0).ver === 'a' && G.view(sN, 0).grabs.length === 0, 'ver 가 없는 판은 상태에 새 칸이 없고 view 는 a(예전)로 알려요');
+  const sB = G.init({ n: 9, seed: 5, cfg: { ver: 'b' } }); ok(G.view(sB, 0).ver === 'b' && JSON.stringify(sB.groups) === JSON.stringify(sN.groups) && JSON.stringify(sB.bag) === JSON.stringify(sN.bag), '같은 seed 는 판 번호만 다르고 조 편성 · 광산 순서는 같아요');
+  // 옛 판에는 n 이 들어가도 한 개씩 (복기에 n 이 없으니 같은 행동이면 같은 판)
+  const sA = mk(61); bidAll(sA, 3); const before = sA.bag.length; ap(sA, sA.miners[0], { t: 'draw', n: 5 }); ok(sA.bag.length === before - 1, 'ver 없는 옛 판에서는 draw 가 n 과 상관없이 1개');
+}
 console.log(`gn-miner selftest: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);
