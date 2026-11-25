@@ -73,6 +73,7 @@ const shotDir = val('shots', '');
       const { page, ctx, errs } = await newPage(async p => {
         await p.route('**/list/genius.js*', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: fake }));
         await p.route('**/list/devil-s3.js*', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: 'throw new Error("깨진 목록 파일")' }));
+        await p.route('**/list/devil.js*', r => r.fulfill({ status: 200, contentType: 'text/javascript', body: '/* 데블스 S1·S2 목록을 일부러 비움 — 빈 칸 시험 */' }));
       });
       await page.goto(url());
       await page.waitForFunction(() => window.__survival && window.__survival.ready, null, { timeout: 15000 });
@@ -92,7 +93,7 @@ const shotDir = val('shots', '');
       await page.click('#progTabs .prog[data-p="blood"]');
       await page.waitForFunction(() => !document.getElementById('panel').hidden, null, { timeout: 12000 });
       ok(true, '못 불러온 뒤에도 다른 칸은 그대로');
-      // 빈 칸 (데블스 칸에 목록 없음) → 준비 중
+      // 빈 칸 (데블스 칸 목록을 위에서 비워 둠 — 진짜 devil.js 에는 게임이 있어도) → 준비 중
       await page.click('#progTabs .prog[data-p="devil"]');
       const emp = await page.evaluate(() => ({ txt: document.getElementById('gameCards').textContent, panel: document.getElementById('panel').hidden }));
       ok(/준비 중/.test(emp.txt) && emp.panel, '게임 없는 칸은 준비 중 · 설명 칸 숨김: ' + emp.txt);
