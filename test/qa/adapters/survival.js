@@ -3,7 +3,7 @@
 //  · 한 게임 = 모드 하나 ('solo:<id>'): 방송 칸 → 시즌 칸 → 카드를 진짜로 눌러 고르고(게임 파일은 그때 불러옴) → [혼자] → [시작] → 내 차례마다 ui.qa(없으면 core.ai) 로 둠 → 결과 창
 //  · 폰 검사는 375×667 (phoneViewport) · 판 화면은 한 화면(세로 스크롤 없음, oneScreen) · 콘솔 오류 0 은 공통 검사(absorb)
 //  · 손잡이: window.__survival — ready · LIST · pick · fast · pause · autoAct · probe · fp · round · canAct
-//  · 친구랑(온라인)은 아케이드 mock 으로 아직 안 붙임 — 껍데기 시험 survival/test/*_ui.js 가 가상 틀로 확인
+//  · 친구랑(온라인)은 아케이드 mock 으로 2인 한 판(선생님 꺼짐 · 랭킹 한 번 · 손님 새로 고침) — online 항목. 그 밖은 껍데기 시험 survival/test/*_ui.js 가 가상 틀로 확인
 'use strict';
 const fs = require('fs'), path = require('path'), vm = require('vm');
 
@@ -79,7 +79,40 @@ module.exports = {
   modes,
   quickModes: keys,                         // 빠른 모드도 목록 전 항목 (한 게임이 몇 초)
   monkeyStart: keys.includes('solo:bloodrps') ? 'solo:bloodrps' : keys[0],
-  onlineGap: '친구랑(온라인)은 아케이드 mock 에 안 붙임 — 껍데기 시험 survival/test/*_ui.js (가상 틀)로 확인',
+  // 친구랑 (아케이드 mock): 선생님 꺼진 2인 판(피의 게임 가위바위보) 하나를 방장 · 손님이 끝까지 → 랭킹은 한 판에 한 번 (끝난 뒤 손님이 새로 고침해도 또 안 불림) · 오류 0.
+  //  (cd71c75 이전 shell.js 는 선생님 꺼짐에서 render 무한 재귀 → 판이 깨져 이 검사가 실패함)
+  online: {
+    open: async () => { const S = window.__survival; await S.ready; if (!(await S.pick('bloodrps', 'friend'))) throw new Error('bloodrps 를 못 고름'); S.fast(1); document.getElementById('startBtn').click(); },
+    beforeStart: () => { const i = document.querySelector('.arn-coach input'); if (i && i.checked) i.click(); },   // 선생님 끔 (기본 꺼짐이지만 확실히)
+    started: () => { const S = window.__survival; return !!(S && S.ses && S.mode === 'online' && !document.getElementById('play').hidden && S.V); },
+    setup: role => {
+      window.__qaRole = role; const S = window.__survival; if (S) { S.fast(1); S.pause(false); }
+      if (role === 'guest') { try { const m = JSON.stringify({ pid: 'qa-guest', name: '큐에이' }); localStorage.setItem('game.me', m); localStorage.setItem('game.me.test', m); } catch (e) {} }   // 새로 고침 뒤 페이지엔 프로필이 있어서 랭킹이 로컬에 쌓임
+      if (!window.__qaWatch) window.__qaWatch = setInterval(() => {        // 끝난 판: 손님이 새로 고침해도 랭킹이 또 안 쌓여야 함 (결과 창에서는 drive 가 안 불려서 타이머로)
+        const S2 = window.__survival, V = S2 && S2.V; if (!V || !V.over || window.__qaRole !== 'guest' || window.__qaChk) return;
+        window.__qaChk = 1; const stage0 = +sessionStorage.getItem('__qaStage') || 0;
+        // 이 기기에 쌓인 '베니 서바이벌' 판 수 (common/rank.js 가 localStorage 에 둠 — 새 페이지가 뜨자마자 불린 것도 셈)
+        const played = () => { let t = 0; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (!/survival/.test(k) || /^sv-/.test(k)) continue; try { const o = JSON.parse(localStorage.getItem(k)); if (o && o.all && +o.all.n) t += +o.all.n; } catch (e) {} } return t; };
+        setTimeout(() => {
+          const n = played();
+          if (stage0 === 0) { sessionStorage.setItem('__qaStage', '1'); sessionStorage.setItem('__qaN', String(n)); location.reload(); }
+          else { sessionStorage.setItem('__qaStage', '2'); if (n !== (+sessionStorage.getItem('__qaN') || 0)) console.error('[qa] 친구랑 랭킹이 새로 고침 뒤 또 쌓임 (' + sessionStorage.getItem('__qaN') + ' → ' + n + ')'); }
+        }, 900);
+      }, 150);
+    },
+    round: () => { const S = window.__survival; return S && S.ses ? S.ses.g : -1; },
+    fp: () => { const S = window.__survival; return S && S.ses ? S.fp() : null; },
+    drive: () => {
+      const S = window.__survival, qa = window.__qa;
+      if (!S || !S.ses) return;
+      if (qa.clickText(/^알겠어요$/)) return;
+      const V = S.V;
+      if (V && V.over) return;
+      for (let i = 0; i < 4; i++) { if (!S.autoAct()) break; }
+    },
+    stuckMs: 25000,
+    roundMs: 150000,
+  },
   gaps: (ENTRIES.length ? [] : ['survival/list/*.js 에 게임이 하나도 없음 — 검사할 판이 없음']).concat(READ_ERRS.map(s => '목록 파일을 못 읽음 (그 파일 게임은 검사에서 빠짐) — ' + s)),
   reproHint: (mode, seed) => `${mode.replace('solo:', '')}: 첫 화면에서 방송 칸 → 시즌 칸 → 카드 선택 → [혼자] → [시작] 후 내 차례마다 __survival.autoAct()`,
   // 판이 끝나는 순간 한 번: 🎞️ 복기 열림 · 끝까지 넘김 · 닫으면 결과 창으로 돌아옴 (어긋나면 예외 → 러너가 '멈춤 / probe 오류: 복기 …' 로 보고)

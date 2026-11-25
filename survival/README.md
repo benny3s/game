@@ -60,6 +60,14 @@
   - `ui.coach(V, me, since, names)` 는 복기에서도 불려요 (`since = -1`) — 그때 선생님의 💡 가 '그때 선생님: …' 줄로 나와요.
 - **README 밖의 것은 shell 이**: 기록 저장(`localStorage sv.rev.v1`, 최근 10판 · 150KB 이하) · 📒 담기(`common/mistakes.js` 의 `survival`) · 친구랑 손님 전달 · 복기 화면 · 연습 판.
 
+## 공용 틀이 해 주는 것 (11-26) — 게임은 알고만 있으면 돼요
+- **선생님 창 가림**: 셸이 선생님 창만큼 판 칸 아래를 비워요 (기본 켬, `ui.fitCoach = false` 로만 끔). 판을 줄이고 싶으면 `.sv-coachfit .판{ width:min(100%, calc(var(--sv-sh) - …)) }` — 못 줄이면 판 칸 안에서 스크롤돼요.
+- **뒤로 (안드로이드)**: 판 화면에서는 셸이 맡아요 — 열린 창(선생님 · 규칙 · 복기 · 지난 대국 · 결과)을 하나씩 닫고, 창이 없으면 ‹ 와 같이 '한 번 더' 뒤 종목 목록. 결과 창을 닫으면 🏁 결과 단추가 생겨요. 게임 쪽에서 `window.__ownBack` · history 를 만지지 마세요.
+- **친구랑 차례 시간**: 방 설정 '차례 시간' (30초 · 1분 · 2분 · 없음, 기본 1분). 같은 결정을 넘기면 그 자리를 AI 가 대신 두고 알림 (돌아와 고르면 다시 사람). 게임은 할 일 없음.
+- **친구랑 랭킹은 한 판에 한 번** (이 기기 localStorage `sv-ranked`).
+- **버저 · 반응 속도 게임** (`gn-samenum` · `gn-mysterysign` · `gn-formulaauction` 등): 손님이 보낸 ms 를 그대로 믿지 말고 `window.SVHuman.ms(x)` 로 거르세요 (사람 최소 120 ms · 최대 60 s · 숫자가 아니면 최대). core 는 Node 에서도 돌아야 하니 이 꼴로:
+  `const humanMs = (typeof window !== "undefined" && window.SVHuman) ? window.SVHuman.ms : (x => Math.max(120, Math.min(60000, Number.isFinite(+x) ? +x : 60000)));` 그리고 apply 에서 `a.ms = humanMs(a.ms)`.
+
 ## 품질 관문 (게임 하나마다 — 총괄 기준 `survival-quality.md` 5번)
 `selftest` 실패 0 → `node survival/test/<id>_ui.js` → **`node survival/test/replay_check.js --g <id>`**(복기 약속) → **`node survival/test/tier_bench.js --g <id>`**(고급이 초급을 이기는지: 실력 게임 65% · 운이 큰 게임은 `LUCK` 표에 한 줄 올려 55%) → `node survival/test/shell_ui.js --only <id>`(혼자 끝까지 + 🎞️ 복기 열림 · 끝까지 넘김) → `node test/qa/run.js --quick --no-selftest --games survival` → llm-bridge 교차 리뷰 → push → 총괄에 한 줄. 방송과 같은 설명(howto · 1분 규칙 · `src` 에 확인한 회차 · 영상), AI 선생님 세 줄 + 숫자 근거도 이 관문의 일부예요.
 

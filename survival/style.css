@@ -111,3 +111,17 @@ body.sv-fitcoach .cpn{max-height:min(21vh,190px)}
   .dock button .ic{width:42px;height:42px;font-size:19px}
   .dock{gap:10px}
 }
+
+/* ── 11-26 폰 화면 손질: 누르는 곳은 44px 이상 (셸 공용 단추만) · 튜토리얼 제목 두 줄 · 결과 창 단추 줄 고정 ── */
+#play .iconbtn,#rev .iconbtn{width:44px;height:44px}
+#play .pill{min-height:44px;display:inline-grid;align-items:center}
+.dock button{min-height:44px;min-width:48px}
+.tut-ov .tut-x{width:44px;height:44px}
+.tut-ov .tut-hd h2{white-space:normal;overflow:visible;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:keep-all;line-height:1.25}
+.sv-rrange{height:44px}
+#resBox.sv-res{display:flex;flex-direction:column;gap:10px;overflow:hidden;max-height:calc(100dvh - 32px)}
+#resBox .sv-rscroll{flex:1 1 auto;min-height:0;overflow-y:auto;display:grid;gap:10px;align-content:start;-webkit-overflow-scrolling:touch}
+#resBox .sv-acts{flex:none;display:grid;gap:8px}
+#resBox .sv-res h2,#resBox>h2{flex:none;margin:0}
+#resBox .sv-acts .btn{min-height:44px}
+.sv-resx{max-height:none}

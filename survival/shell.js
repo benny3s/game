@@ -20,6 +20,9 @@
   const $ = id => document.getElementById(id);
   const CORES = (window.SVCores = window.SVCores || {}), UIS = (window.SVUI = window.SVUI || {});   // 게임 파일이 나중에 여기에 등록함 (미리 만들어 둬야 같은 객체를 봄)
   const SITE = "survival";
+  // 버저 · 반응 속도 게임용 공용 도움 (11-26): 손님이 보낸 ms 를 그대로 믿지 않고 사람 최소 반응(120 ms) 밑이면 올려 잡음. 방장(core 의 apply)이 씀.
+  //  core.js 쓰는 법 (Node 시험에서는 window 가 없으니 이 꼴로):  const humanMs = (typeof window !== "undefined" && window.SVHuman) ? window.SVHuman.ms : (x => Math.max(120, Math.min(60000, +x || 0)));
+  window.SVHuman = window.SVHuman || { MIN: 120, MAX: 60000, ms: x => { x = +x; return Math.max(120, Math.min(60000, Number.isFinite(x) ? x : 60000)); } };
 
   // ── 목록 (list/*.js) · 게임 불러오기 ────────────────────────────
   // 일꾼마다 list/<이름>.js 에 (window.SVList = window.SVList || []).push({ id, prog, season, title, emoji, v, … }) — 형식은 README.md
@@ -316,19 +319,45 @@
   function endSession(keepNet) {
     if (!SES) return;
     if (SES.T) SES.T.kill();
-    if (SES.on) { SES.on.offs.forEach(f => { try { f(); } catch (e) {} }); SES.on.offs = []; Object.values(SES.on.away || {}).forEach(t => clearTimeout(t)); }
+    if (SES.on) { SES.on.offs.forEach(f => { try { f(); } catch (e) {} }); SES.on.offs = []; Object.values(SES.on.away || {}).forEach(t => clearTimeout(t)); clearTimeout(SES.on.idleT); }
     if (SES.on && !keepNet && window.ArenaUI && ArenaUI.net) { try { ArenaUI.leave(); } catch (e) {} }
     SES = null;
     if (coach) coach.hide();
     $("resOv").hidden = true;
   }
+  // ── 안드로이드 · 브라우저 뒤로 (11-26) ──
+  //  판 화면에서는 셸이 뒤로를 맡음 (common/backnav.js 는 __ownBack 이 참이면 비켜 줌):
+  //  ① 열린 창(선생님 · 복기 · 지난 대국 목록 · 규칙 · 결과)을 하나씩 닫고 ② 창이 없으면 ‹ 와 같게 '한 번 더' 뒤 종목 목록으로.
+  //  결과 창은 resHidden 으로 닫아 🏁 결과 단추로 다시 열 수 있음.
+  let guardOn = false, skipPop = false;
+  window.__ownBack = () => skipPop || (document.body.classList.contains("playing") && !!SES);
+  function backCloseTop() {
+    const rv = $("rev");
+    const ov = [...document.querySelectorAll(".tut-ov, .rk-ov, .cozy-ov, .mst-ov, .sv-hov, .overlay:not(#resOv):not(.arn-ov)")].filter(el => !el.hidden && el.getClientRects().length && !el.closest(".arn-ov")).pop();
+    if (ov) { const x = ov.querySelector("[data-x], .rk-x, .x-btn, .close, [aria-label='닫기']"); if (x) x.click(); else ov.remove(); return true; }
+    if (window.SVReview && SVReview.active && rv && !rv.hidden) { SVReview.close(); return true; }
+    if (coach && coach.visible && !coach.collapsed) { coach.hide(); render(); return true; }
+    if (SES && SES.V && SES.V.over && !SES.resHidden && !$("resOv").hidden) { SES.resHidden = true; render(); return true; }
+    return false;
+  }
+  addEventListener("popstate", () => {
+    if (skipPop) { skipPop = false; return; }
+    if (!guardOn) return;
+    guardOn = false;
+    if (!SES || !document.body.classList.contains("playing")) return;
+    try { history.pushState({ svplay: 1 }, ""); guardOn = true; } catch (e) {}
+    if (backCloseTop()) { sfx("tap"); return; }
+    $("backBtn").click();                                          // ‹ 와 같은 '한 번 더 누르면 나가요' (두 번째에 종목 목록 · 친구랑은 방 나가기)
+  });
   function showPlay() {
     document.body.classList.add("playing");
     document.querySelector(".wrap").hidden = true;
     $("play").hidden = false;
+    if (!guardOn) { try { history.pushState({ svplay: 1 }, ""); guardOn = true; } catch (e) {} }
   }
   function showHome() {
     document.body.classList.remove("playing");
+    if (guardOn) { guardOn = false; skipPop = true; try { history.back(); } catch (e) { skipPop = false; } }
     $("play").hidden = true;
     $("resOv").hidden = true;
     document.querySelector(".wrap").hidden = false;
@@ -366,7 +395,7 @@
       SES.me = 0;
     } else if (mode === "watch") {
       const n = watchN(id), mix = ["hard", "normal", "hard", "easy", "normal", "hard", "normal", "easy"];
-      seats = []; for (let k = 0; k < n; k++) { const t = ui.max <= 2 ? "hard" : mix[k]; seats.push({ kind: "ai", tier: t, name: TIERS[t].names[k % 7], emoji: TIERS[t].em }); }
+      seats = []; for (let k = 0; k < n; k++) { const t = ui.max <= 2 ? "hard" : mix[k % mix.length]; seats.push({ kind: "ai", tier: t, name: TIERS[t].names[k % 7], emoji: TIERS[t].em }); }
       SES.me = -1;
     } else {
       if (!hsPick || !hsPick.valid) { C.toast("자리를 먼저 골라 주세요"); SES = null; return; }
@@ -392,8 +421,27 @@
   function onTableUpdate() {
     if (!SES || !SES.T) return;
     SES.V = SES.T.view(viewSeat());
-    if (SES.mode === "online" && SES.on && SES.on.host) pushViews();
+    if (SES.mode === "online" && SES.on && SES.on.host) { pushViews(); idleWatch(); }
     render();
+  }
+  // 접속만 한 채 가만히 있는 사람이 판을 영원히 멈추지 않게 (방장만): 같은 결정을 limOf(cfg) 초 넘게 기다리면 그 자리를 AI 가 대신 둠
+  function idleWatch() {
+    const on = SES.on, T = SES.T; if (!on || !T) return;
+    const lim = limOf(on.cfg);
+    const need = T.over() ? [] : T.needs().filter(i => T.seats[i] && T.seats[i].kind === "remote" && !T.seats[i].sub);
+    const sig = need.length ? `${SES.g}|${T.rec ? T.rec.acts.length : 0}|${need.join(",")}` : "";
+    if (on.idleSig === sig) return;
+    on.idleSig = sig; clearTimeout(on.idleT);
+    if (!sig || !lim) return;
+    on.idleT = setTimeout(() => {
+      if (!SES || SES.on !== on || on.idleSig !== sig || !SES.T) return;
+      const names = [];
+      for (const i of SES.T.needs()) { const s = SES.T.seats[i]; if (s && s.kind === "remote" && !s.sub) { s.sub = true; s.idle = true; names.push(s.name); } }
+      if (!names.length) return;
+      const m = `⏱ ${names.join(" · ")} 님이 ${lim}초 안에 못 골라서 AI 가 대신 둬요`;
+      C.toast(m, 3200); try { on.net.chat && on.net.chat(m); } catch (e) {}
+      on.idleSig = ""; SES.T.kick();
+    }, lim * 1000);
   }
   function onTableOver() {
     SES.T.finish();                                              // 🎞️ 기록 저장 (이 기기 최근 10판)
@@ -485,6 +533,17 @@
   }
 
   // ── 결과 · 기록 ───────────────────────────────────────────
+  // 친구랑: 방 코드 · 판 번호 · 종목 · 결과로 '이미 기록함' 표시를 이 기기에 남김 (새로 고침 뒤 GRank.result 가 또 불리지 않게). 처음이면 true.
+  function markRanked(V) {
+    let key = "";
+    try { key = [SES.on && SES.on.net && SES.on.net.code || "", SES.g, SES.id, (V.ranks || []).join(","), (V.score || []).join(",")].join("|"); } catch (e) { return true; }
+    try {
+      const K = "sv-ranked", a = JSON.parse(localStorage.getItem(K) || "[]");
+      if (a.includes(key)) return false;
+      a.push(key); localStorage.setItem(K, JSON.stringify(a.slice(-40)));
+    } catch (e) {}
+    return true;
+  }
   function onOverSeen() {
     if (!SES || SES.ranked === SES.g) return;
     SES.ranked = SES.g;
@@ -492,6 +551,7 @@
     if (SES.mode === "watch" || SES.drill || !window.GRank || !V.ranks) return;     // 연습 판(📒)은 기록에 안 셈
     if (SES.mode === "local") return;                                               // 한 기기 판은 기록에 안 셈 (오목 등 다른 게임과 같게)
     if (me < 0) return;
+    if (SES.mode === "online" && !markRanked(V)) return;                            // 새로 고침으로 같은 판이 다시 '끝남'으로 보여도 기록은 한 번만
     const R = V.ranks, mine = R[me], firsts = R.filter(x => x === 0).length;
     const res = mine === 0 ? (firsts > 1 ? "d" : "w") : "l";
     const beat = R.filter((x, i) => i !== me && x > mine).length;
@@ -513,7 +573,7 @@
     let acts = "";
     if (SES.mode !== "online") acts = `<button class="btn primary big" data-r="again">↺ 한 판 더</button><div class="two">${revBtn()}<button class="btn" data-r="peek">👀 판 보기</button><button class="btn" data-r="home">종목 고르기</button></div>`;
     else acts = onlineActs();
-    $("resBox").innerHTML = `<h2>${head}</h2><ol class="sv-rank">${rows}</ol>${extra ? `<div class="sv-resx">${extra}</div>` : ""}${acts}`;
+    $("resBox").innerHTML = `<h2>${head}</h2><div class="sv-rscroll"><ol class="sv-rank">${rows}</ol>${extra ? `<div class="sv-resx">${extra}</div>` : ""}</div><div class="sv-acts">${acts}</div>`;
     if (ov.hidden) { ov.hidden = false; if (me >= 0 && R[me] === 0) try { C.confetti(); } catch (e) {} }
   }
   // 🎞️ 복기: 방금 끝난 판의 기록 (방장 · 혼자 · 한 기기 · 구경 = 내 테이블, 손님 = 방장이 끝난 뒤 보내 준 것)
@@ -562,6 +622,9 @@
     }
     return out.join("");
   }
+  // 결정마다 시간 제한 (방 설정 '차례 시간', 초 · 0 = 없음): 넘기면 그 자리 AI 가 대신 둠
+  const LIMITS = [[60, "1분"], [30, "30초"], [120, "2분"], [0, "없음"]];
+  const limOf = cfg => (cfg && cfg.limit != null && [0, 30, 60, 120].includes(+cfg.limit)) ? +cfg.limit : 60;
   function friendOpts() {
     const gid = cfg => (cfg && entryOf(cfg.game) && !entryOf(cfg.game).link) ? cfg.game : opt.game;       // 방이 고른 게임 (모르는 이름이면 내가 보던 것)
     const label = cfg => {
@@ -579,7 +642,7 @@
         return `${ui.emoji} ${ui.name} · ${seated}명${tot > seated ? ` + AI ${tot - seated}` : ""}${n > ui.max ? ` · ${n - ui.max}명은 구경` : ""}`;
       },
       settings: {
-        defaults: { game: opt.game, fill: 0, tier: "normal", o: gameOpts(opt.game) },
+        defaults: { game: opt.game, fill: 0, tier: "normal", limit: 60, o: gameOpts(opt.game) },
         label,
         render(el, cfg, canEdit, update) {
           const id = gid(cfg);
@@ -594,6 +657,7 @@
             const parts = [`${ui.emoji} ${ui.name}`];
             for (const it of ui.opts || []) { const x = it.items.find(y => String(y[0]) === String(go[it.k])); if (x) parts.push(x[1]); }
             if (fill > 0 && ui.max > 2) parts.push(`빈자리 AI(${TIERS[tier].em})로 ${fill}명까지`);
+            if (limOf(cfg)) parts.push(`차례 ${limOf(cfg)}초`);
             el.innerHTML = `<p class="arn-soft" style="text-align:center">${parts.map(esc).join(" · ")}</p>`;
             return;
           }
@@ -603,6 +667,7 @@
             h += `<div class="optrow"><span class="small">빈자리</span>${segHtml("fill", items.slice(0, 4), fill)}</div>`;
             if (fill > 0) h += `<div class="optrow"><span class="small">AI 실력</span>${segHtml("tier", ["easy", "normal", "hard"].map(t => [t, `${TIERS[t].em} ${TIERS[t].name}`]), tier)}</div>`;
           }
+          h += `<div class="optrow"><span class="small">차례 시간</span>${segHtml("limit", LIMITS, limOf(cfg))}</div>`;
           for (const it of ui.opts || []) h += `<div class="optrow"><span class="small">${esc(it.label)}</span>${segHtml("go:" + it.k, it.items, go[it.k])}</div>`;
           el.innerHTML = h;
           el.onchange = e => {                                    // 종목 바꾸기: 그 게임을 불러온 뒤에 방 설정을 바꿈
@@ -616,6 +681,7 @@
             const key = b.closest(".seg").dataset.seg, v = b.dataset.v;
             if (key === "fill") update({ fill: +v });
             else if (key === "tier") update({ tier: v });
+            else if (key === "limit") update({ limit: +v });
             else if (key.startsWith("go:")) { const k = key.slice(3), it = (ui.opts || []).find(x => x.k === k), val = it && it.items.find(x => String(x[0]) === v); if (val) update({ o: Object.assign({}, go, { [k]: val[0] }) }); }
           };
         },
@@ -711,6 +777,7 @@
       if (m.g !== SES.g) { pushViews(); return; }
       const s = SES.T.seats.findIndex(x => x.uid === u);
       if (s < 0) return;
+      if (SES.T.seats[s].sub && SES.T.seats[s].idle) { SES.T.seats[s].sub = false; SES.T.seats[s].idle = false; }   // 시간 넘겨 AI 가 대신 두던 자리: 돌아와서 고르면 다시 사람이 둠
       const r = SES.T.act(s, m.a);
       if (!r.ok) { try { on.net.send(u, { t: "err", err: r.err || "그렇게는 못 해요" }, true); } catch (e) {} pushViews(); }
       return;
