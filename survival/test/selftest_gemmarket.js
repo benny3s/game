@@ -113,5 +113,45 @@ for (const n of [4, 5, 7, 9]) for (const tier of ['easy', 'normal', 'hard']) for
   }
   eq(bad, 0, '선생님 글에 빈 칸 · undefined · NaN 없음');
 }
+// 9) 고급 AI: 마니또 순환 표본 · 순위 평가 · 숨은 마니또를 엿보지 않음 (11-25)
+{
+  // 9-1) cycleSample: 한 바퀴 · 자기 자신 아님 · 내가 마니또인 사람(X)의 마니또는 나 · 내 마니또는 X 가 아님
+  let allOk = true; const r0 = mb(3);
+  for (const n of [4, 5, 7, 9]) for (let t = 0; t < 40; t++) {
+    const me = t % n, X = (me + 1 + (t % (n - 1))) % n; if (X === me) continue;
+    const m = G.cycleSample(n, me, X, r0);
+    let c = 0, p = 0; do { p = m[p]; c++; } while (p !== 0 && c <= n);
+    if (c !== n || m.some((x, i) => x === i || x < 0 || x >= n) || new Set(m).size !== n || m[X] !== me || m[me] === X) allOk = false;
+  }
+  ok(allOk, 'cycleSample 은 n 명을 한 바퀴로 잇고 m[X]=나 · 내 마니또≠X');
+  // 내 마니또가 될 수 있는 사람은 '나 · X 를 뺀 모두' 이고 모두 나옴 (n=5: 3명)
+  const seenM = new Set(); for (let t = 0; t < 200; t++) seenM.add(G.cycleSample(5, 0, 1, r0)[0]);
+  eq([...seenM].sort(), [2, 3, 4], 'n=5 에서 내 마니또 후보는 2·3·4 모두');
+  // 9-2) evalRank 모양: 합법 수만 · 몫 0~1 · 정렬 · 상태를 안 바꿈
+  for (const n of [4, 6, 9]) {
+    const st = G.init({ n, seed: 40 + n }), me = G.needs(st)[0], V = G.view(st, me), vs = JSON.stringify(V), s0 = JSON.stringify(st);
+    const L = G.evalRank(V, me, 40, mb(n));
+    eq(L.map(x => x.to).sort((a, b) => a - b), G.legal(st, me).map(a => a.to).sort((a, b) => a - b), `n=${n} 평가 후보 = 합법 수 전부`);
+    ok(L.every(x => x.win >= 0 && x.win <= 1 && Number.isFinite(x.ev) && Number.isFinite(x.pts)), `n=${n} 몫 0~1 · 값이 숫자`);
+    ok(L.every((x, i) => i === 0 || L[i - 1].ev >= x.ev), `n=${n} ev 내림차순`);
+    ok(JSON.stringify(V) === vs && JSON.stringify(st) === s0, `n=${n} evalRank 는 view · 상태를 안 바꿈`);
+  }
+  // 9-3) 숨은 마니또 배치만 다른 두 판 — 내가 보는 것(forWho 포함)은 같으므로 고급 AI 선택도 같아야 함 (숨은 정보를 안 씀)
+  let same = 0, tot = 0;
+  for (const n of [5, 6, 8]) for (let seed = 1; seed <= 3; seed++) {
+    const st1 = G.init({ n, seed: 900 + seed }), st2 = JSON.parse(JSON.stringify(st1)), me = G.needs(st1)[0];
+    const X = st1.manito.indexOf(me); let chain = [], p = st1.manito[me]; while (p !== X) { chain.push(p); p = st1.manito[p]; }     // 나 → … → X 사이
+    const rev = chain.slice().reverse(), m2 = st1.manito.slice();
+    m2[X] = me; let prev = me; for (const o of rev) { m2[prev] = o; prev = o; } m2[prev] = X; st2.manito = m2;
+    ok(m2.indexOf(me) === X, '다른 마니또 배치도 내가 마니또인 사람은 같음');
+    const a1 = G.ai(G.view(st1, me), me, 'hard', mb(77 + seed)), a2 = G.ai(G.view(st2, me), me, 'hard', mb(77 + seed));
+    tot++; if (JSON.stringify(a1) === JSON.stringify(a2)) same++;
+    eq(JSON.stringify(G.view(st1, me)), JSON.stringify(G.view(st2, me)), `n=${n} 숨은 마니또 배치가 달라도 내 화면은 같음`);
+  }
+  eq(same, tot, `고급 AI 는 숨은 마니또 배치를 안 봄 (${same}/${tot})`);
+  // 9-4) 선생님(고급과 같은 평가) 글에 몫(%)이 나오고 깨진 값이 없음
+  const st = G.init({ n: 5, seed: 12 }), me = G.needs(st)[0], c = G.coach(G.view(st, me), me, -1, ['나', 'A', 'B', 'C', 'D']);
+  ok(/%/.test(c.why) && !/undefined|NaN/.test(JSON.stringify(c)), '선생님 글에 최종 순위 몫(%)');
+}
 console.log(`보석 암시장 시험: 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);

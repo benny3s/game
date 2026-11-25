@@ -213,11 +213,11 @@
       "끝나면 내 보석과 같은 종류의 <b>구매자 칸마다 숫자만큼</b> 점수 · 폭탄은 깎임 · 누가 내 폭탄을 가져가면 <b>+3</b>",
       "최종 점수 = <b>내 점수 × 내 마니또의 점수</b> (나는 내가 누구의 마니또인지만 알아요) · 높은 순서가 순위",
     ],
-    note: "방송과 다른 점: 4~9명 (방송은 9명, 빈 자리는 AI), 피스가 없어서 구매자 · 휴지통 카드 몰래 보기는 게임 중 한 번 공짜, 3분 제한 · 대화 없음, 첫 선은 무작위, 점수가 같으면 내 점수가 높은 쪽이 위.",
+    note: "방송과 다른 점: 4~9명 (방송은 9명, 빈 자리는 AI), 피스가 없어서 구매자 · 휴지통 카드 몰래 보기는 게임 중 한 번 공짜, 3분 제한 · 대화 없음 (방송은 대화로 서로의 마니또를 알아내지만 여기서는 내 마니또를 끝까지 몰라요 — 고급 AI · 선생님은 공개된 점수와 '내가 누구의 마니또인지'만으로 계산해요), 첫 선은 무작위, 점수가 같으면 내 점수가 높은 쪽이 위.",
     sub: V => (V.over ? "끝" : V.phase === "swap" ? `${V.round} / ${V.rounds}라운드 · 교환 ${V.step + 1}/${V.total}` : `${V.round} / ${V.rounds}라운드 · 결과`),
     chip: (V, i) => ({ t: V.over && V.final ? `${V.final.fin[i]}` : `${V.score[i]}점`, on: V.needs.includes(i) && !V.over }),
     render, result,
-    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 가 계산한 이번 라운드 점수 기대값과 견줌)
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 가 계산한 '최종 순위에서 남을 이길 몫' 과 견줌 — 마니또는 모르는 것으로 보고)
     actText: (a, V, names) => {
       if (!a) return "—";
       const PL = ["구매자 1칸", "구매자 2칸", "구매자 3칸", "휴지통"];
@@ -228,11 +228,11 @@
     review: (V, seat, myA, bestA, info) => {
       if (!V || !myA || !bestA || myA.t !== "swap" || bestA.t !== "swap" || V.mine == null) return null;
       const r = (() => { let a = (((info && info.seed) | 0) + V.round * 131 + V.step * 17 + seat) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
-      const L = G.evalMoves(V, seat, 120, r), best = L[0], mine = L.find(x => x.to === myA.to);
+      const L = G.evalRank(V, seat, 120, r), best = L[0], mine = L.find(x => x.to === myA.to);
       if (!best || !mine) return null;
       const names = info && info.names;
-      const f = x => (x >= 0 ? "+" : "") + x.toFixed(1);
-      return { sev: Math.max(0, Math.min(100, Math.round((best.ev - mine.ev) * 12))), why: `이 라운드 끝 점수 기대값 — 고급 AI 가 본 최선 ${G.toText(best.to, names)} ${f(best.ev)} / 내 선택 ${G.toText(myA.to, names)} ${f(mine.ev)} (남은 교환은 무작위로 가정)` };
+      const f = x => (x >= 0 ? "+" : "") + x.toFixed(1), pc = x => Math.round(x * 100) + "%";
+      return { sev: Math.max(0, Math.min(100, Math.round((best.ev - mine.ev) * 240))), why: `최종 순위에서 남을 이길 몫 — 고급 AI 가 본 최선 ${G.toText(best.to, names)} ${pc(best.win)} (이번 라운드 ${f(best.pts)}점) / 내 선택 ${G.toText(myA.to, names)} ${pc(mine.win)} (${f(mine.pts)}점) · 마니또는 모르는 것으로 보고, 남은 교환은 무작위로 가정` };
     },
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     tutorial,

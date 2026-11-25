@@ -50,7 +50,26 @@
 .ep-res{display:grid;gap:3px;font-size:12.5px;line-height:1.4}
 .ep-hbtn{display:inline-block;margin:2px 4px 2px 0;padding:5px 10px;border-radius:999px;border:1px solid rgba(250,204,21,.55);background:rgba(250,204,21,.12);color:#fde68a;font:800 12.5px var(--round);cursor:pointer}
 @media (max-height:700px){.ep-c{width:60px;height:44px;font-size:19px}.ep-pyr{gap:4px}.ep-row{gap:4px}.ep-tg b{font-size:26px}.ep-b{min-height:44px}.ep-info{min-height:2.4em;font-size:12px}.ep-ex{font-size:17px}}
-@media (min-height:760px){.ep-c{width:70px;height:56px;font-size:23px}.ep-b{min-height:52px}}`;
+@media (min-height:760px){.ep-c{width:70px;height:56px;font-size:23px}.ep-b{min-height:52px}}
+/* 선생님 창이 열려 아래가 줄었을 때(fitCoach): 칸 높이를 shell 이 알려 주는 판 높이(--sv-sh)에 맞춰 줄이고, 내 차례(단추가 있을 때)에는 안내 줄 · 찾은 답 줄을 숨겨요 (같은 내용이 선생님 창 '최근' 에 있음) */
+.sv-coachfit{gap:4px}
+.sv-coachfit .ep-top{gap:8px}
+.sv-coachfit .ep-tg{display:flex;align-items:baseline;gap:6px;min-width:0;padding:1px 12px;border-radius:12px}
+.sv-coachfit .ep-tg small{font-size:10px}.sv-coachfit .ep-tg b{font-size:24px}
+.sv-coachfit .ep-meta{font-size:11.5px;gap:0}
+.sv-coachfit .ep-pyr{gap:3px}.sv-coachfit .ep-row{gap:4px}
+.sv-coachfit .ep-c{width:58px;height:clamp(28px,calc((var(--sv-sh,360px) - 128px) / 4),46px);font-size:17px;border-radius:9px}
+.sv-coachfit .ep-c i{top:0;left:4px;font-size:9px}
+.sv-coachfit .ep-c em{width:17px;height:17px;font:900 11px/17px var(--round);top:-6px;right:-5px}
+.sv-coachfit .ep-v{padding-top:4px}
+.sv-coachfit .ep-ex{font-size:15px;line-height:1.3;min-height:20px}
+.sv-coachfit .ep-ex:empty{display:none}
+.sv-coachfit .ep-b{min-height:40px;font-size:13px}
+.sv-coachfit .ep-info{min-height:0;font-size:11.5px;line-height:1.3}
+.sv-coachfit .ep-info.end{font-size:12px;padding:2px 8px}
+.sv-coachfit .ep-list{min-height:0;flex-wrap:nowrap;justify-content:flex-start;overflow-x:auto;gap:3px;scrollbar-width:none}
+.sv-coachfit .ep-k{flex:none;font-size:11px}
+.sv-coachfit .ha{display:none}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
 
@@ -79,13 +98,13 @@
     }
     return h + `</div>`;
   }
-  function listHtml(V, me, names, showMiss) {
+  function listHtml(V, me, names, showMiss, ha) {
     const got = new Set(V.found.map(x => x.k));
     let h = V.found.map(x => `<span class="ep-k ok${x.s === me ? " me" : ""}" data-k="${x.k}">${x.k} <small>${esc(nmOf(names, x.s, me))}</small></span>`).join("");
     const bad = V.tries.filter(x => x.res === "wrong" || x.res === "dup").slice(-3);
     h += bad.map(x => `<span class="ep-k x" data-k="${x.k}">${x.k} <small>${esc(nmOf(names, x.s, me))} −1</small></span>`).join("");
     if (showMiss && V.ans) h += V.ans.filter(k => !got.has(k)).map(k => `<span class="ep-k miss" data-k="${k}">${k} <small>${exprHtml(V.cells, k)}</small></span>`).join("");
-    return `<div class="ep-list">${h || `<span class="ep-k"><small>아직 찾은 답 없음</small></span>`}</div>`;
+    return `<div class="ep-list${ha ? " ha" : ""}">${h || `<span class="ep-k"><small>아직 찾은 답 없음</small></span>`}</div>`;
   }
   function lastTry(V, me, names) {
     const t = V.tries[V.tries.length - 1]; if (!t) return "";
@@ -117,9 +136,9 @@
       info = `라운드 ${B.round} 끝 — ${B.why === "all" ? "정답을 모두 찾았어요" : B.why === "pass" ? "모두 넘겨서 끝" : "차례를 다 써서 끝"}${missed ? ` · 못 찾은 답 <b>${missed}개</b> (점선)` : ""}`;
     } else if (can) info = `🎯 내 차례 — 답을 말하거나 넘겨요${V.tries.length ? ` · 직전 ${lastTry(V, me, names)}` : ""}`;
     else info = V.tries.length ? lastTry(V, me, names) : `${esc(nmOf(names, V.turn, me))} 차례…`;
-    h += `<div class="ep-info${ic}"><span>${info}</span></div>`;
+    h += `<div class="ep-info${ic}${can ? " ha" : ""}"><span>${info}</span></div>`;
     if (can) h += `<div class="ep-act"><button type="button" class="ep-b" data-x="clear"${S.k ? "" : " disabled"}>지우기</button><button type="button" class="ep-b" data-x="pass">넘기기</button><button type="button" class="ep-b go" data-x="say"${S.k.length === 3 ? "" : " disabled"}>${S.k.length === 3 ? `${S.k} 정답 선언` : `${3 - S.k.length}칸 더`}</button></div>`;
-    h += rend && B ? listHtml({ found: B.found, tries: [], ans: B.ans, cells: B.cells }, me, names, true) : listHtml(V, me, names, false);
+    h += rend && B ? listHtml({ found: B.found, tries: [], ans: B.ans, cells: B.cells }, me, names, true) : listHtml(V, me, names, false, can);
     stage.innerHTML = h;
 
     stage.onclick = e => {
@@ -261,7 +280,7 @@
 
   window.SVUI = window.SVUI || {};
   window.SVUI.eqpyramid = {
-    name: "수식 피라미드", emoji: "🔢", short: "피라미드 10칸 중 3칸으로 타깃 넘버 만들기 — 첫 칸 부호는 무시, 곱셈 · 나눗셈 먼저, 틀리면 −1", min: 2, max: 4, defN: 2, board: false,
+    name: "수식 피라미드", emoji: "🔢", short: "피라미드 10칸 중 3칸으로 타깃 넘버 만들기 — 첫 칸 부호는 무시, 곱셈 · 나눗셈 먼저, 틀리면 −1", min: 2, max: 4, defN: 2, board: false, fitCoach: true,
     opts: [
       { k: "src", label: "문제", items: [["new", "새 문제"], ["tv", "방송 10판"]], def: "new" },
       { k: "rounds", label: "라운드", items: [[10, "10라운드"], [5, "5라운드 (짧게)"]], def: 10 },

@@ -234,7 +234,73 @@
       return { to, ev: L.length ? sum / L.length : 0 };
     }).sort((a, b) => b.ev - a.ev || a.to - b.to);
   }
-  const TIER = { easy: 0, normal: 14, hard: 90 };
+  // ── 고급: 최종 순위로 재는 평가 ──────────────────────────────────
+  // 최종 점수 = 내 점수 × 마니또 점수 라서 내 점수만 올리는 것이 순위를 올리지 않을 수 있음 (마니또 점수가 음수면 반대 — 방송의 '마이너스 전략').
+  // 보이는 것만 씀: 라운드 끝마다 공개되는 모두의 점수(V.score) · 내가 누구의 마니또인지(V.forWho) · 공개된 교환 기록.
+  // 마니또는 한 바퀴로 이어져 있고 그 사람(forWho)의 마니또가 나이므로, 내 마니또는 '나 · 그 사람을 뺀 나머지' 중 한 명 (누군지는 몰라 → 같은 확률로 뽑아 봄).
+  // 남은 교환 · 남은 라운드는 모두 무작위로 둔다고 보고 끝까지 돌려, 최종 순위에서 남을 이긴 몫(win)을 잼. 고르는 값 ev = win + 내 이번 라운드 점수 × RANK_PTS/10
+  // (순위 지표만으로는 표본이 흔들려, 큰 인원에서 '내 점수 올리기' 쪽을 섞음 — 가중치 0.5 는 고급 vs 초급 6000판 벤치로 정함).
+  const RANK_PTS = 0.5;
+  function cycleSample(n, me, X, r) {
+    const m = Array(n).fill(-1), others = [];
+    for (let i = 0; i < n; i++) if (i !== me && i !== X) others.push(i);
+    for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
+    m[X] = me; let prev = me; for (const o of others) { m[prev] = o; prev = o; } m[prev] = X;    // X → 나 → … → X (m[p] = p 점수에 곱해지는 사람)
+    return m;
+  }
+  function futureGains(n, rounds, r) {                          // 남은 라운드를 모두 무작위로 둔다고 보고 사람마다 얻을 점수
+    const f = Array(n).fill(0);
+    for (let k = 0; k < rounds; k++) {
+      const deck = Array.from({ length: CARDS.length }, (_, i) => i);
+      for (let i = deck.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [deck[i], deck[j]] = [deck[j], deck[i]]; }
+      const hands = deck.slice(0, n), slots = deck.slice(n, n + 3), bonus = Array(n).fill(0); let trash = deck[n + 3];
+      const lead = Math.floor(r() * n), fwd = Array.from({ length: n }, (_, i) => (lead + i) % n);
+      for (const s of fwd.concat(fwd.slice().reverse())) {
+        const lo = isBomb(hands[s]) ? TO_P : 0, hi = TO_P + n; let to;
+        do { to = lo + Math.floor(r() * (hi - lo)); } while (to === TO_P + s);
+        const mine = hands[s]; let other;
+        if (to < 3) { other = slots[to]; slots[to] = mine; } else if (to === TO_TRASH) { other = trash; trash = mine; }
+        else { const p = to - TO_P; other = hands[p]; hands[p] = mine; if (isBomb(other)) bonus[p] += STEAL; }
+        hands[s] = other;
+      }
+      const b = buyerCount(slots); hands.forEach((c, i) => { f[i] += gainOf(c, b) + bonus[i]; });
+    }
+    return f;
+  }
+  function rolloutAll(L, V, firstTo, u) {                       // rollout 과 같되 사람마다 이번 라운드 점수를 돌려줌
+    const n = V.n, hands = L.hands.slice(), slots = L.slots.slice(), bonus = L.bonus.slice(); let trash = L.trash, ui = 0;
+    for (let k = V.step; k < V.total; k++) {
+      const s = V.order[k]; let to;
+      if (k === V.step) to = firstTo;
+      else { const lo = isBomb(hands[s]) ? TO_P : 0, hi = TO_P + n; do { to = lo + Math.floor(u[ui++ % u.length] * (hi - lo)); } while (to === TO_P + s); }
+      const mine = hands[s]; let other;
+      if (to < 3) { other = slots[to]; slots[to] = mine; } else if (to === TO_TRASH) { other = trash; trash = mine; }
+      else { const p = to - TO_P; other = hands[p]; hands[p] = mine; if (isBomb(other)) bonus[p] += STEAL; }
+      hands[s] = other;
+    }
+    const b = buyerCount(slots); return hands.map((c, i) => gainOf(c, b) + bonus[i]);
+  }
+  // → [{ to, ev, win, pts }] ev 높은 순. win = 최종 순위로 남을 이길 몫(0~1) · pts = 이번 라운드 내 점수 기대값
+  function evalRank(V, me, S, r) {
+    if (!(V.forWho >= 0 && V.forWho < V.n) || V.forWho === me) return [];      // 구경 보기('all') 처럼 내 자리가 없으면 평가하지 않음 (ai 는 무작위 합법 수로 넘어감)
+    const n = V.n, L = samples(V, me, S, r), myCard = V.mine, X = V.forWho, left = Math.max(0, V.rounds - V.round);
+    const cand = []; for (let to = 0; to < TO_P + n; to++) { if (to === TO_P + me) continue; if (myCard != null && isBomb(myCard) && to < TO_P) continue; cand.push(to); }
+    const us = L.map(() => Array.from({ length: 64 }, () => r()));
+    const M = L.map(() => cycleSample(n, me, X, r)), F = L.map(() => futureGains(n, left, r));      // 후보끼리 같은 난수 · 같은 마니또 · 같은 남은 라운드 (비교가 흔들리지 않게)
+    const k = L.length || 1;
+    return cand.map(to => {
+      let sum = 0, pts = 0;
+      for (let i = 0; i < L.length; i++) {
+        const G = rolloutAll(L[i], V, to, us[i]), tot = G.map((g, j) => V.score[j] + g + F[i][j]), fin = tot.map((t, j) => t * tot[M[i][j]]);
+        let w = 0;
+        for (let j = 0; j < n; j++) if (j !== me) w += fin[me] > fin[j] ? 1 : fin[me] < fin[j] ? 0 : tot[me] > tot[j] ? 1 : tot[me] < tot[j] ? 0 : 0.5;
+        sum += w / (n - 1); pts += G[me];
+      }
+      const win = sum / k, p = pts / k;
+      return { to, ev: win + RANK_PTS * p / 10, win, pts: p };
+    }).sort((a, b) => b.ev - a.ev || a.to - b.to);
+  }
+  const TIER = { easy: 0, normal: 14, hard: 120 };
   function peekPick(V, me, r) {
     // 가장 모르는 칸 = 후보 배치 안에서 종류가 가장 고르게 나뉘는 구매자 칸
     const L = samples(V, me, 40, r), n = V.n; let best = 0, bs = -1;
@@ -248,10 +314,10 @@
     if (tier === "easy") return r() < 0.12 && !V.peeked ? { t: "peek", loc: Math.floor(r() * 4) } : { t: "swap", to: randTo() };
     if (!V.peeked && V.step < n && tier === "hard" && r() < 0.8) return { t: "peek", loc: peekPick(V, me, r) };
     if (tier === "normal" && r() < 0.15) return { t: "swap", to: randTo() };
-    const S = TIER[tier] || TIER.normal, L = evalMoves(V, me, S, r);
+    const S = TIER[tier] || TIER.normal, L = (tier === "hard" ? evalRank : evalMoves)(V, me, S, r);
     if (!L.length) return { t: "swap", to: randTo() };
-    // 거의 같은 값이면 무작위로 (사람처럼 보이게 · 읽히지 않게)
-    const top = L.filter(x => x.ev >= L[0].ev - 0.12);
+    // 거의 같은 값이면 무작위로 (사람처럼 보이게 · 읽히지 않게) — 고급은 순위 몫(0~1) 단위라 문턱이 더 좁음
+    const top = L.filter(x => x.ev >= L[0].ev - (tier === "hard" ? 0.002 : 0.12));
     return { t: "swap", to: top[Math.floor(r() * top.length)].to };
   }
 
@@ -278,14 +344,13 @@
     let rec = "상대 차례를 기다려요", why = "";
     if (V.phase === "swap" && V.needs.includes(me)) {
       const r = (() => { let a = 4242 + V.round * 31 + V.step * 7 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; })();
-      const L = evalMoves(V, me, 90, r), best = L[0];
+      const L = evalRank(V, me, 120, r), best = L[0];
       if (best) {
         rec = `${esc(toText(best.to, names))} 와 교환`;
-        const top3 = L.slice(0, 3).map(x => `${esc(toText(x.to, names))} ${x.ev >= 0 ? "+" : ""}${x.ev.toFixed(1)}`).join(" · ");
-        const fmt = x => (x >= 0 ? "+" : "") + x.toFixed(1);
-        const kinds = V.hist.length ? "" : "";
-        why = `이 라운드 끝 점수의 기대값(남은 교환 ${total - V.step - 1}번을 무작위로 가정): ${top3}.${V.bombLock ? " 폭탄은 사람에게만 넘길 수 있어요 — 이미 폭탄을 든 사람이면 그쪽이 +3 을 받아요." : ""}${V.peeked ? "" : " 몰래 보기(한 번)로 구매자 칸을 먼저 확인할 수도 있어요."}${kinds}`;
-        void fmt;
+        const sg = x => (x >= 0 ? "+" : "") + x.toFixed(1);
+        const top3 = L.slice(0, 3).map(x => `${esc(toText(x.to, names))} ${Math.round(x.win * 100)}% (이번 라운드 ${sg(x.pts)}점)`).join(" · ");
+        const known = V.forWho >= 0 ? `나 · 내가 마니또인 ${who} 를 뺀 사람 중 한 명을 같은 확률로 가정` : "누가 마니또인지 모르니 모두 같은 확률로 가정";
+        why = `최종 순위에서 남을 이길 몫(괄호는 이번 라운드 내 점수 기대값): ${top3}. 내 마니또는 모르니 ${known}하고, 남은 교환 ${total - V.step - 1}번과 다음 라운드는 무작위로 가정했어요.${V.bombLock ? " 폭탄은 사람에게만 넘길 수 있어요 — 이미 폭탄을 든 사람이면 그쪽이 +3 을 받아요." : ""}${V.peeked ? "" : " 몰래 보기(한 번)로 구매자 칸을 먼저 확인할 수도 있어요."}`;
       }
     } else if (V.phase === "show") rec = "결과를 확인하고 다음 라운드를 준비해요";
     return { opp, mine, rec, why };
@@ -294,6 +359,6 @@
   return {
     id: "gemmarket", CARDS, KN, ROUNDS, TO_TRASH, TO_P, STEAL,
     init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach,
-    buyerCount, gainOf, checkTo, samples, evalMoves, toText, peekPick,
+    buyerCount, gainOf, checkTo, samples, evalMoves, evalRank, cycleSample, toText, peekPick,
   };
 });
