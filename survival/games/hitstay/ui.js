@@ -157,7 +157,7 @@
 
   window.SVUI = window.SVUI || {};
   window.SVUI.hitstay = {
-    name: "HIT, STAY", emoji: "🂡", short: "카드 합을 한계 숫자에 맞춰요", min: 2, max: 6, defN: 4, board: false,
+    name: "HIT, STAY", emoji: "✋", short: "카드 합을 한계 숫자에 맞춰요", min: 2, max: 6, defN: 4, board: false,
     opts: [{ k: "chips", label: "시작 칩", items: [[30, "30칩 (방송 그대로)"], [15, "15칩 (빠르게)"]], def: 30 }],
     howto: [
       "카드 3장을 받고 <b>1장만 공개</b> · 2장은 나만 봐요",
