@@ -260,7 +260,7 @@
       const res = r.ranks && r.me >= 0 && r.ranks[r.me] != null ? `${r.ranks[r.me] + 1}등` : r.mode === "watch" ? "구경" : "";
       return `<button type="button" class="btn sv-rrow" data-i="${i}"><span>${esc(m.emoji)} <b>${esc(m.name)}</b></span><small>${esc(modeTxt[r.mode] || "")} · ${r.n}명 · ${esc(res)} · ${fmt(r.at)}</small></button>`;
     }).join("");
-    ov.innerHTML = `<div><h2>🎞️ 지난 판 복기</h2><p class="small" style="margin:0">이 기기에 최근 ${MAXREC}판까지 남아요.</p>${rows || `<p class="sv-empty">아직 없어요. 한 판 하고 나면 여기에 남아요.</p>`}<button type="button" class="btn" data-x>닫기</button></div>`;
+    ov.innerHTML = `<div><h2>📜 지난 대국 · 복기</h2><p class="small" style="margin:0">이 기기에 최근 ${MAXREC}판까지 남아요.</p>${rows || `<p class="sv-empty">아직 없어요. 한 판 하고 나면 여기에 남아요.</p>`}<button type="button" class="btn" data-x>닫기</button></div>`;
     ov.onclick = e => { if (e.target === ov || e.target.closest("[data-x]")) { ov.remove(); return; } const b = e.target.closest("[data-i]"); if (b) { const r = list[+b.dataset.i]; ov.remove(); if (r && o.onPick) o.onPick(r); } };
     document.body.appendChild(ov);
   }

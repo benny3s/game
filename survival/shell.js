@@ -441,7 +441,7 @@
     // 선생님 단추: 혼자 · 한 기기 · 구경 = 늘, 친구랑 = 방장이 켰을 때만
     const coachOk = SES.mode !== "online" || !!(SES.on && SES.on.cfg && SES.on.cfg.coach);
     $("coachBtn").hidden = !coachOk;
-    if (coach && !coachOk) coach.hide();
+    if (coach && !coachOk && coach.visible) coach.hide();      // visible 확인 필수: hide → onChange → render 가 되풀이되면 무한 재귀 (친구랑 · 선생님 꺼짐)
     if (coach && coach.visible) updateCoach();
     fitStage();
     $("againBtn").hidden = SES.mode === "online";
@@ -490,7 +490,7 @@
     SES.ranked = SES.g;
     const V = SES.V, me = SES.mode === "solo" || SES.mode === "online" ? SES.me : -1;
     if (SES.mode === "watch" || SES.drill || !window.GRank || !V.ranks) return;     // 연습 판(📒)은 기록에 안 셈
-    if (SES.mode === "local") { try { GRank.result(SITE, { mode: "hot", res: "d", beat: 0 }); } catch (e) {} return; }
+    if (SES.mode === "local") return;                                               // 한 기기 판은 기록에 안 셈 (오목 등 다른 게임과 같게)
     if (me < 0) return;
     const R = V.ranks, mine = R[me], firsts = R.filter(x => x === 0).length;
     const res = mine === 0 ? (firsts > 1 ? "d" : "w") : "l";
