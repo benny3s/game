@@ -75,7 +75,7 @@
     if (a.t === "peek") {
       if (!V.peek || st.peekDone[seat]) return { ok: false, err: "엿보기는 한 번뿐이에요" };
       if (!Number.isInteger(a.g) || a.g < 0 || a.g >= G) return { ok: false, err: "엿볼 관전 플레이어를 골라요" };
-      st.peeked[seat] = { g: a.g, cards: st.guests[a.g].slice() }; st.peekDone[seat] = true; push(st, { k: "peek", s: seat, g: a.g });
+      st.peeked[seat] = { g: a.g, cards: st.guests[a.g].slice() }; st.peekDone[seat] = true;   // 엿보기는 기록에도 안 남겨요 (상대는 엿봤는지도 몰라요)
       return { ok: true };   // 차례는 그대로
     }
     if (a.t === "open") {
@@ -94,7 +94,7 @@
       const gh = st.guests[a.g], k = guestPick(gh, H.filter(x => x.o).map(x => x.c), V.zeroLoses), got = gh[k], gave = H[a.c].c;
       gh[k] = gave; H[a.c] = { c: got, o: false };
       st.gex[seat][a.g] = true; st.nEx[seat]++;
-      if (st.peeked[seat] && st.peeked[seat].g === a.g) st.peeked[seat] = null;   // 바뀐 손은 더 이상 모름
+      for (const q of [0, 1]) if (st.peeked[q] && st.peeked[q].g === a.g) st.peeked[q] = null;   // 누가 바꾸든 그 사람의 손은 달라져서 엿본 것은 더 이상 몰라요
       push(st, { k: "swap", s: seat, g: a.g });
       nextTurn(st); return { ok: true, got, gave };
     }
@@ -196,14 +196,14 @@
     const all = seat === "all" || (typeof seat === "number" && seat < 0), me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const reveal = st.over || all;
     const oppHand = s => st.hands[s].map(x => ({ c: reveal || x.o ? x.c : null, o: x.o }));
-    const pubObj = { t: st.turn, ph: st.phase, o: st.hands.map(h => h.map(x => (x.o ? x.c : -1))), ne: st.nEx, pk: st.peekDone.map(p => (p ? 1 : 0)), ov: st.over, w: st.winner };
-    const me0 = me >= 0 ? me : 0;
-    const mine = st.hands[me0].map(x => ({ c: x.c, o: x.o }));
+    const pubObj = { t: st.turn, ph: st.phase, o: st.hands.map(h => h.map(x => (x.o ? x.c : -1))), ne: st.nEx, ov: st.over, w: st.winner };
+    const me0 = me >= 0 ? me : 0, known = me >= 0;   // 자리 번호가 없으면 0번 자리의 손 · 엿본 것을 보여 주지 않아요
+    const mine = st.hands[me0].map(x => ({ c: known || reveal ? x.c : null, o: x.o }));
     const v = {
       n: 2, seat, ver: st.ver, rules: { maxEx: st.V.maxEx, mustAll: st.V.mustAll, peek: st.V.peek, zeroLoses: st.V.zeroLoses }, guestsN: G, turn: st.turn, phase: st.phase,
-      mine, opp: oppHand(1 - me0), gex: st.gex[me0].slice(), nExs: st.nEx.slice(), nEx: st.nEx[me0], peeked: st.peeked[me0] ? { g: st.peeked[me0].g, cards: st.peeked[me0].cards.slice() } : null,
-      peekUsed: st.peekDone[me0], needs: needs(st), over: st.over, winner: st.winner, draw: st.draw, why: st.why, loser: st.loser,
-      hands: reveal ? st.hands.map(h => h.map(x => ({ c: x.c, o: x.o }))) : null, ranks: st.over ? ranks(st) : null, score: st.over ? ranks(st).map(x => (x === 0 && !st.draw ? 1 : 0)) : [0, 0], log: st.log.slice(-30).filter(e => e.k !== "peek" || e.s === me0 || all), pub: hash(JSON.stringify(pubObj)),
+      mine, opp: oppHand(1 - me0), gex: st.gex[me0].slice(), nExs: st.nEx.slice(), nEx: st.nEx[me0], peeked: known && st.peeked[me0] ? { g: st.peeked[me0].g, cards: st.peeked[me0].cards.slice() } : null,
+      peekUsed: known ? st.peekDone[me0] : false, needs: needs(st), over: st.over, winner: st.winner, draw: st.draw, why: st.why, loser: st.loser,
+      hands: reveal ? st.hands.map(h => h.map(x => ({ c: x.c, o: x.o }))) : null, ranks: st.over ? ranks(st) : null, score: st.over ? ranks(st).map(x => (x === 0 && !st.draw ? 1 : 0)) : [0, 0], log: st.log.slice(-30), pub: hash(JSON.stringify(pubObj)),
     };
     if (me >= 0 && st.turn === me && !st.over) v.legal = legal(st, me);
     return v;

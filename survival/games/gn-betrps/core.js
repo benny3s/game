@@ -137,7 +137,7 @@
     return {
       n: 2, ver: st.ver, round: st.round, R: st.R, ot: st.ot, total: st.R + st.ot, phase: st.phase, chips: st.chips.slice(), first: st.first, duel: st.duel, better: betterOf(st),
       virtual: st.virtual, mark: st.virtual || rev || all ? st.mark : -1, hint: all ? st.hints.slice() : seat >= 0 && !st.virtual ? st.hints[seat] : -1,
-      reward: rewardOf(st, st.round), rewards: st.rewards.slice(), virt: st.virt, drawBet: st.drawBet, kinds: T.drawBet ? 3 : 2,
+      reward: rewardOf(st, st.round), rewards: st.rewards.slice(), virt: Object.fromEntries(Object.keys(st.virt).map(r => [r, all || st.ver === "d" || +r <= st.round ? st.virt[r] : -1])), drawBet: st.drawBet, kinds: T.drawBet ? 3 : 2,
       done: st.act.map(a => !!a), mine: all ? null : seat >= 0 && st.act[seat] ? Object.assign({}, st.act[seat]) : null, acts: all ? st.act.map(a => (a ? Object.assign({}, a) : null)) : null,
       res: rev ? st.res : null, hist: st.hist.slice(-12), needs: needs(st), over: st.over, ranks: st.over ? ranks(st) : null, score: st.chips.slice(), log: st.log.slice(-30), seat, pub: hash(JSON.stringify(pubObj)),
     };

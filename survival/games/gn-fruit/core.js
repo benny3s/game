@@ -29,15 +29,13 @@
     for (let i = om.length - 1; i > 0; i--) { const j = Math.floor(rnd(st) * (i + 1)); [om[i], om[j]] = [om[j], om[i]]; }
     if (c.omit) om = c.omit.slice();   // 시험용
     for (let i = 0; i < n; i++) st.own.push([0, 1, 2].filter(f => f !== om[i]));
-    skipSwapIfNone(st);
     push(st, { k: "start" });
     return st;
   }
   const sellers = (st, f) => st.own.map((o, i) => (o.includes(f) ? i : -1)).filter(i => i >= 0);
-  function skipSwapIfNone(st) { if (st.phase === "swap" && !st.item.some(Boolean)) st.phase = "price"; }
   function needs(st) {
     if (st.over) return [];
-    if (st.phase === "swap") return [...Array(st.n).keys()].filter(i => st.item[i] && !st.swapIn[i]);
+    if (st.phase === "swap") return [...Array(st.n).keys()].filter(i => !st.swapIn[i]);   // 아이템이 없어도 모두 '계속'을 눌러요 (누가 남았는지 흐름으로 안 드러나게)
     return [...Array(st.n).keys()].filter(i => !st.prices[i]);
   }
   function resolveSwaps(st) {
@@ -73,16 +71,17 @@
       if (st.draw) st.ranks = Array(st.n).fill(0);
       st.losers = st.draw ? [] : st.income.map((x, i) => (x === mn ? i : -1)).filter(i => i >= 0);
       push(st, { k: "end" });
-    } else { st.phase = "swap"; skipSwapIfNone(st); }
+    } else st.phase = "swap";
   }
   function apply(st, seat, a) {
     if (st.over) return { ok: false, err: "끝난 판이에요" };
     if (!a) return { ok: false, err: "행동을 골라요" };
     if (!Number.isInteger(seat) || seat < 0 || seat >= st.n) return { ok: false, err: "자리가 없어요" };
     if (st.phase === "swap") {
-      if (!st.item[seat] || st.swapIn[seat]) return { ok: false, err: "지금은 낼 게 없어요" };
+      if (st.swapIn[seat]) return { ok: false, err: "이미 정했어요 — 다른 사람을 기다려요" };
       if (a.t === "noswap") st.swapIn[seat] = { t: "no" };
       else if (a.t === "swap") {
+        if (!st.item[seat]) return { ok: false, err: "아이템은 한 번만 쓸 수 있어요" };
         if (!st.own[seat].includes(a.from) || !Number.isInteger(a.to) || a.to < 0 || a.to > 2 || st.own[seat].includes(a.to)) return { ok: false, err: "내 과일 하나를, 내가 안 파는 과일로 바꿔요" };
         st.swapIn[seat] = { t: "swap", from: a.from, to: a.to };
       } else return { ok: false, err: "교체를 하거나 안 해요" };
@@ -108,7 +107,7 @@
   const ranks = st => (st.ranks ? st.ranks.slice() : null);
   function legal(st, seat) {
     if (st.over) return [];
-    if (st.phase === "swap") return st.item[seat] && !st.swapIn[seat] ? [{ t: "noswap" }] : [];
+    if (st.phase === "swap") return !st.swapIn[seat] ? [{ t: "noswap" }] : [];
     if (st.prices[seat]) return [];
     return [{ t: "price", p: { [st.own[seat][0]]: PMAX, [st.own[seat][1]]: PMAX } }];
   }
@@ -130,7 +129,7 @@
     const pub = { r: st.round, ph: st.phase, own: st.own, sub: needs(st), h: hist.length ? st.hist.map(h => [h.swaps, h.fruits.map(fr => [fr.f, fr.hidden ? null : fr.price, fr.hidden ? null : fr.inc, fr.hidden ? 1 : 0])]) : [], ov: st.over };
     const mineIn = me >= 0 ? st.income[me] : null;
     const v = {
-      n: st.n, seat, round: st.round, rounds: st.rounds, phase: st.phase, own: st.own.map(o => o.slice()), item: me >= 0 ? st.item[me] : null, itemAll: st.item.slice(),
+      n: st.n, seat, round: st.round, rounds: st.rounds, phase: st.phase, own: st.own.map(o => o.slice()), item: me >= 0 ? st.item[me] : null,
       sellersOf: [0, 1, 2].map(f => sellers(st, f)), income: mineIn, hist, swapsNow: (st.curSwaps || []).map(x => ({ s: x.s, from: x.from, to: x.to })),
       swapIn: me >= 0 && st.swapIn[me] ? st.swapIn[me].t : null, mineP: me >= 0 && st.prices[me] ? Object.assign({}, st.prices[me].p) : null, mineSecret: me >= 0 ? st.secret[me] : -1,
       waiting: needs(st), needs: needs(st), over: st.over, ranks: st.over ? st.ranks.slice() : null, losers: st.over ? st.losers.slice() : [], draw: !!st.draw, score: st.over ? st.score.slice() : Array(st.n).fill(0),

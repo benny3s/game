@@ -105,7 +105,7 @@
     return { aInv: k ? oi / k : 5, aDon: k ? od / k : 4, k };
   }
   // 돈은 남겨 봐야 쓸모없어요 → 남은 돈을 남은 라운드에 나눠 쓰는 게 기본 (b = 한 라운드 평균 예산)
-  // easy 는 예산을 안 보고 감으로 · normal 은 예산만 · hard 는 관찰(다른 사람 평균)과 마지막 라운드 전액 사용까지
+  // easy 는 예산을 안 보고 감으로 · normal · hard 는 예산을 나눠 쓰고 마지막 라운드에 전액 사용 (hard 는 위험을 덜 걸고 방어를 더 많이 해요) — obs(다른 사람 평균 관찰)는 시험해 봤지만 이득이 없어 꺼 둠
   const TIER = { easy: { atk: 0.42, av: 2.0, df: 0.45, nz: 1.0, bud: 0, obs: 0, last: 0 }, normal: { atk: 0.33, av: 2.4, df: 0.75, nz: 0.6, bud: 1, obs: 0, last: 1 }, hard: { atk: 0.35, av: 1.8, df: 0.7, nz: 0.4, bud: 1, obs: 0, last: 1 } };
   function plan(V, me, tier, r) {
     const T = TIER[tier] || TIER.normal, C = V.cash, R = V.rounds - V.round, o = observe(V);

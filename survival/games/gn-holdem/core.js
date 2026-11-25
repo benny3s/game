@@ -131,7 +131,10 @@
     st.phase = "reveal"; st.contrib = [0, 0];
     push(st, { k: "end", r: st.round, t: r.type, w: r.win });
     const broke = st.chips[0] <= 0 || st.chips[1] <= 0;
-    if ((broke && st.carry === 0) || st.round >= st.maxR) { st.over = true; st.phase = "end"; }
+    if ((broke && st.carry === 0) || st.round >= st.maxR) {   // 마지막 판에 이월 판돈이 남으면 반씩 나눠요
+      if (st.carry > 0) { const h = Math.floor(st.carry / 2); st.chips[0] += h; st.chips[1] += h; st.carry = 0; r.chips = st.chips.slice(); st.hist[st.hist.length - 1].chips = r.chips; }
+      st.over = true; st.phase = "end";
+    }
   }
   const auto = st => (st.phase === "reveal" ? 3600 : null);
   function advance(st) { if (st.phase === "reveal") startRound(st); }

@@ -151,7 +151,7 @@
       pubAns: st.pubAns ? Object.assign({}, st.pubAns) : null, priv: all ? st.priv.map(x => x && Object.assign({}, x)) : seat >= 0 && st.priv[seat] ? Object.assign({}, st.priv[seat]) : null,
       done: st.phase === "info" ? st.info.map(x => !!x) : st.bids.map(x => x !== null), mine: all ? null : seat >= 0 ? st.bids[seat] : null,
       spent: st.spent.slice(), budget: BUDGET, left: st.spent.map(s => BUDGET - s), bidMax: seat >= 0 ? bidMax(st, seat) : 0, cap: CAP,
-      points: st.pts.slice(), last10: st.last10, res: rev ? st.res : null, prices: all ? it.prices.slice() : null, hist: st.hist.slice(), bids: all ? st.bids.slice() : null,
+      points: st.pts.slice(), last10: st.last10, res: rev ? (all ? st.res : Object.assign({}, st.res, { prices: null })) : null, prices: all ? it.prices.slice() : null, hist: st.hist.slice(), bids: all ? st.bids.slice() : null,
       needs: needs(st), over: st.over, ranks: st.over ? ranks(st) : null, score: st.pts.slice(), log: st.log.slice(-30), pub: hash(JSON.stringify(pubObj)),
     };
   }

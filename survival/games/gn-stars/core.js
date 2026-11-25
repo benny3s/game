@@ -57,16 +57,23 @@
     return [];
   }
   // 별 3개 → 별 1개 교환 (사본에 적용)
+  // 이미 완성한 별자리의 별은 교환에 쓸 수 없어요 (남는 별만 교환)
+  const freeOf = (h, c) => h[c] - (h[c] >= NEED[c] ? NEED[c] : 0);
   function doSwaps(h, bag, swaps) {
+    if (swaps != null && !Array.isArray(swaps)) return "교환할 색을 다시 골라요";
     for (const s of swaps || []) {
       if (!s || !Number.isInteger(s.from) || !Number.isInteger(s.to) || s.from < 0 || s.from > 3 || s.to < 0 || s.to > 3 || s.from === s.to) return "교환할 색을 다시 골라요";
-      if (h[s.from] < 3) return `${COL[s.from]} 별이 3개 있어야 바꿀 수 있어요`;
+      if (freeOf(h, s.from) < 3) return `${COL[s.from]} 별이 3개 더 있어야 바꿀 수 있어요 (완성한 별자리 별은 못 바꿔요)`;
       if (bag[s.to] < 1) return `${COL[s.to]} 별이 남아 있지 않아요`;
       h[s.from] -= 3; bag[s.from] += 3; h[s.to]++; bag[s.to]--;
     }
     return null;
   }
   function endGame(st, why, loser) {
+    if (loser < 0) {   // 폭탄이 아닌 종료: 승점 최저자가 한 명이면 탈락 후보
+      const p = st.hold.map(ptsOf), mn = Math.min(...p), who = p.map((x, i) => (x === mn ? i : -1)).filter(i => i >= 0);
+      loser = who.length === 1 ? who[0] : -1;
+    }
     st.over = true; st.why = why; st.loser = loser; st.phase = "end";
     if (st.rev && !st.rev.done) { st.rev.done = true; st.hist.push(st.rev); }
     push(st, { k: "end", why, loser });
@@ -151,7 +158,7 @@
   }
   const over = st => !!st.over;
   function ranks(st) {
-    const p = st.hold.map(ptsOf), loser = st.why === "bomb" ? st.loser : -1;
+    const p = st.hold.map(ptsOf), loser = st.loser;
     return p.map((x, i) => (i === loser ? st.n - 1 : p.filter((y, j) => j !== loser && y > x).length));
   }
   // ── AI 쪽 계산 (보이는 것만) ─────────────────────────────────
@@ -173,7 +180,7 @@
     const h = hold.slice(), b = bag.slice(), out = [];
     for (let it = 0; it < 4; it++) {
       let best = null, bg = tier === "easy" ? 0.5 : 0.05;
-      for (let x = 0; x < 4; x++) if (h[x] >= 3) for (let y = 0; y < 4; y++) if (y !== x && b[y] >= 1) {
+      for (let x = 0; x < 4; x++) if (freeOf(h, x) >= 3) for (let y = 0; y < 4; y++) if (y !== x && b[y] >= 1) {
         const g = Vh(h.map((v, c) => (c === x ? v - 3 : c === y ? v + 1 : v))) - Vh(h);
         if (g > bg) { bg = g; best = { from: x, to: y }; }
       }
@@ -276,7 +283,7 @@
     const who = i => (i === me ? "나" : nm(names, i));
     if (V.over) {
       const why = V.why === "bomb" ? `${who(V.loser)}가 폭탄 3개를 받아 끝났어요` : V.why === "cons" ? "누군가 별자리 3개를 완성해 끝났어요" : "별을 다 나눠서 끝났어요";
-      return { opp: `${why}. 승점이 가장 높은 쪽이 우승이에요.`, mine: `내 승점 ${V.points[me]} · 완성한 별자리 ${V.cons[me]}개 · 폭탄 ${V.bombs[me]}개`, rec: V.ranks && V.ranks[me] === 0 ? "우승이에요!" : "승점 합계가 승부예요", why: "별자리 개수보다 승점 합계로 우승이 가려져요 (3개 10점보다 2개 12점이 이길 수 있어요)." };
+      return { opp: `${why}. 승점이 가장 높은 쪽이 우승이에요.${V.why !== "bomb" && V.loser >= 0 ? ` 승점이 가장 낮은 ${who(V.loser)}가 탈락 후보예요.` : ""}`, mine: `내 승점 ${V.points[me]} · 완성한 별자리 ${V.cons[me]}개 · 폭탄 ${V.bombs[me]}개`, rec: V.ranks && V.ranks[me] === 0 ? "우승이에요!" : "승점 합계가 승부예요", why: "별자리 개수보다 승점 합계로 우승이 가려져요 (3개 10점보다 2개 12점이 이길 수 있어요)." };
     }
     const danger = [];
     for (let i = 0; i < V.n; i++) { if (i === me) continue; if (V.bombs[i] >= 2) danger.push(`${who(i)} 폭탄 ${V.bombs[i]}개(하나 더 받으면 탈락)`); if (V.cons[i] >= 2) danger.push(`${who(i)} 별자리 ${V.cons[i]}개(하나 더 완성하면 끝)`); }
@@ -296,5 +303,5 @@
     return { opp: oppTxt, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-stars", NEED, CP, CN, COL, CEM, PERCOL, MAX_ROUNDS, TIER, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, cardPlan, evalCards, greedyTake, planSwaps, ptsOf, consOf, util, doSwaps };
+  return { id: "gn-stars", NEED, CP, CN, COL, CEM, PERCOL, MAX_ROUNDS, TIER, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, cardPlan, evalCards, greedyTake, planSwaps, ptsOf, consOf, util, doSwaps, freeOf };
 });

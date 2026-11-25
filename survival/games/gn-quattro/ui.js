@@ -62,7 +62,6 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
       if (e.k === "start") return `<div class="qt-ev o">🎲 ${who(e.first)} 먼저 시작해요</div>`;
       if (e.k === "open") return `<div class="qt-ev ${cls}"><b>${who(e.s)}</b>: ${cname(e.card)} 카드를 열었어요</div>`;
       if (e.k === "swap") return `<div class="qt-ev ${cls}"><b>${who(e.s)}</b>: 관전 ${e.g + 1}번과 카드를 교환했어요</div>`;
-      if (e.k === "peek") return `<div class="qt-ev ${cls}"><b>${who(e.s)}</b>: 관전 ${e.g + 1}번의 카드를 엿봤어요</div>`;
       return "";
     });
     return `<div class="qt-log" id="qt-log">${rows.join("") || `<div class="qt-ev">아직 아무도 카드를 열지 않았어요.</div>`}</div>`;

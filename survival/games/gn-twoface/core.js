@@ -156,7 +156,11 @@
     st.hist.push({ r: r.r, type: r.type, win: r.win, ok: r.ok, pot: r.pot, pen: r.pen || 0, bonus: r.bonus || 0, f: r.f, chips: r.chips, cards: r.show ? r.cards : null, side: r.side });
     st.phase = "reveal"; st.contrib = [0, 0];
     push(st, { k: "end", r: st.round, t: r.type, w: r.win });
-    if (st.chips[0] <= 0 || st.chips[1] <= 0 || st.round >= st.maxR) { st.over = true; st.phase = "end"; }
+    const broke = st.chips[0] <= 0 || st.chips[1] <= 0;
+    if ((broke && st.carry === 0) || st.round >= st.maxR) {   // 이월 판돈이 남았으면 다음 판에서 가려요 (마지막 판에 남으면 반씩 나눠요)
+      if (st.carry > 0) { const h = Math.floor(st.carry / 2); st.chips[0] += h; st.chips[1] += h; st.carry = 0; r.chips = st.chips.slice(); st.hist[st.hist.length - 1].chips = r.chips; }
+      st.over = true; st.phase = "end";
+    }
   }
   const auto = st => (st.phase === "reveal" ? 3800 : null);
   function advance(st) { if (st.phase === "reveal") startRound(st); }
@@ -181,7 +185,7 @@
     return {
       n: 2, round: st.round, maxR: st.maxR, ver: st.ver, phase: st.phase, chips: st.chips.slice(), contrib: bet ? st.contrib.slice() : [0, 0], carry: st.carry, pot: bet ? pot(st) : 0,
       cur: st.cur, turn: st.turn, first: st.first, cap: bet ? capTotal(st) : 0, canRaise: bet && canRaise(st), start: st.start,
-      side: st.side.slice(), dbl: st.dbl.slice(), dRange: R, chk: !!st.chk, cards, res: st.res, hist: st.hist.slice(-12),
+      side: st.side.slice(), dbl: st.dbl.slice(), dRange: R, chk: !!st.chk, cards, res: st.res && !open && !all ? Object.assign({}, st.res, { cards: null }) : st.res, hist: st.hist.slice(-12),
       needs: needs(st), over: st.over, ranks: st.over ? ranks(st) : null, score: st.chips.slice(), log: st.log.slice(-30), seat, pub: hash(JSON.stringify(pubObj)),
     };
   }

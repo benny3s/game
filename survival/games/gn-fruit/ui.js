@@ -77,8 +77,13 @@
       h += `<div class="fr-info"><b>${V.draw ? "수입이 모두 같아 무승부예요" : first.includes(me) && !watch ? "🎉 내가 우승했어요!" : `${first.map(i => esc(nameOf(ctx, i))).join(" · ")} 우승`}</b> · 수입 ${V.incomes.map((x, i) => `${i === me && !watch ? "나" : esc(nameOf(ctx, i))} ${won(x)}`).join(" / ")}</div>`;
     } else if (mine && V.phase === "swap") {
       const mineF = V.own[me], other = [0, 1, 2].filter(f => !mineF.includes(f))[0];
-      h += `<div class="fr-info hint">🔄 <b>교체</b>: 희망가를 내기 전에 내 과일 하나를 ${fn(other)}(으)로 바꿔요 — 모두에게 공개되고 끝까지 유지돼요. 아이템은 교체 · 비밀 중 <b>한 번</b>만 써요.</div>`;
-      h += `<div class="fr-sw">${mineF.map(f => `<button data-sw="${f}">${fn(f)} → ${fn(other)} 로 교체하기</button>`).join("")}<button data-sw="no">교체 안 하고 희망가 정하기</button></div>`;
+      if (V.item) {
+        h += `<div class="fr-info hint">🔄 <b>교체</b>: 희망가를 내기 전에 내 과일 하나를 ${fn(other)}(으)로 바꿔요 — 모두에게 공개되고 끝까지 유지돼요. 아이템은 교체 · 비밀 중 <b>한 번</b>만 써요.</div>`;
+        h += `<div class="fr-sw">${mineF.map(f => `<button data-sw="${f}">${fn(f)} → ${fn(other)} 로 교체하기</button>`).join("")}<button data-sw="no">교체 안 하고 희망가 정하기</button></div>`;
+      } else {
+        h += `<div class="fr-info hint">🔄 아이템을 이미 썼어요 — 이번 라운드는 교체할 수 없어요.</div>`;
+        h += `<div class="fr-sw"><button data-sw="no">계속해서 희망가 정하기</button></div>`;
+      }
     } else if (mine) {
       const own = V.own[me];
       h += `<div class="fr-info hint">과일마다 <b>가장 싼 값을 낸 사람</b>이 (판매가 × 판매자 수)를 독식해요. 모두 같은 값이면 똑같이 나눠요 — 5천 원이면 과일마다 5천 원씩!</div>`;

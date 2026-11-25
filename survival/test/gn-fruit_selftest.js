@@ -61,7 +61,9 @@ const T3 = { omit: [0, 1, 2] };   // 3명: s0=[1,2] s1=[0,2] s2=[0,1]
   ok(G.sellers(st, 0).join() === '0,1,2' && G.sellers(st, 1).join() === '2', '판매자 목록이 바뀌어요');
   ok(!ap(st, 0, { t: 'price', p: { 0: 5, 2: 5 }, secret: 2 }).ok, '교체를 쓴 사람은 비밀을 못 써요 (아이템은 한 번)');
   price(st, [{ 0: 5, 2: 5 }, { 0: 5, 2: 5 }, { 0: 5, 1: 5 }]);
-  ok(st.round === 1 && st.phase === 'swap' && G.needs(st).join() === '1,2', '다음 라운드: 아이템이 남은 사람만 교체 단계');
+  ok(st.round === 1 && st.phase === 'swap' && G.needs(st).join() === '0,1,2', '다음 라운드: 아이템이 없어도 모두 교체 단계를 지나요 (누가 남았는지 흐름으로 안 드러남)');
+  ok(!ap(st, 0, { t: 'swap', from: 0, to: 1 }).ok && st.swapIn[0] === null, '아이템을 쓴 사람은 교체 못 하고 계속만 가능');
+  ok(ap(st, 0, { t: 'noswap' }).ok && G.view(st, 1).itemAll === undefined, '아이템 없는 사람도 계속을 누르고, 다른 사람의 아이템 상태는 보이지 않아요');
 }
 // 5) 비밀: 판매가 · 수입 공개를 막아요
 {
@@ -74,7 +76,7 @@ const T3 = { omit: [0, 1, 2] };   // 3명: s0=[1,2] s1=[0,2] s2=[0,1]
   ok(f1.inc[f1.sellers.indexOf(1)] === 6 && V1.hist[0].secretBy.join() === '1' && V0.hist[0].secretBy.length === 0, '쓴 사람만 자기가 썼다는 걸 알아요 (누가 썼는지도 비공개)');
   ok(VA.hist[0].fruits[2].price === 3 && VA.hist[0].secretBy.join() === '1', '구경하는 사람은 다 보여요');
   ok(st.item[1] === false && st.item[0] === true, '비밀을 쓰면 아이템이 사라져요');
-  ok(G.needs(st).join() === '0,2', '다음 라운드: 아이템이 남은 사람만 교체 단계');
+  ok(G.needs(st).join() === '0,1,2', '다음 라운드: 모두 교체 단계 (아이템 유무와 무관)');
   // 지난 비밀 과일의 수입은 내 누적에는 들어가요
   ok(st.income.join() === '5,11,5' || st.income[1] === 11, '숨겨도 수입은 실제로 정산돼요');
 }

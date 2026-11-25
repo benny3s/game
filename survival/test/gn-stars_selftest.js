@@ -90,20 +90,28 @@ const cards = (st, arr) => arr.forEach((c, i) => ap(st, i, { t: 'card', c }));
 // 7) 교환: 같은 색 3개 → 원하는 색 1개 · 별 보존 · 거절 조건
 {
   const st = G.init({ n: 3, seed: 10 });
-  st.hold[0] = [6, 0, 0, 0]; st.bag[0] -= 6;
+  st.hold[0] = [9, 0, 0, 0]; st.bag[0] -= 9;
   ok(total(st) === 100, '시험 준비 후 별 보존');
   ok(!G.apply(st, 0, { t: 'swap', from: 1, to: 2 }).ok, '노랑이 없으면 교환 못 해요');
   ok(!G.apply(st, 0, { t: 'swap', from: 0, to: 0 }).ok, '같은 색으로는 못 바꿔요');
   ok(ap(st, 0, { t: 'swap', from: 0, to: 2 }).ok, '빨강 3개 → 파랑 1개');
-  ok(st.hold[0].join() === '3,0,1,0' && total(st) === 100, '빨강 3개가 줄고 파랑 1개가 생김 · 별 보존');
+  ok(st.hold[0].join() === '6,0,1,0' && total(st) === 100, '빨강 3개가 줄고 파랑 1개가 생김 · 별 보존');
   ok(ap(st, 0, { t: 'card', c: 3, swaps: [{ from: 0, to: 3 }] }).ok, '카드를 내면서 교환 (빨강 3개 → 초록 1개)');
-  ok(st.hold[0].join() === '0,0,1,1' && st.cards[0] === 3, '교환 뒤 카드 제출');
+  ok(st.hold[0].join() === '3,0,1,1' && st.cards[0] === 3, '교환 뒤 카드 제출');
+  ok(!G.apply(st, 1, { t: 'card', c: 2, swaps: 'x' }).ok && st.cards[1] === null, '교환 값이 배열이 아니면 거절 (오류 없이)');
   const s2 = G.init({ n: 3, seed: 10 }); s2.hold[1] = [0, 3, 0, 0]; s2.bag[1] -= 3; s2.bag[2] = 0;
   ok(!G.apply(s2, 1, { t: 'swap', from: 1, to: 2 }).ok, '그 색 별이 더 없으면 교환 불가');
   ok(!G.apply(s2, 1, { t: 'card', c: 2, swaps: [{ from: 1, to: 2 }] }).ok && s2.cards[1] === null, '교환이 거절되면 카드도 내지 않은 것으로');
   // 교환으로 별자리 3개가 완성되면 즉시 종료
   const s3 = G.init({ n: 3, seed: 12 }); s3.hold[0] = [3, 4, 4, 3]; s3.bag[0] -= 3; s3.bag[1] -= 4; s3.bag[2] -= 4; s3.bag[3] -= 3;
+  s3.hold[1] = [3, 0, 0, 0]; s3.bag[0] -= 3;
   ok(ap(s3, 0, { t: 'swap', from: 3, to: 2 }).ok && s3.over && s3.why === 'cons', '교환으로 별자리 3개를 채워도 즉시 종료');
+  ok(s3.loser === 2 && G.ranks(s3).join() === '0,1,2', '별자리 3개 종료: 승점 최저자가 탈락 후보(꼴찌)');
+  // 완성한 별자리의 별은 잠겨서 교환할 수 없음 (남는 별 3개가 있어야 함)
+  const s4 = G.init({ n: 3, seed: 14 }); s4.hold[0] = [3, 0, 0, 0]; s4.bag[0] -= 3;
+  ok(!G.apply(s4, 0, { t: 'swap', from: 0, to: 2 }).ok && s4.hold[0].join() === '3,0,0,0', '완성한 별자리(빨강 3/3)의 별은 교환 못 해요');
+  s4.hold[0] = [6, 0, 0, 0]; s4.bag[0] -= 3;
+  ok(G.apply(s4, 0, { t: 'swap', from: 0, to: 2 }).ok && s4.hold[0].join() === '3,0,1,0', '남는 별 3개(6−3)는 교환 가능, 완성은 유지');
 }
 // 8) 고르기 검증 · 가져가고 바로 교환 (take + swaps)
 {

@@ -88,7 +88,7 @@
     return `<div class="st-res">${V.rev.takes.map(t => `<span class="${t.s === me ? "me" : ""}">${nm(t.s)} <small>(${t.k})</small> ➜ ${takeTxt(t.take)}</span>`).join("")}${ex.length ? `<span class="x">겹쳐서 제외: ${ex.map(i => `${nm(i)}(${V.rev.cards[i]})`).join(" ")}</span>` : ""}</div>`;
   }
   function swapHtml(V, me) {
-    const rows = [0, 1, 2, 3].filter(x => V.hold[me][x] >= 3).map(x => `<div class="row"><b class="c${x}">★</b> ${COL[x]} 3개 ➜ ${[0, 1, 2, 3].filter(y => y !== x && V.bag[y] > 0).map(y => `<button data-sw="${x}-${y}" class="c${y}">★</button>`).join("")}</div>`);
+    const rows = [0, 1, 2, 3].filter(x => G.freeOf(V.hold[me], x) >= 3).map(x => `<div class="row"><b class="c${x}">★</b> ${COL[x]} 3개 ➜ ${[0, 1, 2, 3].filter(y => y !== x && V.bag[y] > 0).map(y => `<button data-sw="${x}-${y}" class="c${y}">★</button>`).join("")}</div>`);
     return rows.length ? `<div class="st-swap"><div>🔄 같은 색 3개 = 원하는 색 1개 (눌러서 교환)</div>${rows.join("")}</div>` : "";
   }
   function render(stage, V, ctx) {
@@ -117,7 +117,7 @@
       } else h += `<div class="st-info">${V.picker === me && !watch ? "" : `<b>${esc(nameOf(ctx, V.picker))}</b>가 ${V.pickK}개를 고르는 중이에요…`}</div>`;
     } else {
       h += resHtml(V, ctx, watch ? -1 : me);
-      h += `<div class="st-info">${V.over ? (V.why === "bomb" ? `💥 ${V.loser === me ? "내가" : esc(nameOf(ctx, V.loser)) + "가"} 폭탄 3개!` : V.why === "cons" ? "🌟 별자리 3개 완성!" : "별을 다 나눴어요") : "곧 다음 라운드가 시작돼요…"}</div>`;
+      h += `<div class="st-info">${V.over ? (V.why === "bomb" ? `💥 ${V.loser === me ? "내가" : esc(nameOf(ctx, V.loser)) + "가"} 폭탄 3개!` : (V.why === "cons" ? "🌟 별자리 3개 완성!" : "별을 다 나눴어요") + (V.loser >= 0 ? ` · 승점 꼴찌(탈락 후보): ${V.loser === me ? "나" : esc(nameOf(ctx, V.loser))}` : "")) : "곧 다음 라운드가 시작돼요…"}</div>`;
     }
     h += acts;
     stage.innerHTML = h;

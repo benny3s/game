@@ -102,6 +102,14 @@ const openAll = (st, seat) => { for (let i = 0; i < 4; i++) if (!st.hands[seat][
   const V = G.view(st, 0); ok(V.peeked && V.peeked.g === 4 && V.peeked.cards.join() === st.guests[4].join(), '엿본 3장이 보여요');
   ok(G.view(st, 1).peeked === null, '상대는 내가 엿본 카드를 몰라요');
   ok(!G.apply(st, 0, { t: 'peek', g: 5 }).ok, '엿보기는 한 번뿐');
+  const st0 = G.init({ n: 2, seed: 9, cfg: { ver: 'b', first: 0 } }), p0 = G.view(st0, 1).pub;
+  ap(st0, 0, { t: 'peek', g: 4 });
+  ok(G.view(st0, 1).pub === p0 && !st0.log.some(e => e.k === 'peek') && G.view(st0, 1).peekUsed === false, '엿보기는 상대 화면 · 기록에 흔적이 없어요');
+  const u = G.view(st0, undefined);
+  ok(u.mine.every(x => x.c === null) && u.peeked === null && u.peekUsed === false, '자리를 모르는 보기에는 0번 자리의 카드 · 엿본 것이 안 보여요');
+  ap(st0, 0, { t: 'open', c: 0 }); ap(st0, 1, { t: 'open', c: 0 }); ap(st0, 0, { t: 'open', c: 1 });
+  ok(G.view(st0, 0).peeked && G.view(st0, 0).peeked.g === 4, '아직 안 바뀐 손은 그대로 알아요');
+  ok(ap(st0, 1, { t: 'swap', c: 1, g: 4 }).ok && G.view(st0, 0).peeked === null, '상대가 그 관전 플레이어와 교환하면 엿본 정보는 사라져요');
   const sa = G.init({ n: 2, seed: 9, cfg: { ver: 'a', first: 0 } });
   ok(!G.apply(sa, 0, { t: 'peek', g: 0 }).ok, '판 a 에는 엿보기가 없어요');
 }

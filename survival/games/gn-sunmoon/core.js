@@ -109,7 +109,7 @@
     return {
       n: 2, R: st.R, round: st.round, phase: st.phase, chips: st.chips.slice(), first: st.first, second: second(st), bets, mark: reveal ? st.mark : -1,
       hint, wit: st.wit, lim: st.phase === "first" ? limitFirst(st) : 0, range: st.phase === "second" ? rangeSecond(st) : null,
-      res: st.res, hist: st.hist.map(h => ({ r: h.r, f: h.f, mark: h.mark, gain: h.gain, chips: h.chips, bets: h.bets })),
+      res: st.res && !all ? Object.assign({}, st.res, { hint: st.res.hint.map((h, i) => (i === seat ? h : -2)) }) : st.res, hist: st.hist.map(h => ({ r: h.r, f: h.f, mark: h.mark, gain: h.gain, chips: h.chips, bets: h.bets })),
       needs: needs(st), over: st.over, ranks: st.over ? ranks(st) : null, score: st.chips.slice(),
       log: st.log.slice(-30), seat, pub: hash(JSON.stringify(pubObj)),
     };
