@@ -169,6 +169,35 @@
     sub: V => (V.over ? "끝" : `${V.round + 1}라운드 · 순서 ${V.pos + 1}/3`),
     chip: (V, i) => ({ t: `${V.over ? "" : V.miners.includes(i) ? "⛏" : ""}${V.score[i]}점`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (제시 점수 · 꺼내기/스톱을 같은 표본으로 견줘 평균 점수 손해를 재요 — 남의 비밀 제시는 안 써요)
+    actText: (a, V) => {
+      if (!a || typeof a !== "object") return "—";
+      if (a.t === "bid") return Number.isInteger(a.v) ? `📝 ${a.v}점 제시 (비밀)` : "—";
+      if (a.t === "draw") return V && typeof V.M === "number" ? `⛏ 광물 꺼내기 (지금 채굴 ${V.M}점 · 💣${V.B}/3 · 남은 ${V.bagN}개)` : "⛏ 광물 꺼내기";
+      if (a.t === "stop") return V && typeof V.M === "number" ? `✋ 스톱 (채굴 ${V.M}점으로 마감 · 💣${V.B}/3)` : "✋ 스톱";
+      return "—";
+    },
+    review: (V, seat, myA, bestA, info) => {
+      try {
+        if (!V || !myA || !bestA || typeof seat !== "number" || V.over) return null;
+        const seed = ((info && info.seed) >>> 0) ^ Math.imul(((info && info.k) | 0) + 1, 0x9e3779b1) ^ Math.imul(V.turn + 1, 0x85ebca6b);
+        const sg = x => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}`, SCALE = 10;   // 이 정도 점수를 한 수로 잃으면 sev 100 (한 조에 평균 5점 안팎씩 쌓이니 6점 이상 잃어야 📒 에 담겨요)
+        const sevOf = (c) => { const loss = Math.max(0, c.dEv), noise = loss < 2 * c.se + 0.05; let sev = Math.round(Math.min(100, (100 * loss) / SCALE)); if (noise) sev = Math.min(sev, 15); return { sev, noise }; };
+        if (V.phase === "bid" && myA.t === "bid" && bestA.t === "bid") {
+          const c = G.compareBids(V, seat, myA.v, bestA.v, seed >>> 0, 1200);
+          if (!c) return null;
+          const { sev, noise } = sevOf(c), pc = x => `${Math.round(x * 100)}%`;
+          return { sev, why: `평균 점수: 고급 AI ${bestA.v}점 제시 ${sg(c.evBest)}점(제시 합이 채굴보다 클 확률 ${pc(c.pShortBest)}) → 내 ${myA.v}점 제시 ${sg(c.evMy)}점(${pc(c.pShortMy)})${noise ? " — 거의 같아요" : ""} · 광부는 평균 ${Math.round(c.avgM)}점을 캘 것 같고 다른 ${V.pres.length - 1}명 제시 합은 ${Math.round(c.avgOthers)}점쯤으로 봤어요` };
+        }
+        if (V.phase === "mine" && V.cur === seat && (myA.t === "draw" || myA.t === "stop") && (bestA.t === "draw" || bestA.t === "stop")) {
+          const c = G.compareMine(V, seat, myA.t, bestA.t, seed >>> 0, 600);
+          if (!c) return null;
+          const { sev, noise } = sevOf(c), lab = t => (t === "draw" ? "꺼내기" : "스톱"), val = t => (t === "draw" ? c.dDraw : c.dStop);
+          return { sev, why: `내 몫 평균: 고급 AI ${lab(bestA.t)} ${sg(val(bestA.t))}점 → 내 ${lab(myA.t)} ${sg(val(myA.t))}점${noise ? " — 거의 같아요" : ""} · 지금 채굴 ${V.M}점 · 💣 ${V.B}/3 · 다음에 폭탄이 나올 확률 약 ${Math.round(c.pBomb * 100)}% · 제시 합은 평균 ${Math.round(c.avgS)}점쯤으로 봤어요` };
+        }
+        return null;
+      } catch (e) { return null; }
+    },
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

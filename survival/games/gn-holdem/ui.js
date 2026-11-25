@@ -166,6 +166,33 @@
     ];
   }
 
+  // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 의 기대 칩 평가 evalActs 로 두 수를 같은 잣대로 잼)
+  const pcs = x => Math.round(x * 100) + "%";
+  const sgn = v => (v < -0.05 ? "−" : "+") + Math.abs(v).toFixed(1);
+  const mul = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const actText = (a, V) => {
+    if (!a || typeof a !== "object") return "—";
+    if (a.t === "fold") return "폴드";
+    if (a.t === "call") { const need = V && V.contrib && V.turn != null && V.contrib[V.turn] != null ? V.cur - V.contrib[V.turn] : 0; return need > 0 ? `콜 — ${need}칩 더 맞춰서 공개` : "콜 — 바로 공개"; }
+    if (a.t === "raise" && Number.isFinite(+a.to)) { const to = a.to | 0; return `레이즈 → ${to}칩까지${V && V.cap && to >= V.cap ? " (올인)" : ""}`; }
+    return "—";
+  };
+  const shortAct = a => (a.t === "fold" ? "폴드" : a.t === "call" ? "콜" : `레이즈 ${a.to | 0}칩`);
+  const okAct = a => !!a && (a.t === "fold" || a.t === "call" || (a.t === "raise" && Number.isFinite(+a.to)));
+  // sev = (고급 AI 수의 기대 칩 − 내 수의 기대 칩) ÷ (시작 칩의 15%) × 100 → 시작 칩 15 면 손해 약 1.4칩부터 60 (📒), 20 이면 1.8칩
+  const review = (V, seat, myA, bestA, info) => {
+    if (!V || V.phase !== "bet" || !(seat === 0 || seat === 1) || !okAct(myA) || !okAct(bestA)) return null;
+    const key = a => (a.t === "raise" ? `raise ${a.to | 0}` : a.t);
+    if (key(myA) === key(bestA)) return null;
+    const seed = (((info && info.seed) | 0) ^ Math.imul((((info && info.k) | 0) + 1), 0x9e3779b1)) >>> 0;
+    const E = G.evalActs(V, seat, mul(seed), [myA, bestA]), em = E.ex[0], eb = E.ex[1], loss = eb - em;
+    if (!Number.isFinite(em) || !Number.isFinite(eb)) return null;
+    const sev = Math.round(Math.min(100, Math.max(0, 100 * loss / Math.max(2, 0.15 * (V.start || 15)))));
+    const y = V.cards[1 - seat], P = E.P, fold = myA.t === "fold" || bestA.t === "fold", cy = G.cat(V.shared, y);
+    const why = `내 수 ${shortAct(myA)} 기대 칩 ${sgn(em)} · 고급 AI ${shortAct(bestA)} 기대 칩 ${sgn(eb)}${loss <= 0.05 ? " (거의 같아요)" : ""} — 공유 ${V.shared[0]}·${V.shared[1]} · 상대 카드 ${y}${cy ? `(${G.CAT[cy]})` : ""} 기준 이길 확률 약 ${pcs(P.win)}${P.draw >= 0.01 ? ` · 무승부 ${pcs(P.draw)}` : ""}${fold && P.penE >= 0.05 ? ` · 조합을 들고 폴드하면 페널티 (기대 −${P.penE.toFixed(1)}칩)` : ""}${bestA.t === "raise" && P.win < 0.4 ? " · 상대가 접을 가능성까지 계산한 값이에요" : ""}`;
+    return { sev, why };
+  };
+
   window.SVUI = window.SVUI || {};
   window.SVUI["gn-holdem"] = {
     name: "인디언 홀덤", emoji: "🃏", short: "공유카드 2장 · 상대 카드만 보이는 1:1 베팅", min: 2, max: 2, defN: 2, board: false,
@@ -183,7 +210,7 @@
     ],
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),
-    render, result,
+    render, result, actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

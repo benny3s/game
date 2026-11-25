@@ -209,29 +209,66 @@
     return best[Math.floor(r() * best.length)].a;
   }
 
+  // ── 글 도우미 (받침에 맞춰 이/가 · 을/를 · 은/는 · 와/과 · 로/으로) ──
+  const jong = t => { t = String(t == null ? "" : t); const ch = t.charAt(t.length - 1), c = ch ? ch.charCodeAt(0) : 0; if (c >= 0xAC00 && c <= 0xD7A3) return (c - 0xAC00) % 28; if (ch >= "0" && ch <= "9") return [21, 8, 0, 16, 0, 0, 1, 8, 8, 0][+ch]; return 0; };
+  const eul = t => t + (jong(t) ? "을" : "를"), wa = t => t + (jong(t) ? "과" : "와");
+  const canon = a => (a && typeof a === "object" ? [a.t, a.c, a.tg, a.w, a.dir].map(x => (x === undefined || x === null ? "" : x)).join("|") : "");
+
   // ── AI 선생님 ───────────────────────────────────────────────
   const nm = (names, i) => (names && names[i]) || `${i + 1}번`;
-  function actText(a, who) {
-    if (a.t === "sil") return `🔇 ${who(a.tg)}의 능력을 막아요`;
+  // 행동 한 줄 글 — V(그 수를 두기 전 view)가 있으면 칸 이동까지 보여 줘요. 없어도(null) 돼요.
+  function actText(a, who, V) {
+    if (!a || typeof a !== "object") return "—";
+    const s = V && typeof V.cur === "number" ? V.cur : -1, hasV = !!(V && Array.isArray(V.pos) && s >= 0);
+    const P = i => (hasV && V.pos[i] !== undefined ? V.pos[i] : null);
+    const to = (i, d) => { const p = P(i); if (p === null) return ""; const q = Math.max(0, p + d); return ` (${p}칸 → ${q >= GOAL ? "🏁 골인" : `${q}칸`})`; };
+    if (a.t === "sil") return `🔇 ${who(a.tg)}의 능력을 막아요${hasV && V.ab && V.ab[a.tg] && P(a.tg) !== null ? ` (${AB[V.ab[a.tg]].name} · ${P(a.tg)}칸)` : ""}`;
     if (a.t === "skip") return "밀지 않고 넘어가요";
-    if (a.t === "push") return `👊 ${who(a.tg)}를 ${a.dir > 0 ? "앞으로" : "뒤로"} 1칸 밀어요`;
-    if (a.t === "grav") return `🧲 ${a.c} 카드를 버리고 ${who(a.tg)}를 끌어와요`;
-    return `카드 ${a.c}${a.w !== undefined && a.w !== null ? ` + 🤝 ${who(a.w)}와 같이 이동` : ""}`;
+    if (a.t === "push") return `👊 ${eul(who(a.tg))} ${a.dir > 0 ? "앞으로" : "뒤로"} 1칸 밀어요${to(a.tg, a.dir > 0 ? 1 : -1)}`;
+    if (a.t === "grav") {
+      const ps = P(s), pt = P(a.tg), t2 = ps !== null && pt !== null ? Math.max(0, pt > ps ? ps + 1 : ps - 1) : null;
+      return `🧲 ${a.c} 카드를 버리고 ${eul(who(a.tg))} 끌어와요${t2 !== null ? ` (${pt}칸 → ${t2}칸)` : ""}`;
+    }
+    if (a.t === "card" && a.c !== undefined) return `카드 ${a.c}${to(s, a.c)}${a.w !== undefined && a.w !== null ? ` + 🤝 ${wa(who(a.w))} 같이 이동${to(a.w, a.c)}` : ""}`;
+    return "—";
+  }
+  // 🎞️ 복기용 — 고른 두 수(내 수 · 고급 AI 수)를 '같은 표본'(고정 씨앗)으로 끝까지 해 봐서 우승 순위 확률 · 기대 보상을 같은 잣대로 재요.
+  //   보이는 것만 쓰고(모두 공개), V 는 바꾸지 않아요. 반환: { my:{v,wp}, best:{v,wp}, dV(고급−내), dWp, se(차이의 표준오차) } | null(비교 못 함)
+  function compareActs(V, me, myA, bestA, seed, trials) {
+    if (!V || !V.st || V.over || V.cur !== me || !myA || !bestA) return null;
+    const st = fromView(V), legalK = actions(st).map(canon), km = canon(myA), kb = canon(bestA);
+    if (km === kb || !legalK.includes(km) || !legalK.includes(kb)) return null;
+    const T = Math.max(20, trials | 0 || 300), run = a => {
+      const xs = [];
+      for (let i = 0; i < T; i++) {
+        const r = sampler(((seed >>> 0) + Math.imul(i + 1, 0x9e3779b1)) >>> 0), s2 = clone(st);
+        apply(s2, me, clone(a));
+        xs.push(s2.over ? reward(s2, me) : rollout(s2, me, r));
+      }
+      return xs;
+    };
+    const xm = run(myA), xb = run(bestA), mean = xs => xs.reduce((p, q) => p + q, 0) / xs.length, wp = xs => xs.filter(x => x > 0.999).length / xs.length;
+    const d = xb.map((x, i) => x - xm[i]), md = mean(d), sd = Math.sqrt(d.reduce((p, q) => p + (q - md) * (q - md), 0) / Math.max(1, d.length - 1));
+    return { my: { v: mean(xm), wp: wp(xm) }, best: { v: mean(xb), wp: wp(xb) }, dV: md, dWp: wp(xb) - wp(xm), se: sd / Math.sqrt(d.length), trials: T };
   }
   function coach(V, me, since, names) {
     const who = i => (i === me ? "나" : nm(names, i));
     const placeNow = s => 1 + V.pos.filter(p => p > V.pos[s]).length;
     const lineOf = s => `${who(s)}(${AB[V.ab[s]].em}${AB[V.ab[s]].name}) ${V.fin[s] >= 0 ? `${V.fin[s] + 1}등 골인` : `${V.pos[s]}칸 · 카드 ${V.hand[s].join("·")}`}`;
-    if (!(me >= 0 && me < V.n)) return { opp: "구경 중이에요", mine: "-", rec: "-", why: "자리에 앉은 사람에게만 추천이 나와요." };
+    if (!(me >= 0 && me < V.n)) return { opp: `구경 중이에요 — 지금 ${V.finOrder.length}명이 골인했어요`, mine: "-", rec: "-", why: `자리에 앉은 사람에게만 추천이 나와요. (우승 순위는 ${V.W.map(w => `${w}등`).join("·")})` };
     const opp = V.tord.filter(s => s !== me).map(lineOf).join(" / ");
     const wTxt = V.W.map(w => `${w}등`).join("·");
     if (V.over) return { opp, mine: lineOf(me), rec: V.ranks[me] === 0 ? "중간으로 골인했어요!" : `${V.W[0]}등 근처가 우승이었어요`, why: `최종 순위: ${V.places.map((s, i) => `${i + 1}등 ${who(s)}`).join(" · ")}. 너무 앞서도 너무 뒤처져도 안 되고, 우승 순위(${wTxt})로 골인하는 게 목표예요.` };
-    const mine = `${lineOf(me)} · 지금 ${placeNow(me)}위 · 목표: ${wTxt}로 골인`;
-    if (V.cur !== me) return { opp, mine, rec: "기다려요", why: `${who(V.cur)} 차례예요 (${AB[V.ab[V.cur]].name}). 상대의 남은 카드는 모두 공개라 다음 이동을 짐작할 수 있어요.` };
+    const mine = `${lineOf(me)} · 지금 ${placeNow(me)}위 · 목표: ${wTxt}으로 골인`;
+    if (V.cur !== me) {
+      const c = V.cur, pc = V.pos[c], hc = V.hand[c], lo = Math.min(...hc), hi = Math.max(...hc), gap = pc - V.pos[me];
+      if (V.fin[me] >= 0) return { opp, mine, rec: "기다려요", why: `나는 ${V.fin[me] + 1}등으로 골인했어요 (우승 ${wTxt}). 지금 ${who(c)} 차례 — ${pc}칸 · 카드 ${hc.join("·")}라서 다음엔 ${pc + lo >= GOAL ? "골인" : `${pc + lo}칸`}~${pc + hi >= GOAL ? "골인" : `${pc + hi}칸`}이 돼요. 게임은 ${V.need}명이 골인하면 끝나요 (지금 ${V.finOrder.length}명).` };
+      return { opp, mine, rec: "기다려요", why: `${who(c)} 차례 (${AB[V.ab[c]].name}) — ${pc}칸에서 ${eul(`카드 ${hc.join("·")}`)} 가져서 다음엔 ${pc + lo >= GOAL ? "골인" : `${pc + lo}칸`}~${pc + hi >= GOAL ? "골인" : `${pc + hi}칸`}이 돼요. 나와는 ${gap > 0 ? `${gap}칸 앞` : gap < 0 ? `${-gap}칸 뒤` : "같은 칸"}이고 내 순위는 ${placeNow(me)}위 (우승 ${wTxt}). 상대 카드는 모두 공개라 다음 이동을 짐작할 수 있어요.` };
+    }
     const res = evalActions(V, me, sampler(V.turnNo * 17 + me * 5 + V.pos[me] + 1), 40).sort((x, y) => (y.wp - x.wp) || (y.v - x.v));
     const top = res[0], second = res[1];
-    return { opp, mine, rec: actText(top.a, who), why: `이 수로 끝까지 해 보면 우승 순위로 골인할 가능성이 약 ${Math.round(top.wp * 100)}%${second ? ` (다음 후보 ${actText(second.a, who)} ${Math.round(second.wp * 100)}%)` : ""}예요. 우승은 1등이 아니라 ${wTxt}예요 — 빨리 가는 것보다 순위를 맞추는 게 중요해요.` };
+    return { opp, mine, rec: actText(top.a, who, V), why: `이 수로 끝까지 해 보면 우승 순위로 골인할 가능성이 약 ${Math.round(top.wp * 100)}%${second ? ` (다음 후보 ${actText(second.a, who)} ${Math.round(second.wp * 100)}%)` : ""}예요. 결승 31칸까지 ${GOAL - V.pos[me]}칸 남았고, 이미 골인한 사람은 ${V.finOrder.length}명이에요 — 우승은 1등이 아니라 ${wTxt}이라, 빨리 가는 것보다 순위를 맞추는 게 중요해요.` };
   }
 
-  return { id: "gn-midrun", GOAL, SETC, KEYS, AB, WIN, NEED, init, needs, apply, view, over, ranks, legal, auto, advance, actions, fromView, ai, coach, rollout, evalActions, actText, sampler, hash, cur, silenced, silTargets, gravTargets, withTargets };
+  return { id: "gn-midrun", GOAL, SETC, KEYS, AB, WIN, NEED, init, needs, apply, view, over, ranks, legal, auto, advance, actions, fromView, ai, coach, rollout, evalActions, compareActs, actText, canon, sampler, hash, cur, silenced, silTargets, gravTargets, withTargets };
 });

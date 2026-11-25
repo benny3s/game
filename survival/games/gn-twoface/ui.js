@@ -172,6 +172,39 @@
     ];
   }
 
+  // ── 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 와 같은 확률 · 기대 칩 평가로 견줌) ──
+  const pcT = x => Math.round(x * 100) + "%";
+  const sgnT = x => ((x = Math.round(x * 10) / 10) >= 0 ? "+" : "−") + Math.abs(x).toFixed(1);
+  function actText(a, V, names) {
+    if (!a || typeof a !== "object") return "—";
+    const me = V && typeof V.seat === "number" && V.seat >= 0 ? V.seat : -1, opp = me >= 0 ? 1 - me : -1;
+    const sd = me >= 0 && V && V.side && V.side[me] >= 0 ? V.side[me] : a.side, st = sd === 0 || sd === 1 ? ` (${SIDE[sd]})` : "";
+    if (a.t === "fold") return me >= 0 && V && V.dbl && V.dbl[opp] > 0 ? "폴드 (양면베팅 폴드 · 페널티 10칩)" : "폴드";
+    if (a.t === "call") {
+      if (me >= 0 && V && V.dbl && V.dbl[opp] > 0) return `양면베팅 ${V.dbl[opp]}칩 콜`;
+      const need = me >= 0 && V && V.contrib ? V.cur - V.contrib[me] : null;
+      return need > 0 ? `콜 ${need}칩${st}` : need === 0 ? (V.chk ? `콜 · 바로 공개${st}` : `기본 베팅만 하고 넘기기${st}`) : `콜${st}`;
+    }
+    if (a.t === "raise") return `${a.to != null ? a.to + "칩까지 " : ""}베팅${st}`;
+    if (a.t === "double") return a.x != null ? `양면베팅 ${a.x}칩 (앞 · 뒤 각각)` : "양면베팅";
+    return "—";
+  }
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || V.phase !== "bet" || (seat !== 0 && seat !== 1)) return null;
+    const sideOf = a => (V.side[seat] >= 0 ? V.side[seat] : a.side === 0 || a.side === 1 ? a.side : -1);
+    if (myA.t === bestA.t && (myA.to | 0) === (bestA.to | 0) && (myA.x | 0) === (bestA.x | 0) && sideOf(myA) === sideOf(bestA)) return null;   // 같은 수
+    const m = G.evalAct(V, seat, myA, "hard"), b = G.evalAct(V, seat, bestA, "hard");
+    if (!m || !b) return null;
+    const stat = e => (e.kind === "fold" ? `낸 칩만 잃어 기대 칩 ${sgnT(e.ev)}` : e.kind === "foldDbl" ? `페널티 10칩까지 기대 칩 ${sgnT(e.ev)}` : e.kind === "double" ? `양면베팅 성공 확률 ${pcT(e.p)} · 기대 칩 ${sgnT(e.ev)}` : `${e.kind === "callDbl" ? "상대 양면베팅이 실패할 확률" : "이길 확률"} ${pcT(e.p)} · 기대 칩 ${sgnT(e.ev)}`);
+    const scale = Math.max(4, 0.2 * (V.start || 30)), gap = b.ev - m.ev;
+    let sev = gap < 0.15 ? 0 : 100 * gap / scale;
+    if (info && info.same) sev = Math.min(sev, 20);                                            // 고급 AI 도 가끔 두는 수
+    if (myA.t === bestA.t && (myA.t === "raise" || myA.t === "double") && m.side === b.side) sev = Math.min(sev, 30);   // 베팅 크기만 다른 것은 판단 차이
+    sev = Math.max(0, Math.min(100, Math.round(sev)));
+    const tail = gap >= 0.15 ? ` — 기대 칩 ${gap.toFixed(1)} 차이 (시작 칩의 ${Math.round(100 * gap / (V.start || 30))}%)` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 상대 반응까지 봐요)" : " — 거의 같아요";
+    return { sev, why: `고급 AI 수 (${actText(bestA, V, info && info.names)}): ${stat(b)} / 내 수 (${actText(myA, V, info && info.names)}): ${stat(m)}${tail}` };
+  }
+
   window.SVUI = window.SVUI || {};
   window.SVUI["gn-twoface"] = {
     name: "양면포커", emoji: "🃏", short: "앞뒤가 다른 카드 · 면을 골라 겨루는 1:1 베팅", min: 2, max: 2, defN: 2, board: false,
@@ -190,6 +223,7 @@
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),
     render, result,
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

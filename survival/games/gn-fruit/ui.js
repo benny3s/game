@@ -102,6 +102,53 @@
       if (t.dataset.a === "price") { ctx.sfx("pop"); const a = { t: "price", p: Object.assign({}, S.p) }; if (S.sec >= 0) a.secret = S.sec; ctx.act(a); }
     };
   }
+  // ── 🎞️ 복기 고리 ──────────────────────────────────────────────
+  const fe = f => (F[f] ? `${F[f].e}${F[f].n}` : "?");
+  function actText(a, V, names) {
+    if (!a || typeof a !== "object") return "—";
+    if (a.t === "noswap") return "교체 안 함";
+    if (a.t === "swap") return F[a.from] && F[a.to] ? `${fe(a.from)} → ${fe(a.to)} 교체` : "—";
+    if (a.t === "price" && a.p && typeof a.p === "object") {
+      const parts = Object.keys(a.p).map(Number).filter(f => F[f]).sort().map(f => `${fe(f)} ${a.p[f]}천 원`);
+      if (!parts.length) return "—";
+      if (Number.isInteger(a.secret) && F[a.secret]) parts.push(`🔒 ${fe(a.secret)} 비밀`);
+      return parts.join(" · ");
+    }
+    return "—";
+  }
+  // 받침에 맞춰 조사 (과일 이름 끝)
+  const jp = (f, a, b) => { const w = F[f] ? F[f].n : "", k = w.charCodeAt(w.length - 1); return fe(f) + (k >= 0xAC00 && k <= 0xD7A3 && (k - 0xAC00) % 28 !== 0 ? a : b); };
+  const sg = x => (Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "−") + Math.abs(x).toFixed(1));
+  const pc = x => Math.round(x * 100) + "%";
+  const sameAct = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || !V.own || !V.own[seat] || sameAct(myA, bestA) || (info && info.same)) return null;
+    const ob = G.observe(V, seat), left = V.rounds - V.round;
+    if (V.phase === "swap") {
+      if (myA.t !== "swap" || bestA.t !== "noswap" || !F[myA.from] || !F[myA.to]) return null;
+      const kf = V.sellersOf[myA.from].length, kt = V.sellersOf[myA.to].length, qt = G.cutProbs(V, seat, myA.to, ob).reduce((s, x) => s * (1 - x), 1);
+      return { sev: kt >= kf ? 30 : 18, why: `교체하면 ${fe(myA.from)} ${kf}명 → ${kf - 1}명, ${fe(myA.to)} ${kt}명 → ${kt + 1}명이에요. 혼자 4천 원으로 깎아 독식하는 몫도 ${4 * kf}천 → ${4 * (kt + 1)}천 원으로 바뀌지만 ${F[myA.to].n}에서 누가 깎을 확률이 약 ${pc(1 - qt)}라 뚜렷한 이득은 없고, 아이템(교체 · 비밀 중 한 번뿐)을 써 버려요.` };
+    }
+    if (V.phase !== "price" || myA.t !== "price" || bestA.t !== "price" || !myA.p || !bestA.p) return null;
+    const seed = (((info && info.seed) | 0) ^ Math.imul((((info && info.k) | 0) + 1), 0x9e3779b1)) >>> 0;
+    const evs = G.evalPrices(V, seat, seed), parts = []; let loss = 0;
+    for (const e of evs) {
+      const pm = myA.p[e.f], pb = bestA.p[e.f];
+      if (pm === pb || !(pm >= 1 && pm <= G.PMAX) || !(pb >= 1 && pb <= G.PMAX)) continue;
+      const d = e.adj[pb] - e.adj[pm]; loss += Math.max(0, d);
+      parts.push({ d, c: 1 - e.q.reduce((s, x) => s * (1 - x), 1), t: `${fe(e.f)} 내 ${pm}천 원 ${sg(e.adj[pm])}천 vs 고급 AI ${pb}천 원 ${sg(e.adj[pb])}천` });
+    }
+    // 🔒 비밀 아이템: 깎은 과일을 숨길 때만 값어치가 있어요 (한 번뿐 · 마지막 라운드엔 지킬 다음 라운드가 없음)
+    const mySec = Number.isInteger(myA.secret) && myA.secret >= 0 ? myA.secret : -1, bSec = Number.isInteger(bestA.secret) && bestA.secret >= 0 ? bestA.secret : -1;
+    let sx = 0, sxt = "";
+    if (mySec >= 0 && (left === 1 || !(myA.p[mySec] < G.PMAX))) { sx = 14; sxt = left === 1 ? "마지막 라운드에 비밀을 쓰면 숨겨서 지킬 다음 라운드가 0번이에요" : `깎지 않은 ${jp(mySec, "을", "를")} 숨기면 가릴 게 없어요 (아이템은 한 번뿐)`; }
+    else if (left > 1 && mySec < 0 && bSec >= 0 && V.own[seat].some(f => myA.p[f] < G.PMAX)) { sx = 10; sxt = `값을 깎았는데 비밀을 안 썼어요 — 고급 AI 는 깎은 ${jp(bSec, "을", "를")} 🔒 로 숨겨 남은 ${left - 1}라운드의 보복을 줄여요`; }
+    if (!parts.length && !sx) return null;
+    parts.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+    const sev = Math.max(0, Math.min(100, Math.round(100 * loss / 14 + sx)));
+    const dsum = parts.reduce((x, p) => x + p.d, 0), head = parts.length ? (dsum < -0.35 ? "내 수의 기대 수입이 더 높게 나와요 — " : loss < 0.35 ? "두 수의 기대 수입이 거의 같아요 — " : "") + parts.map(p => p.t).join(" · ") + ` (기대 수입 = 다음 라운드 보복 위험까지 뺀 값 · 이 과일 판매자 중 누가 깎을 확률 약 ${pc(parts[0].c)})` : "";
+    return { sev, why: [head, sxt].filter(Boolean).join(" · ") };
+  }
   function result(V) {
     const first = V.ranks ? V.ranks.map((x, i) => (x === 0 ? i + 1 : 0)).filter(Boolean) : [];
     return `${V.draw ? "무승부 (수입이 모두 같아요)" : `우승 ${first.join("·")}번 · 최하위 ${V.losers.map(i => i + 1).join("·")}번`}${V.incomes ? ` · 수입 ${V.incomes.join("/")}천 원` : ""}`;
@@ -142,6 +189,8 @@
     sub: V => (V.over ? "끝" : `${V.round + 1}/${V.rounds} 라운드`),
     chip: (V, i) => ({ t: V.own[i].map(f => F[f].e).join(""), on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 와 같은 모형으로 두 수의 기대 수입을 견줌)
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

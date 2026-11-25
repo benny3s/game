@@ -183,39 +183,56 @@
     }
     return out;
   }
+  // 상대가 지금까지 늘 한 칸에만 몰아 걸었다면(초보 습관) 앞으로도 그렇게 건다고 보고 맞서요
+  const lumpyOpp = (V, opp) => { const past = (V.hist || []).map(h => h.bets[opp]).filter(b => b && sum(b) > 0); return past.length >= 2 && past.filter(b => Math.max(...b) >= 0.9 * sum(b)).length >= 0.75 * past.length; };
+  // 내 베팅 b 하나를 끝까지 K 번 가상으로 두어 이긴 횟수(동점 0.5)와 마지막 칩 차(나 − 상대)의 합을 돌려줘요.
+  // 표본 i 의 난수는 base 와 i 로만 정해져서, 같은 base 로 부르면 여러 베팅을 같은 난수(공통 난수)로 견줄 수 있어요.
+  function simBet(V, me, b, p, base, K, oTier) {
+    const opp = 1 - me, iFirst = V.first === me, sTier = "normal";
+    let win = 0, dchip = 0;
+    for (let i = 0; i < K; i++) {
+      const rr = mrng(base + i * 7919 + 13);
+      const st = { R: V.R, round: V.round, chips: V.chips.slice(), first: V.first, bets: [null, null], mark: 0, hint: [-1, -1] };
+      const u = rr(); st.mark = u < p[0] ? 0 : u < p[0] + p[1] ? 1 : 2;
+      st.bets[me] = b; st.chips[me] -= sum(b);
+      if (iFirst) { st.hint[opp] = drawHint(rr, st.mark); const ob = planHeur(synV(st, opp, "second"), opp, oTier, rr).b; st.bets[opp] = ob; st.chips[opp] -= sum(ob); }
+      else st.bets[opp] = V.bets[V.first].slice();
+      st.chips[0] += 3 * st.bets[0][st.mark]; st.chips[1] += 3 * st.bets[1][st.mark];
+      let dead = st.chips[0] <= 0 || st.chips[1] <= 0, rd = V.round;
+      while (!dead && rd < V.R) {
+        rd++; st.round = rd; st.first = (V.first + rd - V.round) % 2; st.bets = [null, null];
+        st.mark = Math.floor(rr() * 3); st.hint = [drawHint(rr, st.mark), drawHint(rr, st.mark)];
+        const f = st.first, sc = 1 - f, bf = planHeur(synV(st, f, "first"), f, f === me ? sTier : oTier, rr).b; st.chips[f] -= sum(bf); st.bets[f] = bf;
+        const bs = planHeur(synV(st, sc, "second"), sc, sc === me ? sTier : oTier, rr).b; st.chips[sc] -= sum(bs); st.bets[sc] = bs;
+        st.chips[0] += 3 * st.bets[0][st.mark]; st.chips[1] += 3 * st.bets[1][st.mark];
+        if (st.chips[0] <= 0 || st.chips[1] <= 0) dead = true;
+      }
+      win += st.chips[me] > st.chips[opp] ? 1 : st.chips[me] === st.chips[opp] ? 0.5 : 0;
+      dchip += st.chips[me] - st.chips[opp];
+    }
+    return { win, dchip };
+  }
   function planMC(V, me, r, K) {
     const opp = 1 - me, p = posterior(V, me, "hard"), iFirst = V.first === me;
     const cands = candBets(p, iFirst ? 0 : V.range.min, iFirst ? V.lim : V.range.max);
-    const base = Math.floor(r() * 1e9);
-    // 상대가 지금까지 늘 한 칸에만 몰아 걸었다면(초보 습관) 앞으로도 그렇게 건다고 보고 맞서요
-    const past = (V.hist || []).map(h => h.bets[opp]).filter(b => b && sum(b) > 0), lumpy = past.length >= 2 && past.filter(b => Math.max(...b) >= 0.9 * sum(b)).length >= 0.75 * past.length;
-    const oTier = lumpy ? "easy" : "normal", sTier = "normal";
+    const base = Math.floor(r() * 1e9), oTier = lumpyOpp(V, opp) ? "easy" : "normal";
     let best = null, bw = -1;
     for (const b of cands) {
-      let win = 0;
-      for (let i = 0; i < K; i++) {
-        const rr = mrng(base + i * 7919 + 13);
-        const st = { R: V.R, round: V.round, chips: V.chips.slice(), first: V.first, bets: [null, null], mark: 0, hint: [-1, -1] };
-        const u = rr(); st.mark = u < p[0] ? 0 : u < p[0] + p[1] ? 1 : 2;
-        st.bets[me] = b; st.chips[me] -= sum(b);
-        if (iFirst) { st.hint[opp] = drawHint(rr, st.mark); const ob = planHeur(synV(st, opp, "second"), opp, oTier, rr).b; st.bets[opp] = ob; st.chips[opp] -= sum(ob); }
-        else st.bets[opp] = V.bets[V.first].slice();
-        st.chips[0] += 3 * st.bets[0][st.mark]; st.chips[1] += 3 * st.bets[1][st.mark];
-        let dead = st.chips[0] <= 0 || st.chips[1] <= 0, rd = V.round;
-        while (!dead && rd < V.R) {
-          rd++; st.round = rd; st.first = (V.first + rd - V.round) % 2; st.bets = [null, null];
-          st.mark = Math.floor(rr() * 3); st.hint = [drawHint(rr, st.mark), drawHint(rr, st.mark)];
-          const f = st.first, sc = 1 - f, bf = planHeur(synV(st, f, "first"), f, f === me ? sTier : oTier, rr).b; st.chips[f] -= sum(bf); st.bets[f] = bf;
-          const bs = planHeur(synV(st, sc, "second"), sc, sc === me ? sTier : oTier, rr).b; st.chips[sc] -= sum(bs); st.bets[sc] = bs;
-          st.chips[0] += 3 * st.bets[0][st.mark]; st.chips[1] += 3 * st.bets[1][st.mark];
-          if (st.chips[0] <= 0 || st.chips[1] <= 0) dead = true;
-        }
-        win += st.chips[me] > st.chips[opp] ? 1 : st.chips[me] === st.chips[opp] ? 0.5 : 0;
-      }
+      const win = simBet(V, me, b, p, base, K, oTier).win;
       if (win > bw) { bw = win; best = b; }
     }
     const total = sum(best), pp = posterior(V, me, "hard");
     return { b: best, total, p: pp, mp: maxOf(pp), why: total === 0 ? "lead" : maxOf(pp) >= 0.5 ? "hint" : "weak", win: bw / K };
+  }
+  // 복기용: 두 베팅(내 수 · 고급 AI 의 수)을 같은 난수로 K 번씩 끝까지 둬 보고 이길 확률 · 마지막 칩 차 · 이번 라운드 기대 칩을 돌려줘요.
+  // 고르는 것은 하지 않고 받은 view 를 바꾸지 않아요. seed(정수)로 난수가 정해져 같은 장면은 늘 같은 값이에요.
+  function compareBets(V, me, bA, bB, seed, K) {
+    K = K || 120;
+    const p = posterior(V, me, "hard"), base = Math.floor(mrng((seed >>> 0) || 1)() * 1e9), oTier = lumpyOpp(V, 1 - me) ? "easy" : "normal";
+    return [bA, bB].map(b => {
+      const s = simBet(V, me, b, p, base, K, oTier);
+      return { b: b.slice(), total: sum(b), win: s.win / K, dchip: s.dchip / K, ev: 3 * (p[0] * b[0] + p[1] * b[1] + p[2] * b[2]) - sum(b) };
+    });
   }
   function plan(V, me, tier, r) { return tier === "hard" ? planMC(V, me, r, 48) : planHeur(V, me, tier, r); }
   function ai(V, me, tier, r) {
@@ -226,40 +243,84 @@
 
   // ── AI 선생님 (내게 보이는 것만 읽음) ──────────────────────
   const pc = x => Math.round(x * 100) + "%";
+  const sg = n => (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n);                              // 정수 부호 (0 은 부호 없이)
+  const sg1 = x => (x >= 0.05 ? "+" : x <= -0.05 ? "−" : "") + Math.abs(x).toFixed(1);        // 소수 한 자리 부호
+  const hasFinal = w => { const s = String(w || ""), ch = s.charAt(s.length - 1), c = s.charCodeAt(s.length - 1); if (c >= 0xAC00 && c <= 0xD7A3) return (c - 0xAC00) % 28 !== 0; return "013678".includes(ch) && ch !== ""; };
+  const eun = w => (hasFinal(w) ? "은" : "는"), iga = w => (hasFinal(w) ? "이" : "가"), ira = w => (hasFinal(w) ? "이라" : "라");
+  const rg = (a, b) => (a === b ? `${a}칩` : `${a}~${b}칩`);   // 범위 글 (같으면 한 값)
   const bTxt = b => b ? MARKS.map((m, k) => b[k] ? `${EM[k]}${b[k]}` : "").filter(Boolean).join(" ") || "0칩" : "";
+  // 상대가 지난 라운드들에서 어떻게 걸었는지 — 공개된 기록만
+  function oppHabit(V, opp) {
+    let n = 0, lump = 0, tot = 0, plus = 0, net = 0;
+    for (const h of V.hist || []) { const b = h.bets && h.bets[opp]; if (!b) continue; const t = sum(b); n++; tot += t; net += h.gain[opp] - t; if (t > 0) { if (Math.max(...b) >= 0.9 * t) lump++; if (h.gain[opp] > t) plus++; } }
+    return { n, lump, tot, plus, net };
+  }
+  const habitTxt = (H, who) => (H.n ? ` 지난 ${H.n}라운드 동안 ${who}${eun(who)} 평균 ${(H.tot / H.n).toFixed(1)}칩을 걸었고 한 칸 몰아 걸기 ${H.lump}번 · 플러스 라운드 ${H.plus}번 (칩 ${sg(H.net)}).` : " 첫 라운드라 상대의 습관을 볼 기록은 아직 없어요 (귀띔이 맞을 확률은 모두 50%).");
   function coach(V, me, since, names) {
+    me = me === 1 ? 1 : me === 0 ? 0 : (V.seat === 1 ? 1 : 0);
     const nm = i => (names && names[i]) || `${i + 1}번`;
-    if (V.over) return { opp: "승부가 끝났어요.", mine: `내 칩 ${V.chips[me]} · 상대 ${V.chips[1 - me]} → ${V.ranks[me] === 0 ? "내가 앞서요" : "아쉽지만 뒤졌어요"}`, rec: "한 판 더 해 봐요!", why: "" };
-    const opp = 1 - me, last = V.hist[V.hist.length - 1];
+    const opp = 1 - me, hist = V.hist || [], last = hist[hist.length - 1], C = V.chips[me], O = V.chips[opp], who = nm(opp), H = oppHabit(V, opp);
+    if (V.over) {
+      let bigW = null, bigL = null;
+      for (const h of hist) { const net = h.gain[me] - sum(h.bets[me]); if (!bigW || net > bigW.net) bigW = { r: h.r, net }; if (!bigL || net < bigL.net) bigL = { r: h.r, net }; }
+      const d = C - O, res = d > 0 ? "내가 앞서요" : d < 0 ? "아쉽지만 뒤졌어요" : "비겼어요";
+      const parts = [bigW && bigW.net > 0 ? `가장 크게 번 라운드는 ${bigW.r}라운드(${sg(bigW.net)}칩)` : "", bigL && bigL.net < 0 ? `가장 크게 잃은 라운드는 ${bigL.r}라운드(${sg(bigL.net)}칩)` : ""].filter(Boolean);
+      const swing = parts.length ? parts.join(" · ") + "." : "내 칩이 늘거나 줄어든 라운드가 없었어요.";
+      return { opp: `승부가 끝났어요. ${who}${eun(who)} ${hist.length}라운드 동안 칩 ${sg(H.net)}, 한 칸 몰아 걸기 ${H.lump}번이었어요.`, mine: `내 칩 ${C} · 상대 ${O} (차 ${sg(d)}) → ${res}`, rec: "한 판 더 해 봐요!", why: `${swing} 맞힌 칸은 3배라서 큰 베팅 한두 번이 판을 가르는 게임이에요.`.trim() };
+    }
     // 👀 상대 흐름
+    const first = V.first === me, limOpp = Math.min(O, Math.floor(C / 2));
     let o;
-    if (V.phase === "second" && V.first === opp && V.bets[opp]) {
-      const b = V.bets[opp], t = sum(b), top = [0, 1, 2].sort((x, y) => b[y] - b[x])[0];
-      o = t === 0 ? `${nm(opp)}(선)이 한 칩도 안 걸었어요 → 확실한 정보가 없거나 칩을 지키는 중.` :
-        b.filter(x => x > 0).length === 1 ? `${nm(opp)}(선)이 ${EM[top]}${MARKS[top]}에만 ${t}칩 → 귀띔이 ${MARKS[top]}이라 믿는 듯 (귀띔이 맞을 확률은 50%라 허세일 수도).` :
-          `${nm(opp)}(선)이 ${bTxt(b)} 로 나눠 걸었어요 → 확신이 약해 보여요.`;
-    } else if (last && last.r === V.round - 1 || last && V.phase === "end") {
-      const ob = last.bets[opp];
-      o = `지난 ${last.r}라운드 정답 ${EM[last.mark]}${MARKS[last.mark]} — ${nm(opp)}은 ${bTxt(ob)} 걸어 ${last.gain[opp] > sum(ob) ? "+" + (last.gain[opp] - sum(ob)) : "−" + (sum(ob) - last.gain[opp])}칩.`;
-    } else o = "아직 상대 움직임이 없어요. 이번 라운드는 " + (V.first === me ? "내가 먼저 걸어요." : `${nm(opp)}이 먼저 걸어요.`);
+    if (V.phase === "second" && !first && V.bets[opp]) {
+      const b = V.bets[opp], t = sum(b), before = O + t, top = [0, 1, 2].sort((x, y) => b[y] - b[x])[0], mk = MARKS[top];
+      o = t === 0 ? `${who}(선)이 한 칩도 안 걸었어요 (한도 ${Math.min(before, Math.floor(C / 2))}칩 중 0) → 확실한 정보가 없거나 칩을 지키는 중.` :
+        b.filter(x => x > 0).length === 1 ? `${who}(선)이 ${EM[top]}${mk}에만 ${t}칩 (가진 ${before}칩의 ${Math.round(t / before * 100)}%) → 귀띔이 ${mk}${ira(mk)} 믿는 듯해요. 귀띔이 맞을 확률은 50%라 상대 베팅만 보면 이 칸이 정답일 확률도 약 50%예요.` :
+          `${who}(선)이 ${bTxt(b)} 로 나눠 걸었어요 (모두 ${t}칩, 가진 ${before}칩의 ${Math.round(t / before * 100)}%) → 확신이 약해 보여요.`;
+      o += habitTxt(H, who);
+    } else if (V.phase === "first" && first) {
+      o = (V.lim > 0 ? `${who}${eun(who)} 아직 안 걸었어요. 내가 선이라 0~${V.lim}칩(상대 칩 ${O}의 절반)을 걸 수 있고, 내가 ${V.lim}칩 걸면 상대는 최소 ${Math.min(2 * V.lim, O)}칩을 걸어야 해요.` : `${who}${eun(who)} 아직 안 걸었어요. 상대 칩이 ${O}개뿐이라 내가 걸 수 있는 칩은 0개예요.`) + habitTxt(H, who);
+    } else if (V.phase === "first") {
+      o = `${who}(선)이 거는 중이에요. 상대가 걸 수 있는 한도는 0~${limOpp}칩(내 칩 ${C}의 절반) — 많이 걸수록 정답을 확신한다는 신호예요.` + habitTxt(H, who);
+    } else if (V.phase === "second" && first) {
+      const mt = sum(V.bets[me] || [0, 0, 0]);
+      o = `${who}(후)가 내 베팅(${bTxt(V.bets[me]) || "0칩"})을 보고 거는 중이에요. ${Math.min(2 * mt, O) === O ? `내 ${mt}칩의 2배 이상이라 가진 ${O}칩을 모두(올인) 걸어야 해요.` : `내 ${mt}칩의 2배 이상 — ${rg(Math.min(2 * mt, O), O)}을 걸 수 있어요.`}` + habitTxt(H, who);
+    } else if (last && V.phase === "reveal") {
+      const ob = last.bets[opp], t = sum(ob), net = last.gain[opp] - t;
+      o = `이번 ${last.r}라운드 정답은 ${EM[last.mark]}${MARKS[last.mark]} — ${who}${eun(who)} ${bTxt(ob)} 걸어 ${sg(net)}칩 (지금 ${O}칩).` + habitTxt(H, who);
+    } else o = `${who}의 칩은 ${O}개예요.` + habitTxt(H, who);
     // 📊 내 흐름
-    const mp = posterior(V, me, "hard");
-    const mine = `${V.round}/${V.R}라운드 · 칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]} · 내 귀띔 ${V.hint[me] >= 0 ? EM[V.hint[me]] + MARKS[V.hint[me]] : "없음"} → 정답 확률 ☀️${pc(mp[0])} 🌙${pc(mp[1])} ⭐${pc(mp[2])}`;
+    const mp = posterior(V, me, "hard"), h0 = V.hint[me], d = C - O;
+    let mine = `${V.round}/${V.R}라운드(남은 ${V.R - V.round}) · 칩 나 ${C} : 상대 ${O} (차 ${sg(d)})`;
+    if (V.mark >= 0) mine += ` · 내 귀띔 ${h0 >= 0 ? EM[h0] + MARKS[h0] : "없음"} → ${h0 === V.mark ? "맞았어요" : "틀렸어요"} (귀띔은 50%만 맞아요)`;
+    else mine += ` · 내 귀띔 ${h0 >= 0 ? EM[h0] + MARKS[h0] : "없음"} → 정답 확률 ☀️${pc(mp[0])} 🌙${pc(mp[1])} ⭐${pc(mp[2])}`;
+    if (V.needs.includes(me)) { const lim = V.phase === "first" ? { min: 0, max: V.lim } : V.range; mine += ` · 걸 수 있는 칩 ${rg(lim.min, lim.max)}`; }
     // 💡 추천 + 👉
-    let rec = "상대 차례를 기다려요", why = "";
+    const topK = [0, 1, 2].sort((x, y) => mp[y] - mp[x])[0], ev1 = 3 * mp[topK] - 1;   // 한 칸에 칩 1개를 걸 때의 기대 (정답 확률 × 3배 − 1)
+    let rec, why;
     if (V.needs.includes(me)) {
       const pl = plan(V, me, "hard", () => 0.5);
       rec = pl.total === 0 ? "한 칩도 걸지 않기" : `${bTxt(pl.b)} (모두 ${pl.total}칩)`;
       const winTxt = pl.win !== undefined ? ` 이 베팅으로 끝까지 둬 보면(시뮬레이션) 이길 확률은 약 ${pc(pl.win)}예요.` : "";
       if (V.phase === "first") {
-        why = pl.why === "lead" ? `칩이 2배 넘게 앞서요. 선일 때 0칩으로 지키면 후는 위험을 혼자 떠안아요 (상한은 상대 칩의 절반 = ${V.lim}칩).` :
-          `선은 ${V.lim}칩까지만 걸 수 있어요. 맞히면 3배! 귀띔이 맞을 확률이 50%라 기대값이 높은 ${MARKS[[0, 1, 2].sort((x, y) => mp[y] - mp[x])[0]]}에 몰아요 — 단, 후가 내 베팅을 보고 따라 걸 수 있어요.` + winTxt;
+        why = pl.why === "lead" ? `칩이 2배 넘게 앞서요 (${C} : ${O}). 선일 때 0칩으로 지키면 후는 위험을 혼자 떠안아요 (상한은 상대 칩의 절반 = ${V.lim}칩).` + winTxt :
+          `선은 ${V.lim}칩까지만 걸 수 있어요. 맞히면 3배! ${MARKS[topK]}에 칩 1개를 걸면 기대 ${sg1(ev1)}칩 (정답 확률 ${pc(mp[topK])} × 3배 − 1) — 단, 후가 내 베팅을 보고 따라 걸 수 있어요.` + winTxt;
       } else {
-        why = `후는 최소 ${V.range.min}칩 (선의 2배). 선 베팅과 내 귀띔을 합치면 가장 높은 칸이 ${pc(maxOf(mp))}예요 — ${maxOf(mp) >= 0.62 ? "확신이 크니 올인으로 3배를 노려요." : "나눠 걸면 잃어도 덜 아파요."}` + winTxt;
+        why = `후는 최소 ${V.range.min}칩 (선의 2배). 선 베팅과 내 귀띔을 합치면 가장 높은 칸 ${MARKS[topK]}${iga(MARKS[topK])} ${pc(mp[topK])}예요 (칩 1개당 기대 ${sg1(ev1)}칩) — ${mp[topK] >= 0.62 ? "확신이 크니 올인으로 3배를 노려요." : "나눠 걸면 잃어도 덜 아파요."}` + winTxt;
       }
-    } else if (V.phase === "reveal") { rec = "결과를 보고 다음 라운드를 준비해요"; }
+    } else if (V.phase === "reveal" && last) {
+      const net = last.gain[me] - sum(last.bets[me]), nf = 1 - V.first === me;
+      rec = `결과를 보고 다음 라운드를 준비해요 — 이번 라운드 나 ${sg(net)}칩 (칩 ${C} : ${O})`;
+      why = `정답은 ${EM[last.mark]}${MARKS[last.mark]}${last.hint && last.hint[me] >= 0 ? `, 내 귀띔(${EM[last.hint[me]]})은 ${last.hint[me] === last.mark ? "맞았어요" : "틀렸어요"}` : ""}. ${V.round >= V.R ? "이번이 마지막 라운드였어요." : `남은 ${V.R - V.round}라운드 · `}${V.round >= V.R ? "" : nf ? `다음엔 내가 선이라 한도 ${Math.min(C, Math.floor(O / 2))}칩` : `다음엔 상대가 선이라 나는 후 (상대 한도 ${Math.min(O, Math.floor(C / 2))}칩 → 나는 최대 ${Math.min(2 * Math.min(O, Math.floor(C / 2)), C)}칩 맞춰야 할 수 있어요)`}.`;
+    } else if (V.phase === "first") {   // 내가 후, 상대(선)가 아직 안 걸었어요
+      rec = `상대가 먼저 걸어요 — 상대는 0~${limOpp}칩, 내가 걸어야 할 최소 칩은 0~${Math.min(2 * limOpp, C)}칩 (상대 베팅의 2배)`;
+      why = `나는 후라 상대가 칸별로 건 칩을 보고 따라 걸 수 있어요. 지금 정답 확률은 내 귀띔만으로 가장 높은 칸 ${MARKS[topK]}${iga(MARKS[topK])} ${pc(mp[topK])} — 상대가 한 칸에 몰아 걸면 그 칸의 확률이 올라가요 (상대 귀띔이 맞을 확률 50%).`;
+    } else {   // 내가 선, 상대(후)가 거는 중
+      const mt = sum(V.bets[me] || [0, 0, 0]), evb = V.bets[me] ? 3 * (mp[0] * V.bets[me][0] + mp[1] * V.bets[me][1] + mp[2] * V.bets[me][2]) - mt : 0;
+      rec = `상대(후)가 거는 중이에요 — 내가 건 ${mt}칩의 2배 이상이라 ${Math.min(2 * mt, O) === O ? `상대는 ${O}칩 올인` : rg(Math.min(2 * mt, O), O)}`;
+      why = `내 베팅(${bTxt(V.bets[me]) || "0칩"})은 정답이 나오면 3배예요. 지금 확률로 이번 라운드 기대 ${sg1(evb)}칩 (맞는 칸 확률 × 3배 − 건 칩). 상대는 내 베팅 칸을 보고 따라 걸 수 있어요.`;
+    }
     return { opp: o, mine, rec, why };
   }
 
-  return { id: "gn-sunmoon", MARKS, EM, START, TRUTH, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, posterior, plan, limitFirst, rangeSecond, sum };
+  return { id: "gn-sunmoon", MARKS, EM, START, TRUTH, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, posterior, plan, compareBets, limitFirst, rangeSecond, sum };
 });

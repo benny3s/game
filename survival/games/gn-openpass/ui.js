@@ -220,6 +220,48 @@
     const mx = V.ranks ? Math.max(...V.ranks) : 0, lows = V.ranks ? V.ranks.map((x, i) => (x === mx ? i + 1 : 0)).filter(Boolean) : [];
     return `우승 ${first.join("·")}번 (${G.showVal(V.vals[first[0] - 1])})${lows.length < V.n ? ` · 가장 작은 값 ${lows.join("·")}번 (${G.showVal(V.vals[lows[0] - 1])})` : ""}`;
   }
+  // ── 🎞️ 복기 고리 ──
+  // 행동 한 줄 글. V = 그 수를 두기 전 그 자리 view (없어도 됨)
+  function actText(a, V) {
+    if (!a || typeof a !== "object") return "—";
+    if (a.t === "buy") { if (!Array.isArray(a.p) || a.p.length !== 3) return "추가 팩 구입"; const p = a.p.map(x => +x || 0); return p.some(Boolean) ? `${G.packTxt(p)} 구입 (가넷 ${G.buyCost(p)}개)` : "추가 팩 안 사요"; }
+    if (a.t === "submit") return a.sel && typeof a.sel === "object" ? `카드 20장 제출 · ${G.selTxt(a.sel)}` : "카드 20장 제출";
+    if (a.t === "open" || a.t === "pass") {
+      const s = V && V.phase === "play" && V.cur >= 0 ? V.cur : -1, col = s >= 0 && V.backs && V.backs[s] ? V.backs[s][V.pos[s]] : null;
+      const cd = V && s >= 0 && V.decks && V.decks[s] && V.decks[s][V.pos[s]];   // 다 공개된 view(끝난 뒤)면 앞면까지
+      const head = col ? `${G.BACK_NAME[col]} 뒷면 카드` : "카드";
+      if (a.t === "open") return cd ? `${head} 오픈 → ${cardTxt(cd.b, cd.f)}` : `${head} 오픈`;
+      return `${head} 패스${s >= 0 ? ` (${V.passes[s] + 1}/${G.MAXPASS}번째)` : ""}`;
+    }
+    return "—";
+  }
+  // 내 수(myA)와 고급 AI 수(bestA) 를 같은 평가로 재요. 비교 못 하면 null
+  //  · 오픈/패스 = 이길 확률 차이 (먼저 끝낸 사람이 있으면 지금 최고를 넘길 확률) · 구입/제출 = 그 덱끼리 맞붙었을 때 내 덱이 질 확률
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || typeof myA !== "object" || typeof bestA !== "object") return null;
+    if (JSON.stringify(myA) === JSON.stringify(bestA)) return null;   // 같은 수
+    const k = info && Number.isInteger(info.k) ? info.k : 0, base = ((((info && info.seed) | 0) ^ Math.imul(k + 1, 0x9e3779b1)) >>> 0) || 1;
+    const pc = x => Math.round(x * 100) + "%", cap = (sev, same) => Math.max(0, Math.min(same ? 50 : 100, Math.round(sev)));   // 같은 수를 고급 AI 도 두는 경우(info.same)는 큰 실수로 안 셈
+    const same = !!(info && info.same);
+    if (V.phase === "play" && (myA.t === "open" || myA.t === "pass") && (bestA.t === "open" || bestA.t === "pass")) {
+      const ev = G.evalPlay(V, seat, base, 500);
+      if (!ev || ev.pass === null) return null;
+      const mine = myA.t === "open" ? ev.open : ev.pass, best = bestA.t === "open" ? ev.open : ev.pass, loss = Math.max(0, best - mine);
+      const col = V.backs && V.backs[seat] ? G.BACK_NAME[V.backs[seat][V.pos[seat]]] : "";
+      const lead = ev.win ? `지금 최고(${G.showVal(ev.T)})를 넘길 확률` : `이길 확률(상대 ${ev.nOpp}명도 내 덱과 비슷하다고 볼 때)`;
+      return { sev: cap(100 * loss / 0.25, same), why: `${col ? col + " 뒷면 카드 · " : ""}${lead}: 고급 AI 수(${bestA.t === "open" ? "오픈" : "패스"}) 약 ${pc(best)} → 내 수(${myA.t === "open" ? "오픈" : "패스"}) ${pc(mine)} · 끝까지 해 봤을 때 대표 값 오픈 약 ${ev.vOpen} vs 패스 약 ${ev.vPass} (칸 ${V.boards[seat].length}/${G.SLOTS} · 패스 ${V.passes[seat]}/${G.MAXPASS})` };
+    }
+    if (V.phase === "buy" && myA.t === "buy" && Array.isArray(myA.p) && Array.isArray(bestA.p)) {
+      const mp = myA.p.map(x => +x || 0), bp = bestA.p.map(x => +x || 0);
+      const a = G.evalBuy(mp, base, 600), b = G.evalBuy(bp, base + 1, 600), pw = G.beatProb(a.out, b.out);
+      return { sev: cap(200 * (0.5 - pw), same), why: `각자 그 팩으로 가장 좋게 20장을 골라 맞붙으면 내 덱이 이길 확률 약 ${pc(pw)} (대표 값 내 구입 약 ${G.lgShow(a.v)} vs 고급 AI 구입 약 ${G.lgShow(b.v)}) · 내 구입 ${G.packTxt(mp)} / 고급 AI ${G.packTxt(bp)}` };
+    }
+    if (V.phase === "submit" && myA.t === "submit" && myA.sel && bestA.sel) {
+      const a = G.evalDeck(myA.sel, base, 600), b = G.evalDeck(bestA.sel, base + 1, 600), pw = G.beatProb(a.out, b.out);
+      return { sev: cap(200 * (0.5 - pw), same), why: `이 20장끼리 맞붙으면 내 덱이 이길 확률 약 ${pc(pw)} (대표 값 내 덱 약 ${G.lgShow(a.v)} vs 고급 AI 덱 약 ${G.lgShow(b.v)}) · 내 덱 ${G.selTxt(myA.sel)} / 고급 AI ${G.selTxt(bestA.sel)}` };
+    }
+    return null;
+  }
   function tutorial() {
     style();
     const cells = (arr, hl) => `<div class="op-sl">${[...Array(G.SLOTS).keys()].map(i => { const f = arr[i]; return f === undefined ? `<div class="op-s"></div>` : `<div class="op-s f ${typeof f === "string" ? "sy" : ""} ${hl && hl.includes(i) ? "dim" : ""}" style="background:#334155">${face(f)}</div>`; }).join("")}</div>`;
@@ -263,6 +305,8 @@
     sub: V => (V.over ? "끝" : V.phase === "buy" ? "팩 구입" : V.phase === "submit" ? "카드 제출" : `${V.vals.filter(Boolean).length}/${V.n}명 끝`),
     chip: (V, i) => ({ t: V.phase === "play" || V.over ? (V.vals[i] ? G.showVal(V.vals[i]) : `${V.boards[i].length}/${G.SLOTS}`) : V.phase === "buy" ? (V.buyDone[i] ? "구입 ✓" : "구입 중") : (V.subDone[i] ? "제출 ✓" : "고르는 중"), on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (이길 확률 · 덱 맞대결로 고급 AI 수와 견줌)
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

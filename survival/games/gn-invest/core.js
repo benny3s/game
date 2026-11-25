@@ -138,27 +138,94 @@
     return { t: "bid", v: Math.max(0, v | 0), d: Math.max(0, d | 0) };
   }
 
+  // ── 복기 평가 (ai 의 선택은 안 바꿈 · 받은 view 도 안 바꿈 · 난수는 받은 씨앗만) ──
+  // 다른 사람이 낼 돈 모형: hard 와 같은 구조 — 공격 라운드(투자 크게 · 기부 조금) / 방어 라운드(투자 0 · 기부 위주) / 마지막 라운드(남은 돈 거의 전부).
+  // 공개된 합계로 다른 사람의 남은 돈 · 씀씀이를 어림하고, 그 크기를 모형에 맞춰요.
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  function oppCash(V) {
+    const n = V.n; let c0 = V.cash;
+    for (const h of V.hist) c0 += (h.mv || 0) + (h.md || 0);   // 처음 가진 돈 = 지금 돈 + 내가 쓴 돈
+    let co = c0, spendSum = 0, bSum = 0;
+    for (const h of V.hist) { bSum += co / (V.rounds - h.r); const sp = (h.ti + h.td - (h.mv || 0) - (h.md || 0)) / (n - 1); spendSum += sp; co -= sp; }
+    return { co: Math.max(1, co), sf: V.hist.length ? clamp(spendSum / (1.28 * bSum), 0.6, 1.6) : 1, c0 };
+  }
+  function oppWorlds(V, me, r, K) {
+    const n = V.n, R = V.rounds - V.round, oc = oppCash(V), out = [];
+    const gz = () => { let u = 0; while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); };
+    for (let k = 0; k < K; k++) {
+      const v = Array(n).fill(0), d = Array(n).fill(0);
+      for (let j = 0; j < n; j++) {
+        if (j === me) continue;
+        const cj = Math.max(1, oc.co * (0.7 + 0.6 * r())), z = gz();
+        let vj, dj;
+        if (R === 1) { vj = Math.round(cj * clamp(0.62 + 0.05 * z, 0.3, 0.9)); dj = Math.round(cj - vj); }
+        else {
+          const b = cj / R * oc.sf;
+          if (r() < (R <= 3 ? 0.5 : 0.36)) { vj = Math.round(Math.max(2, b * 2.1 * Math.exp(0.3 * z))); dj = Math.round(b * 0.25); }
+          else { vj = 0; dj = Math.max(1, Math.round(b * 0.7 * Math.exp(0.35 * z))); }
+          if (vj + dj > cj) { const s = cj / (vj + dj); vj = Math.floor(vj * s); dj = Math.floor(dj * s); }
+        }
+        v[j] = vj; d[j] = dj;
+      }
+      out.push({ v, d });
+    }
+    return out;
+  }
+  // 남은 돈의 값: 남은 라운드에 나눠 쓸 돈 (쓸수록 한 라운드당 효과는 줄어요 · 마지막 라운드 뒤 남은 돈은 값이 없어요)
+  const futureVal = (C, R, beta) => (R <= 0 ? 0 : 1.3 * R * (1 - Math.exp(-C / (R * beta))));
+  // 내 (투자 v, 기부 d) 를 모형 세계에서 겨뤄 본 결과: 대주주가 될 확률 · 수전노가 될 확률 · 쓰는 돈의 값을 뺀 기대 점수(표식 단위)
+  function evalBids(V, me, bids, seed, K) {
+    const worlds = oppWorlds(V, me, sampler(seed), K || 240), R = V.rounds - V.round, C = V.cash, beta = Math.max(1, 1.1 * C / Math.max(1, R));
+    const maxMis = Math.max(...V.misC), wM = 1 + (V.misC[me] > 0 && V.misC[me] >= maxMis ? 0.5 : 0);
+    return bids.map(b => {
+      let big = 0, mis = 0;
+      for (const w of worlds) {
+        const v = w.v.slice(), d = w.d.slice(); v[me] = b.v; d[me] = b.d;
+        const bg = pickBig(v), ms = pickMiser(d, bg);
+        if (bg === me) big++; if (ms.includes(me)) mis++;
+      }
+      const pBig = big / worlds.length, pMis = mis / worlds.length, s = b.v + b.d;
+      const cost = R > 1 ? futureVal(C, R - 1, beta) - futureVal(Math.max(0, C - s), R - 1, beta) : 0;
+      return { v: b.v, d: b.d, pBig, pMis, spend: s, cost, util: pBig - wM * pMis - cost };
+    });
+  }
+
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   function sampler(seed) { let a = (seed >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   const won = x => `${x * 1000}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "원";
+  const pct = x => Math.round(x * 100) + "%", sg2 = x => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2);
   function coach(V, me, since, names) {
     const nm = i => (i === me ? "나" : (names && names[i]) || `${i + 1}번`);
+    const seated = Number.isInteger(me) && me >= 0 && V.bigC && me < V.n, mxB = Math.max(...V.bigC), mxM = Math.max(...V.misC);
+    const marks = `표식(대주주/수전노): ${[...Array(V.n).keys()].map(i => `${nm(i)} ${V.bigC[i]}/${V.misC[i]}`).join(" · ")}`;
     if (V.over) {
       const first = V.ranks.map((x, i) => (x === 0 ? i : -1)).filter(i => i >= 0);
-      return { opp: V.draw ? "수전노 표식이 모두 같아 무승부예요." : `최하위(수전노 최다): ${V.losers.map(nm).join(" · ")}`, mine: `내 표식 — 대주주 ${V.bigC[me]} · 수전노 ${V.misC[me]}`, rec: V.draw ? "무승부" : first.includes(me) ? "이겼어요!" : V.losers.includes(me) ? "수전노가 가장 많았어요" : "아깝네요", why: "수전노가 가장 많으면 최하위, 나머지 중 대주주가 가장 많은 사람이 우승이에요." };
+      return {
+        opp: (V.draw ? "수전노 표식이 모두 같아 무승부예요." : `최하위(수전노 최다 ${mxM}개): ${V.losers.map(nm).join(" · ")}`) + ` · ${marks}`,
+        mine: seated ? `내 표식 — 대주주 ${V.bigC[me]} · 수전노 ${V.misC[me]} (대주주 최다 ${mxB} · 수전노 최다 ${mxM})${V.cashes ? ` · 남은 돈 ${won(V.cashes[me])}` : ""}` : `대주주 최다 ${mxB} · 수전노 최다 ${mxM}`,
+        rec: V.draw ? "무승부" : seated && first.includes(me) ? "이겼어요!" : seated && V.losers.includes(me) ? "수전노가 가장 많았어요" : "아깝네요",
+        why: `수전노가 가장 많으면(${mxM}개) 최하위, 나머지 중 대주주가 가장 많은(${Math.max(...V.bigC.filter((x, i) => !V.losers.includes(i) || V.draw))}개) 사람이 우승이에요. 9라운드에 대주주 ${V.bigC.reduce((s, x) => s + x, 0)}번 · 수전노 ${V.misC.reduce((s, x) => s + x, 0)}번이 나왔어요.`,
+      };
     }
-    const o = observe(V), last = V.hist.length ? V.hist[V.hist.length - 1] : null;
-    const opp = V.hist.length ? `지난 라운드까지 다른 사람 평균: 투자 ${o.aInv.toFixed(1)}천 원 · 기부 ${o.aDon.toFixed(1)}천 원 / 라운드${last ? ` · 지난 라운드 대주주 ${last.big >= 0 ? nm(last.big) : "없음"} · 수전노 ${last.miser.map(nm).join("·")}` : ""}.` : "아직 공개된 정보가 없어요 — 첫 라운드예요.";
-    const mine = `${V.round + 1}/${V.rounds} 라운드 · 남은 돈 ${won(V.cash)} · 내 표식 대주주 ${V.bigC[me]} / 수전노 ${V.misC[me]} · 최다 수전노 ${Math.max(...V.misC)}`;
+    if (!seated) return { opp: `구경 중이에요 — ${marks}`, mine: `${V.round + 1}/${V.rounds} 라운드`, rec: "자리에 앉으면 내 차례마다 알려 드려요", why: "투자가 가장 많으면 대주주, 기부가 가장 적으면 수전노(대주주는 면제)예요. 수전노가 가장 많으면 최하위, 나머지 중 대주주가 가장 많으면 우승이에요." };
+    const o = observe(V), oc = oppCash(V), last = V.hist.length ? V.hist[V.hist.length - 1] : null, R = V.rounds - V.round;
+    const opp = V.hist.length ? `지난 라운드까지 다른 사람 평균: 투자 ${o.aInv.toFixed(1)}천 원 · 기부 ${o.aDon.toFixed(1)}천 원 / 라운드 (남은 돈 어림 ${Math.round(oc.co)}천 원)${last ? ` · 지난 라운드 대주주 ${last.big >= 0 ? nm(last.big) : "없음"} · 수전노 ${last.miser.map(nm).join("·")}` : ""} · ${marks}`
+      : `아직 공개된 정보가 없어요 — 첫 라운드예요. 다들 ${won(oc.c0)}으로 시작해서 라운드마다 평균 약 ${won(Math.round(oc.c0 / V.rounds))}씩 쓸 수 있어요 · ${marks}`;
+    const mine = `${V.round + 1}/${V.rounds} 라운드 · 남은 돈 ${won(V.cash)}(라운드당 평균 ${won(Math.round(V.cash / R))}) · 내 표식 대주주 ${V.bigC[me]} / 수전노 ${V.misC[me]} · 대주주 선두 ${mxB} · 수전노 최다 ${mxM}${V.misC[me] > 0 && V.misC[me] >= mxM ? " (내가 최다 — 최하위 위험)" : ""}`;
     if (!V.needs.includes(me)) return { opp, mine, rec: "다른 사람을 기다려요", why: "이미 냈어요." };
-    const p = plan(V, me, "hard", sampler(V.round * 97 + V.hist.length * 13 + me + 7));
-    const a = ai(V, me, "hard", sampler(V.round * 97 + V.hist.length * 13 + me + 7));
-    const rec = `투자 ${won(a.v)} · 기부 ${won(a.d)}`;
-    const why = p.mode === "last" ? "마지막 라운드예요: 남은 돈은 끝나면 쓸모가 없으니 전부 써요. 투자 6 · 기부 4 정도로 나눠 대주주도 노리고 수전노도 피해요."
-      : p.mode === "atk" ? `이번 라운드는 대주주를 노려요: 남은 돈을 남은 라운드로 나눈 예산(${won(Math.round(V.cash / (V.rounds - V.round)))})의 약 2배를 투자하고 기부는 조금만 해요. 같은 금액을 낸 사람이 있으면 대주주가 못 되고, 못 되면 수전노까지 받을 수 있어요.`
-        : `이번 라운드는 수전노를 피해요: 투자는 하지 않고 예산(${won(Math.round(V.cash / (V.rounds - V.round)))})의 70% 정도를 기부해요. 기부가 가장 적은 사람이 수전노예요 (대주주는 면제). 돈은 남겨 봐야 쓸모없으니 골고루 써요.`;
+    const sd = V.round * 97 + V.hist.length * 13 + me + 7, p = plan(V, me, "hard", sampler(sd)), a = ai(V, me, "hard", sampler(sd)), b = V.cash / R;
+    const dAlt = Math.min(V.cash, Math.max(1, Math.round(b * 0.7))), vAlt = Math.min(V.cash, Math.round(b * 2.1));
+    const [er, ed, ea] = evalBids(V, me, [{ v: a.v, d: a.d }, { v: 0, d: dAlt }, { v: vAlt, d: Math.min(V.cash - vAlt, Math.round(b * 0.25)) }], sd + 31, 240);
+    const cmp = e => `투자 ${won(e.v)} · 기부 ${won(e.d)} → 대주주 ${pct(e.pBig)} · 수전노 ${pct(e.pMis)} · 기대 점수 ${sg2(e.util)}`;
+    const rec = `투자 ${won(a.v)} · 기부 ${won(a.d)} (어림: 대주주 ${pct(er.pBig)} · 수전노 ${pct(er.pMis)})`;
+    const head = p.mode === "last" ? "마지막 라운드예요: 남은 돈은 끝나면 쓸모가 없으니 전부 써요. 투자 6 · 기부 4 정도로 나눠 대주주도 노리고 수전노도 피해요."
+      : p.mode === "atk" ? `이번 라운드는 대주주를 노려요: 남은 돈을 남은 라운드로 나눈 예산(${won(Math.round(b))})의 약 2배를 투자하고 기부는 조금만 해요. 같은 금액을 낸 사람이 있으면 대주주가 못 되고, 못 되면 수전노까지 받을 수 있어요.`
+        : `이번 라운드는 수전노를 피해요: 투자는 하지 않고 예산(${won(Math.round(b))})의 70% 정도를 기부해요. 기부가 가장 적은 사람이 수전노예요 (대주주는 면제). 돈은 남겨 봐야 쓸모없으니 골고루 써요.`;
+    const bestAlt = ed.util > ea.util ? ["방어", ed] : ["공격", ea];
+    const note = R > 1 && bestAlt[1].util > er.util + 0.3 ? ` 모형으로는 ${bestAlt[0] === "방어" ? "방어가" : "공격이"} 더 안전해 보여요 (기대 점수 ${sg2(bestAlt[1].util)} vs ${sg2(er.util)}) — 대주주 표식을 모으려고 가끔 공격하되 수전노 위험을 늘 같이 봐요.` : "";
+    const why = R === 1 ? `${head} 비교(다른 사람은 남은 돈 어림 ${Math.round(oc.co)}천 원 기준): ${cmp(er)}.` : `${head} 비교(다른 사람 모형 기준, 쓰는 돈의 값 뺌): 추천 ${cmp(er)} / 방어 ${cmp(ed)} / 공격 ${cmp(ea)}.${note}`;
     return { opp, mine, rec, why };
   }
 
-  return { id: "gn-invest", ROUNDS, CASH, pickBig, pickMiser, rankAll, init, needs, apply, view, over, ranks, legal, auto, advance, ai, plan, observe, coach, won, TIER };
+  return { id: "gn-invest", ROUNDS, CASH, pickBig, pickMiser, rankAll, init, needs, apply, view, over, ranks, legal, auto, advance, ai, plan, observe, oppCash, oppWorlds, evalBids, sampler, coach, won, TIER };
 });

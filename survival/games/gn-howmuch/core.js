@@ -163,7 +163,8 @@
     return V.guests.map(g => Math.max(-0.9, Math.min(0.9, Math.log(Math.max(1, g.total) / sm) * 0.8)));
   }
   function sampler(seed) { let a = (seed >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-  function sampleM(V, K, r) {
+  // 알아낸 정보에 맞는 손님 가격 5개를 K 번 어림해 뽑아요 (복기 · 정보 질문 평가도 같이 씀)
+  function sampleWorlds(V, K, r) {
     const med = POOL[V.itemId].med, bias = guestBias(V), facts = [];
     if (V.pubAns) facts.push(V.pubAns); if (V.priv) facts.push(V.priv);
     const g = () => { let u = 0; while (u === 0) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); };
@@ -176,10 +177,11 @@
         best = pr;
         if (facts.every(f => f.kind === "price" || 1 + pr.filter(x => x > pr[f.guest]).length === f.ans)) break;
       }
-      out.push(Math.max(...best));
+      out.push(best);
     }
-    return out.sort((a, b) => a - b);
+    return out;
   }
+  function sampleM(V, K, r) { return sampleWorlds(V, K, r).map(pr => Math.max(...pr)).sort((a, b) => a - b); }
   const quant = (arr, q) => arr[Math.max(0, Math.min(arr.length - 1, Math.floor(q * arr.length)))];
   const erf = x => { const t = 1 / (1 + 0.3275911 * Math.abs(x)), y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x); return x >= 0 ? y : -y; };
   const Phi = z => 0.5 * (1 + erf(z / Math.SQRT2));
@@ -212,6 +214,35 @@
     p = Math.max(1, Math.min(mx, p));
     return { p, med: quant(samples, 0.5), q10: quant(samples, 0.1), q90: quant(samples, 0.9), pw: bestP, best: bestB, lam };
   }
+  // ── 복기 평가 (ai 의 선택은 안 바꿈 · 받은 view 도 안 바꿈 · 난수는 받은 씨앗만) ──
+  // 내 제시가 b 일 때 이길 확률 · 예산의 값을 뺀 기대 점수 (bidPlan 과 같은 모형)
+  function evalBids(V, me, bids, seed) {
+    const T = TIER.hard, samples = sampleM(V, T.K, sampler(seed)), others = V.n - 1, left = V.left[me], P = V.pts;
+    const lam = T.kappa * (ptsLeft(V) * 0.4) / Math.max(1, left);
+    return {
+      med: quant(samples, 0.5), q10: quant(samples, 0.1), q90: quant(samples, 0.9), lam, P,
+      bids: bids.map(b => {
+        let pw = 0;
+        for (const M of samples) { if (b > M) continue; let q = 1; for (let o = 0; o < others; o++) q *= 1 - pOtherAbove(b, M); pw += q; }
+        pw /= samples.length;
+        return { b, pw, cost: lam * b, util: P * pw - lam * b };
+      }),
+    };
+  }
+  // 정보 질문 평가: 질문마다 '최고가(M)의 불확실성을 몇 % 줄이는가' (손님 가격 어림 세계를 답에 따라 묶어 분산이 줄어드는 비율) · 손님마다 최고가를 냈을 확률
+  function infoValue(V, seed) {
+    const W = sampleWorlds(V, 300, sampler(seed)), N = W.length, lnM = W.map(pr => Math.log(Math.max(...pr)));
+    const mean = a => a.reduce((s, x) => s + x, 0) / a.length, mAll = mean(lnM), vAll = mean(lnM.map(x => (x - mAll) * (x - mAll))) || 1e-9;
+    const red = key => { const g = new Map(); W.forEach((pr, i) => { const k = key(pr, i); if (!g.has(k)) g.set(k, []); g.get(k).push(lnM[i]); }); let w = 0; for (const a of g.values()) { const m = mean(a); w += a.reduce((s, x) => s + (x - m) * (x - m), 0); } return Math.max(0, Math.min(1, 1 - (w / N) / vAll)); };
+    const price = [], rank = [], pMax = [];
+    for (let g = 0; g < 5; g++) {
+      const sorted = W.map(pr => pr[g]).sort((a, b) => a - b), cut = []; for (let q = 1; q < 10; q++) cut.push(sorted[Math.floor(q * N / 10)]);
+      price.push(red(pr => cut.filter(c => pr[g] >= c).length));
+      rank.push(red(pr => 1 + pr.filter(x => x > pr[g]).length));
+      pMax.push(W.filter(pr => pr[g] === Math.max(...pr)).length / N);
+    }
+    return { price, rank, pMax };
+  }
   // 정보 질문 고르기: 합계가 큰 손님(최고가를 낼 가능성이 큼)의 가격을 물음
   function askPlan(V, me, tier, r) {
     const order = V.guests.map((g, i) => i).sort((a, b) => V.guests[b].total - V.guests[a].total);
@@ -234,19 +265,59 @@
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   const won = x => (x >= 100000000 ? `${(x / 100000000).toFixed(x % 100000000 ? 2 : 0)}억` : x >= 10000 ? `${(x / 10000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}만` : String(x)) + "원";
   const fmt = x => Math.round(x).toLocaleString("ko-KR") + "원";
+  const pct = x => Math.round(x * 100) + "%";
+  const pct1 = x => (x < 0.01 ? "1% 미만" : Math.round(x * 100) + "%");
+  // 받침에 맞춰 조사 붙이기 (이름 · 숫자 끝)
+  const jp = (w, a, b) => { w = String(w); const c = w.slice(-1), k = c.charCodeAt(0); const t = k >= 0xAC00 && k <= 0xD7A3 ? (k - 0xAC00) % 28 !== 0 : /[0-9]/.test(c) ? "013678".includes(c) : false; return w + (t ? a : b); };
+  const sg2 = x => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2);
   function coach(V, me, since, names) {
-    if (V.over) { const best = Math.max(...V.points); return { opp: "게임이 끝났어요.", mine: `내 승점 ${V.points[me]} · 최고 ${best}`, rec: V.ranks[me] === 0 ? "우승이에요!" : "예산 배분을 돌아봐요 — 10라운드 4점이 승부처예요", why: "" }; }
-    if (V.phase === "reveal") { const r = V.res; return { opp: r ? `최고가 M = ${fmt(r.M)} · ${r.winner < 0 ? "이번 판 득점 없음" : `${r.winner === me ? "내가" : (names && names[r.winner]) || `${r.winner + 1}번이`} +${r.pts}점`}` : "", mine: `승점 나 ${V.points[me]} · 남은 예산 ${won(V.left[me])}`, rec: "결과를 보고 다음 판을 준비해요", why: "" }; }
-    const known = []; if (V.pubAns) known.push(`공개정보: ${V.guests[V.pubAns.guest].name} ${V.pubAns.kind === "price" ? `가격 ${fmt(V.pubAns.ans)}` : `${V.pubAns.ans}번째로 높음`}`);
-    if (V.priv) known.push(`내 정보: ${V.guests[V.priv.guest].name} ${V.priv.kind === "price" ? `가격 ${fmt(V.priv.ans)}` : `${V.priv.ans}번째로 높음`}`);
+    const seated = Number.isInteger(me) && me >= 0 && me < V.n, nm = i => (i === me ? "나" : (names && names[i]) || `${i + 1}번`);
+    const gname = g => `${V.guests[g].em}${V.guests[g].name}`;
+    const qtxt = a => `${gname(a.guest)} ${a.kind === "price" ? `가격 ${fmt(a.ans)}` : `${a.ans}번째로 높음`}`;
+    if (V.over) {
+      const best = Math.max(...V.points), H = V.hist || [], won0 = H.filter(h => h.winner >= 0).length, dupN = H.filter(h => h.dup.some(Boolean)).length, overN = H.filter(h => h.over.every(Boolean)).length;
+      const rk = seated && V.ranks ? V.ranks[me] + 1 : 0;
+      return {
+        opp: `승점: ${V.points.map((x, i) => `${nm(i)} ${x}`).join(" · ")}${V.last10 >= 0 ? ` · 10라운드 4점 득점: ${nm(V.last10)}` : " · 10라운드는 아무도 득점하지 못했어요"}`,
+        mine: seated ? `내 승점 ${V.points[me]} · 최고 ${best} (${rk}위) · 남은 예산 ${won(V.left[me])}` : `최고 승점 ${best}`,
+        rec: seated ? (V.ranks[me] === 0 ? "우승이에요!" : "예산 배분을 돌아봐요 — 10라운드 4점이 승부처예요") : "끝났어요",
+        why: `${H.length}판 중 득점이 나온 판 ${won0}번 · 같은 값 무효가 있던 판 ${dupN}번 · 모두 최고가(M) 초과로 득점이 없던 판 ${overN}번이었어요. 승점은 1×7 · 2 · 2 · 4 (합 15), 같으면 10라운드 승자가 우승해요.`,
+      };
+    }
+    if (V.phase === "reveal") {
+      const r = V.res, win = r ? r.winner : -1, mb = r && seated ? r.bids[me] : null;
+      let why = "";
+      if (r && seated) {
+        const ratio = Math.round(100 * mb / r.M), top = win >= 0 ? r.bids[win] : null;
+        why = win === me ? `내 ${fmt(mb)}은 최고가 M 의 ${ratio}%로 M 이하 중 가장 높은 값(겹치는 값 없음)이라 이겼어요 (+${r.pts}점).`
+          : r.over[me] ? `내 ${fmt(mb)}은 M ${fmt(r.M)}의 ${ratio}%라 M 을 넘어 무효예요 — M 의 어림 범위를 벗어났어요.`
+            : r.dup[me] ? `내 ${fmt(mb)}은 다른 사람과 같은 값이라 서로 무효예요 — 끝자리를 어긋나게 해야 해요 (M 의 ${ratio}%).`
+              : win >= 0 ? `내 ${fmt(mb)}(M 의 ${ratio}%)은 유효하지만 ${nm(win)}의 ${fmt(top)}(M 의 ${Math.round(100 * top / r.M)}%)이 더 높아서 졌어요 — ${fmt(top - mb)} 차이.`
+                : `모두 M 을 넘었거나 같은 값이라 득점한 사람이 없어요.`;
+      } else if (r) why = win >= 0 ? `최고가 M ${fmt(r.M)} 이하 중 가장 높은 값(${fmt(r.bids[win])})이 이겼어요.` : "모두 M 을 넘었거나 같은 값이라 득점한 사람이 없어요.";
+      return { opp: r ? `최고가 M = ${fmt(r.M)} · ${win < 0 ? "이번 판 득점 없음" : `${win === me ? "내가" : jp(nm(win), "이", "가")} +${r.pts}점`} · 제시(M 대비): ${r.bids.map((b, i) => `${nm(i)} ${Math.round(100 * b / r.M)}%${r.over[i] ? "🚫" : r.dup[i] ? "⚠️" : ""}`).join(" · ")}` : "", mine: seated ? `승점 나 ${V.points[me]} · 남은 예산 ${won(V.left[me])} · 남은 점수 ${ptsLeft({ round: V.round + 1 })}점` : `남은 점수 ${ptsLeft({ round: V.round + 1 })}점`, rec: "결과를 보고 다음 판을 준비해요", why };
+    }
+    if (!seated) return { opp: "구경 중이에요 — 손님 5명이 몰래 낸 가격 중 최고가(M)가 이번 승부의 기준이에요.", mine: `${V.round}/${V.rounds} 판 · 이번 판 ${V.pts}점`, rec: "자리에 앉으면 내 차례마다 알려 드려요", why: "M 이하 중 가장 높은 값이 이기고, 같은 값은 서로 무효예요." };
+    const known = []; if (V.pubAns) known.push(`공개정보: ${qtxt(V.pubAns)}`);
+    if (V.priv) known.push(`내 정보: ${qtxt(V.priv)}`);
     const r = sampler(V.round * 7919 + V.itemId * 31 + (V.priv ? V.priv.ans | 0 : 0)), S = sampleM(V, 300, r);
-    const oppTxt = `손님 5명이 낸 가격 중 최고가(M)가 이번 승부의 기준이에요. M 이하인 사람 중 가장 높은 값이 이기고, 같은 값은 서로 무효예요. ${known.length ? known.join(" · ") + "." : "아직 알아낸 정보가 없어요."}`;
-    const mineTxt = `이번 판 ${V.pts}점 · 남은 예산 ${won(V.left[me])} (남은 점수 ${ptsLeft(V)}점) · 승점 나 ${V.points[me]} · 추정 M: 중앙 ${won(quant(S, 0.5))} (80% 범위 ${won(quant(S, 0.1))} ~ ${won(quant(S, 0.9))})`;
+    const oppTxt = `손님 5명이 낸 가격 중 최고가(M)가 이번 승부의 기준이에요. M 이하인 사람 중 가장 높은 값이 이기고, 같은 값은 서로 무효예요. ${known.length ? known.join(" · ") + "." : "아직 알아낸 정보가 없어요."} 손님 10개 합계 순위: ${V.guests.map((g, i) => [g.total, i]).sort((a, b) => b[0] - a[0]).map(x => `${gname(x[1])} ${won(x[0])}`).join(" > ")}. 다른 사람 승점 ${V.points.map((x, i) => (i === me ? null : `${nm(i)} ${x}`)).filter(Boolean).join(" · ")}`;
+    const mineTxt = `이번 판 ${V.pts}점 · 남은 예산 ${won(V.left[me])} (남은 점수 ${ptsLeft(V)}점, 라운드당 평균 ${won(Math.round(V.left[me] / Math.max(1, V.rounds - V.round + 1)))}) · 승점 나 ${V.points[me]} · 추정 M: 중앙 ${won(quant(S, 0.5))} (80% 범위 ${won(quant(S, 0.1))} ~ ${won(quant(S, 0.9))})`;
     let rec = "정보를 골라요", why = "";
-    if (V.phase === "info") { const q = askPlan(V, me, "hard", () => 0.5); rec = `${V.guests[q.priv.guest].name}의 ${q.priv.kind === "price" ? "가격" : "순위"} 묻기`; why = "총합이 큰 손님이 최고가를 냈을 가능성이 커요. 가격을 직접 알면 M 의 하한을 잡을 수 있어요."; }
-    else if (V.phase === "bid" && V.needs.includes(me)) { const pl = bidPlan(V, me, "hard", sampler(V.round * 104729 + V.itemId)); rec = pl.p >= 1 ? `약 ${won(pl.p)} (끝자리를 흩뜨려서)` : "낼 수 있는 예산이 없어요"; why = `이길 확률 약 ${Math.round(pl.pw * 100)}%. M 을 넘기면 무효, 남과 같은 값이면 둘 다 무효 — 끝자리를 어긋나게! 예산이 ${won(V.left[me])} 남았으니 ${V.pts >= 4 ? "4점이 걸린 마지막 판을 위해 아껴 둔 만큼 과감하게" : "점수가 큰 뒤 라운드를 위해 너무 많이 쓰지 말아요"}.`; }
+    if (V.phase === "info") {
+      const q = askPlan(V, me, "hard", () => 0.5), iv = infoValue(V, V.round * 7919 + V.itemId * 31 + 5), g = q.priv.guest, o = q.priv.kind === "price" ? "rank" : "price";
+      rec = `${V.guests[g].name}의 ${q.priv.kind === "price" ? "가격" : "순위"} 묻기`;
+      why = `${gname(g)} ${q.priv.kind === "price" ? "가격을" : "순위를"} 물으면 최고가(M)의 불확실성이 약 ${pct(iv[q.priv.kind][g])} 줄어요 (같은 손님의 ${o === "price" ? "가격을" : "순위를"} 물으면 약 ${pct(iv[o][g])}). 10개 합계가 큰 ${jp(gname(g), "은", "는")} 이번에 최고가를 냈을 확률이 약 ${pct(iv.pMax[g])}예요 (가장 작은 손님은 ${pct(Math.min(...iv.pMax))}). 가격을 직접 알면 M 의 하한을 잡을 수 있어요.`;
+    } else if (V.phase === "bid" && V.needs.includes(me)) {
+      const sd = V.round * 104729 + V.itemId, pl = bidPlan(V, me, "hard", sampler(sd));
+      if (pl.p >= 1) {
+        const ev = evalBids(V, me, [Math.max(1, Math.round(pl.p / 2)), pl.p, Math.min(V.bidMax, Math.round(pl.p * 1.5))], sd), [lo, mid, hi] = ev.bids;
+        rec = `약 ${won(pl.p)} (끝자리를 흩뜨려서)`;
+        why = `이길 확률 약 ${pct(pl.pw)} (추정 M 중앙 ${won(quant(S, 0.5))}의 ${pct1(pl.p / Math.max(1, quant(S, 0.5)))}). 비교: ${won(lo.b)} → ${pct(lo.pw)} · ${won(mid.b)} → ${pct(mid.pw)} · ${won(hi.b)} → ${pct(hi.pw)}. M 을 넘기면 무효, 남과 같은 값이면 둘 다 무효 — 끝자리를 어긋나게! 예산이 ${won(V.left[me])} 남았으니 ${V.pts >= 4 ? "4점이 걸린 마지막 판을 위해 아껴 둔 만큼 과감하게" : `이번 판 ${V.pts}점에 쓰는 ${won(pl.p)}은 남은 예산의 ${pct1(pl.p / Math.max(1, V.left[me]))}예요 — 점수가 큰 뒤 라운드를 위해 너무 많이 쓰지 말아요`}.`;
+      } else { rec = "낼 수 있는 예산이 없어요"; why = `남은 예산 ${won(V.left[me])}에서 남은 라운드마다 1원씩은 남겨야 해서 이번 판에는 낼 수 없어요.`; }
+    } else if (V.phase === "bid") { rec = "다른 사람을 기다려요"; why = "이미 제시했어요."; }
     return { opp: oppTxt, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-howmuch", TIER, BUDGET, CAP, ROUNDS, PTS, POOL, GUESTS, GEM, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, bidPlan, askPlan, sampleM, bidMax, answer, maxOf, ptsOf };
+  return { id: "gn-howmuch", TIER, BUDGET, CAP, ROUNDS, PTS, POOL, GUESTS, GEM, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, bidPlan, askPlan, sampleM, sampleWorlds, sampler, evalBids, infoValue, ptsLeft, quant, bidMax, answer, maxOf, ptsOf };
 });

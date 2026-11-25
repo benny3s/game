@@ -89,6 +89,22 @@
       if (t.dataset.a === "bid" && S.v + S.d <= V.cash) { ctx.sfx("pop"); ctx.act({ t: "bid", v: S.v, d: S.d }); }
     };
   }
+  // ── 🎞️ 복기 고리 ──────────────────────────────────────────────
+  function actText(a, V, names) {
+    if (!a || a.t !== "bid" || !Number.isFinite(a.v) || !Number.isFinite(a.d)) return "—";
+    return `투자 ${won(a.v)} · 기부 ${won(a.d)}`;
+  }
+  const f2 = x => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2);
+  const pc = x => Math.round(x * 100) + "%";
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || myA.t !== "bid" || bestA.t !== "bid" || !V.hist || V.cash == null || (info && info.same)) return null;
+    if (myA.v === bestA.v && myA.d === bestA.d) return null;
+    const seed = (((info && info.seed) | 0) ^ Math.imul((((info && info.k) | 0) + 1), 0x9e3779b1)) >>> 0;
+    const [m, b] = G.evalBids(V, seat, [{ v: myA.v, d: myA.d }, { v: bestA.v, d: bestA.d }], seed, 240), R = V.rounds - V.round;
+    const gap = b.util - m.util, sev = Math.max(0, Math.min(100, Math.round(100 * gap / 1.1)));
+    const head = gap < -0.15 ? "내 수의 기대 점수가 더 높게 나와요 — " : gap < 0.15 ? "두 수의 기대 점수가 비슷해요 — " : "";
+    return { sev, why: `${head}대주주가 될 확률 내 수 ${pc(m.pBig)} / 고급 AI ${pc(b.pBig)} · 수전노가 될 확률 ${pc(m.pMis)} / ${pc(b.pMis)} · 쓰는 돈 ${won(m.spend)} / ${won(b.spend)} (남은 돈 ${won(V.cash)}, ${R}라운드) → 기대 점수 ${f2(m.util)} vs ${f2(b.util)} (표식 단위, 남은 돈의 값 뺌)` };
+  }
   function result(V) {
     const first = V.ranks ? V.ranks.map((x, i) => (x === 0 ? i + 1 : 0)).filter(Boolean) : [];
     return `${V.draw ? "무승부 (수전노 표식이 모두 같아요)" : `우승 ${first.join("·")}번 · 최하위 ${V.losers.map(i => i + 1).join("·")}번`} · 대주주 ${V.bigC.join("/")} · 수전노 ${V.misC.join("/")}`;
@@ -129,6 +145,8 @@
     sub: V => (V.over ? "끝" : `${V.round + 1}/${V.rounds} 라운드`),
     chip: (V, i) => ({ t: `🏆${V.bigC[i]} 🪙${V.misC[i]}`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (모형 세계에서 대주주 · 수전노 확률로 두 수를 견줌)
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

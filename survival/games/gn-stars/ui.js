@@ -158,6 +158,44 @@
     ];
   }
 
+  // ── 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 가 쓰는 평가 — 겹침 · 상대 카드 추정 · 별자리 진행 · 폭탄 벌점 — 로 견줌) ──
+  const CEM = G.CEM, pcT = x => Math.round(x * 100) + "%", sgnT = x => ((x = Math.round(x * 10) / 10) >= 0 ? "+" : "−") + Math.abs(x).toFixed(1);
+  const swTxt = s => `${CEM[s.from]}3개 → ${CEM[s.to]}1개 교환`;
+  const swapsTxt = a => (a && Array.isArray(a.swaps) && a.swaps.length ? ` (${a.swaps.filter(s => s && CEM[s.from] && CEM[s.to]).map(swTxt).join(", ")})` : "");
+  const takeStr = t => (Array.isArray(t) ? t.map((x, i) => (x > 0 ? `${i < 4 ? CEM[i] : "💣"}${x}` : "")).filter(Boolean).join(" ") : "") || "빈손";
+  function actText(a, V, names) {
+    if (!a || typeof a !== "object") return "—";
+    if (a.t === "card") return Number.isInteger(a.c) ? `${a.c}번 카드 내기${swapsTxt(a)}` : "—";
+    if (a.t === "take") return Array.isArray(a.take) ? `${takeStr(a.take)} 가져가기${swapsTxt(a)}` : "—";
+    if (a.t === "swap") return CEM[a.from] && CEM[a.to] ? swTxt(a) : "—";
+    return "—";
+  }
+  const sameSw = (a, b) => JSON.stringify((a && a.swaps) || []) === JSON.stringify((b && b.swaps) || []);
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || !V.needs || !V.needs.includes(seat)) return null;
+    const SC = 4;   // 기대 점수 4점(= 카시오페아 한 개 가까이)의 손해가 100
+    const seed = ((((info && info.seed) | 0) ^ Math.imul(((info && info.k) | 0) + 1, 0x9e3779b1) ^ Math.imul(V.round + 1, 0x85ebca6b)) >>> 0) || 1;
+    if (myA.t === "swap") {   // 교환: 별자리 진행 점수가 오르면 좋은 수, 내려가면 손해
+      const m = G.evalActs(V, seat, [myA], seed)[0];
+      if (!m) return null;
+      const inBest = !!(bestA.swaps && bestA.swaps.some(s => s && s.from === myA.from && s.to === myA.to));
+      const sev = inBest || m.ev >= -0.05 ? 0 : Math.min(100, Math.round(100 * -m.ev / SC));
+      return { sev, why: `교환하면 별자리 진행 점수 ${m.from.toFixed(1)} → ${m.to.toFixed(1)} (${sgnT(m.ev)})${inBest ? " · 고급 AI 도 같은 교환을 해요" : m.ev > 0.05 ? "" : " · 이 교환은 점수를 올리지 못해요"}` };
+    }
+    if (myA.t !== bestA.t) return null;
+    if (myA.t === "card" ? myA.c === bestA.c && sameSw(myA, bestA) : JSON.stringify(myA.take) === JSON.stringify(bestA.take) && sameSw(myA, bestA)) return null;   // 같은 수
+    const r = G.evalActs(V, seat, [myA, bestA], seed), m = r[0], b = r[1];
+    if (!m || !b) return null;
+    const gap = b.ev - m.ev;
+    let sev = gap < 0.15 ? 0 : 100 * gap / SC;
+    if (info && info.same) sev = Math.min(sev, 20);   // 고급 AI 도 가끔 두는 수
+    sev = Math.max(0, Math.min(100, Math.round(sev)));
+    const stat = e => (e.kind === "card" ? `겹칠 확률 ${pcT(e.col)} · 기대 점수 ${sgnT(e.ev)}${e.swapGain ? ` (교환 ${sgnT(e.swapGain)} 포함)` : ""}`
+      : `별자리 진행 ${sgnT(e.prog)}${e.pen ? ` · 폭탄 벌점 −${e.pen.toFixed(1)} (폭탄 ${e.b1}개)` : ""} → 합계 ${sgnT(e.ev)}`);
+    const tail = gap >= 0.15 ? ` — 기대 점수 ${gap.toFixed(1)} 차이` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 상대 카드 추정까지 봐요)" : " — 거의 같아요";
+    return { sev, why: `고급 AI 수 (${actText(bestA, V, info && info.names)}): ${stat(b)} / 내 수 (${actText(myA, V, info && info.names)}): ${stat(m)}${tail}` };
+  }
+
   window.SVUI = window.SVUI || {};
   window.SVUI["gn-stars"] = {
     name: "별자리 게임", emoji: "🌟", short: "카드로 별을 가져가요 · 같은 숫자는 제외 · 폭탄은 피해요", min: 4, max: 7, defN: 7, board: false,
@@ -173,6 +211,7 @@
     sub: V => (V.over ? "끝" : `${V.round}라운드 · 별 ${V.bag.reduce((a, b) => a + b, 0)}개 남음`),
     chip: (V, i) => ({ t: `${V.points[i]}점${V.bombs[i] ? ` 💣${V.bombs[i]}` : ""}`, on: V.needs.includes(i) && !V.over, out: V.bombs[i] >= 3 }),
     render, result,
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

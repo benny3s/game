@@ -149,6 +149,29 @@
     sub: V => V.over ? "끝" : `${V.round} / ${V.R}라운드`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (같은 난수로 두 베팅을 끝까지 가상으로 둬 이길 확률을 견줌)
+    actText: (a, V) => {
+      if (!a || a.t !== "bet" || !Array.isArray(a.b) || a.b.length !== 3 || !a.b.every(x => Number.isFinite(x))) return "—";
+      const tot = sum(a.b), role = V && typeof V.seat === "number" ? (V.seat === V.first ? "선 · " : V.seat === V.second ? "후 · " : "") : "";
+      if (tot <= 0) return role + "한 칩도 안 걸음";
+      const on = [0, 1, 2].filter(k => a.b[k] > 0);
+      return role + (on.length === 1 ? `${G.EM[on[0]]}${G.MARKS[on[0]]}에 ${tot}칩 몰아 걸기` : `${on.map(k => `${G.EM[k]}${G.MARKS[k]} ${a.b[k]}칩`).join(" · ")} (모두 ${tot}칩)`);
+    },
+    review: (V, seat, myA, bestA, info) => {
+      if (!V || !myA || !bestA || myA.t !== "bet" || bestA.t !== "bet" || !Array.isArray(myA.b) || !Array.isArray(bestA.b)) return null;
+      if ((V.phase !== "first" && V.phase !== "second") || (seat !== 0 && seat !== 1) || !V.hint || V.hint[seat] === undefined) return null;
+      if (myA.b.join() === bestA.b.join()) return null;
+      const k = info && Number.isFinite(info.k) ? info.k : 0, sd = info && Number.isFinite(info.seed) ? info.seed : 1;
+      const K = 400, [m, b] = G.compareBets(V, seat, myA.b, bestA.b, ((sd ^ Math.imul(k + 1, 0x9e3779b1)) >>> 0) || 1, K);
+      const dW = (b.win - m.win) * 100, pc = x => Math.round(x * 100) + "%";
+      const sev = dW <= 0 ? 0 : Math.round(Math.min(100, dW * 3.4));   // 이길 확률이 1%p 깎일 때마다 3.4점 (약 18%p 깎여야 60점 = 📒)
+      const sg = n => (n > 0 ? "+" : n < 0 ? "−" : "") + Math.abs(n), span = x => { const g = x.b.map(v => 3 * v - x.total); const lo = Math.min(...g), hi = Math.max(...g); return lo === hi ? `${sg(lo)}칩` : `${sg(lo)}~${sg(hi)}칩`; };
+      const tail = `이번 라운드 결과 범위 (정답 칸에 따라) 고급 AI 수 ${span(b)} · 내 수 ${span(m)}`;
+      const why = dW > 2 ? `이길 확률 약 ${pc(b.win)} → 내 수 ${pc(m.win)} (끝까지 ${K}번씩 가상으로 둠) · ${tail}`
+        : dW < -2 ? `이번엔 내 수 쪽이 이길 확률이 더 높게 나왔어요 (내 수 ${pc(m.win)} · 고급 AI 수 ${pc(b.win)}) · ${tail}`
+          : `두 수의 이길 확률이 거의 같아요 (고급 AI 수 ${pc(b.win)} · 내 수 ${pc(m.win)}) · ${tail}`;
+      return { sev, why };
+    },
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

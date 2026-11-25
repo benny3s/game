@@ -219,39 +219,78 @@
     return { t: "bet", kind: bp.kind, n: bp.n };
   }
 
+  // ── 복기 · 선생님용 평가 (ai 와 같은 handPlan · betPlan · rolePlan 식을 그대로 재사용 · 내 귀띔만 씀 · view 를 안 바꿈 · 난수 없음) ──
+  // 한 수의 '상대와의 칩 차이 기대 변화' (ev) + p(이길 · 맞힐 확률). 역할 고르기 = 승부(가장 좋은 손의 값) 대 베팅(기대 이득 − 상대가 받을 보상)
+  function evalAct(V, me, a) {
+    if (!V || !a || typeof a !== "object" || !V.needs || !V.needs.includes(me)) return null;
+    if (V.phase === "role" && a.t === "role") {
+      const hp = handPlan(V, me, "hard", () => 0.5), bp = betPlan(V, me, "hard"), P = bp.P;
+      const best = hp.U.indexOf(Math.max(...hp.U)), cbar = Math.min(V.chips[me], Math.max(1, Math.round(V.chips[me] * 0.4)));
+      if (a.role === "duel") return { kind: "duel", ev: Math.max(...hp.U), p: myOutcome(V, best).win, hand: best };
+      if (a.role === "bet") return { kind: "bet", ev: bp.edge * cbar - V.reward * P.win, p: P.win, pb: bp.kind, noChips: V.chips[me] <= 0 };
+      return null;
+    }
+    if (V.phase !== "play") return null;
+    if (a.t === "hand" && V.duel === me && [0, 1, 2].includes(a.h)) {
+      const hp = handPlan(V, me, "hard", () => 0.5), o = myOutcome(V, a.h);
+      return { kind: "hand", ev: hp.U[a.h], p: o.win, pd: o.draw, h: a.h };
+    }
+    if (a.t === "bet" && V.duel !== me && V.duel >= 0 && (a.kind === "win" || a.kind === "lose" || (a.kind === "draw" && V.drawBet))) {
+      const n = Math.max(1, a.n | 0), bp = betPlan(V, me, "hard"), P = bp.P;
+      return { kind: "betk", ev: bp.e[a.kind] * n, p: a.kind === "win" ? P.win : a.kind === "lose" ? P.lose : P.draw, k: a.kind, n };
+    }
+    return null;
+  }
+
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   const pc = x => Math.round(x * 100) + "%";
+  const sgn = x => ((x = Math.round(x * 10) / 10) >= 0 ? "+" : "−") + Math.abs(x).toFixed(1);
   const KIND = { win: "이긴다", lose: "진다", draw: "비긴다" };
   function coach(V, me, since, names) {
     const nm = i => (names && names[i]) || `${i + 1}번`;
+    if (me !== 0 && me !== 1) me = 0;
     const opp = 1 - me;
-    if (V.over) return { opp: "승부가 끝났어요.", mine: `내 칩 ${V.chips[me]} · 상대 ${V.chips[opp]}`, rec: V.ranks[me] === 0 ? "이겼어요! 한 판 더?" : V.ranks[me] === V.ranks[opp] ? "무승부예요" : "아쉬워요 — 뒤쪽 큰 보상 판이 승부처예요", why: "" };
+    if (V.over) {
+      const h = V.hist || [], duelN = h.filter(x => x.duel === me).length, duelW = h.filter(x => x.duel === me && x.result === 1).length;
+      const bets = h.filter(x => x.duel !== me && x.bet), betW = bets.filter(x => x.bet.d > 0).length, gain = bets.reduce((s, x) => s + x.bet.d, 0), df = V.chips[me] - V.chips[opp];
+      return {
+        opp: `승부가 끝났어요. 총 ${V.total}판${V.ot ? ` (연장 ${V.ot}판 포함)` : ""} · 상대 칩 ${V.chips[opp]}개.`,
+        mine: `내 칩 ${V.chips[me]} : 상대 ${V.chips[opp]} (${df > 0 ? `${df}칩 앞섬` : df < 0 ? `${-df}칩 뒤짐` : "같음"})`,
+        rec: V.ranks[me] === 0 && V.ranks[opp] === 0 ? "무승부예요" : V.ranks[me] === 0 ? "이겼어요! 한 판 더?" : "아쉬워요 — 뒤쪽 큰 보상 판이 승부처예요",
+        why: `마지막 ${h.length}판 기록: 내가 승부한 ${duelN}판 중 ${duelW}판 이겼고, 베팅한 ${bets.length}판 중 ${betW}판 맞혀 ${gain >= 0 ? "+" : "−"}${Math.abs(gain)}칩이었어요.`,
+      };
+    }
     if (V.phase === "reveal") {
-      const r = V.res;
-      return { opp: r ? `${nm(r.duel)}의 손 ${EM[r.hand]}${HAND[r.hand]} vs 표식 ${EM[r.mark]}${HAND[r.mark]} → ${r.result === 1 ? "승" : r.result === 0 ? "무" : "패"}${r.bet ? ` · 베팅 ${KIND[r.bet.kind]} ${r.bet.n}칩 (${r.bet.d >= 0 ? "+" : ""}${r.bet.d})` : ""}` : "", mine: `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]}`, rec: "결과를 보고 다음 판을 준비해요", why: "" };
+      const r = V.res, d = i => (r.after[i] - r.before[i]);
+      return {
+        opp: r ? `${nm(r.duel)}의 손 ${EM[r.hand]}${HAND[r.hand]} vs 표식 ${EM[r.mark]}${HAND[r.mark]} → ${r.result === 1 ? "승" : r.result === 0 ? "무" : "패"}${r.bet ? ` · 베팅 ${KIND[r.bet.kind]} ${r.bet.n}칩 (${r.bet.d >= 0 ? "+" : ""}${r.bet.d})` : ""}` : "",
+        mine: `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]}`, rec: "결과를 보고 다음 판을 준비해요",
+        why: r ? `이번 판 칩 변화: 나 ${r.before[me]}→${r.after[me]} (${d(me) >= 0 ? "+" : "−"}${Math.abs(d(me))}) · 상대 ${r.before[opp]}→${r.after[opp]} (${d(opp) >= 0 ? "+" : "−"}${Math.abs(d(opp))}). 승부 보상 ${r.reward}칩${r.bet ? ` · 베팅 정산 ${r.bet.d >= 0 ? "+" : "−"}${Math.abs(r.bet.d)}칩` : ""}.` : `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]}.`,
+      };
     }
     const hintTxt = V.virtual ? `이번 판은 가상 플레이어 — 표식이 ${EM[V.mark]}${HAND[V.mark]}로 공개돼 있어요` : `증인이 나에게 ${EM[V.hint]}${HAND[V.hint]}라고 귀띔했어요 (맞을 확률 50%, 아니면 나머지 둘 중 하나)`;
     const L = lead(V, me), stage = rem(V) <= 3 ? "막판" : V.round <= 3 ? "초반" : "중반";
     const oppTxt = `${hintTxt}. 상대도 자기만의 귀띔을 받았고, 서로 상대의 귀띔은 몰라요. 보상은 이번 판 ${V.reward}칩 (${stage}).`;
     const mineTxt = `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]} (${L > 0 ? `${L}칩 앞서요` : L < 0 ? `${-L}칩 뒤져요` : "같아요"}) · ${V.round}/${V.R}판${V.ot ? ` (연장 ${V.ot})` : ""}`;
-    let rec = "상대 선택을 기다려요", why = "";
+    const mp = markPost(V), mpTxt = `표식 추정 — ${[0, 1, 2].map(h => `${HAND[h]} ${pc(mp[h])}`).join(" · ")}`;
+    let rec = "상대 선택을 기다려요", why = `${V.phase === "role" ? "상대가 승부 · 베팅 중 하나를 고르는 중이에요" : "상대가 고르는 중이에요"}. ${mpTxt}. 상대가 고르면 이 추정으로 손이나 베팅을 정해요.`;
     if (V.needs.includes(me)) {
       if (V.phase === "role") {
         const p = rolePlan(V, me, "hard", () => 0.5);
         rec = p.role === "duel" ? "승부 (내가 가위바위보)" : "베팅 (상대 승부에 걸기)";
-        why = p.why === "noChips" ? "칩이 없으면 베팅은 못 해요 — 승부로 보상을 노려요." : p.why === "oppNoChips" ? "상대 칩이 없어 내가 승부하면 베팅 손해 없이 보상만 받아요." : `승부는 보상 ${V.reward}칩이 걸려 있지만 상대가 내 손을 읽고 베팅할 수 있어요. 베팅은 귀띔 하나로 상대 손을 짐작해야 해요.`;
+        why = p.why === "noChips" ? "칩이 없으면 베팅은 못 해요 — 승부로 보상을 노려요." : p.why === "oppNoChips" ? "상대 칩이 없어 내가 승부하면 베팅 손해 없이 보상만 받아요." : `승부는 보상 ${V.reward}칩이 걸려 있지만 상대가 내 손을 읽고 베팅할 수 있어요. 베팅은 귀띔 하나로 상대 손을 짐작해야 해요. (기대 칩 차이: 승부 ${sgn(p.Uduel)} · 베팅 ${sgn(p.Vbet)})`;
       } else if (V.duel === me) {
         const hp = handPlan(V, me, "hard", () => 0.5), best = hp.U.indexOf(Math.max(...hp.U)), P = myOutcome(V, best);
         rec = `${EM[best]} ${HAND[best]}`;
-        why = `표식 추정으로 이길 확률 ${pc(P.win)} · 비길 확률 ${pc(P.draw)}. ${V.chips[opp] > 0 ? "상대가 '이긴다'에 걸 거라 예상되면 일부러 져서 칩을 태우는 수도 있어요." : "상대 칩이 없어 걱정 없이 이기러 가요."}${L > 2 ? " 앞서 있으면 표식과 같은 손(비김)으로 굳히는 방법도!" : ""}`;
+        why = `표식 추정으로 이길 확률 ${pc(P.win)} · 비길 확률 ${pc(P.draw)} (기대 칩 차이 ${sgn(hp.U[best])}). ${V.chips[opp] > 0 ? "상대가 '이긴다'에 걸 거라 예상되면 일부러 져서 칩을 태우는 수도 있어요." : "상대 칩이 없어 걱정 없이 이기러 가요."}${L > 2 ? " 앞서 있으면 표식과 같은 손(비김)으로 굳히는 방법도!" : ""}`;
       } else {
         const bp = betPlan(V, me, "hard");
         rec = `${KIND[bp.kind]}에 ${bp.n}칩`;
-        why = `상대는 자기 귀띔을 이기는 손을 낼 가능성이 높아요. 내 귀띔으로 보면 '${KIND[bp.kind]}' 쪽이 유리해요 (이득 ${bp.edge >= 0 ? "+" : ""}${bp.edge.toFixed(2)}칩/1칩). 일부러 지는 수에 당하지 않게 앞서 있으면 소액으로!`;
+        why = `상대는 자기 귀띔을 이기는 손을 낼 가능성이 높아요. 내 귀띔으로 보면 '${KIND[bp.kind]}' 쪽이 유리해요 (맞힐 확률 ${pc(bp.kind === "win" ? bp.P.win : bp.kind === "lose" ? bp.P.lose : bp.P.draw)} · 이득 ${bp.edge >= 0 ? "+" : ""}${bp.edge.toFixed(2)}칩/1칩 → 기대 ${sgn(bp.edge * bp.n)}칩). 일부러 지는 수에 당하지 않게 앞서 있으면 소액으로!`;
       }
     }
     return { opp: oppTxt, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-betrps", VERS, HAND, EM, OT_MAX, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, res3, beatH, loseH, markPost, duelOutcome, myOutcome, betPlan, handPlan, rolePlan, rewardOf };
+  return { id: "gn-betrps", VERS, HAND, EM, OT_MAX, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, evalAct, res3, beatH, loseH, markPost, duelOutcome, myOutcome, betPlan, handPlan, rolePlan, rewardOf };
 });

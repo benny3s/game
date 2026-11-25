@@ -172,6 +172,35 @@
     ];
   }
 
+  // ── 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (고급 AI 와 같은 승부 · 베팅 기대값으로 견줌) ──
+  const pcT = x => Math.round(x * 100) + "%";
+  const sgnT = x => ((x = Math.round(x * 10) / 10) >= 0 ? "+" : "−") + Math.abs(x).toFixed(1);
+  function actText(a, V, names) {
+    if (!a || typeof a !== "object") return "—";
+    if (a.t === "role") return a.role === "duel" ? "승부 (내가 가위바위보)" : a.role === "bet" ? "베팅 (상대 승부에 걸기)" : "—";
+    if (a.t === "hand") return a.h === 0 || a.h === 1 || a.h === 2 ? `${EM[a.h]} ${HAND[a.h]} 내기` : "—";
+    if (a.t === "bet") return KIND[a.kind] ? `'${KIND[a.kind]}'에 ${a.n}칩 베팅` : "—";
+    return "—";
+  }
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || myA.t !== bestA.t || (seat !== 0 && seat !== 1) || !V.needs || !V.needs.includes(seat)) return null;
+    if (myA.role === bestA.role && myA.h === bestA.h && myA.kind === bestA.kind && (myA.n | 0) === (bestA.n | 0)) return null;   // 같은 수
+    const m = G.evalAct(V, seat, myA), b = G.evalAct(V, seat, bestA);
+    if (!m || !b) return null;
+    // 칩 규모(내 칩 + 이번 판 보상)의 30% 가 100점 · 승부 / 베팅 고르기는 고급 AI 도 확률로 고르는 갈림길이라 1.8배 느슨하게
+    const scale = Math.max(2, 0.3 * (V.chips[seat] + V.reward)) * (myA.t === "role" ? 1.8 : 1), gap = b.ev - m.ev;
+    let sev = gap < 0.1 ? 0 : 100 * gap / scale;
+    if (info && info.same) sev = Math.min(sev, 20);                                            // 고급 AI 도 가끔 두는 수
+    if (myA.t === "bet" && myA.kind === bestA.kind) sev = Math.min(sev, 30);                   // 같은 쪽에 거는 칩 수만 다른 것은 판단 차이
+    sev = Math.max(0, Math.min(100, Math.round(sev)));
+    const stat = e => e.kind === "duel" ? `승부하면 ${EM[e.hand]}${HAND[e.hand]}로 이길 확률 ${pcT(e.p)} · 기대 칩 ${sgnT(e.ev)}`
+      : e.kind === "bet" ? `베팅하면 상대가 이길 확률 ${pcT(e.p)}${e.noChips ? " (내 칩이 없어 걸 수 없음)" : ""} · 기대 칩 ${sgnT(e.ev)}`
+      : e.kind === "hand" ? `이길 확률 ${pcT(e.p)} · 비길 확률 ${pcT(e.pd)} · 기대 칩 ${sgnT(e.ev)}`
+      : `맞힐 확률 ${pcT(e.p)} → 기대 칩 ${sgnT(e.ev)}`;
+    const tail = gap >= 0.1 ? ` — 기대 칩 ${gap.toFixed(1)} 차이` : gap <= -0.1 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 앞섬 · 뒤짐도 봐요)" : " — 거의 같아요";
+    return { sev, why: `고급 AI 수 (${actText(bestA, V, info && info.names)}): ${stat(b)} / 내 수 (${actText(myA, V, info && info.names)}): ${stat(m)}${tail}` };
+  }
+
   window.SVUI = window.SVUI || {};
   window.SVUI["gn-betrps"] = {
     name: "베팅 가위바위보", emoji: "✌️", short: "증인의 표식 · 승부 또는 베팅 · 1:1 심리전", min: 2, max: 2, defN: 2, board: false,
@@ -189,6 +218,7 @@
     sub: V => V.over ? "끝" : `${V.round}/${V.R}판 · 보상 ${V.reward}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

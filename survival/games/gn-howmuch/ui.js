@@ -155,6 +155,44 @@
       else if (t.dataset.a === "bid") { const p = parseInt(S.p.replace(/[^0-9]/g, ""), 10) || 0; if (p >= 1 && p <= V.bidMax) { ctx.sfx("pop"); ctx.act({ t: "bid", p }); } }
     };
   }
+  // ── 🎞️ 복기 고리 ──────────────────────────────────────────────
+  const okG = g => Number.isInteger(g) && g >= 0 && g < 5;
+  const okQ = q => !!q && (q.kind === "price" || q.kind === "rank") && okG(q.guest);
+  const gn = g => `${G.GEM[g]}${G.GUESTS[g]}`, kn = k => (k === "price" ? "가격" : "순위"), kt = k => (k === "price" ? "가격은" : "순위는");
+  function actText(a, V, names) {
+    if (!a || typeof a !== "object") return "—";
+    if (a.t === "info") {
+      if (!okQ(a)) return "—";
+      return `🔒 ${gn(a.guest)} ${kn(a.kind)} 묻기${okQ(a.pub) ? ` · 📢 공개 ${gn(a.pub.guest)} ${kn(a.pub.kind)} 묻기` : ""}`;
+    }
+    if (a.t === "bid" && Number.isFinite(a.p) && a.p >= 1) return `${ko(a.p)} 제시`;
+    return "—";
+  }
+  const pc = x => Math.round(x * 100) + "%", pc1 = x => (x < 0.01 ? "1% 미만" : pc(x)), f2 = x => (x >= 0 ? "+" : "−") + Math.abs(x).toFixed(2);
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || (info && info.same) || JSON.stringify(myA) === JSON.stringify(bestA)) return null;
+    const seed = (((info && info.seed) | 0) ^ Math.imul((((info && info.k) | 0) + 1), 0x9e3779b1)) >>> 0;
+    if (V.phase === "bid" && myA.t === "bid" && bestA.t === "bid" && Number.isFinite(myA.p) && Number.isFinite(bestA.p) && V.left && V.left[seat] != null) {
+      const ev = G.evalBids(V, seat, [myA.p, bestA.p], seed), [m, b] = ev.bids, med = Math.max(1, ev.med);
+      const gap = b.util - m.util, scale = 0.3 * V.pts + 0.4;
+      const round10k = x => x >= 10000 && x % 10000 === 0;
+      const same0 = round10k(myA.p) && !round10k(bestA.p);
+      const sev = Math.max(0, Math.min(100, Math.round(100 * gap / scale + (same0 && gap > 0.05 ? 5 : 0))));
+      const head = gap < -0.05 ? "내 수의 기대 점수가 더 높게 나와요 — " : gap < 0.05 ? "두 수의 기대 점수가 비슷해요 — " : "";
+      return { sev, why: `${head}이길 확률 내 ${ko(myA.p)}(추정 M 중앙의 ${pc1(myA.p / med)}) ${pc(m.pw)} / 고급 AI ${ko(bestA.p)}(${pc1(bestA.p / med)}) ${pc(b.pw)} · 추정 M 중앙 ${ko(ev.med)} (80% 범위 ${ko(ev.q10)} ~ ${ko(ev.q90)}) · 이번 판 ${V.pts}점, 예산 값을 빼면 기대 점수 ${f2(m.util)} vs ${f2(b.util)}${same0 ? " · 딱 떨어지는 값은 남과 겹쳐 무효가 되기 쉬워요" : ""}` };
+    }
+    if (V.phase === "info" && myA.t === "info" && bestA.t === "info" && okQ(myA) && okQ(bestA)) {
+      const iv = G.infoValue(V, seed), val = q => iv[q.kind][q.guest];
+      const vm = val(myA), vb = val(bestA), pubOn = V.pubSeat === seat && okQ(myA.pub) && okQ(bestA.pub);
+      const pm = pubOn ? val(myA.pub) : 0, pb = pubOn ? val(bestA.pub) : 0;
+      const d = Math.max(0, vb - vm) + 0.5 * Math.max(0, pb - pm);
+      const sev = Math.max(0, Math.min(100, Math.round(90 * d * (0.5 + 0.25 * V.pts))));
+      const priv = `내 질문 ${gn(myA.guest)} ${kt(myA.kind)} 최고가(M)의 불확실성을 약 ${pc(vm)} 줄이고, 고급 AI 의 ${gn(bestA.guest)} ${kt(bestA.kind)} 약 ${pc(vb)} 줄여요 (그 손님이 최고가를 냈을 확률 약 ${pc(iv.pMax[bestA.guest])})`;
+      const pubT = pubOn && (myA.pub.guest !== bestA.pub.guest || myA.pub.kind !== bestA.pub.kind) ? ` · 공개 질문은 내 ${gn(myA.pub.guest)} ${kn(myA.pub.kind)} 약 ${pc(pm)} vs 고급 AI ${gn(bestA.pub.guest)} ${kn(bestA.pub.kind)} 약 ${pc(pb)}` : "";
+      return { sev, why: `${vm >= vb && pm >= pb ? "내 질문도 비슷하게 좋아요 — " : ""}${priv}${pubT}` };
+    }
+    return null;
+  }
   function result(V) {
     const H = V.hist || [];
     return `<b>${V.round}라운드</b> · 득점 없는 판 ${H.filter(x => x.winner < 0).length}번 · 같은 값 무효 ${H.filter(x => x.dup.some(Boolean)).length}번 · 쓴 예산 ${short(V.spent.reduce((a, b) => Math.max(a, b), 0))}원(최대)`;
@@ -194,6 +232,8 @@
     sub: V => (V.over ? "끝" : `${V.round}/${V.rounds}라운드 · ${V.pts}점`),
     chip: (V, i) => ({ t: `${V.points[i]}점`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (이길 확률 · 정보가 줄이는 불확실성으로 두 수를 견줌)
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

@@ -161,24 +161,39 @@
       return PMAX;
     }
     // hard: 상대마다 '깎을 가능성'을 어림해 기대 수입이 가장 큰 가격을 골라요 (몬테카를로)
-    const base = [0.12, 0.2, 0.3, 0.55][Math.min(3, V.round)], q = S.map(i => {
+    const ev = evPrices(V, me, f, r, ob);
+    let bestP = PMAX, bestE = -1;
+    for (let p = 1; p <= PMAX; p++) if (ev.adj[p] > bestE) { bestE = ev.adj[p]; bestP = p; }
+    return bestP;
+  }
+  // 상대(나 빼고 이 과일 판매자)마다 이번 라운드에 값을 깎을 가능성 어림 — hard 의 판단과 복기 평가가 같이 써요
+  function cutProbs(V, me, f, ob) {
+    const S = V.sellersOf[f].filter(i => i !== me), lm = ob.lastMin[f], base = [0.12, 0.2, 0.3, 0.55][Math.min(3, V.round)];
+    return S.map(i => {
       const rate = ob.seen[i] ? ob.cut[i] / ob.seen[i] : 0;
       let x = base + 0.5 * rate; if (lm !== null && lm < PMAX && !ob.cut[i]) x += 0.25;   // 가격 전쟁 분위기
       return Math.min(0.9, x);
     });
-    const M = 160; let bestP = PMAX, bestE = -1;
+  }
+  // 내 희망가 p(1~5) 의 기대 수입: raw = 이번 라운드만 · adj = 값을 깎으면 다음 라운드부터 상대가 따라 깎는 벌점까지 뺀 값 (hard 가 고르는 기준)
+  function evPrices(V, me, f, r, ob) {
+    const left = V.rounds - V.round, last = left === 1, q = cutProbs(V, me, f, ob), M = 160, k = V.sellersOf[f].length;
     const draw = () => { const u = r(); return u < 0.5 ? 4 : u < 0.75 ? 3 : u < 0.9 ? 2 : 1; };
     const samples = []; for (let m = 0; m < M; m++) samples.push(q.map(x => (r() < x ? draw() : PMAX)));
-    const k = V.sellersOf[f].length;
+    const raw = [0], adj = [0], pen = [0];
     for (let p = 1; p <= PMAX; p++) {
       let E = 0;
       for (const opp of samples) { const mn = Math.min(p, ...opp), win = opp.filter(x => x === mn).length + (p === mn ? 1 : 0); E += p === mn ? Math.floor(mn * k / win) : 0; }
       E /= M;
-      // 깎으면 다음 라운드부터 상대가 따라 깎아요 → 남은 라운드가 많을수록 깎는 값에 벌점
-      if (p < PMAX && !last) E -= 1.6 * (left - 1) * (PMAX - p) / 4 * 1.2;
-      if (E > bestE) { bestE = E; bestP = p; }
+      const pn = p < PMAX && !last ? 1.6 * (left - 1) * (PMAX - p) / 4 * 1.2 : 0;   // 깎으면 다음 라운드부터 상대가 따라 깎아요 → 남은 라운드가 많을수록 벌점
+      raw.push(E); pen.push(pn); adj.push(E - pn);
     }
-    return bestP;
+    return { raw, adj, pen, q, k };
+  }
+  // 복기 평가: 내 과일마다 희망가별 기대 수입 (받은 view 를 바꾸지 않고, 씨앗만 쓰는 순수 함수)
+  function evalPrices(V, me, seed) {
+    const ob = observe(V, me), r = sampler(seed);
+    return V.own[me].map(f => Object.assign({ f }, evPrices(V, me, f, r, ob)));
   }
   function ai(V, me, tier, r) {
     if (!V.needs.includes(me)) return null;
@@ -197,24 +212,60 @@
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   function sampler(seed) { let a = (seed >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   const won = x => `${x * 1000}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + "원";
+  // 공개된 기록에서 본 각 자리의 수입 (비밀 과일은 모름 — 내 몫만 알아요) → [{ i, inc }]
+  function pubIncome(V, me) {
+    const inc = Array(V.n).fill(0);
+    for (const h of V.hist) for (const fr of h.fruits) fr.sellers.forEach((i, k) => { if (fr.inc[k] !== null && fr.inc[k] !== undefined) inc[i] += fr.inc[k]; });
+    return inc;
+  }
+  const f1 = x => (Math.abs(x) < 0.05 ? "0.0" : (x > 0 ? "+" : "−") + Math.abs(x).toFixed(1));
+  const pct = x => Math.round(x * 100) + "%";
+  const anyCut = q => 1 - q.reduce((s, x) => s * (1 - x), 1);
   function coach(V, me, since, names) {
     const nm = i => (i === me ? "나" : (names && names[i]) || `${i + 1}번`), fn = f => FRUITS[f].e + FRUITS[f].n;
+    const seated = Number.isInteger(me) && me >= 0 && V.own && V.own[me];
     if (V.over) {
-      const first = V.ranks.map((x, i) => (x === 0 ? i : -1)).filter(i => i >= 0);
-      return { opp: V.draw ? "모두 수입이 같아 무승부예요." : `최하위: ${V.losers.map(nm).join(" · ")}`, mine: `내 수입 ${won(V.incomes[me])}`, rec: V.draw ? "무승부" : first.includes(me) ? "이겼어요!" : "아깝네요", why: "과일마다 가장 싼 값을 낸 사람이 그 과일 수입을 독식해요. 서로 믿고 같은 값을 내면 똑같이 나눠 가져요." };
+      const inc = V.incomes || [], mx = Math.max(...inc), mn = Math.min(...inc);
+      let cutN = 0, coopN = 0; for (const h of V.hist) for (const fr of h.fruits) { if (fr.price === null || !fr.sellers.length) continue; if (fr.price < PMAX) cutN++; else coopN++; }
+      const first = V.ranks.map((x, i) => (x === 0 ? i : -1)).filter(i => i >= 0), rk = seated ? V.ranks[me] + 1 : 0;
+      return {
+        opp: (V.draw ? "모두 수입이 같아 무승부예요." : `최하위: ${V.losers.map(nm).join(" · ")}`) + ` · 수입(천 원) ${inc.map((x, i) => `${nm(i)} ${x}`).join(" / ")}`,
+        mine: seated ? `내 수입 ${won(inc[me])} · ${V.draw ? "무승부" : `${rk}위 (1위와 ${mx - inc[me]}천 원 차이 · 최하위와 ${inc[me] - mn}천 원 차이)`}` : `1위 수입 ${won(mx)} · 최하위 ${won(mn)}`,
+        rec: V.draw ? "무승부" : seated && first.includes(me) ? "이겼어요!" : "아깝네요",
+        why: `4라운드 동안 과일별로 값을 깎아 독식한 판 ${cutN}번, 5천 원으로 똑같이 나눈 판 ${coopN}번이었어요. 과일마다 가장 싼 값을 낸 사람이 그 과일 수입을 독식하고, 서로 믿고 같은 값을 내면 똑같이 나눠 가져요 (모두 5천 원이면 1인 1만 원).`,
+      };
     }
+    if (!seated) return { opp: "구경 중이에요 — 과일마다 가장 싼 값을 낸 사람이 그 과일의 수입을 독식해요.", mine: `${V.round + 1}/${V.rounds} 라운드 · ${V.phase === "swap" ? "교체 단계" : "희망가 단계"}`, rec: "자리에 앉으면 내 차례마다 알려 드려요", why: "판매가 = 그 과일 판매자 희망가 중 최저가, 최저가를 낸 사람이 (판매가 × 판매자 수)를 가져가요. 모두 5천 원이면 과일마다 5천 원씩 나눠요." };
     const ob = observe(V, me), mine = V.own[me].map(fn).join(" · ");
-    const cutters = ob.cut.map((c, i) => (c > 0 && i !== me ? `${nm(i)}(${c}번)` : null)).filter(Boolean);
-    const opp = V.hist.length ? `지난 라운드까지 값을 깎아 수입을 독식한 사람: ${cutters.length ? cutters.join(" · ") : "없음"} · 지난 라운드 판매가 ${[0, 1, 2].map(f => (ob.lastMin[f] === null ? null : `${FRUITS[f].e}${ob.lastMin[f]}천`)).filter(Boolean).join(" ")}` : "아직 공개된 정보가 없어요 — 첫 라운드예요.";
-    const info = `${V.round + 1}/${V.rounds} 라운드 · 내 과일 ${mine} · 내 수입 ${won(V.income)}${V.item ? " · 아이템 남음(교체 또는 비밀 1번)" : ""}`;
+    const cutters = ob.cut.map((c, i) => (c > 0 && i !== me ? `${nm(i)} ${c}/${ob.seen[i]}번` : null)).filter(Boolean);
+    const pi = pubIncome(V, me); pi[me] = V.income;
+    const lead = pi.map((x, i) => [x, i]).filter(x => x[1] !== me).sort((a, b) => b[0] - a[0])[0];
+    const sdQ = V.round * 77 + V.hist.length * 11 + me * 3 + 5, evs = V.phase === "price" ? evalPrices(V, me, sdQ) : [];
+    const qs = V.phase === "price" ? evs.map(e => `${FRUITS[e.f].e}${FRUITS[e.f].n} ${pct(anyCut(e.q))}`) : [];
+    const opp = V.hist.length
+      ? `값을 깎아 독식한 횟수(깎음/본 횟수): ${cutters.length ? cutters.join(" · ") : "아직 없음"} · 지난 라운드 판매가 ${[0, 1, 2].map(f => (ob.lastMin[f] === null ? null : `${FRUITS[f].e}${ob.lastMin[f]}천`)).filter(Boolean).join(" ")}${qs.length ? ` · 이번에 누가 깎을 가능성(내 어림): ${qs.join(" · ")}` : ""}`
+      : `아직 공개된 정보가 없어요 — 첫 라운드예요. 처음엔 다들 5천 원을 낼 가능성이 커요 (사람마다 깎을 가능성 어림 약 ${pct(cutProbs(V, me, V.own[me][0], ob)[0] || 0.12)})${qs.length ? ` · 이번에 누가 깎을 가능성(내 어림): ${qs.join(" · ")}` : ""}.`;
+    const info = `${V.round + 1}/${V.rounds} 라운드 · 내 과일 ${mine} · 내 수입 ${won(V.income)}${lead && V.hist.length ? ` (공개된 수입으로 본 다른 사람 최고 ${won(lead[0])}${lead[0] > V.income ? ` — ${lead[0] - V.income}천 원 앞섬` : ""} · 비밀 과일 제외)` : ""}${V.item ? " · 아이템 남음(교체 또는 비밀 1번)" : " · 아이템 씀"}`;
     if (!V.needs.includes(me)) return { opp, mine: info, rec: "다른 사람을 기다려요", why: "이미 냈어요." };
-    if (V.phase === "swap") return { opp, mine: info, rec: "이번엔 교체하지 않아요", why: "교체는 희망가를 내기 전에 내 과일 하나를 바꾸는 아이템이에요 (한 번만, 모두에게 공개). 판매자가 적은 과일로 옮기면 독식할 수 있지만, 지금은 비밀 아이템을 아껴 둬요." };
-    const sd = V.round * 77 + V.hist.length * 11 + me * 3 + 5, a = ai(V, me, "hard", sampler(sd));
+    if (V.phase === "swap") {
+      const to = [0, 1, 2].find(f => !V.own[me].includes(f)), kt = V.sellersOf[to].length, qt = anyCut(cutProbs(V, me, to, ob));
+      const cnt = [0, 1, 2].map(f => `${FRUITS[f].e}${V.sellersOf[f].length}명`).join(" ");
+      return {
+        opp, mine: info, rec: V.item ? "이번엔 교체하지 않아요" : "아이템을 이미 썼어요 — '계속'을 눌러요",
+        why: `지금 판매자 수 ${cnt}. 교체하면 판매자가 적은 쪽으로 옮겨 독식 몫(값 × 판매자 수)이 달라지지만, ${FRUITS[to].e}${FRUITS[to].n}(지금 ${kt}명 → ${kt + 1}명)에서 누가 깎을 가능성은 약 ${pct(qt)}라 얻는 것이 뚜렷하지 않아요. 아이템은 교체 · 비밀 중 한 번뿐이라 비밀을 아껴 둬요.`,
+      };
+    }
+    const a = ai(V, me, "hard", sampler(sdQ));
     const rec = V.own[me].map(f => `${fn(f)} ${a.p[f]}천 원`).join(" · ") + (a.secret !== undefined ? ` · 🔒 ${fn(a.secret)} 비밀` : "");
-    const cutNow = V.own[me].filter(f => a.p[f] < PMAX).length > 0;
-    const why = cutNow ? "다른 사람이 값을 깎을 것 같아서 나도 깎아요. 가장 싼 값을 혼자 내면 (판매가 × 판매자 수)를 독식하지만, 같이 깎으면 서로 손해예요." + (a.secret !== undefined ? " 비밀 아이템으로 이 과일의 결과를 숨기면 다음 라운드에 보복당할 걱정이 줄어요." : "") : "모두가 5천 원을 내면 과일마다 똑같이 나눠 가져요(1인 1만 원). 깎을 신호가 없어서 약속을 지켜요.";
+    const lines = evs.map(e => {
+      const p = a.p[e.f], k = e.k, last = V.rounds - V.round === 1;
+      if (p < PMAX) return `${fn(e.f)}: 판매자 ${k}명, 혼자 ${p}천 원이면 ${p}×${k}=${p * k}천 원 독식 · 한 명이라도 깎을 확률 ${pct(anyCut(e.q))} → ${p}천 원 기대 ${f1(e.adj[p])}천 (이번 라운드만 ${f1(e.raw[p])}${last ? "" : `, 다음 라운드부터 따라 깎일 위험 ${f1(-e.pen[p])}`}) vs 5천 원 ${f1(e.adj[PMAX])}천`;
+      return `${fn(e.f)}: 판매자 ${k}명, 한 명이라도 깎을 확률 ${pct(anyCut(e.q))} → 5천 원 기대 ${f1(e.adj[PMAX])}천 vs 4천 원 ${f1(e.adj[4])}천 (깎아도 이번 라운드만 ${f1(e.raw[4])}, 깎을수록 다음 라운드부터 따라 깎여요)`;
+    });
+    const cutNow = lines.length > 0 && V.own[me].some(f => a.p[f] < PMAX);
+    const why = lines.join(" / ") + (cutNow ? " — 같이 깎으면 서로 손해예요." + (a.secret !== undefined ? " 비밀 아이템으로 이 과일의 결과를 숨기면 다음 라운드에 보복당할 걱정이 줄어요." : "") : " — 깎을 신호가 없어서 약속을 지켜요 (모두 5천 원이면 1인 1만 원).");
     return { opp, mine: info, rec, why };
   }
 
-  return { id: "gn-fruit", FRUITS, ROUNDS, PMAX, sellers, init, needs, apply, view, over, ranks, legal, auto, advance, ai, observe, pickPrice, coach, won, TIER };
+  return { id: "gn-fruit", FRUITS, ROUNDS, PMAX, sellers, init, needs, apply, view, over, ranks, legal, auto, advance, ai, observe, pickPrice, cutProbs, evPrices, evalPrices, sampler, pubIncome, coach, won, TIER };
 });

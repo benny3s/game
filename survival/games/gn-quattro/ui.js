@@ -159,6 +159,38 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
     sub: V => (V.over ? "끝" : V.rules.mustAll ? `교환 ${V.nExs.join(" : ")} / ${G.GUESTS}` : `교환 ${V.nExs.join(" : ")} / ${V.rules.maxEx}`),
     chip: (V, i) => ({ t: `교환 ${V.nExs[i]}`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (같은 가상 관전 플레이어 손으로 두 수를 끝까지 둬 콰트로 확률 · 합을 견줌)
+    actText: (a, V) => {
+      if (!a) return "—";
+      const own = i => (Number.isInteger(i) && V && V.mine && V.mine[i] && typeof V.mine[i].c === "number" ? cname(V.mine[i].c) : Number.isInteger(i) ? `${i + 1}번째 카드` : "카드");
+      if (a.t === "open") return `${own(a.c)} 카드 열기`;
+      if (a.t === "swap") return `${own(a.c)} 카드를 관전 ${Number.isInteger(a.g) ? a.g + 1 : "?"}번과 교환`;
+      if (a.t === "peek") return `관전 ${Number.isInteger(a.g) ? a.g + 1 : "?"}번의 카드 3장 엿보기`;
+      return "—";
+    },
+    review: (V, seat, myA, bestA, info) => {
+      if (!V || !myA || !bestA || !V.mine || !V.rules || (seat !== 0 && seat !== 1) || V.turn !== seat || V.over) return null;
+      if (myA.t === "peek" && bestA.t === "peek") return { sev: 0, why: `엿보기는 아직 안 바꾼 관전 플레이어 ${V.gex.filter(x => !x).length}명 누구를 골라도 똑같아요 — 아직 아무도 카드를 모르는 사람이라 처음엔 차이가 없어요` };
+      if (myA.t === "peek" || !["open", "swap", "peek"].includes(myA.t) || !["open", "swap", "peek"].includes(bestA.t)) return null;
+      if (JSON.stringify(myA) === JSON.stringify(bestA)) return null;
+      const k = info && Number.isFinite(info.k) ? info.k : 0, sd = info && Number.isFinite(info.seed) ? info.seed : 1, seedv = ((sd ^ Math.imul(k + 1, 0x9e3779b1)) >>> 0) || 1;
+      const NORM = G.UB + G.UW * 26, pc = x => `${Math.round(x * 100)}%`, sm = x => (x.q ? ` (합 평균 ${x.sum.toFixed(0)})` : "");
+      const opened = V.mine.filter(x => x.o).map(x => x.c), card = myA.t === "open" && V.mine[myA.c] ? V.mine[myA.c].c : null;
+      const zero = card === 0 && V.rules.zeroLoses ? "검정 0 을 열면 바로 지는 판이에요 · " : card !== null && G.qCap(opened) !== null && G.qCap(opened.concat(card)) === null ? "이 카드를 열면 이미 열린 카드와 색이나 숫자가 겹쳐 콰트로를 못 만들어요 · " : "";
+      let ref = bestA, note = "", rn = "고급 AI 수";
+      if (bestA.t === "peek") {   // 고급 AI 는 늘 엿보기부터 해요 (차례를 안 씀) — 엿보기 없이 둔 내 수는 '엿보기 없이 둘 수 있는 가장 좋은 수'와 견줘요
+        ref = G.bestPlain(V, seedv, 24); if (!ref) return null; rn = "엿보기 없는 최선 수";
+        note = ` · 고급 AI 는 먼저 엿보기를 해요 (차례를 안 써요) — 엿보기 없이 가장 좋은 수: ${window.SVUI["gn-quattro"].actText(ref, V)}`;
+        if (JSON.stringify(myA) === JSON.stringify(ref)) return { sev: 0, why: "엿보기 없이 둘 수 있는 가장 좋은 수예요 — 고급 AI 는 그 전에 엿보기부터 해요 (차례를 안 써서 먼저 써도 손해가 없어요)" };
+      }
+      const c = G.compareActs(V, myA, ref, seedv, 160);
+      if (c.same) return { sev: 0, why: "관전 플레이어 누구와 바꿔도 같은 수예요 — 아직 카드를 모르는 사람은 서로 구별이 안 되니 결과도 같아요" };
+      const dP = (c.best.u - c.mine.u) / NORM * 100, sev = dP <= 1 ? 0 : Math.round(Math.min(100, (dP - 1) * 3));   // 콰트로 확률(합 반영) 1%p 상당이 깎일 때마다 3점 (약 21%p 깎여야 60점 = 📒)
+      const why = dP > 2 ? `${zero}콰트로가 될 확률 약 ${pc(c.best.q)}${sm(c.best)} → 내 수 ${pc(c.mine.q)}${sm(c.mine)} (끝까지 160번씩 가상으로 둠)${note}`
+        : dP < -2 ? `이번엔 내 수 쪽이 더 좋게 나왔어요 (내 수 ${pc(c.mine.q)}${sm(c.mine)} · ${rn} ${pc(c.best.q)}${sm(c.best)})${note}`
+          : `${zero}두 수의 결과가 거의 같아요 (${rn} ${pc(c.best.q)}${sm(c.best)} · 내 수 ${pc(c.mine.q)}${sm(c.mine)})${note}`;
+      return { sev, why };
+    },
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd) || (V.legal && V.legal[0]) || null,
     tutorial,

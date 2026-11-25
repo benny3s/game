@@ -288,25 +288,82 @@
     return plan(V, me, tier, r).a;
   }
 
+  // ── 복기 · 선생님용 평가 (ai 와 같은 확률 도우미를 그대로 재사용 · 보이는 것만 · 받은 view 는 안 바꿈 · 난수 없음) ──
+  // 한 수의 '이번 판 기대 칩'(판 시작 대비) 과 p(이길 확률 · 양면베팅은 성공 확률 · 양면베팅을 받았을 땐 내가 이길 확률)
+  // 가정: 내가 레이즈하면 상대가 PFOLD 만큼 접고 나머지는 콜하는 것으로 봄 · 무승부는 0 으로 셈 (ai 의 evCall 과 같은 식)
+  const PFOLD = 0.25;
+  function evalAct(V, me, a, tier) {
+    tier = tier || "hard";
+    if (!V || !a || typeof a !== "object" || V.phase !== "bet" || me !== 0 && me !== 1) return null;
+    const opp = 1 - me, mine = V.contrib[me], q = V.contrib[opp], cur = V.cur, carry = V.carry;
+    if (V.dbl[opp] > 0) {   // 상대가 양면베팅을 건 상태: 콜 또는 폴드
+      const x = V.dbl[opp];
+      if (a.t === "fold") return { kind: "foldDbl", ev: -mine - Math.min(BONUS, V.chips[me]), p: null, side: -1 };
+      if (a.t !== "call") return null;
+      const need = cur - mine, side = V.side[me] >= 0 ? V.side[me] : (a.side === 0 || a.side === 1 ? a.side : (vsDouble(V, me, tier, 0) > vsDouble(V, me, tier, 1) + 0.04 ? 0 : 1));
+      const pf = vsDouble(V, me, tier, side), bonus = Math.min(BONUS, Math.max(0, V.chips[me] - need));
+      return { kind: "callDbl", side, p: pf, ev: pf * (1 + 2 * x + carry) - (1 - pf) * (1 + x + bonus), x };
+    }
+    const d = oppFace(V, me, tier);
+    const sd = V.side[me] >= 0 ? V.side[me] : (a.side === 0 || a.side === 1 ? a.side : bestSide(V, me, d));
+    if (a.t === "fold") return { kind: "fold", ev: -mine, p: null, side: -1 };
+    if (a.t === "call") {
+      const o = faceOdds(V, me, sd, d);
+      return { kind: "call", side: sd, p: o.win, pd: o.draw, ev: o.win * (carry + cur) - o.lose * cur, stake: cur, chk: V.cur - mine <= 0 };
+    }
+    if (a.t === "raise") {
+      const to = a.to | 0;
+      if (to <= cur || !V.canRaise) return null;
+      // 판돈만큼 키운 것까지만 이득으로 셈 (그보다 크게 걸면 상대가 접으니, 크기 차이는 판단 차이일 뿐)
+      const o = faceOdds(V, me, sd, d), toEff = Math.min(to, cur + Math.max(2, carry + mine + q)), evShow = o.win * (carry + toEff) - o.lose * toEff;
+      return { kind: "raise", side: sd, to, p: o.win, pd: o.draw, ev: (1 - PFOLD) * evShow + PFOLD * (carry + q) };
+    }
+    if (a.t === "double") {
+      const x = a.x | 0, R = V.dRange || { lo: 1, hi: 0 };
+      if (x < 1 || R.hi < R.lo) return null;
+      const ps = dblOdds(V, me, d), co = Math.max(q, 1 + x), bonus = Math.min(BONUS, Math.max(0, V.chips[opp] - Math.max(0, 1 + x - q)));
+      return { kind: "double", side: -1, x, p: ps, ev: ps * (co + carry + bonus) - (1 - ps) * (1 + 2 * x) };
+    }
+    return null;
+  }
+
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   const pc = x => Math.round(x * 100) + "%";
+  // 이름 뒤 조사: '나' → 내가 · 받침 있으면 이 / 없으면 가
+  const iga = s => { s = String(s); if (s === "나") return "내가"; const c = s.charCodeAt(s.length - 1); const bat = c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : "0136780".includes(s[s.length - 1]) && /[0-9]/.test(s[s.length - 1]); return s + (bat ? "이" : "가"); };
+  const sgn = x => ((x = Math.round(x * 10) / 10) >= 0 ? "+" : "−") + Math.abs(x).toFixed(1);
   const SIDE = ["앞면", "뒷면"];
   function coach(V, me, since, names) {
     const nm = i => (names && names[i]) || `${i + 1}번`;
+    if (me !== 0 && me !== 1) me = 0;
     const opp = 1 - me;
-    if (V.over) return { opp: "승부가 끝났어요.", mine: `내 칩 ${V.chips[me]} · 상대 ${V.chips[opp]}`, rec: V.ranks[me] === 0 ? "이겼어요! 한 판 더?" : "아쉬워요 — 상대 앞면과 내 뒷면을 먼저 비교해 보세요!", why: "" };
+    if (V.over) {
+      const h = V.hist || [], won = h.filter(x => x.win === me).length, dblOk = h.filter(x => x.type === "dbl" && x.ok && x.win === me).length, df = V.chips[me] - V.chips[opp];
+      return {
+        opp: `승부가 끝났어요. ${nm(opp)}의 마지막 칩은 ${V.chips[opp]}개 (시작 ${V.start}개).`,
+        mine: `내 칩 ${V.chips[me]} : 상대 ${V.chips[opp]} (시작 ${V.start}칩 대비 ${V.chips[me] >= V.start ? "+" : "−"}${Math.abs(V.chips[me] - V.start)})`,
+        rec: V.ranks[me] === 0 && V.ranks[opp] === 0 ? "비겼어요 — 칩이 같아요" : V.ranks[me] === 0 ? "이겼어요! 한 판 더?" : "아쉬워요 — 상대 앞면과 내 뒷면을 먼저 비교해 보세요!",
+        why: `${V.round}판 가운데 마지막 ${h.length}판은 내가 ${won}판 이겼고 양면베팅 성공은 ${dblOk}번이에요. 칩 차이는 ${df >= 0 ? "+" : "−"}${Math.abs(df)}개예요.`,
+      };
+    }
     if (V.phase !== "bet") {
       const r = V.res;
-      let t = "다음 판을 준비해요.";
-      if (r) t = r.type === "fold" ? `${r.folder === me ? "내가" : nm(opp) + "이"} 폴드${r.pen ? ` (양면베팅 폴드 페널티 ${r.pen}칩)` : ""}` : r.type === "dbl" ? `양면베팅 ${r.ok ? "성공" : "실패"} — ${nm(r.win)} 승` : r.type === "draw" ? "무승부 — 판돈 이월" : `${nm(r.win)} 승`;
-      return { opp: t, mine: `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]}${V.carry ? ` · 이월 판돈 ${V.carry}` : ""}`, rec: "결과를 보고 다음 판을 준비해요", why: "" };
+      let t = "다음 판을 준비해요.", why = `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]} · 이월 판돈 ${V.carry}칩.`;
+      if (r) {
+        t = r.type === "fold" ? `${r.folder === me ? "내가" : iga(nm(opp))} 폴드${r.pen ? ` (양면베팅 폴드 페널티 ${r.pen}칩)` : ""}` : r.type === "dbl" ? `양면베팅 ${r.ok ? "성공" : "실패"} — ${nm(r.win)} 승` : r.type === "draw" ? "무승부 — 판돈 이월" : `${nm(r.win)} 승`;
+        const cs = r.cards, cardTxt = i => (cs && cs[i] && r.side[i] >= 0 ? `${SIDE[r.side[i]]} ${cs[i][r.side[i]]}` : "");
+        if (r.type === "fold") why = `폴드로 판돈 ${r.pot}칩이 ${r.win === me ? "내게" : nm(r.win) + "에게"} 갔어요${r.pen ? ` (+ 페널티 ${r.pen}칩)` : ""}. 칩은 나 ${V.chips[me]} : 상대 ${V.chips[opp]}.`;
+        else if (r.type === "dbl" && cs) { const D = r.D, S = 1 - D; why = `양면베팅 ${D === me ? "내" : nm(D) + "의"} 앞 ${cs[D][0]} · 뒤 ${cs[D][1]} vs ${S === me ? "내" : nm(S) + "의"} ${cardTxt(S)} — ${r.ok ? "둘 다 커서 성공" : "한 면이 같거나 낮아 실패"}. 판돈 ${r.pot}칩${r.bonus ? ` + 보너스 ${r.bonus}칩` : ""}.`; }
+        else if (cs) why = `내 ${cardTxt(me)} vs 상대 ${cardTxt(opp)} → ${r.type === "draw" ? `같아서 무승부, 판돈 ${r.pot}칩이 다음 판으로 이월돼요` : `${r.win === me ? "내가" : iga(nm(r.win))} 이겨 판돈 ${r.pot}칩을 가져가요`}. 칩은 나 ${V.chips[me]} : 상대 ${V.chips[opp]}.`;
+      }
+      return { opp: t, mine: `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]}${V.carry ? ` · 이월 판돈 ${V.carry}` : ""}`, rec: "결과를 보고 다음 판을 준비해요", why };
     }
     const fo = V.cards[opp].f, b = V.cards[me].b, tier = "hard";
     const evs = V.log.filter(e => e.k === "bet" && e.s === opp && e.i >= roundStart(V)); const last = evs[evs.length - 1];
     const d = oppFace(V, me, tier), side = bestSide(V, me, d), o = faceOdds(V, me, side, d), ps = dblOdds(V, me, d);
-    const oppTxt = `${nm(opp)}의 앞면은 ${fo}(내가 보는 숫자)${V.ver === "b" ? ` → 뒷면은 ${fo % 2 ? "짝" : "홀"}수` : ""}. ` + (V.side[opp] >= 0 ? `${SIDE[V.side[opp]]}으로 ${V.side[opp] === 0 ? `승부 — 그 숫자는 ${fo}!` : "승부 — 숫자는 아직 몰라요."}` : "아직 면을 안 골랐어요.") + (last ? ` ${last.a === "double" ? `양면베팅 ${last.x}칩` : last.a === "raise" ? `${last.to}칩까지 베팅` : "콜"}.` : "");
+    const oppTxt = `${nm(opp)}의 앞면은 ${fo}(내가 보는 숫자)${V.ver === "b" ? ` → 뒷면은 ${fo % 2 ? "짝" : "홀"}수` : ""}. ` + (V.side[opp] >= 0 ? `${SIDE[V.side[opp]]}으로 ${V.side[opp] === 0 ? `승부 — 그 숫자는 ${fo}!` : "승부 — 숫자는 아직 몰라요."}` : "아직 면을 안 골랐어요.") + (last ? ` ${last.a === "double" ? `양면베팅 ${last.x}칩` : last.a === "raise" ? `${last.to}칩까지 베팅` : last.a === "check" ? "기본 1칩만 걸고 넘김" : "콜"}.` : "");
     const mineTxt = `내 뒷면 ${b}${V.ver === "b" ? ` (앞면은 ${b % 2 ? "짝" : "홀"}수)` : ""} · 칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]} · 판돈 ${V.pot} · ${SIDE[side]}으로 가면 이길 확률 ${pc(o.win)} · 양면베팅 성공 확률 ${pc(ps)}`;
-    let rec = "상대 차례를 기다려요", why = "";
+    let rec = "상대 차례를 기다려요", why = `상대 차례예요. 지금 ${SIDE[side]}으로 가면 이길 확률 ${pc(o.win)} (비길 확률 ${pc(o.draw)}) · 양면베팅 성공 확률 ${pc(ps)}이라서, 상대가 걸어 오면 이 숫자로 콜 · 폴드를 정해요.`;
     if (V.needs.includes(me)) {
       const pl = plan(V, me, "hard", () => 0.5), t = pl.a.t;
       rec = t === "fold" ? "폴드하기" : t === "call" ? (pl.need > 0 ? `콜 (${SIDE[pl.a.side]})` : V.chk ? `콜 · 바로 공개 (${SIDE[pl.a.side]})` : `넘기기 (${SIDE[pl.a.side]})`) : t === "double" ? `양면베팅 ${pl.a.x}칩` : `${SIDE[pl.side]}으로 ${pl.a.to}칩까지`;
@@ -315,9 +372,11 @@
       else if (t === "fold") why = `${SIDE[pl.side]}으로 이길 확률이 ${pc(pl.o.win)}라 낮아요. 폴드는 낸 칩만 잃어요 (양면베팅 폴드가 아니면 페널티 없음).`;
       else if (t === "raise") why = `${SIDE[pl.side]}으로 이길 확률 ${pc(pl.o.win)} — 판돈을 키워요. 면은 한 번 고르면 못 바꿔요.`;
       else why = `${SIDE[pl.side]}으로 ${pc(pl.o.win)}라 공개해 볼 만해요.`;
+      const ev = evalAct(V, me, pl.a, "hard");
+      if (ev) why += ` (이 수의 기대 칩 ${sgn(ev.ev)}${t === "fold" ? "" : ` · 폴드는 ${sgn(evalAct(V, me, { t: "fold" }, "hard").ev)}`})`;
     }
     return { opp: oppTxt, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-twoface", MAXR, BONUS, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, plan, canRaise, capTotal, dblRange, oppFace, faceOdds, dblOdds, face };
+  return { id: "gn-twoface", MAXR, BONUS, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, plan, evalAct, canRaise, capTotal, dblRange, oppFace, faceOdds, dblOdds, face };
 });

@@ -275,33 +275,87 @@
     };
   }
 
+  // ── 복기 · 선생님용 평가 (ai() 가 쓰는 evalCards · util · greedyTake 를 그대로 재사용 · 고정 씨앗 · 받은 view 는 안 바꿈) ──
+  // 단위 = util (별자리 진행도 환산 점수 − 폭탄 벌점, ≈ 승점). 별 1개 ≈ +0.5 ~ +1.4 · 폭탄 1개 −1.2 · 2개째 −2.8 · 3개째 −10
+  // 가져가기: 가져간 뒤 util 변화 (+ 별자리 3개가 되어 끝나면 승점 순위 보정). 카드: 상대 카드 추정 · 겹침까지 넣은 기대값
+  function takeGain(V, me, take, swaps) {
+    if (!Array.isArray(take) || take.length !== 5) return null;
+    const h = V.hold[me].slice(), bag = V.bag.slice(), b0 = V.bombs[me], b1 = b0 + take[4];
+    for (let c = 0; c < 4; c++) h[c] += take[c];
+    if (doSwaps(h, bag, swaps)) return null;
+    const prog = Vh(h) - Vh(V.hold[me]), pen = PEN[Math.min(3, b1)] - PEN[Math.min(3, b0)];
+    let end = 0;
+    if (consOf(h) >= 3) { const op = V.hold.map(ptsOf).filter((_, j) => j !== me), omax = Math.max(0, ...op), omin = Math.min(...op, 99), mp = ptsOf(h); end = mp > omax ? 9 : mp <= omin ? -5 : -1; }
+    return { ev: prog - pen + end, prog, pen, end, b1 };
+  }
+  // acts = 같은 자리에서 견줄 행동들 (card · take · swap) → 같은 순서의 [{kind, ev, ...}|null]
+  function evalActs(V, me, acts, seed) {
+    const T = TIER.hard, cache = {}, out = [];
+    for (const a of acts) {
+      if (!a || typeof a !== "object" || !V.needs || !V.needs.includes(me)) { out.push(null); continue; }
+      if (a.t === "swap") {
+        const h = V.hold[me].slice(), bag = V.bag.slice();
+        if (doSwaps(h, bag, [a])) { out.push(null); continue; }
+        out.push({ kind: "swap", ev: Vh(h) - Vh(V.hold[me]), from: Vh(V.hold[me]), to: Vh(h) });
+      } else if (a.t === "card" && V.phase === "card" && Number.isInteger(a.c) && a.c >= 1 && a.c <= 5) {
+        const h = V.hold[me].slice(), bag = V.bag.slice();
+        if (doSwaps(h, bag, a.swaps)) { out.push(null); continue; }
+        const key = JSON.stringify(a.swaps || []);
+        if (!cache[key]) cache[key] = evalCards(Object.assign({}, V, { hold: V.hold.map((x, i) => (i === me ? h : x)) }), me, T, sampler(seed));
+        const E = cache[key], sw = util(h, V.bombs[me]) - util(V.hold[me], V.bombs[me]);
+        out.push({ kind: "card", ev: E.ev[a.c] + sw, col: E.col[a.c], swapGain: sw, c: a.c });
+      } else if (a.t === "take" && V.phase === "pick" && V.picker === me) {
+        const g = takeGain(V, me, a.take, a.swaps);
+        out.push(g ? Object.assign({ kind: "take" }, g) : null);
+      } else out.push(null);
+    }
+    return out;
+  }
+
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   function sampler(seed) { let a = (seed >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   const nm = (names, i) => (names && names[i]) || `${i + 1}번`;
   const itemTxt = take => take.map((x, i) => (x > 0 ? `${i < 4 ? CEM[i] : "💣"}${x}` : "")).filter(Boolean).join(" ") || "없음";
+  // 이름 뒤 조사: '나' → 내가 · 받침 있으면 이 / 없으면 가
+  const iga = s => { s = String(s); if (s === "나") return "내가"; const c = s.charCodeAt(s.length - 1); const bat = c >= 0xAC00 && c <= 0xD7A3 ? (c - 0xAC00) % 28 !== 0 : "0136780".includes(s[s.length - 1]) && /[0-9]/.test(s[s.length - 1]); return s + (bat ? "이" : "가"); };
+  const sgn = x => ((x = Math.round(x * 10) / 10) >= 0 ? "+" : "−") + Math.abs(x).toFixed(1);
   function coach(V, me, since, names) {
+    if (!(me >= 0 && me < V.n)) me = 0;
     const who = i => (i === me ? "나" : nm(names, i));
     if (V.over) {
-      const why = V.why === "bomb" ? `${who(V.loser)}가 폭탄 3개를 받아 끝났어요` : V.why === "cons" ? "누군가 별자리 3개를 완성해 끝났어요" : "별을 다 나눠서 끝났어요";
-      return { opp: `${why}. 승점이 가장 높은 쪽이 우승이에요.${V.why !== "bomb" && V.loser >= 0 ? ` 승점이 가장 낮은 ${who(V.loser)}가 탈락 후보예요.` : ""}`, mine: `내 승점 ${V.points[me]} · 완성한 별자리 ${V.cons[me]}개 · 폭탄 ${V.bombs[me]}개`, rec: V.ranks && V.ranks[me] === 0 ? "우승이에요!" : "승점 합계가 승부예요", why: "별자리 개수보다 승점 합계로 우승이 가려져요 (3개 10점보다 2개 12점이 이길 수 있어요)." };
+      const why = V.why === "bomb" ? `${iga(who(V.loser))} 폭탄 3개를 받아 끝났어요` : V.why === "cons" ? "누군가 별자리 3개를 완성해 끝났어요" : "별을 다 나눠서 끝났어요";
+      const top = Math.max(...V.points);
+      return { opp: `${why}. 승점이 가장 높은 쪽이 우승이에요.${V.why !== "bomb" && V.loser >= 0 ? ` 승점이 가장 낮은 ${iga(who(V.loser))} 탈락 후보예요.` : ""} (${V.round}라운드)`, mine: `내 승점 ${V.points[me]} · 완성한 별자리 ${V.cons[me]}개 · 폭탄 ${V.bombs[me]}개`, rec: V.ranks && V.ranks[me] === 0 ? "우승이에요!" : "승점 합계가 승부예요", why: `최종 승점 ${[...Array(V.n).keys()].map(i => `${who(i)} ${V.points[i]}`).join(" · ")} — 1등과 내 차이 ${top - V.points[me]}점. 별자리 개수보다 승점 합계로 우승이 가려져요 (3개 10점보다 2개 12점이 이길 수 있어요).` };
     }
     const danger = [];
     for (let i = 0; i < V.n; i++) { if (i === me) continue; if (V.bombs[i] >= 2) danger.push(`${who(i)} 폭탄 ${V.bombs[i]}개(하나 더 받으면 탈락)`); if (V.cons[i] >= 2) danger.push(`${who(i)} 별자리 ${V.cons[i]}개(하나 더 완성하면 끝)`); }
     const last = V.hist[V.hist.length - 1];
-    const oppTxt = `${last ? `지난 라운드 카드: ${[...Array(V.n).keys()].map(i => `${who(i)} ${last.cards[i]}${last.elim[i] ? "(겹침)" : ""}`).join(" · ")}. ` : ""}${danger.length ? `주의: ${danger.join(", ")}.` : "아직 끝이 가까운 사람은 없어요."}`;
+    const left = sum(V.bag), tabN = sum(V.table);
+    const oppTxt = `${last ? `지난 라운드 카드: ${[...Array(V.n).keys()].map(i => `${who(i)} ${last.cards[i]}${last.elim[i] ? "(겹침)" : ""}`).join(" · ")}. ` : ""}${danger.length ? `주의: ${danger.join(", ")}.` : `아직 끝이 가까운 사람은 없어요 (남은 별 ${left}개 · 테이블 별 ${tabN}개 + 폭탄 ${V.tbomb}개).`}`;
     const need3 = [0, 1, 2, 3].map(c => `${CEM[c]}${V.hold[me][c]}/${NEED[c]}`).join(" ");
     const mineTxt = `승점 ${V.points[me]} · 별자리 ${V.cons[me]}개 · 폭탄 ${V.bombs[me]}개 · 내 별 ${need3}`;
-    if (V.phase === "rev") return { opp: oppTxt, mine: mineTxt, rec: "결과를 확인해요", why: "곧 다음 라운드가 시작돼요." };
+    if (V.phase === "rev") {
+      const mt = V.rev && V.rev.takes.find(t => t.s === me), pts = V.points.map((p, i) => `${who(i)} ${p}`).join(" · ");
+      return { opp: oppTxt, mine: mineTxt, rec: "결과를 확인해요", why: `이번 라운드 내 카드 ${V.rev ? V.rev.cards[me] : "?"}번 → ${V.rev && V.rev.elim[me] ? "다른 사람과 겹쳐 아무것도 못 가져갔어요" : mt ? `${itemTxt(mt.take)} 가져갔어요` : "가져간 것이 없어요"}. 승점 ${pts} · 남은 별 ${left}개로 곧 다음 라운드가 시작돼요.` };
+    }
     let rec = "기다려요", why = "";
     if (V.phase === "card" && V.needs.includes(me)) {
       const sp = planSwaps(V.hold[me], V.bag, "hard"), V2 = Object.assign({}, V, { hold: V.hold.map((x, i) => (i === me ? sp.hold : x)) });
-      const pl = cardPlan(V2, me, "hard", sampler(V.round * 7919 + me * 31 + V.hist.length)), c = pl.bestC;
-      rec = `${c}번 카드 내기`; why = `다른 사람이 같은 숫자를 낼 확률은 약 ${Math.round(pl.col[c] * 100)}%예요 (겹치면 이번 라운드는 아무것도 못 가져가요). 1~3은 폭탄을 피하기 쉽고, 4~5는 남은 것이 폭탄뿐일 위험이 커요.${sp.swaps.length ? ` 먼저 ${sp.swaps.map(s => `${CEM[s.from]}3개→${CEM[s.to]}1개`).join(", ")} 교환하면 별자리에 가까워져요.` : ""}`;
-    } else if (V.phase === "card") { rec = "다른 사람을 기다려요"; why = "카드는 모두가 낸 뒤 동시에 공개돼요."; }
-    else if (V.phase === "pick" && V.picker === me) { const tk = pickTake(V, me); rec = `${itemTxt(tk)} 가져가기`; why = "별자리를 빨리 채울 별부터, 폭탄은 마지막에 가져가요. 폭탄 3개를 받으면 바로 탈락이에요."; }
-    else if (V.phase === "pick") { rec = `${who(V.picker)}가 고르는 중`; why = `${V.pickK}개를 가져가요. 내 카드는 ${V.rev && V.rev.elim[me] ? "겹쳐서 제외됐어요" : "순서를 기다려요"}.`; }
+      const pl = cardPlan(V2, me, "hard", sampler(V.round * 7919 + me * 31 + V.hist.length)), c = pl.bestC, tot = pl.ev[c] + util(sp.hold, V.bombs[me]) - util(V.hold[me], V.bombs[me]);
+      rec = `${c}번 카드 내기`; why = `다른 사람이 같은 숫자를 낼 확률은 약 ${Math.round(pl.col[c] * 100)}%예요 (겹치면 이번 라운드는 아무것도 못 가져가요) · 기대 승점 변화 ${sgn(tot)}. 1~3은 폭탄을 피하기 쉽고, 4~5는 남은 것이 폭탄뿐일 위험이 커요.${sp.swaps.length ? ` 먼저 ${sp.swaps.map(s => `${CEM[s.from]}3개→${CEM[s.to]}1개`).join(", ")} 교환하면 별자리에 가까워져요.` : ""}`;
+    } else if (V.phase === "card") {
+      rec = "다른 사람을 기다려요";
+      const col = V.mine ? evalCards(V, me, TIER.hard, sampler(V.round * 7919 + me * 31 + V.hist.length)).col[V.mine] : null;
+      why = `카드는 모두가 낸 뒤 동시에 공개돼요 (${V.done.filter(Boolean).length}/${V.n}명 제출).${col != null ? ` 내가 낸 ${V.mine}번이 다른 사람과 겹칠 확률은 약 ${Math.round(col * 100)}%예요.` : ""} 테이블에는 별 ${tabN}개와 폭탄 ${V.tbomb}개가 있어요.`;
+    }
+    else if (V.phase === "pick" && V.picker === me) {
+      const tk = pickTake(V, me), g = takeGain(V, me, tk, []);
+      rec = `${itemTxt(tk)} 가져가기`;
+      why = `별자리를 빨리 채울 별부터, 폭탄은 마지막에 가져가요. 폭탄 3개를 받으면 바로 탈락이에요.${g ? ` 이렇게 가져가면 별자리 진행 ${sgn(g.prog)}점${g.pen ? ` · 폭탄 벌점 −${g.pen.toFixed(1)}점` : ""} → 합계 ${sgn(g.ev)}점이고 폭탄은 ${g.b1}개가 돼요.` : ""}`;
+    }
+    else if (V.phase === "pick") { rec = `${iga(who(V.picker))} 고르는 중`; why = `${V.pickK}개를 가져가요 (테이블에 별 ${tabN}개 · 폭탄 ${V.tbomb}개). 내 카드는 ${V.rev && V.rev.elim[me] ? "겹쳐서 제외됐어요" : "순서를 기다려요"}.`; }
     return { opp: oppTxt, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-stars", NEED, CP, CN, COL, CEM, PERCOL, MAX_ROUNDS, TIER, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, cardPlan, evalCards, greedyTake, planSwaps, ptsOf, consOf, util, doSwaps, freeOf };
+  return { id: "gn-stars", NEED, CP, CN, COL, CEM, PERCOL, MAX_ROUNDS, TIER, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, cardPlan, evalCards, evalActs, takeGain, greedyTake, planSwaps, ptsOf, consOf, util, doSwaps, freeOf };
 });

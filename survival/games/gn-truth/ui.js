@@ -191,6 +191,52 @@
     const asks = V.hist.filter(e => e.q).length, rings = V.hist.filter(e => e.rang).length;
     return V.draw ? `행동이 너무 많아 무승부 · 질문 ${asks}번` : `질문 ${asks}번 · 탐지기가 울린 횟수 ${rings}번 · ${V.codes ? `패스워드 ${V.codes[0]} / ${V.codes[1]}` : ""}`;
   }
+  // ── 🎞️ 복기 고리 ──
+  // 행동 한 줄 글. V = 그 수를 두기 전 그 자리 view (없어도 됨)
+  function actText(a, V) {
+    if (!a || typeof a !== "object") return "—";
+    const me = V && Number.isInteger(V.seat) && V.seat >= 0 ? V.seat : -1, shown = x => (typeof x === "boolean" ? (x ? "예" : "아니오") : String(x));
+    if (a.t === "code") return typeof a.code === "string" && /^[0-9]{4}$/.test(a.code) ? `비밀 패스워드 ${a.code} 정하기` : "비밀 패스워드 정하기";
+    if (a.t === "ask") return G.qValid(a.q) ? `질문 · ${G.qText(a.q)}` : "질문";
+    if (a.t === "guess") {
+      const g = typeof a.code === "string" ? a.code : "????";
+      if (me >= 0 && V.hist && typeof a.code === "string") {
+        try { const C = G.candidates(V, me); return `정답 시도 ${g} (후보 ${C.length.toLocaleString("ko-KR")}개 중 ${C.some(c => c.join("") === g) ? "하나" : "이미 후보에서 빠진 숫자"})`; } catch (e) { /* 아래로 */ }
+      }
+      return `정답 시도 ${g}`;
+    }
+    if (a.t === "answer") {
+      if (me >= 0 && V.pend && V.myCode) {
+        try { const q = V.pend, truth = G.evalQ(q, G.parse(V.myCode)); return `"${G.ansText(q, a.v)}"라고 답함${truth === a.v ? " (진실 — 탐지기가 울려요)" : " (거짓 ✅)"}`; } catch (e) { /* 아래로 */ }
+      }
+      return `"${shown(a.v)}"라고 답함`;
+    }
+    if (a.t === "item") return a.item === "double" ? "⚡ 더블 턴 쓰기" : "아이템 쓰기";
+    if (a.t === "nullify") return a.use ? "🚫 아이템 무효화 쓰기" : "무효화 안 쓰고 그냥 두기";
+    return "—";
+  }
+  // 내 수(myA)와 고급 AI 수(bestA) 뒤의 '대략 이길 확률' 을 같은 경주 계산(G.evalActs)으로 재요. 비교 못 하면 null
+  function review(V, seat, myA, bestA, info) {
+    if (!V || !myA || !bestA || typeof myA !== "object" || typeof bestA !== "object" || myA.t === "code") return null;
+    if (JSON.stringify(myA) === JSON.stringify(bestA)) return null;
+    let ev = null; try { ev = G.evalActs(V, seat, [myA, bestA]); } catch (e) { ev = null; }
+    const em = ev && ev[0], eb = ev && ev[1];
+    if (!em || !eb || !isFinite(em.p) || !isFinite(eb.p)) return null;
+    const pc = x => Math.round(x * 100) + "%", n0 = x => Math.round(x).toLocaleString("ko-KR");
+    const loss = Math.max(0, eb.p - em.p);
+    let cap = 100; if (em.item || eb.item) cap = 30; if (V.phase === "nul") cap = 45; if (info && info.same) cap = Math.min(cap, 50);   // 아이템은 나중에 써도 되니 큰 손해로 안 셈
+    const sev = Math.min(cap, Math.round(100 * loss / 0.5));
+    const my = actText(myA, V), best = actText(bestA, V), cmp = `이길 확률 약 ${pc(eb.p)}(고급 AI 수) → 내 수 ${pc(em.p)}`;
+    let why;
+    if (V.phase === "answer") why = `상대가 내 패스워드를 좁힌 후보: 내 답 뒤 약 ${n0(em.Ma)}개 (${em.rang ? "진실이라 숫자도 하나 공개돼요" : "거짓"}) / 고급 AI 답 뒤 약 ${n0(eb.Ma)}개 (${eb.rang ? "진실" : "거짓"}) — ${cmp}`;
+    else if (V.phase === "nul") why = `내 후보 ${n0(em.N)}개 · 상대 후보 ${n0(em.M)}개 — ${cmp}${em.Nn !== undefined ? ` (무효화로 상대 숫자 하나가 공개되면 내 후보가 약 ${n0(Math.max(1, em.N * 0.656))}개로 줄어요)` : ""} · 무효화는 한 번뿐이라 아껴 두는 것도 선택이에요`;
+    else {
+      const q2 = em.R !== undefined && eb.R !== undefined ? ` · 질문 뒤 남을 후보 기대 ${n0(em.R)}개 vs 고급 AI 수 ${n0(eb.R)}개` : "";
+      const g1 = em.pw !== undefined ? ` · 내 정답 시도가 맞을 확률 ${pc(em.pw)}${em.inC ? "" : " (이미 아닌 숫자예요)"}` : "";
+      why = `내 후보 ${n0(em.N)}개 · 상대가 내 패스워드를 좁힌 후보 ${n0(em.M)}개 — ${cmp}${q2}${g1}${em.item || eb.item ? " · 더블 턴은 나중에 써도 돼서 큰 손해로 안 세요" : ""} (후보를 절반씩 줄이는 경주로 어림한 값)`;
+    }
+    return { sev, why, my, best };
+  }
   function tutorial() {
     style();
     const ev = (cls, who, q, ans, extra) => `<div class="tr-ev ${cls}"><b>${who}</b> ${q}<div class="an ${extra ? "ring" : ""}">→ 답: <b>${ans}</b>${extra || ""}</div></div>`;
@@ -227,6 +273,8 @@
     sub: V => (V.over ? "끝" : `행동 ${V.count}/${V.limit}`),
     chip: (V, i) => ({ t: V.items && V.items.first === i ? "🚩 선" : "", on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (두 수를 '대략 이길 확률' 로 견줌)
+    actText, review,
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

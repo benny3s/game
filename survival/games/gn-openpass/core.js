@@ -346,6 +346,67 @@
     const a = actPlay(V, me, tier, r); return { t: a.t };
   }
 
+  // ── 복기 · 선생님이 같이 쓰는 평가 (AI 의 선택은 바꾸지 않아요 — 두 수를 같은 표본 · 같은 잣대로 재기만 해요) ──
+  const meanOf = a => a.reduce((s, x) => s + x, 0) / Math.max(1, a.length);
+  const sortedNum = a => a.slice().sort((x, y) => x - y);
+  function cdfBelow(sorted, x) {   // 정렬된 목록에서 x 보다 작을 몫 (같으면 반)
+    let lo = 0, hi = sorted.length; while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] < x) lo = m + 1; else hi = m; }
+    let lo2 = lo, hi2 = sorted.length; while (lo2 < hi2) { const m = (lo2 + hi2) >> 1; if (sorted[m] <= x) lo2 = m + 1; else hi2 = m; }
+    return (lo + 0.5 * (lo2 - lo)) / Math.max(1, sorted.length);
+  }
+  const beatProb = (A, B) => { const sb = sortedNum(B); return meanOf(A.map(x => cdfBelow(sb, x))); };   // 서로 독립으로 한 판씩 했을 때 A 가 이길 확률
+  const iyo = s => (/[013678]$/.test(String(s).replace(/[^0-9]/g, "")) ? "이에요" : "예요");   // 숫자 뒤 이에요/예요 (읽는 소리 받침 기준)
+  const lgShow = x => Math.round(Math.pow(10, x)).toLocaleString("ko-KR");   // 자릿수 평균 → 사람이 읽는 값 (대표 값)
+  function deckOutcomes(sel, trials, r, th) {   // 이 20장을 섞어서 끝까지 해 본 최종 값(자릿수)의 목록 — 앞면을 모르는 채로, 기본 규칙으로
+    const cards = []; for (const k of Object.keys(sel)) for (let c = 0; c < sel[k]; c++) cards.push(k);
+    const out = [];
+    for (let t = 0; t < trials; t++) {
+      const a = cards.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      out.push(lg(playRest([], 0, 0, a.map(faceOfKey), a.map(backOfKey), sel, th || TH.hard)));
+    }
+    return out;
+  }
+  // 덱 하나(20장) 평가: 끝까지 해 본 값들과 대표 값(자릿수 평균)
+  function evalDeck(sel, seed, trials) { const out = deckOutcomes(sel, trials || 800, sampler(seed), TH.hard); return { out, v: meanOf(out) }; }
+  // 구입 평가: 그 구입으로 가장 좋게 고른 20장(고급 AI 가 고르는 방식)을 끝까지 해 본 값들
+  function evalBuy(p, seed, trials) {
+    const pool = poolOf(p), sel = bestDeck(pool, sampler(seed), "hard", 60).sel, d = evalDeck(sel, seed + 7, trials);
+    return { sel, out: d.out, v: d.v };
+  }
+  // 이번 오픈 / 패스 평가 (내 차례): judgePlay 와 같은 표본 뽑기로 두 수를 재되, 값이 아니라 '이길 확률' 로 바꿔요
+  //  · 먼저 끝낸 사람이 있으면 → 지금 최고를 넘길 확률 · 내가 첫 차례면 → 상대도 내 덱과 비슷하다고 보고 다 이길 확률
+  function evalPlay(V, me, seed, trials) {
+    if (!V || V.phase !== "play" || V.cur !== me || !V.unk || !V.backs || !V.backs[me]) return null;
+    const r = sampler(seed), th = TH.hard, pos = V.pos[me], board = V.boards[me], ps = V.passes[me], backs = V.backs[me], canPass = ps < MAXPASS;
+    const T = bestOther(V), Tn = T ? num(T) : null, vo = [], vp = [];
+    for (let t = 0; t < trials; t++) {
+      const faces = sampleFaces(V.unk, backs, pos, r);
+      const unkO = Object.assign({}, V.unk), ko = gkey(backs[pos], faces[pos]); if (unkO[ko] > 0) unkO[ko]--;
+      vo.push(playRest(board.concat([faces[pos]]), ps, pos + 1, faces, backs, unkO, th));
+      vp.push(canPass ? playRest(board, ps + 1, pos + 1, faces, backs, V.unk, th) : null);
+    }
+    const res = { win: Tn !== null, T, nOpp: Math.max(1, V.n - 1), canPass, vOpen: lgShow(meanOf(vo.map(lg))), vPass: canPass ? lgShow(meanOf(vp.map(lg))) : null };
+    if (Tn !== null) {
+      res.open = meanOf(vo.map(x => (x > Tn ? 1 : 0)));
+      res.pass = canPass ? meanOf(vp.map(x => (x > Tn ? 1 : 0))) : null;
+    } else {
+      const F = V.mineSub ? sortedNum(deckOutcomes(V.mineSub, 300, sampler(seed + 99), th)) : null;
+      if (!F) return null;
+      const k = res.nOpp, win = x => Math.pow(cdfBelow(F, lg(x)), k);
+      res.open = meanOf(vo.map(win));
+      res.pass = canPass ? meanOf(vp.map(win)) : null;
+    }
+    return res;
+  }
+  // 아직 앞면을 모르는 내 카드 요약 (낸 20장 − 오픈한 카드, 패스한 카드 포함)
+  function unkInfo(V) {
+    const u = V && V.unk; if (!u) return null;
+    const o = { tot: 0, nums: 0, syms: 0, "+": 0, "-": 0, "*": 0, "/": 0 };
+    for (const k of Object.keys(u)) { const f = faceOfKey(k), c = u[k]; o.tot += c; if (typeof f === "number") o.nums += c; else { o.syms += c; o[f] += c; } }
+    return o;
+  }
+  const unkTxt = u => (u ? `아직 앞면을 모르는 내 카드 ${u.tot}장 (숫자 ${u.nums}장 · 기호 ${u.syms}장: ×${u["*"]} +${u["+"]} −${u["-"]} ÷${u["/"]})` : "");
+
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   const nm = (names, i) => (names && names[i]) || `${i + 1}번`;
   const packTxt = p => (p.some(Boolean) ? [p[0] ? `검정 팩 ${p[0]}` : "", p[1] ? `빨강 팩 ${p[1]}` : "", p[2] ? `파랑 팩 ${p[2]}` : ""].filter(Boolean).join(" · ") : "추가 팩 없음");
@@ -354,34 +415,47 @@
     const cnt = a => a.reduce((s, g) => s + g.n, 0);
     return `숫자 ${cnt(nums)}장 · 기호 ${cnt(syms)}장 (${SYMPRI.map(s => { const c = syms.filter(g => g.f === s).reduce((x, g) => x + g.n, 0); return c ? `${symTxt(s)}${c}` : ""; }).filter(Boolean).join(" ")})`;
   };
+  const pct = x => Math.round(x * 100) + "%";
   function coach(V, me, since, names) {
+    const inSeat = Number.isInteger(me) && me >= 0 && me < V.n && V.seat === me;
     const who = i => (i === me ? "나" : nm(names, i));
     const done = V.order.filter(s => V.vals[s]);
     if (V.over) {
-      const first = V.ranks.map((x, i) => (x === 0 ? i : -1)).filter(i => i >= 0);
-      return { opp: `결과: ${V.order.map(s => `${who(s)} ${showVal(V.vals[s])}`).join(" · ")}`, mine: `내 수식: ${exprText(V.boards[me]) || "(없음)"} = ${showVal(V.vals[me])}`, rec: first.includes(me) ? "우승이에요!" : "값이 가장 큰 사람이 우승이에요", why: "곱셈이 이어질수록 값이 크게 자라요. 큰 숫자와 × 카드를 많이 넣고, 연속된 숫자 · 기호는 칸만 낭비한다는 점이 핵심이에요." };
+      const first = V.ranks.map((x, i) => (x === 0 ? i : -1)).filter(i => i >= 0), tf = V.vals[first[0]];
+      const res = `결과: ${V.order.map(s => `${who(s)} ${showVal(V.vals[s])}`).join(" · ")}`;
+      if (!inSeat) { const low = V.vals.reduce((m, f) => (cmpF(f, m) < 0 ? f : m), V.vals[0]); return { opp: res, mine: `우승 ${first.map(who).join("·")} (${showVal(tf)}) · 가장 작은 값 ${showVal(low)}`, rec: "구경 중이에요", why: `${V.n}명 중 가장 큰 값 ${showVal(tf)} — 곱셈이 이어질수록 값이 크게 자라요. 패스는 사람마다 ${V.passes.join(" · ")}장 썼어요.` }; }
+      const b = V.boards[me], valid = keepSeq(b).length, muls = keepSeq(b).filter(f => f === "*").length, ratio = num(tf) > 0 && num(V.vals[me]) > 0 ? num(tf) / num(V.vals[me]) : null;
+      return { opp: res, mine: `내 수식: ${exprText(b) || "(없음)"} = ${showVal(V.vals[me])} · ${V.n}명 중 ${V.ranks[me] + 1}위 · 오픈 ${b.length}칸 · 패스 ${V.passes[me]}장`, rec: first.includes(me) ? "우승이에요!" : `값이 가장 큰 사람이 우승이에요${ratio ? ` — 1위(${showVal(tf)})는 내 값의 약 ${ratio >= 10 ? Math.round(ratio).toLocaleString("ko-KR") : ratio.toFixed(1)}배예요` : ""}`, why: `곱셈이 이어질수록 값이 크게 자라요. 내 수식은 쓰인 카드 ${valid}장 중 곱셈 ${muls}개, 겹쳐서 버려진 카드 ${b.length - valid}장이에요. 큰 숫자와 × 카드를 많이 넣고, 연속된 숫자 · 기호는 칸만 낭비한다는 점이 핵심이에요.` };
     }
     if (V.phase === "buy") {
-      const a = actBuy(V, "hard", sampler(V.n * 31 + me + 5));
-      return { opp: "다른 사람은 몇 팩을 살지 비밀이에요. 순서: " + V.order.map(who).join(" → "), mine: `가넷 ${V.gar}개 · 팩 가격 검정 1 · 빨강 2 · 파랑 3`, rec: packTxt(a.p), why: "파랑 팩에는 7·8·9 가 세 장씩과 × 3장, 10 도 들어 있어요. 큰 숫자와 ×(곱셈)가 많을수록 수식이 크게 자라요. 검정 팩은 작은 숫자 위주라 가넷이 남을 때만 사요." };
+      const a = actBuy(V, "hard", sampler(V.n * 31 + me + 5)), dn = V.buyDone.filter(Boolean).length, vr = evalBuy(a.p, 21, 400).v, v0 = a.p.some(Boolean) ? evalBuy([0, 0, 0], 21, 400).v : vr;
+      return { opp: `다른 ${V.n - 1}명도 모두 가넷 ${V.gar}개로 팩을 정하는 중이에요 (지금 ${dn}/${V.n}명 정했고, 구입은 모두 정한 뒤 공개돼요). 순서: ` + V.order.map(who).join(" → "), mine: `가넷 ${V.gar}개 · 팩 가격 검정 1 · 빨강 2 · 파랑 3 · 기본 카드 20장 (숫자 10장 · 기호 10장)`, rec: packTxt(a.p), why: `파랑 팩에는 7·8·9 가 세 장씩과 × 3장, 10 도 들어 있어요. 큰 숫자와 ×(곱셈)가 많을수록 수식이 크게 자라요. 검정 팩은 작은 숫자 위주라 가넷이 남을 때만 사요. 끝까지 해 봤을 때 대표 값(자릿수 평균)은 이 구입이면 약 ${lgShow(vr)}${a.p.some(Boolean) ? ` · 안 사면 약 ${lgShow(v0)}` : ""}${iyo(a.p.some(Boolean) ? lgShow(v0) : lgShow(vr))}.` };
     }
     if (V.phase === "submit") {
-      if (!V.pool) return { opp: "다른 사람이 낼 카드를 고르는 중이에요.", mine: "구입 결과를 기다려요", rec: "-", why: "-" };
-      const a = actSubmit(V, "hard", sampler(V.n * 17 + me + 3)), sel = a.sel;
-      return { opp: "다른 사람이 낼 카드는 비밀이에요 (뒷면만 보여요).", mine: `가진 카드 ${poolSize(Object.fromEntries(V.pool.map(g => [g.key, g.n])))}장 중 20장을 골라요`, rec: selTxt(sel), why: "수식은 숫자 · 기호가 번갈아야 해서 숫자 8~10장 · 기호 10~12장 정도가 좋아요. × 를 가장 먼저, 그다음 + 를 넣고 − · ÷ 는 마지막에 넣어요 (값을 줄이니까요)." };
+      const dn = V.subDone.filter(Boolean).length;
+      if (!V.pool) return { opp: `다른 사람이 낼 카드는 비밀이에요 (뒷면만 보여요) — 지금 ${dn}/${V.n}명이 냈어요.`, mine: inSeat ? "구입 결과를 기다려요" : "구경 중이에요", rec: "기다려요", why: `낼 카드는 사람마다 20장이에요 (기본 카드 20장 + 산 팩 중에서 고름). ${V.n}명이 모두 내면 시작해요.` };
+      const pool = Object.fromEntries(V.pool.map(g => [g.key, g.n])), a = actSubmit(V, "hard", sampler(V.n * 17 + me + 3)), sel = a.sel, dr = evalDeck(sel, 31, 400), da = evalDeck(autoPick(pool), 31, 400);
+      return { opp: `다른 사람이 낼 카드는 비밀이에요 (뒷면만 보여요) — 지금 ${dn}/${V.n}명이 냈어요.`, mine: `가진 카드 ${poolSize(pool)}장 중 20장을 골라요`, rec: selTxt(sel), why: `수식은 숫자 · 기호가 번갈아야 해서 숫자 8~10장 · 기호 10~12장 정도가 좋아요. × 를 가장 먼저, 그다음 + 를 넣고 − · ÷ 는 마지막에 넣어요 (값을 줄이니까요). 끝까지 해 봤을 때 대표 값(자릿수 평균)은 이 20장이면 약 ${lgShow(dr.v)}, 앞에서부터 20장을 그냥 고르면 약 ${lgShow(da.v)}${iyo(lgShow(da.v))}.` };
     }
-    const cur = V.cur, T = bestOther(V);
+    const cur = V.cur, T = bestOther(V), u = inSeat ? unkInfo(V) : null;
     const finished = done.map(s => `${who(s)} ${showVal(V.vals[s])}`).join(" · ") || "아직 없음";
-    const opp = `순서 ${V.order.map(who).join(" → ")} · 끝난 사람: ${finished}${T ? ` · 지금 최고 ${showVal(T)}` : ""}`;
-    if (cur !== me) return { opp, mine: `${who(cur)} 차례예요 · 수식 ${exprText(V.boards[cur]) || "(비어 있음)"}`, rec: "기다려요", why: "다른 사람이 오픈 · 패스를 고르는 중이에요." };
+    const opp = `순서 ${V.order.map(who).join(" → ")} · 끝난 사람 ${done.length}/${V.n}명: ${finished}${T ? ` · 지금 최고 ${showVal(T)}` : ""}`;
+    if (cur !== me) {
+      const wait = inSeat && !V.vals[me] ? V.order.indexOf(me) - V.order.indexOf(cur) : -1;
+      const mineTxt = `${who(cur)} 차례예요 · 수식 ${exprText(V.boards[cur]) || "(비어 있음)"} (${V.boards[cur].length}/${SLOTS}칸 · 패스 ${V.passes[cur]}/${MAXPASS})${inSeat ? (V.vals[me] ? ` · 내 수식은 끝났어요 = ${showVal(V.vals[me])}` : ` · 내 차례까지 ${wait}명 · ${unkTxt(u)}`) : ""}`;
+      return { opp, mine: mineTxt, rec: "기다려요", why: `다른 사람이 오픈 · 패스를 고르는 중이에요. ${T ? `지금 최고는 ${showVal(T)} — 내 수식이 이 값을 넘어야 이겨요.` : `아직 끝낸 사람이 없어요 (0/${V.n}명) — 내 수식은 나중에 이 중 가장 큰 값을 넘어야 이겨요.`}` };
+    }
     const p = V.pos[me], col = V.backs[me][p];
-    const mineTxt = `${V.boards[me].length}/${SLOTS}칸 · 패스 ${V.passes[me]}/${MAXPASS} · 수식 ${exprText(V.boards[me]) || "(비어 있음)"} = ${showVal(evalBoard(V.boards[me]))}`;
-    const j = judgePlay(V, me, "hard", sampler(p * 131 + V.passes[me] * 17 + me + 11), 70);
-    const pend = keepRaw(V.boards[me]); const last = pend[pend.length - 1];
-    const rec = V.passes[me] >= MAXPASS ? "오픈 (패스를 다 썼어요)" : j.open >= j.pass ? "오픈" : "패스";
-    const why = V.passes[me] >= MAXPASS ? "패스를 10장 다 써서 남은 카드는 자동으로 열려요." : `${BACK_NAME[col]} 뒷면 카드예요 — ${j.win ? `지금 최고(${showVal(T)})를 넘길 가능성이 오픈 ${Math.round(j.open * 100)}% · 패스 ${Math.round(j.pass * 100)}%` : `끝까지 해 봤을 때 대표 값(자릿수 평균)이 오픈 약 ${Math.round(Math.pow(10, j.open)).toLocaleString("ko-KR")} · 패스 약 ${Math.round(Math.pow(10, Math.max(0, j.pass))).toLocaleString("ko-KR")}`}예요. ${last === undefined ? "처음 칸에는 큰 숫자가 좋아요." : typeof last === "number" ? "숫자 뒤에는 기호(특히 ×)가 필요해요 — 숫자가 또 나오면 칸만 차지해요." : "기호 뒤에는 숫자가 필요해요 — 기호가 또 나오면 소용없어요."}`;
+    const mineTxt = `${V.boards[me].length}/${SLOTS}칸 · 패스 ${V.passes[me]}/${MAXPASS} · 수식 ${exprText(V.boards[me]) || "(비어 있음)"} = ${showVal(evalBoard(V.boards[me]))} · ${unkTxt(u)}`;
+    if (V.passes[me] >= MAXPASS) return { opp, mine: mineTxt, rec: "오픈 (패스를 다 썼어요)", why: `패스를 ${MAXPASS}장 다 써서 남은 카드 ${DECK - p}장은 자동으로 열려요.` };
+    const ev = evalPlay(V, me, p * 131 + V.passes[me] * 17 + me + 11, 500);
+    const pend = keepRaw(V.boards[me]), last = pend[pend.length - 1];
+    const tip = last === undefined ? "처음 칸에는 큰 숫자가 좋아요." : typeof last === "number" ? "숫자 뒤에는 기호(특히 ×)가 필요해요 — 숫자가 또 나오면 칸만 차지해요." : "기호 뒤에는 숫자가 필요해요 — 기호가 또 나오면 소용없어요.";
+    if (!ev) return { opp, mine: mineTxt, rec: "오픈", why: `${BACK_NAME[col]} 뒷면 카드예요. ${tip}` };
+    const rec = ev.open >= ev.pass ? "오픈" : "패스";
+    const why = `${BACK_NAME[col]} 뒷면 카드예요 — ${ev.win ? `지금 최고(${showVal(ev.T)})를 넘길 확률이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}` : `이길 확률(상대 ${ev.nOpp}명도 내 덱과 비슷하다고 볼 때)이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}`}예요 (끝까지 해 봤을 때 대표 값 오픈 약 ${ev.vOpen} · 패스 약 ${ev.vPass}). ${tip}`;
     return { opp, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-openpass", TH, want, playRest, sampleFaces, judgePlay, pickDeck, simDeck, bestDeck, allBuys, ai, coach, packTxt, selTxt, bestOther, DECK, SLOTS, MAXPASS, MAXBUY, SYM, BACKS, BACK_NAME, BASE, PACKS, init, needs, apply, view, over, ranks, legal, auto, advance, poolOf, poolSize, groupList, buyCost, faceOfKey, backOfKey, gkey, keepRaw, keepSeq, evalBoard, num, cmpF, showVal, exprText, symTxt, sampler, hash, autoPick };
+  return { id: "gn-openpass", TH, want, playRest, sampleFaces, judgePlay, pickDeck, simDeck, bestDeck, allBuys, ai, coach, packTxt, selTxt, bestOther, DECK, SLOTS, MAXPASS, MAXBUY, SYM, BACKS, BACK_NAME, BASE, PACKS, init, needs, apply, view, over, ranks, legal, auto, advance, poolOf, poolSize, groupList, buyCost, faceOfKey, backOfKey, gkey, keepRaw, keepSeq, evalBoard, num, cmpF, showVal, exprText, symTxt, sampler, hash, autoPick, deckOutcomes, evalDeck, evalBuy, evalPlay, beatProb, lgShow, unkInfo, unkTxt };
 });

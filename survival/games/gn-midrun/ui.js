@@ -191,6 +191,24 @@
     sub: V => (V.over ? "끝" : `${V.round + 1}라운드`),
     chip: (V, i) => ({ t: V.over ? `${V.places.indexOf(i) + 1}등` : V.fin[i] >= 0 ? `🏁${V.fin[i] + 1}등` : `${V.pos[i]}칸`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
+    // 🎞️ 복기: 행동 한 줄 글 · 아쉬운 수 (같은 표본으로 두 수를 끝까지 해 봐서 우승 순위로 골인할 확률을 견줘요 · 모두 공개라 그 자리 view 로 충분)
+    actText: (a, V, names) => G.actText(a, i => (names && names[i]) || `${i + 1}번`, V),
+    review: (V, seat, myA, bestA, info) => {
+      try {
+        if (!V || !myA || !bestA || typeof seat !== "number" || V.over || V.cur !== seat) return null;
+        const seed = ((info && info.seed) >>> 0) ^ Math.imul(((info && info.k) | 0) + 1, 0x9e3779b1) ^ Math.imul(V.turnNo + 1, 0x85ebca6b);
+        const c = G.compareActs(V, seat, myA, bestA, seed >>> 0, 300);
+        if (!c) return null;
+        const names = info && info.names, nmOf = i => (names && names[i]) || `${i + 1}번`, nmf = i => (i === seat ? "나" : nmOf(i));
+        const loss = Math.max(0, c.dV), noise = loss < 2 * c.se + 0.005;   // 보상 차이가 표본 오차 안이면 '거의 같음'
+        let sev = Math.round(Math.min(100, (100 * loss) / 0.14));
+        if (noise) sev = Math.min(sev, 15);
+        const pc = x => `${Math.round(x * 100)}%`, wTxt = V.W.map(w => `${w}등`).join("·");
+        const place = 1 + V.pos.filter(p => p > V.pos[seat]).length;
+        const tail = noise ? " — 두 수의 차이는 표본 오차 안이라 거의 같아요" : c.dV < 0 ? "" : ` (기대 점수 ${c.best.v.toFixed(2)} vs ${c.my.v.toFixed(2)})`;
+        return { sev, why: `우승 순위(${wTxt})로 골인할 확률: 고급 AI 수 약 ${pc(c.best.wp)} → 내 수 ${pc(c.my.wp)}${tail} · 지금 내 ${V.pos[seat]}칸(${place}위)` };
+      } catch (e) { return null; }
+    },
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     qa: (V, me, rnd) => G.ai(V, me, "easy", rnd),
     tutorial,

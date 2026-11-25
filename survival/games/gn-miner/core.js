@@ -240,34 +240,79 @@
     const a = actMine(V, me, tier, r); return { t: a.t };
   }
 
+  // ── 🎞️ 복기용 평가 (보이는 것만 · 같은 표본 · 고정 씨앗 — ai() 의 선택은 바꾸지 않아요) ─────────
+  // 제시 두 값(내 것 · 고급 AI 것)을 같은 표본(광부들이 캘 점수 · 다른 제시자 점수)으로 견줘요 → 평균 점수 · 'M<S' 확률 · 차이의 표준오차
+  function compareBids(V, me, myV, bestV, seed, trials) {
+    if (!V || V.phase !== "bid" || !V.pres.includes(me) || V.bidDone[me]) return null;
+    const ok = x => Number.isInteger(x) && x >= BMIN && x <= BMAX;
+    if (!ok(myV) || !ok(bestV) || myV === bestV) return null;
+    const T = Math.max(20, trials | 0 || 200), r = sampler(seed >>> 0), miners = V.miners, others = V.pres.filter(s => s !== me);
+    const d = { my: [], best: [] }, sh = { my: 0, best: 0 }; let sM = 0, sO = 0;
+    for (let i = 0; i < T; i++) {
+      const m = sampleM(V, r), ob = sampleBids(V, others.length, r);
+      sM += m.M; sO += ob.reduce((x, y) => x + y, 0);
+      for (const k of ["my", "best"]) {
+        const bids = { [me]: k === "my" ? myV : bestV }; others.forEach((s, j) => { bids[s] = ob[j]; });
+        const res = settle(bids, miners, m.M, m.B); d[k].push(res.d[me]); if (res.kind === "short") sh[k]++;
+      }
+    }
+    return paired(d.my, d.best, { avgM: sM / T, avgOthers: sO / T, pShortMy: sh.my / T, pShortBest: sh.best / T, trials: T });
+  }
+  function paired(xm, xb, extra) {   // 두 수의 평균 · 차이(고급−내) · 차이의 표준오차
+    const mean = a => a.reduce((p, q) => p + q, 0) / a.length, df = xb.map((x, i) => x - xm[i]), md = mean(df);
+    const sd = Math.sqrt(df.reduce((p, q) => p + (q - md) * (q - md), 0) / Math.max(1, df.length - 1));
+    return Object.assign({ evMy: mean(xm), evBest: mean(xb), dEv: md, se: sd / Math.sqrt(df.length) }, extra);
+  }
+  // 광부의 '꺼내기 vs 스톱' — actMine(어려움)과 같은 식으로 두 수의 평균 몫을 같은 표본으로 견줘요
+  function compareMine(V, me, myT, bestT, seed, trials) {
+    if (!V || V.phase !== "mine" || V.cur !== me || V.over) return null;
+    if (!(myT === "draw" || myT === "stop") || !(bestT === "draw" || bestT === "stop") || myT === bestT) return null;
+    const T = Math.max(20, trials | 0 || 200), r = sampler(seed >>> 0), Tg = targetT(V), dStop = [], dDraw = []; let sS = 0;
+    for (let i = 0; i < T; i++) {
+      const S = sampleBids(V, 6, r).reduce((a, b) => a + b, 0), left = Object.assign({}, V.left), drawn = V.drawn.slice();
+      sS += S; dStop.push(share(V.M, V.B, S, 3));
+      drawn.push(drawFrom(left, r));
+      const tt = tally(drawn); let M = tt.M, B = tt.b;
+      if (B < 3) { const m = simMine(drawn, Tg, r); M = m.M; B = m.B; }
+      dDraw.push(share(M, B, S, 3));
+    }
+    const mv = a => a.reduce((p, q) => p + q, 0) / a.length, pBomb = V.bagN ? V.left.b / V.bagN : 0;
+    const my = myT === "draw" ? dDraw : dStop, best = bestT === "draw" ? dDraw : dStop;
+    return paired(my, best, { avgS: sS / T, pBomb, dDraw: mv(dDraw), dStop: mv(dStop), trials: T });
+  }
+
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   const nm = (names, i) => (names && names[i]) || `${i + 1}번`;
   const teamTxt = (V, g, who) => V.groups[g].map(who).join("·");
   function coach(V, me, since, names) {
     const who = i => (i === me ? "나" : nm(names, i));
-    if (!(me >= 0 && me < N)) return { opp: "구경 중이에요", mine: `${V.round + 1}라운드 · 순서 ${V.pos + 1}/3`, rec: "-", why: "자리에 앉은 사람에게만 추천이 나와요." };
+    if (!(me >= 0 && me < N)) return { opp: V.hist.length ? `지난 ${V.hist.length}조 평균 제시 합 ${Math.round(meanS(V))}점` : `아직 지난 조가 없어요 (광물 ${BAGN}개 중 폭탄 ${BAG.b}개)`, mine: `${V.round + 1}라운드 · 순서 ${V.pos + 1}/3 · ${V.turn}/${TURNS}조 지남`, rec: "-", why: "자리에 앉은 사람에게만 추천이 나와요." };
     const myG = V.gOf[me];
     if (V.over) {
       const first = V.ranks.map((x, i) => (x === 0 ? i : -1)).filter(i => i >= 0), mx = Math.max(...V.ranks), last = V.ranks.map((x, i) => (x === mx ? i : -1)).filter(i => i >= 0);
-      return { opp: `최종 점수: ${V.score.map((s, i) => `${who(i)} ${s}`).join(" · ")}`, mine: `내 점수 ${V.score[me]}점 · ${V.ranks[me] + 1}위`, rec: first.includes(me) ? "우승이에요!" : "점수 합계가 가장 높은 사람이 우승이에요", why: `우승 ${first.map(who).join("·")} · 꼴찌 ${last.map(who).join("·")}. 광부일 땐 제시 합(S)을 넘기지 않게, 제시자일 땐 광부가 캘 만큼만 제시하는 게 핵심이에요.` };
+      return { opp: `최종 점수: ${V.score.map((s, i) => `${who(i)} ${s}`).join(" · ")}`, mine: `내 점수 ${V.score[me]}점 · ${V.ranks[me] + 1}위`, rec: first.includes(me) ? `우승이에요! (${V.score[me]}점)` : `점수 합계 1위는 ${Math.max(...V.score)}점 — 나와 ${Math.max(...V.score) - V.score[me]}점 차이였어요`, why: `우승 ${first.map(who).join("·")}(${Math.max(...V.score)}점) · 꼴찌 ${last.map(who).join("·")}(${Math.min(...V.score)}점). 광부일 땐 제시 합(S)을 넘기지 않게, 제시자일 땐 광부가 캘 만큼만 제시하는 게 핵심이에요.` };
     }
     const hs = V.hist, avgM = hs.length ? Math.round(hs.reduce((a, h) => a + h.M, 0) / hs.length) : null, avgS = hs.length ? Math.round(hs.reduce((a, h) => a + h.S, 0) / hs.length) : null;
     const bombs = hs.filter(h => h.B >= 3).length, shorts = hs.filter(h => h.kind === "short").length;
-    const opp = hs.length ? `지난 ${hs.length}조: 평균 채굴 ${avgM}점 · 평균 제시 합 ${avgS}점 · 목표 모자람 ${shorts}번 · 폭탄 3개 ${bombs}번` : "아직 지난 조가 없어요 — 평균 제시 합은 알 수 없어요";
+    const opp = hs.length ? `지난 ${hs.length}조: 평균 채굴 ${avgM}점 · 평균 제시 합 ${avgS}점 · 목표 모자람 ${shorts}번 · 폭탄 3개 ${bombs}번` : `아직 지난 조가 없어요 — 처음엔 제시 합을 ${Math.round(meanS(V))}점쯤(6명 × 4점)으로 보고, 광물 ${BAGN}개 중 폭탄은 ${BAG.b}개(약 ${Math.round(100 * BAG.b / BAGN)}%)예요`;
     const ownTurns = hs.filter(h => h.miners.includes(me)).length;
     const mine = `내 점수 ${V.score[me]}점 (${V.ranks ? "" : `내 조 합계 ${V.tscore[myG]}`}) · 광부 ${ownTurns}번 지남 · 이번 조: ${V.miners.map(who).join(" → ")}`;
+    const Sx = Math.round(meanS(V)), done = V.bidDone.filter(Boolean).length;
     if (V.phase === "bid") {
-      if (V.gOf[V.miners[0]] === myG) return { opp, mine, rec: "제시자들이 정하는 동안 기다려요", why: `제시자 ${V.pres.length}명이 비밀로 점수를 정하고 있어요 (${V.bidDone.filter(Boolean).length}/${V.pres.length}명 완료). 그다음 내 조가 광물을 캐요 — 제시 합(S)보다 많이 캐면 남는 점수를 우리 조가 나눠요.` };
-      if (V.bidDone[me]) return { opp, mine, rec: `내 제시 ${V.mineBid}점 — 기다려요`, why: "다른 제시자를 기다리는 중이에요." };
+      if (V.gOf[V.miners[0]] === myG) return { opp, mine, rec: "제시자들이 정하는 동안 기다려요", why: `제시자 ${V.pres.length}명이 비밀로 점수를 정하고 있어요 (${done}/${V.pres.length}명 완료). 제시 합(S)은 평균 ${Sx}점쯤으로 보여요 — 그보다 많이 캐면(M ≥ S) 남는 (M−S)점을 우리 조 3명이 나눠요.` };
+      if (V.bidDone[me]) return { opp, mine, rec: `내 제시 ${V.mineBid}점 — 기다려요`, why: `다른 제시자 ${done - 1}/${V.pres.length - 1}명이 정했어요. 제시 합(S)은 평균 ${Sx}점쯤으로 보여요 — 광부가 그만큼 캐면 내 ${V.mineBid}점을 받고, 모자라면 0점이에요.` };
       const a = actBid(V, me, "hard", sampler(V.turn * 131 + me * 7 + V.score[me] + 3)), emp = allBids(V), base = emp.length ? Math.round(emp.reduce((x, y) => x + y, 0) / emp.length) : 4;
-      return { opp, mine, rec: `${a.v}점 제시`, why: `광부 3명이 평균 ${avgM === null ? "20점 안팎" : avgM + "점"}쯤 캔다고 보고, 다른 제시자들이 평균 ${base}점씩 낸다고 가정해 계산했어요. 6명의 제시 합(S)이 채굴 점수(M)보다 크면 모두 0점이고 가장 높게 낸 사람은 자기 점수만큼 잃어요 — 너무 높게도, 너무 낮게도 말아요.` };
+      return { opp, mine, rec: `${a.v}점 제시`, why: `광부 3명이 평균 ${avgM === null ? "20점 안팎" : avgM + "점"}쯤 캔다고 보고, 다른 제시자들이 평균 ${base}점씩 낸다고 가정해 계산했어요${a.ev !== undefined ? ` (이 제시의 기대 점수 약 ${a.ev >= 0 ? "+" : ""}${a.ev.toFixed(1)}점)` : ""}. 6명의 제시 합(S)이 채굴 점수(M)보다 크면 모두 0점이고 가장 높게 낸 사람은 자기 점수만큼 잃어요 — 너무 높게도, 너무 낮게도 말아요.` };
     }
-    const cur = V.cur;
-    if (cur !== me) return { opp, mine, rec: "기다려요", why: `${who(cur)} 차례예요 · 지금까지 ${V.drawn.length}개 · 채굴 ${V.M}점 · 폭탄 ${V.B}개.` };
-    const a = actMine(V, me, "hard", sampler(V.turn * 71 + V.drawn.length * 13 + me + 9)), rest = V.bagN, p = rest ? V.left.b / rest : 0;
+    const cur = V.cur, rest = V.bagN, p = rest ? V.left.b / rest : 0, pct = Math.round(p * 100);
+    if (cur !== me) {
+      const isMiner = V.miners.includes(me), wait = isMiner ? ` 같은 조 광부로서 M ≥ S(평균 ${Sx}점)가 되면 (M−S)÷3 을 받아요.` : V.mineBid !== null ? ` 내 제시 ${V.mineBid}점은 M ≥ S(평균 ${Sx}점)일 때만 받아요 — 지금 채굴 ${V.M}점은 그 ${Math.round(100 * V.M / Math.max(1, Sx))}%예요.` : "";
+      return { opp, mine, rec: "기다려요", why: `${who(cur)} 차례예요 · 지금까지 ${V.drawn.length}개 · 채굴 ${V.M}점 · 폭탄 ${V.B}/3개 · 다음에 폭탄이 나올 확률 약 ${pct}%.${wait}` };
+    }
+    const a = actMine(V, me, "hard", sampler(V.turn * 71 + V.drawn.length * 13 + me + 9));
     const exp = meanS(V);
-    return { opp, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: a.t === "draw" ? "하나 더 꺼내요" : "스톱", why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S 를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3 을 받지만 폭탄이 3개면 0점이에요. 다음에 폭탄이 나올 확률은 약 ${Math.round(p * 100)}% (남은 ${V.left.b}/${rest}).${a.dDraw !== undefined ? ` 계산: 꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점.` : ""}` };
+    return { opp, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: `${a.t === "draw" ? "하나 더 꺼내요" : "스톱"}${a.dDraw !== undefined ? ` (꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점)` : ""}`, why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S 를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3 을 받지만 폭탄이 3개면 0점이에요. 다음에 폭탄이 나올 확률은 약 ${pct}% (남은 ${V.left.b}/${rest}).${a.dDraw !== undefined ? ` 계산: 꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점.` : ""}` };
   }
 
-  return { id: "gn-miner", N, TURNS, BMIN, BMAX, TEAM, BAG, VAL, NAME, EM, BAGN, init, needs, apply, view, over, ranks, legal, auto, advance, tally, leftOf, settle, share, minerDraw, simMine, sampleBids, evalBids, actBid, actMine, ai, coach, meanS, allBids, sampler, hash, CANDS };
+  return { id: "gn-miner", N, TURNS, BMIN, BMAX, TEAM, BAG, VAL, NAME, EM, BAGN, init, needs, apply, view, over, ranks, legal, auto, advance, tally, leftOf, settle, share, compareBids, compareMine, minerDraw, simMine, sampleBids, evalBids, actBid, actMine, ai, coach, meanS, allBids, sampler, hash, CANDS };
 });

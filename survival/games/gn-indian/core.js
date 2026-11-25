@@ -192,16 +192,17 @@
     return { n: 2, phase: "bet", chips: V.chips.map((c, i) => (i === me ? Math.max(0, c - (X - V.contrib[me])) : c)), contrib, carry: V.carry, cur: X, cap: V.cap, canRaise: V.cap > X, used: V.used, cards, turn: opp,
       log: [{ k: "round", i: 0 }, { k: "bet", s: me, a: "raise", to: X, i: 1 }] };
   }
-  function planEV(V, me, r) {
+  // 수 하나의 기대 칩(이번 판 시작 기준)을 재는 틀. planEV(고급 AI 의 선택)와 evalActs(복기 · 선생님)가 같은 식을 씀 — K = 상대 응답 표본 수(AI 는 6)
+  function evCtx(V, me, r, K) {
     const opp = 1 - me, o = V.cards[opp], P = posterior(V, me, "hard"), m = V.contrib[me], q = V.contrib[opp], carry = V.carry, need = V.cur - m;
     const room = V.cap - V.cur, cands = [{ t: "fold" }];
     if (need <= V.chips[me]) cands.push({ t: "call" });
     if (V.canRaise) { const seen = new Set(); for (const f of [0.15, 0.35, 0.6, 1]) { const to = Math.min(V.cap, V.cur + Math.max(1, Math.round(room * f))); if (!seen.has(to)) { seen.add(to); cands.push({ t: "raise", to }); } } }
-    const oppChips = V.chips[opp], penOpp = o === 10 ? Math.min(PEN, oppChips) : 0, K = 6, base = Math.floor(r() * 1e9);
+    const oppChips = V.chips[opp], penOpp = o === 10 ? Math.min(PEN, oppChips) : 0, base = Math.floor(r() * 1e9);
+    K = K || 6;
     const rg = i => { let a = (base + i * 7919) >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
     const show = (c, fin) => (c > o ? fin + carry : c < o ? -fin : 0);   // 맞춰 보였을 때(각자 fin 칩): 이기면 상대 몫 + 이월, 지면 내 몫, 비기면 0
-    let best = null;
-    for (const a of cands) {
+    const evOf = a => {
       let ev = 0, rf = 0, rc = 0;   // rf/rc: 상대가 재레이즈했을 때 내가 폴드/콜하는 값(합쳐서 더 나은 쪽)
       for (let c = 1; c <= 10; c++) {
         const pc = P.p[c]; if (!(pc > 0)) continue;
@@ -219,9 +220,19 @@
         ev += pc * sum / K;
       }
       if (a.t === "raise") ev += Math.max(rf, rc);
-      if (!best || ev > best.ev + 1e-9) best = { a, ev };
-    }
-    return { a: best.a, ev: best.ev, P, need };
+      return ev;
+    };
+    return { P, need, cands, evOf };
+  }
+  function planEV(V, me, r) {
+    const X = evCtx(V, me, r); let best = null;
+    for (const a of X.cands) { const ev = X.evOf(a); if (!best || ev > best.ev + 1e-9) best = { a, ev }; }
+    return { a: best.a, ev: best.ev, P: X.P, need: X.need };
+  }
+  // 복기 · 선생님용: 기본 후보(폴드 · 콜 · 레이즈 몇 가지)의 기대 칩 표 + extra 로 준 수들의 기대 칩(ex)을 같은 표본으로 잼. view 는 안 바꾸고 ai() 의 선택과 무관.
+  function evalActs(V, me, r, extra, K) {
+    const X = evCtx(V, me, r, K);
+    return { P: X.P, need: X.need, list: X.cands.map(a => ({ a, ev: X.evOf(a) })), ex: (extra || []).map(a => X.evOf(a)) };
   }
   function ai(V, me, tier, r) {
     if (V.phase !== "bet" || !V.needs.includes(me)) return null;
@@ -231,33 +242,57 @@
 
   // ── AI 선생님 (보이는 것만) ─────────────────────────────────
   const pc = x => Math.round(x * 100) + "%";
+  const sg = v => (v < -0.05 ? "−" : "+") + Math.abs(v).toFixed(1);   // 부호 붙인 칩 (소수 1자리)
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const jong = s => { const t = String(s).replace(/[^0-9A-Za-z가-힣]+$/, ""), ch = t.slice(-1), c = ch.charCodeAt(0); if (c >= 0xAC00 && c <= 0xD7A3) return (c - 0xAC00) % 28; if (ch >= "0" && ch <= "9") return "013678".includes(ch) ? 1 : 0; return 0; };
+  const josa = (name, withJ, noJ) => esc(name) + (jong(name) ? withJ : noJ);   // 받침 있으면 withJ · 없으면 noJ
+  const lastRaises = (V, who) => V.log.filter(e => e.k === "bet" && e.s === who && e.a === "raise" && e.i >= roundStart(V));
+  const stat = (H, me) => ({ n: H.length, w: H.filter(x => x.type !== "draw" && x.win === me).length, l: H.filter(x => x.type !== "draw" && x.win === 1 - me).length, d: H.filter(x => x.type === "draw").length, foldOpp: H.filter(x => x.type === "fold" && x.win === me).length, foldMe: H.filter(x => x.type === "fold" && x.win === 1 - me).length, penMe: H.filter(x => x.pen && x.win === 1 - me).length });
   function coach(V, me, since, names) {
-    const nm = i => (names && names[i]) || `${i + 1}번`;
-    const opp = 1 - me;
-    if (V.over) return { opp: "승부가 끝났어요.", mine: `내 칩 ${V.chips[me]} · 상대 ${V.chips[opp]}`, rec: V.ranks[me] === 0 ? "이겼어요! 한 판 더?" : "아쉬워요 — 남은 카드를 세며 다시!", why: "" };
-    if (V.phase !== "bet") {
-      const r = V.res;
-      return { opp: r ? `${nm(opp)} 카드 ${r.cards[opp]} · 내 카드 ${r.cards[me]}${r.type === "fold" ? ` — ${r.folder === me ? "내가" : nm(opp) + "이"} 폴드${r.pen ? ` (10 페널티 ${r.pen}칩)` : ""}` : ""}` : "다음 판을 준비해요.", mine: `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]}${V.carry ? ` · 이월 판돈 ${V.carry}` : ""}`, rec: "결과를 보고 남은 카드를 머리에 새겨요", why: `20장 중 ${V.used.length}장이 지나갔어요.` };
+    me = me === 1 ? 1 : 0;
+    const raw = i => String((names && names[i]) || `${i + 1}번`), nm = i => esc(raw(i)), opp = 1 - me, H = V.hist || [], S = stat(H, me);
+    if (V.over) {
+      const df = V.chips[me] - V.chips[opp];
+      return { opp: `승부가 끝났어요 — ${nm(opp)}의 칩 ${V.chips[opp]}.`, mine: `내 칩 ${V.chips[me]} : 상대 ${V.chips[opp]} (${df >= 0 ? "+" : "−"}${Math.abs(df)} · ${V.round}판 진행, 시작 칩 ${V.start})`,
+        rec: df > 0 ? "이겼어요! 한 판 더?" : df === 0 ? "비겼어요 — 다시 겨뤄 봐요" : "아쉬워요 — 남은 카드를 세며 다시!",
+        why: S.n ? `마지막 ${S.n}판 기록: 내가 이긴 판 ${S.w} · 상대가 이긴 판 ${S.l} · 무승부 ${S.d} · 폴드는 나 ${S.foldMe}번 / 상대 ${S.foldOpp}번${S.penMe ? ` · 내가 10 을 들고 폴드한 판 ${S.penMe}번` : ""}.` : "기록된 판이 없어요." };
     }
-    const o = V.cards[opp], P = posterior(V, me, "hard");
-    const evs = V.log.filter(e => e.k === "bet" && e.s === opp && e.i >= roundStart(V));
-    const lastE = evs[evs.length - 1];
-    const oppTxt = lastE ? `${nm(opp)}이 ${lastE.a === "raise" ? `${lastE.to}칩까지 레이즈` : "콜"} — 내 카드가 낮다는 신호일 수도, 허세일 수도 있어요 (상대 카드는 ${o}).` : `${nm(opp)}의 카드는 ${o}. 아직 베팅이 없어요.`;
+    if (V.phase !== "bet") {
+      const r = V.res, cnt = Array(11).fill(2); for (const c of V.used) cnt[c]--;
+      const left = cnt.reduce((a, b, i) => a + (i ? Math.max(0, b) : 0), 0), hi = cnt.slice(8).reduce((a, b) => a + Math.max(0, b), 0), gone = []; for (let c = 1; c <= 10; c++) if (cnt[c] <= 0) gone.push(c);
+      let net = 0, outT = "";
+      if (r) {
+        net = r.type === "draw" ? 0 : r.win === me ? r.gain - r.contrib[me] : -r.contrib[me] - (r.pen || 0);
+        outT = r.type === "draw" ? ` — 무승부 (판돈 ${r.pot}칩은 다음 판으로)` : r.type === "fold" ? ` — ${r.folder === me ? "내가" : josa(raw(opp), "이", "가")} 폴드${r.pen ? ` (10 페널티 ${r.pen}칩)` : ""}` : ` — ${r.win === me ? "내가" : josa(raw(opp), "이", "가")} 이겼어요 (판돈 ${r.pot}칩)`;
+      }
+      return { opp: r ? `${nm(opp)} 카드 ${r.cards[opp]} · 내 카드 ${r.cards[me]}${outT}` : "다음 판을 준비해요.",
+        mine: `${r ? `이번 판 ${net >= 0 ? "+" : "−"}${Math.abs(net)}칩 → ` : ""}칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]}${V.carry ? ` · 이월 판돈 ${V.carry}` : ""}`,
+        rec: `덱에 ${left}장 남았어요 — 8 이상이 ${hi}장 (${left ? pc(hi / left) : "0%"})${gone.length ? ` · 다 나온 숫자 ${gone.join(" · ")}` : ""}`,
+        why: `20장 중 ${V.used.length}장이 지나갔어요${S.n ? ` · 최근 ${S.n}판: 내가 ${S.w}번 · 상대가 ${S.l}번 이김, 무승부 ${S.d}번` : ""}.` };
+    }
+    const o = V.cards[opp], P = posterior(V, me, "hard"), m = V.contrib[me], need = V.cur - m;
+    const P0 = posterior(Object.assign({}, V, { log: V.log.filter(e => !(e.k === "bet" && e.s === opp && e.a === "raise")) }), me, "hard");
+    const rs = lastRaises(V, opp), lastR = rs[rs.length - 1];
+    const oppTxt = (lastR ? `${josa(raw(opp), "이", "가")} ${lastR.to}칩까지 레이즈 — 레이즈 전엔 내 이길 확률 ${pc(P0.win)}, 지금은 ${pc(P.win)}예요 (낮다는 신호일 수도, 허세일 수도 있어요). 상대 카드는 ${o}.` : `${nm(opp)}의 카드는 ${o}. 아직 베팅이 없어요 (상대 칩 ${V.chips[opp]}).`) + (S.n ? ` 최근 ${S.n}판 중 상대 폴드 ${S.foldOpp}번.` : "");
     const left = []; for (let c = 1; c <= 10; c++) { const n = 2 - V.used.filter(x => x === c).length - (o === c ? 1 : 0); if (n > 0) left.push(c + (n > 1 ? "×2" : "")); }
-    const mineTxt = `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]} · 판돈 ${V.pot}${V.carry ? ` (이월 ${V.carry} 포함)` : ""} · 내 카드가 ${o}보다 클 확률 ${pc(P.win)} · 같을 확률 ${pc(P.draw)} · 10일 확률 ${pc(P.p10)}`;
+    const mineTxt = `칩 나 ${V.chips[me]} : 상대 ${V.chips[opp]} · 내가 건 칩 ${m} · 판돈 ${V.pot}${V.carry ? ` (이월 ${V.carry} 포함)` : ""} · 내 카드가 ${o}보다 클 확률 ${pc(P.win)} · 같을 확률 ${pc(P.draw)} · 10일 확률 ${pc(P.p10)}`;
     let rec = "상대 차례를 기다려요", why = "";
     if (V.needs.includes(me)) {
-      const pl = planEV(V, me, () => 0.5);
-      const t = pl.a.t;
-      rec = t === "fold" ? "폴드하기" : t === "call" ? (pl.need > 0 ? `콜 (${pl.need}칩)` : "콜 (바로 공개)") : `레이즈 → ${pl.a.to}칩`;
-      if (t === "fold") why = `이길 확률 ${pc(P.win)}로 콜의 기대값이 낮아요. 단, 내 카드가 10일 확률 ${pc(P.p10)} × 페널티 10칩도 계산했어요.`;
+      const E = evalActs(V, me, () => 0.5), pl = E.list.reduce((b, x) => (!b || x.ev > b.ev + 1e-9 ? x : b), null), t = pl.a.t;   // ai() 의 고급(planEV)과 같은 식 · 같은 표본
+      rec = t === "fold" ? "폴드하기" : t === "call" ? (E.need > 0 ? `콜 (${E.need}칩)` : "콜 (바로 공개)") : `레이즈 → ${pl.a.to}칩`;
+      if (t === "fold") why = `이길 확률 ${pc(P.win)}로 콜의 기대값이 낮아요.${P.p10 >= 0.005 ? ` 단, 내 카드가 10일 확률 ${pc(P.p10)} × 페널티 10칩도 계산했어요.` : ""}`;
       else if (t === "raise") why = `이길 확률이 ${pc(P.win)}라 판돈을 키워요. 상대는 내 카드를 보고 있다는 점도 기억해요.`;
-      else why = pl.need > 0 ? `이길 확률 ${pc(P.win)}로 ${pl.need}칩을 내고 맞서 볼 만해요.` : `더 걸 만큼 앞서지 않아요 (이길 확률 ${pc(P.win)}). 공개하면 손해는 기본 베팅뿐이에요.`;
-      why += ` 이 수의 기대 칩은 ${pl.ev >= 0 ? "+" : ""}${pl.ev.toFixed(1)} (상대가 보이는 카드로 두는 대로 가정해 계산).`;
+      else why = E.need > 0 ? `이길 확률 ${pc(P.win)}로 ${E.need}칩을 내고 맞서 볼 만해요.` : `더 걸 만큼 앞서지 않아요 (이길 확률 ${pc(P.win)}). 공개하면 손해는 기본 베팅뿐이에요.`;
+      const fo = E.list.find(x => x.a.t === "fold"), ca = E.list.find(x => x.a.t === "call"), rz = E.list.filter(x => x.a.t === "raise").reduce((b, x) => (!b || x.ev > b.ev ? x : b), null);
+      why += ` 기대 칩: 폴드 ${sg(fo.ev)}${ca ? ` · 콜 ${sg(ca.ev)}` : ""}${rz ? ` · 레이즈 ${rz.a.to}칩 ${sg(rz.ev)}` : ""} (상대가 보이는 카드로 두는 대로 가정해 계산).`;
       why += ` 남은 카드: ${left.join(" ")}`;
+    } else {
+      const pen = o === 10 ? Math.min(PEN, V.chips[opp]) : 0, evShow = P.win * (V.carry + V.cur) - P.lose * V.cur;
+      const rto = Math.min(V.cap, Math.max(5, V.cur + 1)), Pr = posterior(Object.assign({}, V, { log: V.log.concat([{ k: "bet", s: opp, a: "raise", to: rto, i: 1e9 }]) }), me, "hard");
+      why = `상대가 콜하면 바로 공개돼요 — 이길 ${pc(P.win)} · 질 ${pc(P.lose)} · 기대 칩 ${sg(evShow)}. 상대가 폴드하면 +${V.contrib[opp] + V.carry + pen}칩${pen ? ` (상대 카드가 10이라 페널티 ${pen}칩 포함)` : ""}.${V.canRaise ? ` 상대가 ${rto}칩까지 레이즈하면 이길 확률이 ${pc(Pr.win)}로 바뀌어요.` : ""}`;
     }
     return { opp: oppTxt, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-indian", MAXR, PEN, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, posterior, plan, canRaise, capTotal };
+  return { id: "gn-indian", MAXR, PEN, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, posterior, plan, planEV, evalActs, canRaise, capTotal };
 });

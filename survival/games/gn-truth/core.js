@@ -311,6 +311,61 @@
     };
   }
 
+  // ── 복기 · 선생님이 같이 쓰는 평가 (AI 의 선택은 바꾸지 않아요 — 두 수를 같은 잣대로 재기만 해요) ──
+  // 둘이 번갈아 후보를 줄이다 먼저 맞히는 '경주' 로 보고 이길 확률을 어림해요: 질문 하나는 후보를 절반으로, 후보가 적으면 하나씩 찍어 보기
+  const GN = 40, PEN = Math.pow(0.9, 4);   // PEN = 진실 페널티로 '이 숫자는 없다' 가 공개되면 남는 후보 비율 (한 숫자를 안 쓸 확률 0.9^4)
+  function makeRace() {
+    const memo = new Map();
+    const W = (N, M, k) => {   // 내 차례(이번 턴 행동 k번 남음) · 내 후보 N · 상대 후보 M → 내가 이길 확률
+      N = Math.max(1, Math.round(N)); M = Math.max(1, Math.round(M));
+      if (N === 1) return 1;
+      const key = (N * 10007 + M) * 2 + (k >= 2 ? 1 : 0), hit = memo.get(key);
+      if (hit !== undefined) return hit;
+      const cont = n => (k >= 2 ? W(n, M, 1) : 1 - W(M, n, 1));
+      let best = cont(Math.ceil(N / 2));
+      if (N <= GN) best = Math.max(best, 1 / N + (1 - 1 / N) * cont(N - 1));
+      memo.set(key, best);
+      return best;
+    };
+    return W;
+  }
+  // 이번 판 자리 me 가 둘 수 있는 행동들을 같은 잣대(이길 확률 p)로 재요. acts[i] 를 못 재면 null.
+  // · 질문/정답/더블 턴(내 차례) · 거짓 답(답할 차례) · 무효화(무효화 차례) — V 는 그 자리 view (상대 숨은 패는 안 써요)
+  function evalActs(V, me, acts) {
+    if (!V || !Array.isArray(acts) || (me !== 0 && me !== 1)) return (acts || []).map(() => null);
+    const W = makeRace(), C = candidates(V, me), N = C.length, Co = oppCandidates(V, me), M = Co.length, two = V.acts >= 2;
+    if (V.phase === "ask" && V.turn === me) {
+      const after = n => (two ? W(n, M, 1) : 1 - W(M, n, 1)), set = new Set(C.map(c => c.join("")));
+      return acts.map(a => {
+        if (!a) return null;
+        if (a.t === "ask" && qValid(a.q)) { const R = qScore(a.q, C); return { p: after(R), N, M, R }; }
+        if (a.t === "guess" && typeof a.code === "string") { const inC = set.has(a.code), pw = inC ? 1 / Math.max(1, N) : 0; return { p: pw + (1 - pw) * after(inC ? N - 1 : N), N, M, inC, pw }; }
+        if (a.t === "item" && a.item === "double" && V.acts === 1 && !V.doubled) return { p: W(N, M, 2), N, M, item: true };
+        return null;
+      });
+    }
+    if (V.phase === "answer" && V.pend && V.pendBy !== me && V.myCode) {
+      const q = V.pend, tv = evalQ(q, parse(V.myCode)), exOK = !!(V.items.ex[me] && !V.items.usedEx[me]);
+      return acts.map(a => {
+        if (!a || a.t !== "answer") return null;
+        const rang = tv === a.v; let m = 0;
+        for (const c of Co) { const t = evalQ(q, c); if (rang ? t === a.v : t !== a.v) m++; }
+        const Ma = Math.max(1, m * (rang && !exOK ? PEN : 1));
+        return { p: two ? 1 - W(Ma, N, 1) : W(N, Ma, 1), N, M, Ma, rang };
+      });
+    }
+    if (V.phase === "nul" && V.nulPend && V.nulPend.user !== me) {
+      const dbl = V.nulPend.item === "double";
+      return acts.map(a => {
+        if (!a || a.t !== "nullify" || typeof a.use !== "boolean") return null;
+        if (dbl) return { p: 1 - W(M, N, a.use ? 1 : 2), N, M };
+        const Nn = a.use ? Math.max(1, N * PEN) : N;   // 상대의 면제를 막으면 상대 쪽 숫자가 하나 공개돼요
+        return { p: two ? W(Nn, M, 1) : 1 - W(M, Nn, 1), N, M, Nn };
+      });
+    }
+    return acts.map(() => null);
+  }
+
   // ── AI 선생님 (내가 보는 것만) ───────────────────────────────
   function sampler(seed) { let a = (seed >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
   function posText(C) {
@@ -318,32 +373,51 @@
     for (let p = 0; p < 4; p++) { const s = new Set(C.map(c => c[p])), arr = [...s].sort((a, b) => a - b); out.push(`${p + 1}번째 ${arr.length === 10 ? "모든 숫자" : arr.length > 6 ? `${arr.length}가지` : arr.join("·")}`); }
     return out.join(" / ");
   }
+  const fmtN = n => Math.round(n).toLocaleString("ko-KR"), pctN = x => Math.round(x * 100) + "%";
   function coach(V, me, since, names) {
+    const cnt = f => V.hist.filter(f).length;
+    if ((me !== 0 && me !== 1) || V.seat !== me) {   // 구경꾼(자리 없는 view): 보이는 기록만
+      const asks = cnt(e => e.q), rings = cnt(e => e.rang), gs = cnt(e => e.g !== undefined);
+      return { opp: `지금까지 질문 ${asks}번 · 정답 시도 ${gs}번`, mine: `탐지기가 울린 횟수 ${rings}번 · 행동 ${V.count} / ${V.limit}`, rec: "구경 중이에요", why: `답이 늘 거짓이라 예 / 아니오 질문 ${cnt(e => e.q && isYN(e.q))}번은 모두 '답의 반대'가 사실이에요. 패스워드는 0000~9999 의 10,000가지예요.` };
+    }
     const opp = 1 - me, nm = (names && names[opp]) || "상대";
-    if (V.over) return { opp: V.draw ? "행동이 너무 많아 무승부로 끝났어요." : `${V.winner === me ? "내가" : nm + "가"} 상대 패스워드를 맞혀서 끝났어요.`, mine: `내 패스워드 ${V.myCode} · 상대 ${V.codes ? V.codes[opp] : "?"}`, rec: V.winner === me ? "이겼어요!" : "다음엔 예 / 아니오 질문으로 범위를 반씩 줄여요", why: "답이 늘 거짓이라 예 / 아니오 질문은 답의 반대가 정확한 정보예요." };
+    const myAsks = cnt(e => e.q && e.by === me), oppAsks = cnt(e => e.q && e.by === opp), myG = cnt(e => e.g !== undefined && e.by === me), oppG = cnt(e => e.g !== undefined && e.by === opp);
+    const myRings = cnt(e => e.rang && e.by === opp), oppRings = cnt(e => e.rang && e.by === me);   // 내가 진실을 말한 횟수 · 상대가 진실을 말한 횟수
+    if (V.over) {
+      const Nf = candidates(V, me).length;
+      return { opp: `${V.draw ? "행동이 너무 많아 무승부로 끝났어요." : `상대 패스워드를 맞혀서 끝났어요 (맞힌 사람: ${V.winner === me ? "나" : nm}).`} 상대는 질문 ${oppAsks}번 · 정답 시도 ${oppG}번 · 상대가 진실을 말한 횟수 ${oppRings}번`, mine: `내 패스워드 ${V.myCode} · 상대 ${V.codes ? V.codes[opp] : "?"} · 내 질문 ${myAsks}번 · 정답 시도 ${myG}번 · 내가 진실을 말한 횟수 ${myRings}번`, rec: V.winner === me ? "이겼어요!" : V.draw ? "다음엔 질문마다 후보를 절반씩 줄여요" : "다음엔 예 / 아니오 질문으로 범위를 반씩 줄여요", why: `답이 늘 거짓이라 예 / 아니오 질문은 답의 반대가 정확한 정보예요. 내 질문 ${myAsks}번 · 정답 시도 ${myG}번으로 후보가 10,000개 → ${fmtN(Nf)}개까지 줄었어요 (질문마다 절반씩 줄면 약 13번이면 좁혀져요).` };
+    }
     const Nopp = oppCandidates(V, me).length;
-    const oppTxt = V.phase === "code" ? "상대도 4자리를 정하는 중이에요." : `상대가 내 패스워드로 좁힌 후보는 약 ${Nopp.toLocaleString("ko-KR")}개예요${Nopp <= 5 ? " — 곧 맞힐 수 있어서 위험해요!" : ""}.`;
-    if (V.phase === "code") return { opp: oppTxt, mine: "아직 숫자를 정하지 않았어요.", rec: "섞인 숫자 4개로 정하기", why: "1234 · 1111 같은 뻔한 숫자는 쉽게 읽혀요. 같은 숫자를 반복해도 되니 무작위처럼 정해요." };
-    const C = candidates(V, me), N = C.length;
-    const mineTxt = `내 패스워드 ${V.myCode} · 상대 후보 ${N.toLocaleString("ko-KR")}개 · ${N <= 80 || N === 10000 ? posText(C) : "자리별 후보가 아직 넓어요"}${V.known[opp].length ? ` · 상대 패스워드에 없는 숫자 ${V.known[opp].join(", ")}` : ""}`;
+    const oppTxt = V.phase === "code" ? "상대도 4자리를 정하는 중이에요 — 서로 가능한 패스워드는 10,000가지예요." : `상대가 내 패스워드로 좁힌 후보는 약 ${fmtN(Nopp)}개예요${Nopp <= 5 ? " — 곧 맞힐 수 있어서 위험해요!" : ""} (상대 질문 ${oppAsks}번 · 정답 시도 ${oppG}번).`;
+    if (V.phase === "code") return { opp: oppTxt, mine: V.myCode ? `내 패스워드 ${V.myCode} — 상대를 기다려요.` : "아직 숫자를 정하지 않았어요 (0000~9999 중 하나).", rec: "섞인 숫자 4개로 정하기", why: "1234 · 1111 같은 뻔한 숫자는 상대가 처음부터 찍어 볼 수 있어요 (아무 숫자를 찍어서 맞힐 확률은 1/10,000). 같은 숫자를 반복해도 되니 무작위처럼 정해요. 상대가 질문마다 후보를 절반씩 줄이면 약 13번이면 좁혀져요." };
+    const C = candidates(V, me), N = C.length, W = makeRace();
+    const mineTxt = `내 패스워드 ${V.myCode} · 상대 후보 ${fmtN(N)}개 (내 질문 ${myAsks}번 · 정답 시도 ${myG}번) · ${N <= 80 || N === 10000 ? posText(C) : "자리별 후보가 아직 넓어요"}${V.known[opp].length ? ` · 상대 패스워드에 없는 숫자 ${V.known[opp].join(", ")}` : ""}`;
     if (V.phase === "ask" && V.turn === me) {
-      const rr = sampler(V.hist.length * 131 + 7), a = planAsk(V, me, "hard", rr);
+      const rr = sampler(V.hist.length * 131 + 7), a = planAsk(V, me, "hard", rr), ev = evalActs(V, me, [a])[0], pw = ev ? ` (대략 이길 확률 ${pctN(ev.p)} — 내 후보 ${fmtN(N)}개 · 상대 후보 ${fmtN(Nopp)}개)` : "";
       let rec, why;
-      if (a.t === "guess") { rec = `정답 시도: ${a.code}`; why = N === 1 ? "후보가 하나만 남았어요. 맞히면 바로 이겨요!" : `후보가 ${N}개 남았어요. 이쯤이면 질문보다 정답을 말해 보는 게 더 빨라요 (틀려도 페널티는 없고 후보 하나가 줄어요).`; }
-      else if (a.t === "item") { rec = "더블 턴 쓰기"; why = `후보가 ${N}개로 줄었어요. 이번 턴에 질문 + 정답까지 해서 마무리해 봐요.`; }
-      else { rec = `"${qText(a.q)}" 묻기`; why = `${isYN(a.q) ? "예 / 아니오 질문은 상대가 거짓말로 답하니 '답의 반대'가 사실이에요. " : ""}후보 ${N}개를 가장 고르게 가르는 질문이에요.`; }
+      if (a.t === "guess") { rec = `정답 시도: ${a.code}`; why = N === 1 ? `후보가 하나만 남았어요. 맞히면 바로 이겨요!${pw}` : `후보가 ${N}개 남았어요 — 맞힐 확률 1/${N} = ${pctN(1 / N)}. 이쯤이면 질문보다 정답을 말해 보는 게 더 빨라요 (틀려도 페널티는 없고 후보 하나가 줄어요).${pw}`; }
+      else if (a.t === "item") { rec = "더블 턴 쓰기"; why = `후보가 ${N}개로 줄었어요. 이번 턴에 질문 + 정답까지 해서 마무리해 봐요.${pw}`; }
+      else { rec = `"${qText(a.q)}" 묻기`; const R = ev && ev.R !== undefined ? ev.R : qScore(a.q, C); why = `${isYN(a.q) ? "예 / 아니오 질문은 상대가 거짓말로 답하니 '답의 반대'가 사실이에요. " : ""}후보 ${fmtN(N)}개를 가장 고르게 가르는 질문이에요 — 답이 오면 후보가 약 ${fmtN(R)}개로 줄어요.${pw}`; }
       return { opp: oppTxt, mine: mineTxt, rec, why };
     }
     if (V.phase === "answer" && V.pendBy !== me) {
       const q = V.pend, truth = evalQ(q, parse(V.myCode)), pl = planAnswer(V, me, "hard", sampler(V.hist.length * 17 + 3));
-      return { opp: oppTxt, mine: mineTxt, rec: `"${ansText(q, pl.v)}"라고 거짓말하기`, why: `사실은 "${ansText(q, truth)}"이에요. 사실과 같은 답을 하면 탐지기가 울려서 쓰이지 않은 숫자 하나가 상대에게 공개돼요.` };
+      const ev = evalActs(V, me, [pl, { t: "answer", v: truth }]), le = ev[0], te = ev[1];
+      const num = le && te ? ` 거짓(${ansText(q, pl.v)})으로 답하면 상대가 내 패스워드를 약 ${fmtN(le.Ma)}개 후보로 좁히고, 사실대로 답하면 약 ${fmtN(te.Ma)}개까지 좁혀져요 (대략 이길 확률 ${pctN(le.p)} vs ${pctN(te.p)}).` : "";
+      return { opp: oppTxt, mine: mineTxt, rec: `"${ansText(q, pl.v)}"라고 거짓말하기`, why: `사실은 "${ansText(q, truth)}"이에요. 사실과 같은 답을 하면 탐지기가 울려서 쓰이지 않은 숫자 하나가 상대에게 공개돼요.${num}` };
     }
     if (V.phase === "nul" && V.nulPend && V.nulPend.user !== me) {
-      const pl = planNul(V, me, "hard", sampler(5));
-      return { opp: oppTxt, mine: mineTxt, rec: pl.use ? "무효화 쓰기" : "무효화 아끼기", why: V.nulPend.item === "double" ? "상대의 더블 턴은 한 턴에 질문을 두 번 하게 해 줘요. 막으면 이번 턴은 질문 한 번뿐이에요." : "상대의 진실 페널티 면제를 막으면 숫자 하나를 공개시킬 수 있어요." };
+      const pl = planNul(V, me, "hard", sampler(5)), ev = evalActs(V, me, [{ t: "nullify", use: true }, { t: "nullify", use: false }]), num = ev[0] && ev[1] ? ` 쓰면 이길 확률 약 ${pctN(ev[0].p)}, 아끼면 약 ${pctN(ev[1].p)} (내 후보 ${fmtN(N)}개 · 상대 후보 ${fmtN(Nopp)}개 기준 어림).` : "";
+      return { opp: oppTxt, mine: mineTxt, rec: pl.use ? "무효화 쓰기" : "무효화 아끼기", why: `${V.nulPend.item === "double" ? "상대의 더블 턴은 한 턴에 질문을 두 번 하게 해 줘요. 막으면 이번 턴은 질문 한 번뿐이에요." : "상대의 진실 페널티 면제를 막으면 숫자 하나를 공개시킬 수 있어요 (내 후보가 약 34% 줄어요)."}${num}` };
     }
-    return { opp: oppTxt, mine: mineTxt, rec: "기다려요", why: "상대가 정하는 중이에요." };
+    // 기다리는 때: 지금 누가 앞서는지 (경주 어림) 와 오는 답의 값어치
+    const lead = V.turn === me ? W(N, Nopp, 1) : 1 - W(Nopp, N, 1);
+    if (V.phase === "answer" && V.pendBy === me) {
+      const R = qScore(V.pend, C);
+      return { opp: oppTxt, mine: mineTxt, rec: "기다려요", why: `내 질문에 상대가 거짓으로 답하는 중이에요 — 답이 오면 내 후보가 ${fmtN(N)}개 → 약 ${fmtN(R)}개로 줄어요${isYN(V.pend) ? " (답의 반대가 사실)" : ""}. 지금 이길 확률은 대략 ${pctN(lead)}예요.` };
+    }
+    return { opp: oppTxt, mine: mineTxt, rec: "기다려요", why: `상대가 정하는 중이에요. 내 후보 ${fmtN(N)}개 · 상대 후보 ${fmtN(Nopp)}개 — 지금 이길 확률은 대략 ${pctN(lead)}예요.` };
   }
 
-  return { id: "gn-truth", LIMIT, ALL, QLIST, TIER, DOM, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, evalQ, qValid, qText, ansText, isYN, candidates, oppCandidates, qScore, planAsk, planAnswer, parse };
+  return { id: "gn-truth", LIMIT, ALL, QLIST, TIER, DOM, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, evalQ, qValid, qText, ansText, isYN, candidates, oppCandidates, qScore, planAsk, planAnswer, parse, makeRace, evalActs };
 });
