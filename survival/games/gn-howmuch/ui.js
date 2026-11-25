@@ -59,7 +59,7 @@
 .hm-tut{display:grid;gap:8px;justify-items:center;font-size:14px;width:100%}
 .hm-tut .hm-res{width:100%;box-sizing:border-box}
 @media (max-height:780px){.hm-item{font-size:17px;padding:7px}.hm-g b{font-size:17px}.hm-acts{gap:5px}.hm-inp input{padding:7px 10px;font-size:18px}.hm-b{font-size:11px}}
-@media (max-height:690px){.hm-item small{display:none}.hm-hist{display:none}.hm-info{font-size:11.5px}.hm-pre button{padding:4px 8px;font-size:12px}.hm-res{font-size:12px;padding:6px 8px}.hm-bud .hm-b:not(.me){display:none}.hm-q{padding:5px}.hm-g{padding:3px 1px}}`;
+@media (max-height:690px){.hm-item small{display:none}.hm-hist{display:none}.hm-info{font-size:11.5px}.hm-pre button{padding:4px 8px;font-size:12px}.hm-res{font-size:12px;padding:6px 8px}.hm-bud .hm-b:not(.me){display:none}.hm-q{padding:5px}.hm-g{padding:3px 1px}.hm-top{gap:4px}.hm-top>span{padding:3px 8px;font-size:12px}.hm-bud{display:none}.hm-info{line-height:1.25}.hm-ko{min-height:0;font-size:11.5px}.hm-inp{gap:3px}.hm-inp input{padding:5px 10px;font-size:16px}.hm-pre{gap:3px}.hm-pre button{padding:3px 7px;font-size:11.5px}.hm-kinds button{padding:4px 3px;font-size:12px}}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats[i] && ctx.seats[i].name) || `${i + 1}번`;

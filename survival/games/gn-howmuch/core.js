@@ -142,7 +142,7 @@
 
   // ── 보이는 것 ─────────────────────────────────────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), rev = st.phase === "reveal" || st.phase === "end";
+    const all = seat === "all", rev = st.phase === "reveal" || st.phase === "end";
     const it = st.items[Math.min(st.round, ROUNDS) - 1];
     const pubObj = { r: st.round, p: st.phase, sp: st.spent, pt: st.pts, d: st.info.map(x => (x ? 1 : 0)), b: st.bids.map(x => (x === null ? 0 : 1)), pa: st.pubAns, res: rev && st.res ? [st.res.M, st.res.bids, st.res.winner] : 0, ov: st.over };
     return {
