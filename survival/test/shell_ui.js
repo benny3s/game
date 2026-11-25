@@ -150,6 +150,19 @@ const shotDir = val('shots', '');
         await page.evaluate(() => window.__survival.fast(1));
         await page.click('#startBtn');
         await page.waitForFunction(() => !!window.__survival.ses, null, { timeout: 8000 });
+        // 선생님 창을 연 채로도 판이 가려지지 않아야 함 (ui.fitCoach 게임: 스테이지 안 맨 아래 요소 ≤ 창 위쪽)
+        if (await page.evaluate(() => { const u = window.SVUI[window.__survival.ses.id]; return !!(u && u.fitCoach); })) {
+          await page.click('#coachBtn'); await page.waitForTimeout(700);
+          const r = await page.evaluate(() => {
+            const cp = document.querySelector('.cpn'), st = document.getElementById('stage');
+            let bottom = 0; for (const el of st.children) { const b = el.getBoundingClientRect(); if (b.height > 0 && getComputedStyle(el).display !== 'none') bottom = Math.max(bottom, b.bottom); }
+            const bd = st.querySelector('[class$="-board"]'), bb = bd && bd.getBoundingClientRect();
+            return { cpTop: cp && !cp.hidden ? cp.getBoundingClientRect().top : -1, bottom, board: bb ? [Math.round(bb.width), Math.round(bb.height)] : null, fit: st.classList.contains('sv-coachfit') };
+          });
+          ok(r.cpTop > 0 && r.fit && r.bottom <= r.cpTop + 1, `${id} 선생님 창을 열어도 판이 안 가려짐 (맨 아래 ${Math.round(r.bottom)} ≤ 창 위 ${Math.round(r.cpTop)}, 판 ${r.board})`);
+          await shot(page, `coach-${id}`);
+          await page.click('#coachBtn'); await page.waitForTimeout(300);
+        }
         let over = false, acts = 0, stall = 0, last = '';
         for (let i = 0; i < 3000 && !over; i++) {
           const st = await page.evaluate(() => { const s = window.__survival; const a = s.autoAct(); const p = s.probe(); return { a, over: p.over, fp: p.fp }; });

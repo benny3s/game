@@ -72,6 +72,8 @@
 .sv-cwho{margin:0 0 4px;font-size:12px;color:var(--soft)}
 .sv-why{color:#fde68a}
 .cpn-body p{margin:0 0 5px}
+/* 선생님 창이 판을 가리지 않는 게임(ui.fitCoach): 창은 화면의 21%(최대 190px)까지만, 글은 창 안에서 스크롤 — 판은 shell 이 비워 둔 위쪽(--sv-sh)에 맞춰 줄어듦 */
+body.sv-fitcoach .cpn{max-height:min(21vh,190px)}
 
 /* 결과 창 */
 .sv-res{text-align:center}

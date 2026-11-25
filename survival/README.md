@@ -40,7 +40,8 @@
 - `over(st)` · `ranks(st)` · `ai(view, seat, tier, rnd)` (보이는 것만으로) · `legal(st, seat)`(선택) · `auto(st)` / `advance(st)`(사람 입력 없이 넘어가는 단계)
 
 ### `ui.js` — 화면 (→ `window.SVUI[id]`)
-`name` · `emoji` · `short` · `min` · `max` · `board`(한 기기 탭 허용 — 숨은 정보가 없는 1:1 만, 지금 한 기기는 2명 고정) · `defN` · `opts [{k, label, items:[[값,글]], def}]` · `howto ['…']` · `sub(V,me)` · `chip(V,i,me) → {t,on,out}` · `render(stage, V, ctx)` · `coach(V, me, since, names) → {opp, mine, rec, why}` · `result(V, me)`(선택) · `tutorial()` (1분 규칙, 직접 해 보기 한 단계) · `qa(V, me, rnd)`(선택, 자동 시험이 내 차례에 둘 수) · `src` · `diff`.
+`name` · `emoji` · `short` · `min` · `max` · `board`(한 기기 탭 허용 — 숨은 정보가 없는 1:1 만, 지금 한 기기는 2명 고정) · `defN` · `opts [{k, label, items:[[값,글]], def}]` · `howto ['…']` · `sub(V,me)` · `chip(V,i,me) → {t,on,out}` · `render(stage, V, ctx)` · `coach(V, me, since, names) → {opp, mine, rec, why}` · `result(V, me)`(선택) · `tutorial()` (1분 규칙, 직접 해 보기 한 단계) · `qa(V, me, rnd)`(선택, 자동 시험이 내 차례에 둘 수) · `src` · `diff` · `fitCoach`(선택).
+- **`fitCoach: true`** (판이 화면을 꽉 채우는 게임): AI 선생님 창을 열어도 판이 가려지지 않게 shell 이 스테이지 아래쪽을 창만큼 비우고(창 높이는 화면의 21%·최대 190px, 글은 창 안에서 스크롤) 스테이지에 `sv-coachfit` 클래스와 CSS 변수 `--sv-sh`(판이 쓸 수 있는 높이)를 줘요. 게임 CSS 에서 `.sv-coachfit .판 { width: min(100%, calc(var(--sv-sh, 360px) - <판 말고 남은 줄 높이>)) }` 로 판을 줄이고 곁가지(안내 줄 · 범례)는 `display:none`. 예: `games/colorturn` · `games/cardchess`. `shell_ui.js` 가 이 게임들은 선생님 창을 연 채 맨 아래 요소가 창 위쪽보다 위인지 시험해요.
 `ctx` = `{ me, act, canAct, seats, mode, fast, coachOn, g, wait, sfx, toast }`.
 - **지켜야 할 것**: `CONVENTIONS.md` — 선생님(👀 상대 흐름 · 📊 내 흐름 · 💡 추천 · 👉 수의 의미, **보이는 것만**) · 1분 규칙 · 모드 혼자(AI) · 친구랑 · AI 구경 · 기록은 `common/rank.js` 로만 (shell 이 대신 보냄) · 폰 세로 375×667 한 화면 · 콘솔 오류 0 · 조사(이/가 · 은/는)는 받침 맞춰 붙여 쓰기.
 - 모델 = `games/formula/`, 시험 틀 = `test/s3ui_lib.js` (`run(id, policy, opts)`) · `test/board_ui_lib.js` (판 게임).

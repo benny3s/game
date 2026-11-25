@@ -286,7 +286,7 @@
 
   // ── 세션 ──────────────────────────────────────────────────
   let SES = null;
-  const coach = window.CoachPanel ? CoachPanel.create({ game: SITE, title: "AI 선생님", bottom: 92, icon: "🧑‍🏫", startHidden: true }) : null;
+  const coach = window.CoachPanel ? CoachPanel.create({ game: SITE, title: "AI 선생님", bottom: 80, icon: "🧑‍🏫", startHidden: true }) : null;
   let coachBtn = null;
   if (coach) { coachBtn = CoachPanel.button($("coachBtn"), coach); coach.onChange(() => { if (SES) render(); }); }
 
@@ -416,11 +416,33 @@
     $("coachBtn").hidden = !coachOk;
     if (coach && !coachOk) coach.hide();
     if (coach && coach.visible) updateCoach();
+    fitStage();
     $("againBtn").hidden = SES.mode === "online";
     $("resBtn").hidden = !(V.over && SES.resHidden);
     if (V.over) onOverSeen();
     drawResult();
   }
+  // 선생님 창이 판을 가리지 않게 (ui.fitCoach 가 true 인 게임만): 창이 스테이지 아래쪽에 걸치면 그만큼을 비우고
+  //  (스테이지 padding-bottom + .sv-coachfit 클래스), 판이 쓸 수 있는 높이를 스테이지의 CSS 변수 --sv-sh 로 알려 줌.
+  //  게임 CSS 는 `.sv-coachfit .판 { width: min(100%, calc(var(--sv-sh) - …)) }` 로 판을 줄이고 곁가지(안내 · 범례)는 숨김.
+  //  사람이 창을 판과 상관없는 곳으로 끌어다 놓았으면(스테이지 아래쪽에 안 걸침) 건드리지 않음.
+  function fitStage() {
+    const st = $("stage"); if (!st) return;
+    const ui = SES && SES.V && !SES.pend && UIS[SES.id] ? UIS[SES.id] : null, fit = !!(ui && ui.fitCoach);
+    document.body.classList.toggle("sv-fitcoach", fit);
+    st.style.paddingBottom = "";
+    if (!fit) { st.classList.remove("sv-coachfit"); st.style.removeProperty("--sv-sh"); return; }
+    const sb = st.getBoundingClientRect(), cs = getComputedStyle(st);
+    const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
+    let res = 0;
+    const el = coach && coach.visible && !coach.collapsed ? coach.el : null;
+    if (el && !el.hidden) { const cb = el.getBoundingClientRect(); if (cb.height > 0 && cb.bottom >= sb.bottom - 8 && cb.top < sb.bottom) res = Math.ceil(sb.bottom - cb.top + 6); }
+    if (res) st.style.paddingBottom = (pb + res) + "px";
+    st.classList.toggle("sv-coachfit", res > 0);
+    st.style.setProperty("--sv-sh", Math.max(100, Math.floor(sb.height - pt - pb - res)) + "px");
+  }
+  if (coach && coach.el && window.ResizeObserver) { try { new ResizeObserver(() => { if (SES) fitStage(); }).observe(coach.el); } catch (e) {} }
+  addEventListener("resize", () => { if (SES) fitStage(); });
   function updateCoach() {
     const seat = coachSeat();
     if (seat < 0 || !SES || !SES.V) { coach.set(`<p>👀 구경 중이에요. 자리에 앉으면 내 차례마다 알려 드려요.</p>`); return; }

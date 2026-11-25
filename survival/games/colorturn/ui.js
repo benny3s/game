@@ -66,7 +66,9 @@ span.ct-c{cursor:default}
 .ct-pair{display:flex;align-items:center;gap:8px;justify-content:center}
 .ct-pair .ct-c{width:54px;height:54px}
 .ct-pair .ar{font:900 20px var(--round);color:#fde68a}
-@media (max-height:660px){.ct-legend{display:none}}`;
+@media (max-height:660px){.ct-legend{display:none}}
+.sv-coachfit .ct-wrap{width:min(100%,calc(var(--sv-sh,360px) - 18px))}
+.sv-coachfit .ct-legend,.sv-coachfit .ct-info{display:none}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats && ctx.seats[i] && ctx.seats[i].name) || COL[i];
@@ -275,7 +277,7 @@ span.ct-c{cursor:default}
 
   window.SVUI = window.SVUI || {};
   window.SVUI.colorturn = {
-    name: "컬러턴", emoji: "🎨", short: "숨은 지뢰 위의 칩 4목 1:1", min: 2, max: 2, defN: 2, board: true,
+    name: "컬러턴", emoji: "🎨", short: "숨은 지뢰 위의 칩 4목 1:1", min: 2, max: 2, defN: 2, board: true, fitCoach: true,
     src: SRC, diff: DIFF,
     howto: [
       "🎯 목표: <b>내 색 칩 4개</b>를 가로 · 세로 · 대각선 한 줄로 이으면 승",

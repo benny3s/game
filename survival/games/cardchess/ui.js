@@ -80,7 +80,9 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .cc-flow .ar{font:900 16px var(--round);color:#fde68a}
 .cc-tmsg{min-height:2.7em;text-align:center;line-height:1.4;color:var(--soft)}
 .cc-tmsg b{color:#fde68a}
-@media (max-height:660px){.cc-card small{display:none}}`;
+@media (max-height:660px){.cc-card small{display:none}}
+.sv-coachfit .cc-wrap{width:min(100%,calc(var(--sv-sh,360px) - 132px))}
+.sv-coachfit .cc-card small,.sv-coachfit .cc-info{display:none}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats && ctx.seats[i] && ctx.seats[i].name) || SIDE[i];
@@ -362,7 +364,7 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
 
   window.SVUI = window.SVUI || {};
   window.SVUI.cardchess = {
-    name: "카드 체스", emoji: "♟️", short: "카드가 움직임을 정하는 5×5 1:1", min: 2, max: 2, defN: 2, board: true,
+    name: "카드 체스", emoji: "♟️", short: "카드가 움직임을 정하는 5×5 1:1", min: 2, max: 2, defN: 2, board: true, fitCoach: true,
     opts: [{ k: "sets", label: "세트 수", items: [[1, "1세트"], [3, "3세트 (먼저 2승)"]], def: 3 }],
     src: SRC, diff: DIFF,
     howto: [
