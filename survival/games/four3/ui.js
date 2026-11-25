@@ -5,7 +5,7 @@
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const COLS = K.COLS, DOT = ["🔴", "🟡", "🟢", "🔵"], CN = K.cellName;
   const SRC = "방송: 데블스 플랜 (시즌 1) · 6일차 상금 매치 (4명)";
-  const DIFF = "스페셜 게스트 · 상금 미션(세 사람 협력)은 없고 모두 각자 · 2~4명 (빈 자리는 AI) · '넘기기' 단추 (방송은 90초를 넘기면 패스) · 모두 연달아 넘기거나 한 라운드 80수가 넘으면 그 라운드는 승자 없음 · 끝에 피스가 같으면 같은 순위 (방송은 동점자 연장전) · 시작 피스는 0 · 차례 시계는 기본 끔 (옵션 90초)";
+  const DIFF = "스페셜 게스트 · 상금 미션(세 사람 협력)은 없고 모두 각자 · 2~4명 (빈 자리는 AI — 2~3명이면 라운드마다 순서를 한 칸씩 돌려요, 방송 순서표는 4명일 때만) · '넘기기' 단추 (방송은 90초를 넘기면 패스) · 모두 연달아 넘기거나 한 라운드 80수가 넘으면 그 라운드는 승자 없음 · 끝에 피스가 같으면 같은 순위 (방송은 동점자 연장전) · 시작 피스는 0 · 차례 시계는 기본 끔 (옵션 90초)";
   const CSS = `
 .f3-ord{display:flex;gap:4px;flex:none}
 .f3-p{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;height:40px;border-radius:11px;background:rgba(0,0,0,.28);border:1.5px solid rgba(255,255,255,.1);font:800 12px var(--round);color:var(--soft);white-space:nowrap;overflow:hidden;padding:0 3px}
@@ -181,6 +181,11 @@
     }
     stage.innerHTML = `${ordH}<div class="f3-st">${st}</div><div class="f3-wrap">${boardHtml(V, bo)}</div>${actH ? `<div class="f3-act">${actH}</div>` : ""}`;
     fitBoard(stage);
+    if (window.ResizeObserver) {            // 선생님 창이 열리고 닫혀 판 자리가 바뀌면 판 크기도 다시 맞춤 (판 크기가 인라인이라 CSS 로는 안 줄어듦)
+      if (render.ro) render.ro.disconnect();
+      const w = stage.querySelector(".f3-wrap"); let last = w ? w.clientHeight : 0;
+      if (w && w.firstElementChild) { render.ro = new ResizeObserver(() => { if (Math.abs(w.clientHeight - last) > 1) { last = w.clientHeight; fitBoard(stage); } }); render.ro.observe(w); }
+    }
     if (canAct && V.phase === "play" && V.cur === me && V.opt && V.opt.timer && S.armed !== pk) {
       S.armed = pk;
       const ms = S.resume && S.resume.pk === pk ? Math.max(3000, S.resume.left) : V.opt.timer * 1000;   // 보내기가 실패해도 시계는 처음부터가 아니라 남은 만큼
@@ -342,7 +347,7 @@
       "준비물: <b>4×4</b> 판 16칸(A1~D4) · 빨강 · 노랑 · 초록 · 파랑 말 <b>5개씩</b> (라운드마다 새로)",
       "진행: 차례마다 하나 — <b>새 말 놓기</b>(한 칸에 1~3개, 남의 말 위도 됨, 한 칸 <b>3층</b>까지) 또는 <b>말 옮기기</b>(맨 위 내 말 1개를 이웃 8칸으로)",
       "승패: 3목 만든 사람 피스 +3 · <b>동시 3목</b>이면 아무도 못 받음 · <b>4라운드</b> 뒤 피스 많은 사람 승",
-      "특수: 라운드마다 순서가 바뀜 (1R 빨노초파 · 2R 초파빨노 · 3R 파빨노초 · 4R 노초파빨) · 4층 불가 · 할 게 없으면 패스",
+      "특수: 라운드마다 순서가 바뀜 (1R 빨노초파 · 2R 초파빨노 · 3R 파빨노초 · 4R 노초파빨) · 4층 불가 · 할 게 없으면 패스 · 2~3명이면 순서를 한 칸씩 돌림 · 한 라운드 <b>80수</b>가 넘으면 그 라운드는 승자 없음 (끝없는 판 방지 상한)",
       SRC, "※ 방송과 다른 점: " + DIFF,
     ],
     sub: V => (V.over ? "끝" : `${V.round}/${V.R}라운드${V.cur >= 0 ? ` · ${colName(V.cur)} 차례` : ""}`),

@@ -189,12 +189,10 @@
     const others = V.tries.filter(x => x.s !== me).slice(-3);
     if (others.length) p.push(`최근: ${others.map(x => (x.res === "pass" ? `${nm(x.s)} 넘김` : `${nm(x.s)} ${x.k} ${x.res === "ok" ? "정답" : x.res === "dup" ? "중복 −1" : `오답(${x.v}) −1`}`)).join(" / ")}.`);
     else p.push(`라운드 ${V.round} 시작 — 타깃 ${V.target}.`);
-    p.push(`점수 ${V.sc.map((x, s) => `${nm(s)} ${x}`).join(" · ")}.`);
-    if (V.hist.length) { const h = V.hist[V.hist.length - 1]; p.push(`지난 라운드 정답 ${h.nAns}개 중 ${h.found.length}개가 나왔어요.`); }
+    // 선생님 창이 짧아도 💡 단추가 잘리지 않게 글을 줄임 (점수는 위 줄 · 계산 순서는 규칙에 있음)
     if (watch) return { opp: p.join(" "), mine: `찾은 답 ${V.found.length}개 · 이번 라운드 시도 ${V.tries.length}번.`, rec: "구경 중이에요.", why: "" };
     const mineOk = V.found.filter(x => x.s === me).length, mineBad = V.tries.filter(x => x.s === me && (x.res === "wrong" || x.res === "dup")).length;
-    let m = `내 점수 ${V.sc[me]} (${V.ranks[me] + 1}위) · 이번 라운드 내 정답 ${mineOk}개 · 오답 ${mineBad}개.`;
-    m += ` 계산 순서: 곱셈 · 나눗셈 먼저, 첫 칸은 부호 없이 숫자만.`;
+    let m = `${V.sc[me]}점 (${V.ranks[me] + 1}위) · 이번 라운드 정답 ${mineOk} · 오답 ${mineBad}.`;
     let rec, why = "";
     if (V.over) rec = "끝났어요.";
     else if (V.phase !== "play") rec = "다음 라운드를 기다려요.";
@@ -206,7 +204,8 @@
         const k = R.a.k, ex = exprHtml(V.cells, k), c0 = V.cells[L.indexOf(k[0])];
         rec = `남은 정답 ${R.rows.length}개 · 가장 쉬운 것에는 <b>${k[0]}</b> 칸(${c0.n})이 맨 앞에 들어가요.`;
         CC.full = `<b>${k}</b> — ${ex} = ${V.target}. ${wayOf(V.cells, k)} → ${V.target}.`;
-        why = `${CC.open ? CC.full : `<button type="button" class="ep-hbtn" data-ephint>💡 한 번 더 — 전체 식 보기</button>`} 틀리면 −1 이니 확실할 때만 선언해요.`;
+        if (!CC.open) rec += ` <button type="button" class="ep-hbtn" data-ephint>💡 전체 식 보기</button>`;   // 선생님 창이 짧아도 안 잘리게 추천 줄에 붙임
+        why = `${CC.open ? CC.full + " " : ""}틀리면 −1 이니 확실할 때만 선언해요.`;
       }
     }
     return { opp: p.join(" "), mine: m, rec, why };

@@ -100,9 +100,9 @@
       }
       const target = 1 + Math.floor(R() * 20), ans = solve(cells, target);
       if (ans.length >= 2 && ans.length <= 8) return { target, cells };
-      if (ans.length >= 2 && !best) best = { target, cells };
+      if (ans.length >= 2 && (!best || ans.length < best.n)) best = { target, cells, n: ans.length };    // 범위 안 문제를 못 찾을 때를 위한 대비: 정답이 가장 적은 것
     }
-    return best || TV[(r - 1) % TV.length];
+    return best ? { target: best.target, cells: best.cells } : TV[(r - 1) % TV.length];
   }
 
   function init({ n, seed, cfg }) {

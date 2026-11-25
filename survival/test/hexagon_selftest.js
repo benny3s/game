@@ -61,6 +61,7 @@ function playAI(seed, tiers, cfg) {
   ok(C.apply(st, 1, { t: 'ready' }).ok && st.phase === 'buzz' && J(C.needs(st)) === '[0,1]', '둘 다 준비 → 버저');
   ok(!C.apply(st, 0, { t: 'buzz' }).ok && !C.apply(st, 0, { t: 'buzz', ms: NaN }).ok && !C.apply(st, 0, { t: 'call', c: [1, 5, 10] }).ok, '버저 행동 확인');
   ok(C.apply(st, 1, { t: 'buzz', ms: 2500 }).ok && !C.apply(st, 1, { t: 'buzz', ms: 100 }).ok, '한 번만 정함');
+  { const s2 = fixed(); C.apply(s2, 0, { t: 'ready' }); C.apply(s2, 1, { t: 'ready' }); C.apply(s2, 0, { t: 'buzz', ms: 0 }); C.apply(s2, 1, { t: 'buzz', ms: 99999 }); ok(s2.bz[0] === 120 && s2.bz[1] === 99999, '버저 ms 0 을 보내도 120 (사람 최소 반응) · 안 누름(99999)은 그대로 ' + J(s2.bz)); }
   ok(C.apply(st, 0, { t: 'buzz', ms: 1800 }).ok && st.phase === 'call' && st.caller === 0 && J(C.needs(st)) === '[0]', '빠른 사람이 선언');
   ok(st.stat[0].bz === 1 && st.stat[0].ms === 1800 && st.stat[1].bz === 0, '버저 기록 (이긴 사람만)');
   ok(!C.apply(st, 1, { t: 'call', c: [1, 5, 10] }).ok, '상대는 선언 못 함');

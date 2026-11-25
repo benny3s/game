@@ -6,7 +6,7 @@
   const COLS = K.COLS, NC = K.NC;
   const HEX = ["#ef4444", "#f97316", "#facc15", "#22c55e", "#38bdf8", "#2563eb", "#a855f7"];
   const SRC = "방송: 데블스 플랜 (시즌 1) · 6일차 비밀의 방 (1명 vs NPC)";
-  const DIFF = "1:1 사람끼리도 (방송은 플레이어 vs NPC) · 첫 판 흑은 무작위, 다음 판은 번갈아 (방송은 플레이어가 흑) · 5개 이상 한 줄이면 승리 (장목 인정 · 33 금지 없음) · 5목은 심판이 바로 알려 줌 · 판이 다 차면 무승부 · 피스 걸기 없음 · 판 수 (3판 2선승) · 판 크기 (15줄) · '흑백 보기' 연습은 옵션 · 색은 방송 규칙 화면의 7가지";
+  const DIFF = "1:1 사람끼리도 (방송은 플레이어 vs NPC) · 첫 판 흑은 무작위, 다음 판은 번갈아 (방송은 플레이어가 흑) · 5개 이상 한 줄이면 승리 (장목 인정 · 33 금지 없음) · 5목은 심판이 바로 알려 줌 · 판이 다 차면 무승부 · 피스 걸기 없음 · 3판 2선승은 무승부가 끼면 최대 5판 (그래도 같으면 둘 다 승 — 끝없는 판 방지 상한) · 판 수 (3판 2선승) · 판 크기 (15줄) · '흑백 보기' 연습은 옵션 · 색은 방송 규칙 화면의 7가지";
   const CSS = `
 .bo-st{flex:none;min-height:38px;display:grid;place-items:center;text-align:center;font-size:12.5px;line-height:1.35;color:var(--soft);padding:0 2px}
 .bo-st b{color:#fde68a}
@@ -17,6 +17,7 @@
 .bo-res.mid{color:#e2e8f0;background:rgba(148,163,184,.14);border:1px solid rgba(148,163,184,.45)}
 .bo-res small{display:block;font:700 11px var(--round);color:var(--soft)}
 .bo-wrap{flex:1 1 auto;min-height:0;display:grid;place-items:center}
+@media (max-width:430px){.bo-wrap{justify-items:end}}
 .bo-board{position:relative;width:min(100%,380px);aspect-ratio:1;border-radius:12px;background:radial-gradient(circle at 50% 40%,#0f2f52,#06172a 75%);box-shadow:inset 0 0 0 2px rgba(56,189,248,.75),0 0 16px rgba(56,189,248,.3);overflow:hidden}
 .bo-board svg{display:block;width:100%;height:100%;touch-action:manipulation}
 .bo-board .gl{stroke:rgba(56,189,248,.62);stroke-width:.45}
@@ -96,7 +97,8 @@
   function fitBoard(stage) {
     const w = stage.querySelector(".bo-wrap"), b = w && w.firstElementChild; if (!b) return;
     b.style.width = b.style.height = "";
-    const sz = Math.floor(Math.min(w.clientWidth, w.clientHeight || 9999, 380));
+    const inset = window.innerWidth <= 430 && !w.closest(".bo-tut") ? 18 : 0;   // 왼쪽 가장자리 🐞 버튼이 A 줄을 가리지 않게
+    const sz = Math.floor(Math.min(w.clientWidth - inset, w.clientHeight || 9999, 380));
     if (sz > 80) { b.style.width = sz + "px"; b.style.height = sz + "px"; }
   }
   function render(stage, V, ctx) {
@@ -141,6 +143,11 @@
     }
     stage.innerHTML = `<div class="bo-st">${st}</div><div class="bo-wrap">${boardHtml(V, bo)}</div>${actH ? `<div class="bo-act">${actH}</div>` : ""}`;
     fitBoard(stage);
+    if (window.ResizeObserver) {            // 선생님 창이 열리고 닫혀 판 자리가 바뀌면 판 크기도 다시 맞춤
+      if (S.ro) S.ro.disconnect();
+      const w = stage.querySelector(".bo-wrap"); let last = w ? w.clientHeight : 0;
+      if (w) { S.ro = new ResizeObserver(() => { if (Math.abs(w.clientHeight - last) > 1 || !w.firstElementChild.style.width) { last = w.clientHeight; fitBoard(stage); } }); S.ro.observe(w); }
+    }
     stage.onclick = e => {
       const t = e.target.closest("[data-p],button"); if (!t || t.disabled) return;
       const c = S.ctx, VV = S.V; if (!c || !c.canAct || !VV || VV.phase !== "play" || VV.cur !== c.me) return;
@@ -278,7 +285,7 @@
       "준비물: <b>19줄</b> 판 · 돌 밑면은 흑돌 / 백돌, 윗면과 옆은 <b>7가지 색</b> — 위에서는 누구 돌인지 안 보여요",
       "진행: <b>흑</b>이 먼저 색을 골라 두고, <b>백</b>은 방금 흑이 쓴 <b>같은 색</b>으로 둬요 · 번갈아",
       "승패: 5개 이상 한 줄이면 심판이 알려 주고 끝 · 밑면 공개 · 판이 다 차면 무승부",
-      "특수: 내 돌 · 상대 돌은 <b>기억</b>으로만 · 속임수 · 반칙(밑면 보기)은 즉시 패배",
+      "특수: 내 돌 · 상대 돌은 <b>기억</b>으로만 — 방송의 '밑면 몰래 보기 = 즉시 패배'는 앱에서 밑면을 볼 수 없어 따로 없어요 · 3판 2선승은 무승부가 끼면 <b>최대 5판</b>까지 (끝없는 판을 막는 상한), 그래도 승수가 같으면 둘 다 승",
       SRC, "※ 방송과 다른 점: " + DIFF,
     ],
     sub: V => (V.over ? "끝" : `${V.need > 1 ? `${V.gi}판 · ${V.wins[0]}:${V.wins[1]} · ` : ""}${V.cur >= 0 ? `${V.cur === V.black ? "흑" : "백"} 차례 · ${V.mv.length}수` : "판 끝"}`),

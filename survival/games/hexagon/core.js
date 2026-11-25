@@ -19,6 +19,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   const LET = "ABCDEFGHIJKLMNOPQRS".split("");
+  const HMIN = (typeof window !== "undefined" && window.SVHuman && window.SVHuman.MIN) || 120;
   const NO_BUZZ = 99999, MIN_MS = 900, MAXCALLS = 30, MEMPOOL = 16, EXTRA = 3;
   // 칸 좌표 (축 좌표 q, r — 줄 r = −2..2, 위에서부터 3 · 4 · 5 · 4 · 3칸)
   const CELL = [];
@@ -152,7 +153,8 @@
     if (st.phase === "buzz") {
       if (a.t !== "buzz" || typeof a.ms !== "number" || !Number.isFinite(a.ms)) return { ok: false, err: "버저를 누르거나 넘겨요" };
       if (st.bz[seat] !== null) return { ok: false, err: "이미 정했어요" };
-      st.bz[seat] = Math.max(0, Math.min(NO_BUZZ, Math.round(a.ms)));
+      const r = Math.round(a.ms);        // 사람 최소 반응(셸 공용 SVHuman.MIN) 아래는 그 값으로 · 안 누름(NO_BUZZ)은 그대로
+      st.bz[seat] = r >= NO_BUZZ ? NO_BUZZ : Math.max(HMIN, Math.min(NO_BUZZ, r));
       if (st.bz[0] !== null && st.bz[1] !== null) {
         const [m0, m1] = st.bz;
         if (m0 >= NO_BUZZ && m1 >= NO_BUZZ) { push(st, { k: "buzz", r: st.round, w: -1, ms: [m0, m1] }); endRound(st, "pass"); return { ok: true }; }

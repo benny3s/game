@@ -151,5 +151,11 @@ const hardMiss = []; let hardSay = 0;
     ok(w / N >= need, `${A} 이 ${B} 를 이김 ${(w / N).toFixed(2)}`);
   }
 }
+// 8) 만든 판의 정답 수 = 2~8개 (대체 판 포함 · 방송 규칙)
+{
+  const N = QUICK ? 200 : 800; let bad = 0;
+  for (let i = 0; i < N; i++) { const b = C.makeBoard(1000 + i * 7, 1 + (i % 10)); const n = C.solve(b.cells, b.target).length; if (n < 2 || n > 8) bad++; }
+  ok(bad === 0, `만든 판 ${N}개 모두 정답 2~8개 (벗어남 ${bad})`);
+}
 console.log(`eqpyramid selftest: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

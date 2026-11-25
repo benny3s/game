@@ -57,7 +57,12 @@
 .gr-hist .r b{font:800 12.5px var(--round)}
 .gr-hist .r.win{border-color:var(--gold)}
 .gr-tut{display:grid;gap:8px;justify-items:center;width:100%}
-.gr-tut .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center}`;
+.gr-tut .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center}
+@media (max-height:700px){
+.gr-side{padding:5px 7px;gap:4px}.gr-b{height:36px;font-size:17px}.gr-b.sm{height:32px;font-size:15px}
+.gr-edit{gap:4px;padding:6px 8px}.gr-edit .note{font-size:11px;line-height:1.25}
+.gr-pal{grid-template-columns:repeat(10,1fr);gap:3px}.gr-pal button{padding:5px 0 3px;font-size:16px;border-radius:8px}.gr-pal button small{font-size:8px;letter-spacing:-.5px}
+.gr-btns .btn{padding:8px 6px;font-size:13px}.gr-acts{gap:5px}.gr-pts{font-size:20px}}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   let lastSeats = [];
@@ -243,7 +248,7 @@
       "큐브 7개를 <b>합 30 이하</b>로 골라 어두운 통 → 밝은 통(작은 수 → 큰 수) 순서로 넣어요",
       "1:1 대결 7라운드 — 통 하나씩 내서 <b>큰 숫자가 1점</b>, 같으면 무승부",
       "이긴 사람이 다음 라운드 선 · 선의 통은 <b>색만</b> 보여요",
-      "대결에서 이기면 쉬던 사람과 다시 대결 — <b>연달아 두 번</b> 이기면 1등",
+      "대결에서 이기면 쉬던 사람과 다시 대결 — <b>연달아 두 번</b> 이기면 1등 (끝없는 판을 막으려 <b>12번째 대결</b>까지 안 끝나면 대결 승수 → 득점 순으로 가려요)",
     ],
     note: "방송과 다른 점: 3명 고정 (빈 자리는 AI), 첫 대결 두 사람과 첫 선은 무작위, 무승부 대결은 큐브를 새로 넣어 재대결, 12번째 대결에서도 안 끝나면 대결 승수 → 득점 순으로 가려요.",
     sub: V => (V.over ? "끝" : `대결 ${V.match} · ${V.phase === "setup" ? "큐브 넣기" : `${V.round}/${V.rounds} 라운드`}`),
