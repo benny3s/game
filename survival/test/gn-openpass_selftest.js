@@ -210,7 +210,7 @@ const clone = o => JSON.parse(JSON.stringify(o));
   const sumUnk = Object.values(va.unk).reduce((s, x) => s + x, 0);
   ok(sumUnk === 19 && va.backs[0].length === 20 && va.backs[1].length === 20, '모르는 카드 19장 (20장 − 오픈 1장) · 뒷면 색은 모두 보여요');
   ok(G.view(st, 1).unk && G.view(st, -1).unk === null && G.view(st, 1).decks === null && G.view(st, 0).decks === null, '자리가 있는 사람은 판이 끝나기 전에 남의 덱을 못 봐요');
-  ok(G.view(st, -1).decks && G.view(st, 'all').decks && G.view(st, -1).decks[1].length === 20 && G.view(st, -1).pub === G.view(st, 0).pub, 'AI 구경(−1) · 다 보기는 덱까지 보이되 공개 지문은 같아요');
+  ok(G.view(st, -1).decks === null && G.view(st, 'all').decks && G.view(st, 'all').decks[1].length === 20 && G.view(st, 'all').pub === G.view(st, 0).pub && G.view(st, -1).pub === G.view(st, 0).pub, 'AI 구경(all)은 덱까지 보이고 온라인 구경꾼(-1)은 못 봐요 · 공개 지문은 같아요');
   ok(G.view(st, 2).unk && Object.keys(G.view(st, 2).unk).length > 0 && G.view(st, 2).mineSub !== null, '내 제출 카드는 나만 알아요');
 }
 // 8) AI: 구입 · 제출 · 플레이 모두 규칙 안, 끝까지, 어려운 AI 가 쉬운 AI 보다 못하지 않아요
@@ -235,6 +235,28 @@ const clone = o => JSON.parse(JSON.stringify(o));
   ok(lg('normal') > lg('easy') + 0.15, '보통 AI 가 쉬운 AI 보다 값이 커요');
   ok(lg('hard') > lg('easy') + 0.15 && lg('hard') >= lg('normal') - 0.2, '어려운 AI 도 쉬운 AI 보다 커요');
   ok(rk.hard / cnt.hard < rk.easy / cnt.easy && rk.normal / cnt.normal < rk.easy / cnt.easy, '쉬운 AI 의 평균 순위가 가장 나빠요');
+}
+
+// 💡 추천 = 고급 AI 의 수: 구입 · 20장 고르기 · 오픈/패스 전부, 어떤 난수를 줘도 같은 수 (판 전체를 돌며 비교)
+{
+  let tot = 0, same = 0, rndSame = 0;
+  for (let g = 0; g < 6; g++) {
+    const N = 2 + (g % 3), st = G.init({ n: N, seed: 4100 + g * 7, cfg: { gar: g % 2 ? 4 : 0 } });
+    let guard = 0;
+    while (!G.over(st) && guard++ < 600) {
+      const s = G.needs(st)[0], V = G.view(st, s), a = G.ai(V, s, 'hard', G.sampler(1)), b = G.ai(V, s, 'hard', G.sampler(77)), c = G.coach(V, s, 0, null);
+      tot++; if (JSON.stringify(a) === JSON.stringify(b)) rndSame++;
+      let r = null;
+      if (V.phase === 'play') r = a.t === 'open' ? '오픈' : '패스';
+      if (V.phase === 'buy') r = G.packTxt(a.p);
+      if (V.phase === 'submit') r = G.selTxt(a.sel);
+      if (r !== null && V.phase !== 'play' || (V.phase === 'play' && V.passes[s] < G.MAXPASS)) { if (c.rec === r) same++; else ok(false, `추천 ≠ 고급 AI (${V.phase}): ${c.rec} vs ${r}`); } else same++;
+      ok(G.apply(st, s, a).ok || G.apply(st, s, G.legal(st, s)[0]).ok, '고급 AI 수가 합법');
+    }
+  }
+  ok(same === tot, `선생님 추천 = 고급 AI 의 수 (${same}/${tot})`);
+  ok(rndSame === tot, `고급 AI 는 난수와 상관없이 판만으로 정해져요 (${rndSame}/${tot})`);
+  console.log(`  💡 추천 = 고급 AI ${same}/${tot}`);
 }
 console.log(`gn-openpass selftest: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

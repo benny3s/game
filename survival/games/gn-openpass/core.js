@@ -202,7 +202,7 @@
 
   // ── 보이는 것 ─────────────────────────────────────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), me = typeof seat === "number" && seat >= 0 ? seat : -1;
+    const all = seat === "all", me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const reveal = st.over || all;
     const playing = st.phase === "play" || st.phase === "over";
     const cur = st.phase === "play" ? st.order[st.cur] : -1;
@@ -346,8 +346,11 @@
     }
     return { t: "submit", sel: bestDeck(pool, r, tier, 60).sel };
   }
+  // 고급 AI 는 보이는 판(V · 내 자리)만으로 정해지게 — 같은 판이면 어떤 난수를 줘도 같은 수 (선생님 💡 추천 = 고급 AI 의 수)
+  const hardSeed = (V, me) => parseInt(hash(`${V.pub}|${me}|${V.phase}|${V.passes ? V.passes[me] : 0}|${V.pos ? V.pos[me] : 0}|${V.gar}`), 36) >>> 0;
   function ai(V, me, tier, r) {
     if (!V.needs.includes(me)) return null;
+    if (tier === "hard") r = sampler(hardSeed(V, me));
     if (V.phase === "buy") return actBuy(V, tier, r);
     if (V.phase === "submit") return actSubmit(V, tier, r);
     const a = actPlay(V, me, tier, r); return { t: a.t };
@@ -435,13 +438,13 @@
       return { opp: res, mine: `내 수식: ${exprText(b) || "(없음)"} = ${showVal(V.vals[me])} · ${V.n}명 중 ${V.ranks[me] + 1}위 · 오픈 ${b.length}칸 · 패스 ${V.passes[me]}장`, rec: first.includes(me) ? "우승이에요!" : `값이 가장 큰 사람이 우승이에요${ratio ? ` — 1위(${showVal(tf)})는 내 값의 약 ${ratio >= 10 ? Math.round(ratio).toLocaleString("ko-KR") : ratio.toFixed(1)}배예요` : ""}`, why: `곱셈이 이어질수록 값이 크게 자라요. 내 수식은 쓰인 카드 ${valid}장 중 곱셈 ${muls}개, 겹쳐서 버려진 카드 ${b.length - valid}장이에요. 큰 숫자와 × 카드를 많이 넣고, 연속된 숫자 · 기호는 칸만 낭비한다는 점이 핵심이에요.` };
     }
     if (V.phase === "buy") {
-      const a = actBuy(V, "hard", sampler(V.n * 31 + me + 5)), dn = V.buyDone.filter(Boolean).length, vr = evalBuy(a.p, 21, 400).v, v0 = a.p.some(Boolean) ? evalBuy([0, 0, 0], 21, 400).v : vr;
+      const a = actBuy(V, "hard", sampler(hardSeed(V, me))), dn = V.buyDone.filter(Boolean).length, vr = evalBuy(a.p, 21, 400).v, v0 = a.p.some(Boolean) ? evalBuy([0, 0, 0], 21, 400).v : vr;
       return { opp: `다른 ${V.n - 1}명도 모두 가넷 ${V.gar}개로 팩을 정하는 중이에요 (지금 ${dn}/${V.n}명 정했고, 구입은 모두 정한 뒤 공개돼요). 순서: ` + V.order.map(who).join(" → "), mine: `가넷 ${V.gar}개 · 팩 가격 검정 1 · 빨강 2 · 파랑 3 · 기본 카드 20장 (숫자 10장 · 기호 10장)`, rec: packTxt(a.p), why: `파랑 팩에는 7·8·9 가 세 장씩과 × 3장, 10 도 들어 있어요. 큰 숫자와 ×(곱셈)가 많을수록 수식이 크게 자라요. 검정 팩은 작은 숫자 위주라 가넷이 남을 때만 사요. 끝까지 해 봤을 때 대표 값(자릿수 평균)은 이 구입이면 약 ${lgShow(vr)}${a.p.some(Boolean) ? ` · 안 사면 약 ${lgShow(v0)}` : ""}${iyo(a.p.some(Boolean) ? lgShow(v0) : lgShow(vr))}.` };
     }
     if (V.phase === "submit") {
       const dn = V.subDone.filter(Boolean).length;
       if (!V.pool) return { opp: `다른 사람이 낼 카드는 비밀이에요 (뒷면만 보여요) — 지금 ${dn}/${V.n}명이 냈어요.`, mine: inSeat ? "구입 결과를 기다려요" : "구경 중이에요", rec: "기다려요", why: `낼 카드는 사람마다 20장이에요 (기본 카드 20장 + 산 팩 중에서 고름). ${V.n}명이 모두 내면 시작해요.` };
-      const pool = Object.fromEntries(V.pool.map(g => [g.key, g.n])), a = actSubmit(V, "hard", sampler(V.n * 17 + me + 3)), sel = a.sel, dr = evalDeck(sel, 31, 400), da = evalDeck(autoPick(pool), 31, 400);
+      const pool = Object.fromEntries(V.pool.map(g => [g.key, g.n])), a = actSubmit(V, "hard", sampler(hardSeed(V, me))), sel = a.sel, dr = evalDeck(sel, 31, 400), da = evalDeck(autoPick(pool), 31, 400);
       return { opp: `다른 사람이 낼 카드는 비밀이에요 (뒷면만 보여요) — 지금 ${dn}/${V.n}명이 냈어요.`, mine: `가진 카드 ${poolSize(pool)}장 중 20장을 골라요`, rec: selTxt(sel), why: `수식은 숫자 · 기호가 번갈아야 해서 숫자 8~10장 · 기호 10~12장 정도가 좋아요. × 를 가장 먼저, 그다음 + 를 넣고 − · ÷ 는 마지막에 넣어요 (값을 줄이니까요). 끝까지 해 봤을 때 대표 값(자릿수 평균)은 이 20장이면 약 ${lgShow(dr.v)}, 앞에서부터 20장을 그냥 고르면 약 ${lgShow(da.v)}${iyo(lgShow(da.v))}.` };
     }
     const cur = V.cur, T = bestOther(V), u = inSeat ? unkInfo(V) : null;
@@ -459,10 +462,11 @@
     const front = V.boards[me][0];   // 새 카드는 맨 왼쪽에 놓여요 (첫 카드는 등호 옆 1번 칸)
     const tip = front === undefined ? "첫 카드는 등호 옆 맨 오른쪽 칸에 놓여요 — 큰 숫자가 좋아요 (기호가 먼저 나오면 끝 기호라 무효예요)." : typeof front === "number" ? "맨 왼쪽 숫자 왼쪽에는 기호(특히 ×)가 필요해요 — 숫자가 또 나오면 새 숫자만 남고 앞 숫자는 버려져요." : "맨 왼쪽 기호 왼쪽에는 숫자가 필요해요 — 기호가 또 나오면 새 기호만 남고, 마지막 칸의 기호는 앞에 0 이 붙어요.";
     if (!ev) return { opp, mine: mineTxt, rec: "오픈", why: `${BACK_NAME[col]} 뒷면 카드예요. ${tip}` };
-    const rec = ev.open >= ev.pass ? "오픈" : "패스";
-    const why = `${BACK_NAME[col]} 뒷면 카드예요 — ${ev.win ? `지금 최고(${showVal(ev.T)})를 넘길 확률이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}` : `이길 확률(상대 ${ev.nOpp}명도 내 덱과 비슷하다고 볼 때)이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}`}예요 (끝까지 해 봤을 때 대표 값 오픈 약 ${ev.vOpen} · 패스 약 ${ev.vPass}). ${tip}`;
+    const rec = ai(V, me, "hard").t === "open" ? "오픈" : "패스";   // 💡 = 고급 AI 의 수
+    const close = (ev.open >= ev.pass) !== (rec === "오픈") ? " (두 수의 차이가 아주 작아요)" : "";
+    const why = `${BACK_NAME[col]} 뒷면 카드예요${close} — ${ev.win ? `지금 최고(${showVal(ev.T)})를 넘길 확률이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}` : `이길 확률(상대 ${ev.nOpp}명도 내 덱과 비슷하다고 볼 때)이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}`}예요 (끝까지 해 봤을 때 대표 값 오픈 약 ${ev.vOpen} · 패스 약 ${ev.vPass}). ${tip}`;
     return { opp, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-openpass", TH, want, playRest, sampleFaces, judgePlay, pickDeck, simDeck, bestDeck, allBuys, ai, coach, packTxt, selTxt, bestOther, DECK, SLOTS, MAXPASS, MAXBUY, SYM, BACKS, BACK_NAME, BASE, PACKS, init, needs, apply, view, over, ranks, legal, auto, advance, poolOf, poolSize, groupList, buyCost, faceOfKey, backOfKey, gkey, keepRaw, keepSeq, evalBoard, evalSeq, frontVal, num, cmpF, showVal, exprText, symTxt, sampler, hash, autoPick, deckOutcomes, evalDeck, evalBuy, evalPlay, beatProb, lgShow, unkInfo, unkTxt };
+  return { id: "gn-openpass", TH, want, playRest, sampleFaces, judgePlay, pickDeck, simDeck, bestDeck, allBuys, ai, coach, packTxt, selTxt, bestOther, DECK, SLOTS, MAXPASS, MAXBUY, SYM, BACKS, BACK_NAME, BASE, PACKS, init, needs, apply, view, over, ranks, legal, auto, advance, poolOf, poolSize, groupList, buyCost, faceOfKey, backOfKey, gkey, keepRaw, keepSeq, evalBoard, evalSeq, frontVal, num, cmpF, showVal, exprText, symTxt, sampler, hash, hardSeed, autoPick, deckOutcomes, evalDeck, evalBuy, evalPlay, beatProb, lgShow, unkInfo, unkTxt };
 });
