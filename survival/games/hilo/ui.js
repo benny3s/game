@@ -227,6 +227,46 @@
     return { opp, mine, rec, why };
   }
 
+  // ── 🎞️ 복기: 아쉬운 수 (선생님과 같은 계산 — H.evalPlay · H.evalReveal · 보이는 것만 · 기대 점수 차이로 sev) ──
+  const REV_K = 20;                                    // 기대 점수 1점 손해 = sev 20 (3점 손해부터 📒)
+  const spTxt = s => (s === "R" ? "리버스" : "노멀");
+  const sameA = (a, b) => !!a && !!b && a.t === b.t && a.n === b.n && a.s === b.s && a.to === b.to;
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      if (!V || !myA || V.over || !(seat >= 0 && seat < 4) || !V.needs || !V.needs.includes(seat) || !V.hands || !V.hands[seat]) return none;
+      const isBest = sameA(myA, bestA), inTally = !!(info && info.same), nm = i => (info && info.names && info.names[i]) || `${i + 1}번`;
+      const fin = (s, why) => ({ sev: isBest ? 0 : inTally ? Math.min(Math.max(0, Math.round(s)), 20) : Math.max(0, Math.min(100, Math.round(s))), why });   // 고급 AI 도 두는 수면 아쉬운 장면이 아니에요
+      const pileSum = sum(V.pile), hd = V.hands[seat], hist = V.hist || [];
+      const seed = ((((info && info.seed) | 0) ^ Math.imul(V.round | 0, 2654435761) ^ Math.imul(hist.length + 1, 40503) ^ Math.imul(sum(hd.nums) + 1, 69069) ^ Math.imul((hd.sub ? hd.sub.n : 0) + 3, 1597334677) ^ Math.imul(seat + 1, 374761393)) >>> 0) || 1;
+      const R = seeded(seed), p0 = x => Math.max(1, Math.min(99, Math.round(x * 100)));
+      if (V.phase === "play" && myA.t === "play") {
+        const L = H.evalPlay(V, seat, 400, R), mine = L.find(x => x.n === myA.n && x.s === myA.s);
+        if (!mine || !L.length) return none;
+        const top = L[0], aiE = bestA && bestA.t === "play" ? L.find(x => x.n === bestA.n && x.s === bestA.s) : null, ref = aiE && aiE.ev >= top.ev - 0.15 ? aiE : top;
+        const loss = Math.max(0, top.ev - mine.ev), tag = x => `${x.n}(${spTxt(x.s)})`;
+        const pn = `더미 ${fmt(pileSum)} · 내 ${tag(mine)} 가져갈 확률 ~${p0(mine.p)}% · 기대 ${fmt(Math.round(mine.ev * 10) / 10)}점`;
+        const why = loss < 0.1 || ref.n === mine.n && ref.s === mine.s ? `${pn} (${isBest ? "고급 AI 와 같은 선택" : "낼 수 있는 카드 중 가장 좋은 쪽"}이에요)` : `${pn} / ${isBest ? "" : "고급 AI 의 "}${tag(ref)} ~${p0(ref.p)}% · ${fmt(Math.round(ref.ev * 10) / 10)}점`;
+        return fin(loss * REV_K, why);
+      }
+      if (V.phase === "reveal" && V.canQuit && hd.sub && (myA.t === "show" || myA.t === "quit")) {
+        const e = H.evalReveal(V, seat, 400, R), mineE = myA.t === "show" ? e.evShow : e.evQuit, otherE = myA.t === "show" ? e.evQuit : e.evShow;
+        if (!isFinite(mineE) || !isFinite(otherE)) return none;
+        const loss = Math.max(0, otherE - mineE), f = x => fmt(Math.round(x * 10) / 10);
+        const sh = `내 ${hd.sub.n} 공개 → 더미 ${fmt(pileSum)} 가져갈 확률 ~${p0(e.pShow)}% · 기대 ${f(e.evShow)}점`, qt = `포기 → 기대 ${f(e.evQuit)}점${pileSum < 0 ? ` (같은 숫자를 낸 사람이 있을 확률 ~${p0(e.pShare)}%)` : ""}`;
+        return fin(loss * REV_K, myA.t === "show" ? `${sh} / ${qt}` : `${qt} / ${sh}`);
+      }
+      if (V.phase === "pass" && myA.t === "pass" && V.passOpts && V.passOpts.length) {
+        const po = V.passOpts, top = po.slice().sort((a, b) => V.score[b] - V.score[a])[0];
+        if (myA.to === -1) return fin(Math.abs(pileSum) * REV_K, `넘길 수 있는 사람(${po.map(nm).join(" · ")})이 있는데 안 넘겨서 ${fmt(pileSum)}점을 그대로 가져가요`);
+        if (!po.includes(myA.to)) return none;
+        const d = V.score[top] - V.score[myA.to];
+        return fin(d > 0 ? Math.min(15, 4 + d * 1.5) : 0, d > 0 ? `넘길 수 있는 사람 중 점수가 가장 높은 ${nm(top)}(${fmt(V.score[top])}점)에게 넘기면 내 순위에 더 좋아요 (${nm(myA.to)} ${fmt(V.score[myA.to])}점)` : `넘길 수 있는 사람 중 점수가 가장 높은 ${nm(myA.to)}(${fmt(V.score[myA.to])}점)에게 넘겼어요`);
+      }
+    } catch (e) { /* 계산 못 하면 아래 */ }
+    return none;
+  }
+
   // ── 1분 규칙 ──
   function tutorial() {
     style();
@@ -283,7 +323,7 @@
     src: SRC, diff: DIFF,
     sub: V => (V.over ? "끝" : `${V.round}/${V.R}라운드 · ${{ play: "숨겨 내기", reveal: "공개 · 포기", pass: "마이너스 넘기기", show: "결과" }[V.phase] || ""}`),
     chip: (V, i) => ({ t: `${fmt(V.score[i])}점`, on: V.needs.includes(i) && !V.over, out: false }),
-    render, result, coach, tutorial,
+    render, result, coach, tutorial, review,
     qa: (V, me, rnd) => H.ai(V, me, "easy", rnd),
   };
 })();

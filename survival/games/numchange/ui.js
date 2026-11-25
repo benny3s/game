@@ -192,6 +192,70 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
     return { opp, mine, rec, why: ex };
   }
 
+  // ── 🎞️ 복기 고리 ──
+  // 내 수와 고급 AI 수를 '끝까지 이길 확률'로 견줘요. 계산은 core 의 고급 AI(hardPick)와 같은 방식 — 상대 손은 view.opp.worlds(보이는 것으로 좁힌 가능한 손들),
+  // 상대 성향은 view.style(지금까지 낸 합), 그다음 라운드는 가볍게 끝까지 둬 봄. core 가 내보내지 않는 작은 도우미라 아래에 같은 꼴로 둠(core 의 stepSim · simRest 와 맞춰야 함).
+  // 이번 라운드 이길 확률은 N.chances(coach 가 쓰는 것) 그대로. 쓰는 것은 그 수를 두기 직전 내 view 뿐이에요 (상대가 낸 블록 · 앞날 오가는 블록은 안 봄).
+  const mulb = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  function pairAtQ(H, q, r) {
+    const ps = N.pairsOf(H).sort((x, y) => (x[0] + x[1]) - (y[0] + y[1]) || x[0] - y[0]);
+    return ps[Math.max(0, Math.min(ps.length - 1, Math.round((q + (r() - 0.5) * 0.25) * (ps.length - 1))))];
+  }
+  function lowWin(H, S1) {
+    let win = null, low = null;
+    for (const p of N.pairsOf(H)) { const s = p[0] + p[1]; if (!low || s < low[0] + low[1]) low = p; if (s > S1 && (!win || s < win[0] + win[1])) win = p; }
+    return win || low;
+  }
+  function stepSim(H, sc, P0, P1, h0, h1, r) {
+    const S0 = P0[0] + P0[1], S1 = P1[0] + P1[1];
+    if (S0 > S1) sc[0]++; else if (S1 > S0) sc[1]++;
+    N.exchange(H, [P0, P1], [h0, h1], r);
+  }
+  function simRest(H, sc, k, q, r) {
+    while (sc[0] < N.WINPT && sc[1] < N.WINPT && k < N.ROUNDS + 1 && !(k === N.ROUNDS && sc[0] !== sc[1])) {
+      const P1 = pairAtQ(H[1], q, r), guess = pairAtQ(H[1], q, r);
+      stepSim(H, sc, lowWin(H[0], guess[0] + guess[1]), P1, false, false, r); k++;
+    }
+    return sc[0] > sc[1] ? 1 : sc[0] < sc[1] ? 0 : 0.5;
+  }
+  function oppSamples(V, SAMP, base) {
+    const Ws = V.opp.worlds, out = [];
+    const n0 = V.style ? V.style.n : 0, a = n0 ? V.style.aggr : 0.5, sg = 0.3 / Math.sqrt(n0 + 1) + 0.1;
+    const QS = [0, 0.25, 0.5, 0.75, 1], wq = QS.map(q => Math.exp(-((q - a) * (q - a)) / (2 * sg * sg))), wt = wq.reduce((x, y) => x + y, 0);
+    for (let s = 0; s < SAMP; s++) {
+      const r = mulb(base + s * 977); let x = r() * wt, k = 0; while (k < 4 && (x -= wq[k]) > 0) k++;
+      const W = Ws[Math.floor(r() * Ws.length)];
+      out.push({ W, q: QS[k], P1: pairAtQ(W, QS[k], r), seed: (r() * 4294967296) >>> 0 });
+    }
+    return out;
+  }
+  const sevOf = gap => (gap < 0.05 ? 0 : Math.min(100, Math.round(gap * 300)));        // 모의 대결 승률 20%p 차이 ≈ 60 (📒) — 모의가 낙관적이라 완만하게
+  const blkTxt = (P, h) => `${P[0]}+${P[1]}=${P[0] + P[1]}${h ? " (히든)" : ""}`;
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      if (!V || !V.opp || !V.hand || !myA || !bestA || V.phase !== "pick" || !V.needs.includes(seat)) return none;
+      const norm = a => (a.a >= a.b ? [a.a, a.b] : [a.b, a.a]);
+      const PM = norm(myA), PB = norm(bestA), hM = !!myA.h, hB = !!bestA.h;
+      if (!N.pairsOf(V.hand).some(p => p[0] === PM[0] && p[1] === PM[1]) || !N.pairsOf(V.hand).some(p => p[0] === PB[0] && p[1] === PB[1])) return none;
+      const my = `블록 ${PM[0]} · ${PM[1]}${hM ? " (히든 찬스)" : ""}`, best = `블록 ${PB[0]} · ${PB[1]}${hB ? " (히든 찬스)" : ""}`;
+      const ch = N.chances(V, seat), rd = P => { const x = ch.acts.find(y => y.a === P[0] && y.b === P[1]); return x ? Math.round(x.pWin * 100) : 0; };
+      if (PM[0] === PB[0] && PM[1] === PB[1] && hM === hB) return { sev: 0, why: `고급 AI 와 같은 블록이에요 (${blkTxt(PM, hM)}) — 이번 라운드 이길 확률 ${rd(PM)}%`, my, best };
+      const base = ((((info && info.seed | 0) ^ Math.imul(V.round + 1, 7919) ^ Math.imul(V.score[0] * 8 + V.score[1] + 1, 104729) ^ Math.imul(V.sizes[0] + seat + 5, 31) ^ V.hand.reduce((s, x, i) => s + x * (i + 3) * 101, 0)) >>> 0) * 31) >>> 0;
+      const SM = oppSamples(V, 400, base);
+      const val = (P, h) => {
+        let t = 0;
+        for (const sm of SM) { const H = [V.hand.slice(), sm.W.slice()], sc = [V.score[seat], V.score[1 - seat]], r = mulb(sm.seed); stepSim(H, sc, P, sm.P1, h, false, r); t += simRest(H, sc, V.round + 1, sm.q, r); }
+        return t / SM.length;
+      };
+      const vm = val(PM, hM), vb = val(PB, hB), gap = vb - vm, pc = x => Math.round(x * 100);
+      let sev = sevOf(gap); if (info && info.same) sev = Math.min(sev, 15);
+      const side = (P, h, first) => `${blkTxt(P, h)}: ${first ? "이번 라운드 이길 확률 " : ""}${rd(P)}%, 큰 블록 ${P[0]} 넘김`;
+      const gt = gap >= 0.05 ? `끝까지 모의 대결해 보면 고급 AI 수가 ${pc(gap)}%p 앞서요` : gap <= -0.05 ? "끝까지 모의 대결해 보면 내 수가 더 나아요" : "끝까지 모의 대결해 보면 거의 같아요";
+      return { sev, my, best, why: `내 ${side(PM, hM, true)} / 고급 AI ${side(PB, hB, false)} — ${gt}` };
+    } catch (e) { return none; }
+  }
+
   // ── 1분 규칙 ──
   function tutorial() {
     style();
@@ -248,7 +312,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
     src: SRC, diff: DIFF,
     sub: V => (V.over ? "끝" : roundLabel(V)),
     chip: (V, i) => ({ t: `${V.score[i]}점`, on: V.phase === "pick" && V.needs.includes(i) && !V.over, out: false }),
-    render, coach, result, tutorial,
+    render, coach, result, tutorial, review,
     qa: (V, me, rnd) => N.ai(V, me, "easy", rnd),
   };
 })();

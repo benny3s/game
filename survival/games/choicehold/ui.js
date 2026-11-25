@@ -322,6 +322,54 @@
     return out;
   }
 
+  // ── 🎞️ 복기: 아쉬운 수 (선생님과 같은 계산 — C.betPlan · C.placeEval · C.takeEval · 보이는 것만) ──
+  const sgn = x => (Math.abs(x) < 0.05 ? "" : x < 0 ? "−" : "+") + Math.abs(x).toFixed(1);
+  const pcr = x => Math.max(1, Math.min(99, Math.round(x * 100)));
+  const sameA = (a, b) => !!a && !!b && a.t === b.t && a.to === b.to && a.up === b.up && a.d === b.d;
+  const REV_K = 30;                                    // 기대 칩 1개 손해 = sev 30 (2칩 손해부터 📒)
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      if (!V || !myA || V.over || (seat !== 0 && seat !== 1) || !V.needs || !V.needs.includes(seat)) return none;
+      const isBest = sameA(myA, bestA), inTally = !!(info && info.same);
+      const fin = (s, why) => ({ sev: isBest ? 0 : inTally ? Math.min(Math.max(0, Math.round(s)), 20) : Math.max(0, Math.min(100, Math.round(s))), why });   // 고급 AI 도 두는 수면 아쉬운 장면이 아니에요
+      const ph = V.phase;
+      if ((ph === "bet1" || ph === "bet2") && ["call", "fold", "raise"].includes(myA.t)) {
+        // 폴드 = 0 (이미 낸 칩은 빼고 앞으로 칩만 셈) · 콜 = 승률 × (판돈 + 콜 값) − 콜 값 · 레이즈 = 상대가 받는다고 보고 같은 식 (접을 확률은 모르니 덜 쳐요)
+        const bp = C.betPlan(V, seat, "hard", () => 0.5), e = bp.e, tc = V.cur - V.bet[seat], pot = V.pot, bo = V.bet[1 - seat], bm = V.bet[seat];
+        const evCall = e * (pot + tc) - tc;
+        const evRaise = to => e * (pot + (to - bm) + (to - bo)) - (to - bm);
+        const evOf = a => (a.t === "fold" ? 0 : a.t === "call" ? evCall : (Number.isInteger(a.to) && a.to > V.cur && a.to <= V.cap ? evRaise(a.to) : null));
+        const mine = evOf(myA); if (mine == null) return none;
+        const solid = Math.max(0, evCall), solidA = evCall >= 0 ? { t: "call" } : { t: "fold" };
+        let hard = 0, soft = 0;
+        if (myA.t === "raise") soft = Math.max(0, solid - mine) * 0.6;                       // 허세일 수도 있어 📒 에는 안 담음
+        else hard = Math.max(0, solid - mine);
+        const bestE = bestA && bestA.t === "raise" ? evOf(bestA) : null;
+        if (myA.t !== "raise" && bestE != null) soft = Math.max(soft, Math.max(0, bestE - Math.max(mine, solid)) * 0.5);   // 더 걸어 벌 수 있었던 몫
+        const sev = Math.max(hard * REV_K, Math.min(59, soft * REV_K));
+        const nm = a => (a.t === "fold" ? "폴드" : a.t === "call" ? (tc > 0 ? `콜 ${tc}칩` : "체크") : `레이즈 → ${a.to}칩`);
+        const ref = hard > 0.05 || (myA.t === "raise" && soft > 0.03) ? solidA : bestA && bestE != null && bestE > mine ? bestA : null;
+        const refE = ref ? evOf(ref) : null, ok = hard <= 0.05 && soft <= 0.03;
+        const odds = `승률 ~${pcr(e)}%${tc > 0 ? ` · 콜 손익분기 ${pcr(bp.need)}%` : ` · 판돈 ${pot}칩`}`;
+        const why = ok || refE == null ? `${odds} · 기대 칩 ${nm(myA)} ${sgn(mine)}${myA.t === "raise" ? " (받으면)" : ""}`
+          : `${odds} · 기대 칩 내 ${nm(myA)} ${sgn(mine)} / ${nm(ref)} ${sgn(refE)}${myA.t === "raise" || ref.t === "raise" ? " (받으면)" : ""}`;
+        return fin(sev, why);
+      }
+      if (ph === "place" && V.give && myA.t === "place" && (myA.up === 0 || myA.up === 1)) {
+        const ev2 = C.placeEval(V, seat), k = myA.up, o = 1 - k, loss = Math.max(0, ev2[o] - ev2[k]) * (V.pot + 2);
+        const why = `앞면 ${V.give[k]} 로 놓으면 기대 승률 ~${pcr(ev2[k])}%` + (ev2[o] - ev2[k] > 0.005 ? ` / 앞면 ${V.give[o]} 면 ~${pcr(ev2[o])}% (후가 유리한 쪽을 고른다고 봄)` : " (다른 쪽과 거의 같아요)");
+        return fin(loss * REV_K, why);
+      }
+      if (ph === "take" && V.up != null && myA.t === "take" && (myA.d === "up" || myA.d === "down")) {
+        const te = C.takeEval(V.pc[seat], V.com, V.up), mineP = myA.d === "up" ? te.up : te.down, otherP = myA.d === "up" ? te.down : te.up, loss = Math.max(0, otherP - mineP) * (V.pot + 2);
+        const why = `기대 승률: 앞면(${V.up}) ~${pcr(te.up)}% · 뒷면(모르는 카드) ~${pcr(te.down)}% — 내 선택 ${myA.d === "up" ? "앞면" : "뒷면"}${otherP - mineP > 0.005 ? "" : " (거의 같아요)"}`;
+        return fin(loss * REV_K, why);
+      }
+    } catch (e) { /* 계산 못 하면 아래 */ }
+    return none;
+  }
+
   // ── 1분 규칙 ──
   function tutorial() {
     style();
@@ -373,7 +421,7 @@
     ],
     sub: V => (V.over ? "끝" : `${V.hand}/${V.maxHand}판 · 기본 ${V.ante}칩 · ${PH[V.phase] || ""}`),
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: !!(V.over && V.ranks && V.ranks[i] > 0) }),
-    render, result, coach,
+    render, result, coach, review,
     qa: (V, me, rnd) => C.ai(V, me, "easy", rnd),
     tutorial,
   };

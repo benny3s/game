@@ -236,6 +236,37 @@
     ];
   }
 
+  // ── 🎞️ 복기 (ui.review): B.matrix / B.chances (선생님과 같은 표 — 남은 판까지 본 승률) ─────────────────────────
+  // 같은 시점에 내 수마다 끝까지 이길 확률을 두 가지 상대로 셈: ① 상대가 남은 카드를 고르게 낸다 (선생님의 ev)
+  // ② 상대가 내 약점을 가장 아프게 찌르는 섞어 내기 (이 표의 영합 풀이, 가상 놀이 1500번) — 숨겨 내는 게임이라 상대 수를 알 수 없어서
+  // 손해 = 두 가정 중 작은 쪽(= 둘 다에서 뒤질 때만) · sev = 승률 차 × 400 → 15%p 부터 60. 고급 AI 가 섞어 내는 수(상대가 최선일 때 손해 0)는 아쉬운 수가 아님
+  const rvNoRev = () => ({ sev: 0, why: "" });
+  function rvSolve(M, iters) {
+    const n = M.length, m = M[0].length, cc = Array(m).fill(0), rs = Array(n).fill(0), cs = Array(m).fill(0);
+    let i = 0, j = 0;
+    for (let t = 0; t < iters; t++) {
+      for (let c = 0; c < m; c++) cs[c] += M[i][c];
+      let bj = 0; for (let c = 1; c < m; c++) if (cs[c] < cs[bj]) bj = c; j = bj; cc[j]++;
+      for (let r = 0; r < n; r++) rs[r] += M[r][j];
+      let bi = 0; for (let r = 1; r < n; r++) if (rs[r] > rs[bi]) bi = r; i = bi;
+    }
+    const y = cc.map(v => v / iters);
+    return M.map(row => row.reduce((s, v, c) => s + v * y[c], 0));            // 상대가 y 로 낼 때 내 각 수의 승률
+  }
+  function review(V, seat, myA, bestA, info) {
+    try {
+      if (!V || !myA || !bestA || V.phase !== "pick" || !(seat === 0 || seat === 1)) return rvNoRev();
+      if (myA.r === bestA.r && myA.s === bestA.s) return rvNoRev();
+      const ch = B.chances(V, seat), idx = a => ch.acts.findIndex(x => x.r === a.r && x.s === a.s), mx = B.matrix(V, seat), km = ch.acts.length ? idx(myA) : -1, kb = ch.acts.length ? idx(bestA) : -1;
+      if (km < 0 || kb < 0 || mx.M.length !== ch.acts.length) return rvNoRev();
+      const u = rvSolve(mx.M, 1500), ev = ch.acts.map(a => a.ev);
+      const lossU = Math.max(...ev) - ev[km], lossE = Math.max(...u) - u[km], loss = Math.max(0, Math.min(lossU, lossE));
+      const p = x => Math.round(Math.max(0, Math.min(1, x)) * 100) + "%";
+      const why = `끝까지 이길 확률(상대가 고르게 낼 때) 내 수 ${p(ev[km])} vs AI 수 ${p(ev[kb])} · (가장 아프게 찔러도) ${p(u[km])} vs ${p(u[kb])}${loss < 0.03 ? " (큰 차이는 아니에요)" : ""}`;
+      return { sev: Math.max(0, Math.min(100, Math.round(loss * 400))), why };
+    } catch (e) { return rvNoRev(); }
+  }
+
   const SRC = "방송: 피의 게임 시즌1 · 배틀 가위바위보";
   const DIFF = "방송과 다른 점: 팀전이 아니라 1:1이에요 · 승점은 이기면 2점, 비기면 1점, 지면 0점으로 우리가 정했어요 (방송 문서에 점수 기준이 없어요) · 5라운드 뒤 승점이 높은 쪽이 이기고 같으면 공동 1등이에요 · 동시에 숨겨 내서 한 기기로는 못 해요";
   window.SVUI = window.SVUI || {};
@@ -255,7 +286,7 @@
     src: SRC, diff: DIFF,
     sub: V => (V.over ? "끝" : `${Math.min(V.round, V.R)} / ${V.R} 라운드`),
     chip: (V, i) => ({ t: `${V.pts[i]}점`, on: V.phase === "pick" && V.needs.includes(i) && !V.over, out: false }),
-    render, coach, result, tutorial,
+    render, coach, result, tutorial, review,
     qa: (V, me, rnd) => B.ai(V, me, "easy", rnd),
   };
 })();

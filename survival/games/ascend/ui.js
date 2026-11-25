@@ -189,6 +189,47 @@
     return { opp, mine, rec, why };
   }
 
+  // ── 🎞️ 복기 고리 ──
+  // 내 수와 고급 AI 수를 coach 와 같은 계산(A.evalPut · A.evalSay: 남은 칸에 1~10 이 고르게 온다고 보고 시트를 끝까지 채워 본
+  // 이어진 칸 수의 기대)으로, 같은 표본에 대어 견줘요. 그 수를 두기 직전 내 시트(V.sheet)와 불린 숫자만 써요 (남의 시트 · 결과는 안 봄).
+  const josa = (n, a, b) => ("013678".includes(String(n).slice(-1)) ? a : b);        // 숫자 뒤 받침 (0 1 3 6 7 8 = 받침 있음)
+  const sevOf = gap => (gap < 0.2 ? 0 : Math.min(100, Math.round(gap * 45)));         // 이어질 칸 수 기대 1칸 차이 ≈ 45 (1.35칸이면 📒)
+  function nbTxt(sh, c, v) {
+    let a = c - 1; while (a >= 0 && sh[a] == null) a--;
+    let b = c + 1; while (b < sh.length && sh[b] == null) b++;
+    const fit = (a < 0 || sh[a] <= v) && (b >= sh.length || v <= sh[b]);
+    return `왼쪽 이웃 ${a >= 0 ? sh[a] : "없음"} · 오른쪽 이웃 ${b < sh.length ? sh[b] : "없음"}${fit ? "" : " → 오름차순이 끊겨요"}`;
+  }
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      const sh = V && V.sheet;
+      if (!sh || !myA || !bestA || (V.phase !== "put" && V.phase !== "say") || myA.t !== V.phase) return none;
+      const empt = sh.filter(x => x == null).length; if (!empt) return none;
+      const r = seeded(((info && info.seed | 0) ^ Math.imul(V.round, 131) ^ Math.imul(V.said.length + 1, 17) ^ Math.imul(seat + 3, 7) ^ sh.reduce((s, x) => s + (x || 0) * 31, 0)) >>> 0);
+      const S = 120;
+      if (V.phase === "put") {
+        const v = V.cur, L = A.evalPut(sh, v, A.seqs(r, S, empt), 10);
+        const m = L.find(x => x.c === myA.c), b = L.find(x => x.c === bestA.c) || L[0];
+        if (!m || !b) return none;
+        if (m.c === b.c) return { sev: 0, why: `고급 AI 와 같은 칸이에요 (${m.c + 1}번째 칸 · ${nbTxt(sh, m.c, v)}) — 이어질 칸 예상 ${f1(m.ev)}칸`, my: `${v}${josa(v, "을", "를")} ${m.c + 1}번째 칸에`, best: `${v}${josa(v, "을", "를")} ${b.c + 1}번째 칸에` };
+        let sev = sevOf(b.ev - m.ev); if (info && info.same) sev = Math.min(sev, 15);
+        return {
+          sev, my: `${v}${josa(v, "을", "를")} ${m.c + 1}번째 칸에`, best: `${v}${josa(v, "을", "를")} ${b.c + 1}번째 칸에`,
+          why: `${v}${josa(v, "을", "를")} ${m.c + 1}번째 칸(${nbTxt(sh, m.c, v)})에 두면 이어질 칸 예상 ${f1(m.ev)}칸, ${b.c + 1}번째 칸이면 ${f1(b.ev)}칸이에요${b.ev - m.ev >= 0.2 ? ` (${f1(b.ev - m.ev)}칸 차이)` : " (거의 같아요)"}`,
+        };
+      }
+      const L = A.evalSay(sh, S, r, 3), m = L.find(x => x.v === myA.v), b = L.find(x => x.v === bestA.v) || L[0];
+      if (!m || !b) return none;
+      if (m.v === b.v) return { sev: 0, why: `고급 AI 와 같은 숫자예요 — ${m.v}${josa(m.v, "은", "는")} 내 시트 ${m.c + 1}번째 칸에 맞아 이어질 칸 예상 ${f1(m.ev)}칸`, my: `${m.v} 소리침`, best: `${b.v} 소리침` };
+      let sev = sevOf(b.ev - m.ev); if (info && info.same) sev = Math.min(sev, 15);
+      return {
+        sev, my: `${m.v} 소리침`, best: `${b.v} 소리침`,
+        why: `내가 부른 ${m.v}${josa(m.v, "은", "는")} 내 시트 ${m.c + 1}번째 칸에 맞아 이어질 칸 예상 ${f1(m.ev)}칸, 고급 AI 의 ${b.v}${josa(b.v, "은", "는")} ${b.c + 1}번째 칸에 맞아 ${f1(b.ev)}칸이에요${b.ev - m.ev >= 0.2 ? ` (${f1(b.ev - m.ev)}칸 차이)` : " (거의 같아요)"}`,
+      };
+    } catch (e) { return none; }
+  }
+
   // ── 1분 규칙 ──
   function tutorial() {
     style();
@@ -244,7 +285,7 @@
     src: SRC, diff: DIFF,
     sub: V => (V.over ? "끝" : `${V.round}/${V.R}판 · 소리친 숫자 ${V.said.length}/${A.DECL}`),
     chip: (V, i) => ({ t: `${V.totals[i]}점`, on: V.needs.includes(i) && !V.over, out: false }),
-    render, result, coach, tutorial,
+    render, result, coach, tutorial, review,
     qa: (V, me, rnd) => A.ai(V, me, "easy", rnd),
   };
 })();

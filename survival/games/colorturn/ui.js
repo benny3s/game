@@ -228,6 +228,76 @@ span.ct-c{cursor:default}
     return `${head}<br>💣 지뢰를 밟은 횟수 — ${who(0)} ${f[0]}번 · ${who(1)} ${f[1]}번 (드러난 지뢰 ${V.known.filter(k => k === 2).length}개 / 전체 18개) · ${V.tc}턴`;
   }
 
+  // ── 🎞️ 복기 고리 ──
+  // 지뢰 위치는 둘 다 모르므로 '한 수 앞 승패'만 견줘요 (core 의 K.gen · K.lineCells · K.mineProb · K.threats 를 그대로 씀, view 에 보이는 것만):
+  //   ① 내 수로 바로 4목이 생길 확률  ② 내 수 뒤 상대가 한 수로 이길 수 있는 확률(상대의 가장 좋은 답)  ③ 내 수 뒤 3목 줄 수.
+  // 안 밟은 칸은 줄마다 지뢰 3개라는 확률(mineProb)로 색이 바뀔 가능성을 섞어요. 더 깊은 수읽기는 안 해요 → 한 수 앞 승패가 갈릴 때만 sev 가 큼.
+  const cellTxt = i => `${Math.floor(i / W) + 1}행 ${i % W + 1}열`;
+  const pctT = p => `${Math.round(p * 100)}%`;
+  // 한 수를 둔 뒤 판 · 밟은 기록 (flip = 지뢰라 색이 바뀜)
+  function applyTo(cells, known, seat, a, flip) {
+    const c = cells.slice(), k = known.slice(); let col;
+    if (a.t === "place") col = seat + 1; else { col = c[a.from]; c[a.from] = 0; }
+    if (flip) col = 3 - col;
+    c[a.to] = col; k[a.to] = flip ? 2 : 1;
+    return { c, k };
+  }
+  // 움직인 사람 눈으로 본 결과: 1 = 그 사람 승, -1 = 상대 승, 0 = 계속 (판 규칙 그대로: 둘 다 생기면 움직인 사람 승)
+  function outcome(c, seat) {
+    const b = K.lineCells(c, 1).length > 0, w = K.lineCells(c, 2).length > 0, mine = seat === 0 ? b : w, theirs = seat === 0 ? w : b;
+    return mine ? 1 : theirs ? -1 : 0;
+  }
+  const flips = (k, mp, t) => { const p = k[t] === 2 ? 1 : k[t] === 1 ? 0 : mp[t]; return [[false, 1 - p], [true, p]].filter(x => x[1] > 0); };
+  function probe(V, me, a) {
+    const opp = 1 - me, mp = K.mineProb(V), placed = V.placed.slice();
+    if (a.t === "place") placed[me]++;
+    const lastTo = a.t === "place" ? -1 : a.to;
+    let win = 0, lose = 0, nextLose = 0, nextWith = -1;
+    for (const [fl, w] of flips(V.known, mp, a.to)) {
+      const r = applyTo(V.cells, V.known, me, a, fl), o = outcome(r.c, me);
+      if (o === 1) { win += w; continue; }
+      if (o === -1) { lose += w; continue; }
+      const mp2 = K.mineProb({ known: r.k });
+      let best = 0, at = -1;
+      for (const m of K.gen(r.c, opp, placed[opp], lastTo)) {
+        const oa = (m >> 6) === 36 ? { t: "place", to: m & 63 } : { t: "move", from: m >> 6, to: m & 63 };
+        let pw = 0;
+        for (const [fl2, w2] of flips(r.k, mp2, oa.to)) { const r2 = applyTo(r.c, r.k, opp, oa, fl2); if (outcome(r2.c, opp) === 1) pw += w2; }
+        if (pw > best + 1e-9) { best = pw; at = oa.to; }
+      }
+      nextLose += w * best; if (best > 0 && nextWith < 0) nextWith = at;
+    }
+    const safe = applyTo(V.cells, V.known, me, a, V.known[a.to] === 2).c, ts = K.threats(safe), col = me + 1;
+    return { win, risk: lose + nextLose, at: nextWith, mineT: ts.filter(t => t.col === col).length, oppT: ts.filter(t => t.col !== col).length };
+  }
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      if (!V || !myA || !bestA || (seat !== 0 && seat !== 1) || V.turn !== seat || V.over) return none;
+      const legal = new Set(K.gen(V.cells, seat, V.placed[seat], V.lastTo));
+      const code = a => (a.t === "place" ? (36 << 6) | a.to : (a.from << 6) | a.to);
+      if (!legal.has(code(myA)) || !legal.has(code(bestA))) return none;
+      if (code(myA) === code(bestA)) return { sev: 0, why: "고급 AI 와 같은 수예요" };
+      const m = probe(V, seat, myA), b = probe(V, seat, bestA);
+      let sev = 0, why;
+      const sameAsAi = !!(info && info.same);
+      if (b.win - m.win >= 0.2 && m.win < 0.99) {
+        sev = Math.min(100, Math.round(60 + (b.win - m.win) * 40));
+        why = `고급 AI 수는 바로 4목을 만들어요 (이길 확률 ${pctT(b.win)}) — 내 수는 ${pctT(m.win)}예요`;
+      } else if (m.win < b.win + 0.05 && m.risk - b.risk >= 0.25) {
+        sev = Math.min(100, Math.round(50 + (m.risk - b.risk) * 50));
+        why = `내 수 뒤 상대가 한 수로 이길 확률 ${pctT(m.risk)}${m.at >= 0 ? ` (${cellTxt(m.at)}에 두면 4목)` : ""} — 고급 AI 수 뒤엔 ${pctT(b.risk)}예요`;
+      } else if (m.oppT - b.oppT >= 1 && m.win < b.win + 0.05) {
+        sev = Math.min(45, 20 + 12 * (m.oppT - b.oppT));
+        why = `내 수 뒤 상대 3목 줄 ${m.oppT}개 (고급 AI 수 뒤 ${b.oppT}개) — 한 수 앞 승패는 같아요`;
+      } else if (m.mineT + m.oppT + b.mineT + b.oppT > 0) {
+        why = `내 수 뒤 3목 줄은 내 ${m.mineT}개 · 상대 ${m.oppT}개 (고급 AI 수 뒤 ${b.mineT} · ${b.oppT}개) — 한 수 앞 승패는 비슷해요`;
+      } else why = "";
+      if (sameAsAi) sev = Math.min(sev, 15);
+      return { sev, why };
+    } catch (e) { return none; }
+  }
+
   // ── 1분 규칙 ──
   function miniBoard(cells, o = {}) {
     const t = o.btn ? "button" : "span", at = o.btn ? ' type="button"' : "";
@@ -291,7 +361,7 @@ span.ct-c{cursor:default}
     ],
     sub: V => V.over ? "끝" : `${Math.min(V.tc + 1, V.maxTurn)} / ${V.maxTurn}턴`,
     chip: (V, i) => ({ t: `${DOT[i]}${V.score[i]}`, on: V.needs.includes(i) && !V.over, out: false }),
-    render, coach, result, tutorial,
+    render, coach, result, tutorial, review,
     qa: (V, me, rnd) => K.ai(V, me, "easy", rnd),
   };
 })();

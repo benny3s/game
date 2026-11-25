@@ -268,13 +268,14 @@ function replay(st) {
   return { cells, face };
 }
 function inv(st) {
+  if (st.phase === 'deal') { ok(st.hand[0].length === 0 && st.hand[1].length === 0 && st.wait === -1, '나누기 전엔 카드가 아무에게도 없음'); return; }
   const n0 = st.cells.filter(c => c === 1).length, n1 = st.cells.filter(c => c === 2).length;
   ok(n0 <= 5 && n1 <= 5 && n0 + n1 >= 1, '말은 5개 이하');
   ok(J([...st.hand[0], ...st.hand[1], st.wait].sort()) === D(0, 1, 2, 3, 4), '카드는 늘 5장 (앞 2 · 앞 2 · 대기 1)');
   for (let i = 0; i < 25; i++) if (st.cells[i]) ok(st.face[i] === 1 || st.face[i] === -1, '말에는 방향이 있음');
 }
-function playOut(seed, tiers, sets) {
-  const st = C.init({ n: 2, seed, cfg: { sets: sets || 1 } }), r = mul(seed * 17 + 3); let steps = 0;
+function playOut(seed, tiers, sets, deal) {
+  const st = C.init({ n: 2, seed, cfg: { sets: sets || 1, deal: deal || 'rand' } }), r = mul(seed * 17 + 3); let steps = 0;
   while (!C.over(st) && steps++ < 1200) {
     if (st.phase === 'between') { ok(C.auto(st) > 0, '세트 사이엔 auto'); C.advance(st); continue; }
     const s = C.needs(st)[0]; ok(s !== undefined, '입력 자리가 있음');
@@ -283,7 +284,7 @@ function playOut(seed, tiers, sets) {
     const a = C.ai(C.view(st, s), s, tiers[s], r);
     ok(L.some(x => J(x) === J(a)), `AI(${tiers[s]}) 수가 legal 안에 있음 ${J(a)}`);
     const res = C.apply(st, s, a); if (!res.ok) { ok(false, 'AI 가 규칙을 어김 ' + res.err); break; }
-    ok(C.apply(clone(st), 1 - s, mvA(0, 99, 0)).ok === false, '이상한 수 거부');
+    ok(C.apply(clone(st), 1 - s, a).ok === false && C.apply(clone(st), s, mvA(0, 99, 0)).ok === false, '차례 아닌 자리 · 이상한 수 거부');
     inv(st);
     ok(st.tc <= C.MAXTURN, '한 세트는 60턴 안쪽');
   }
@@ -313,6 +314,85 @@ for (let k = 0; k < 8; k++) playOut(5000 + k, tierSets[4], k % 2 ? 3 : 1);
   ok(C.explain(C.view(cs, 0), 0, mvA(0, 7, 2)).tags.includes('castle'), '상대 성에 오르는 수 태그');
   const an = C.analyze(V, 0);
   ok(an.counts[0] === 2 && an.hanging.includes(12) && an.targets.includes(8) && an.rec && C.analyze(V, 1).rec === null, '분석 묶음');
+}
+
+// 11b) 카드 나누기 (후공이 직접 · 방송) — 옵션 deal:"pick"
+{
+  const bad = [null, undefined, 0, 'x', [], {}, { t: 'deal' }, { t: 'deal', me: [0, 1] }, { t: 'deal', opp: [2, 3] }, { t: 'deal', me: [0, 1], opp: [1, 2] }, { t: 'deal', me: [0, 0], opp: [1, 2] },
+    { t: 'deal', me: [0, 1], opp: [2, 5] }, { t: 'deal', me: [0, 1], opp: [2, -1] }, { t: 'deal', me: [0, 1], opp: [2, 2.5] }, { t: 'deal', me: [0, 1, 2], opp: [3, 4] }, { t: 'deal', me: ['0', 1], opp: [2, 3] },
+    { t: 'deal', me: 'ab', opp: [2, 3] }, { t: 'deal', me: [, 1], opp: [2, 3] }, { t: 'deal', me: [0, 1], opp: [2, ,] }, { t: 'mv', slot: 0, from: 20, to: 15 }, { t: 'pass' }];
+  const st = C.init({ n: 2, seed: 11, cfg: { sets: 3, deal: 'pick' } });
+  ok(st.phase === 'deal' && st.deal === 'pick' && J(C.needs(st)) === D(1) && st.turn === 0, '나누기: 후공(흑)이 먼저 입력할 차례');
+  ok(J(st.hand) === J([[], []]) && st.wait === -1 && st.log.length === 1 && st.log[0].k === 'start' && st.log[0].deal === 1, '나누기 전 카드는 아무에게도 없음');
+  const V = C.view(st, 1), V0 = C.view(st, 0);
+  ok(V.phase === 'deal' && V.dealer === 1 && V0.dealer === 1 && V.deal === 'pick' && V.first === 0 && V.hand[0].length === 0, 'view: dealer · phase');
+  ok(C.legal(st, 1).length === 30 && C.legal(st, 0).length === 0 && C.legal(V, 1).length === 30, '후공만 30가지를 고를 수 있음 (view 로도 같음)');
+  ok(new Set(C.legal(st, 1).map(a => J([a.opp, a.me]))).size === 30, '30가지 모두 다름');
+  ok(C.auto(st) === null, '나누기 중엔 자동 단계 없음');
+  const before = J(C.view(st, 0));
+  for (const a of bad) { let r; try { r = C.apply(st, 1, a); } catch (e) { r = { ok: 'throw ' + e.message }; } ok(r && r.ok === false, '나누기 잘못된 입력 거부: ' + J(a)); }
+  ok(C.apply(st, 0, { t: 'deal', me: [0, 1], opp: [2, 3] }).ok === false && C.apply(st, 1, mvA(0, 20, 15)).ok === false, '선공은 못 나눔 · 수는 아직 못 둠');
+  ok(J(C.view(st, 0)) === before, '거부된 입력은 판을 바꾸지 않음');
+  const r1 = C.apply(st, 1, { t: 'deal', me: [4, 1], opp: [3, 0] });
+  ok(r1.ok && st.phase === 'play' && J(st.hand) === J([[0, 3], [1, 4]]) && st.wait === 2 && st.turn === 0 && J(C.needs(st)) === D(0), '나누기 성공 → 선공 앞 룩 · 나이트, 후공 앞 비숍 · 점퍼, 대기 어태커 (순서 상관없이 정렬)');
+  ok(st.log[st.log.length - 1].k === 'deal' && st.log[st.log.length - 1].s === 1 && J(st.log[st.log.length - 1].hand) === J([[0, 3], [1, 4]]) && st.log[st.log.length - 1].wait === 2, '나누기 기록');
+  ok(C.apply(st, 1, { t: 'deal', me: [0, 1], opp: [2, 3] }).ok === false, '한 번 나눈 뒤엔 또 못 나눔');
+  ok(C.legal(st, 0).length > 0 && C.view(st, 0).dealer === -1, '이제 선공이 수를 둠');
+  // 모든 30가지가 다 받아들여지고 카드가 5장으로 나뉨
+  for (const a of C.legal(C.init({ n: 2, seed: 1, cfg: { deal: 'pick' } }), 1)) {
+    const t = C.init({ n: 2, seed: 1, cfg: { deal: 'pick' } }); ok(C.apply(t, 1, a).ok, '30가지 모두 받음 ' + J(a));
+    ok(J([...t.hand[0], ...t.hand[1], t.wait].sort()) === D(0, 1, 2, 3, 4), '나눈 뒤 카드는 5장');
+    ok(C.legal(t, 0).length > 0, '어느 배치든 선공은 둘 수 있음 ' + J(a));
+  }
+  // 세트마다 다시 나눔: 2세트 선공 = 진 쪽 → 나누는 쪽이 바뀜
+  const t = C.init({ n: 2, seed: 4, cfg: { sets: 3, deal: 'pick' } });
+  C.apply(t, 1, { t: 'deal', me: [0, 1], opp: [2, 3] });
+  t.cells.fill(0); t.face.fill(0); put(t, 12, 0); put(t, 13, 1); t.hand = [[ROOK, BISHOP], [ATTACKER, KNIGHT]]; t.wait = JUMPER;
+  ok(C.apply(t, 0, mvA(0, 12, 13)).ok && t.phase === 'between', '1세트 백 승');
+  C.advance(t);
+  ok(t.set === 2 && t.phase === 'deal' && t.first === 1 && J(C.needs(t)) === D(0) && C.view(t, 0).dealer === 0 && C.legal(t, 0).length === 30 && C.legal(t, 1).length === 0, '2세트: 선공은 흑 · 나누는 쪽은 백');
+  ok(C.apply(t, 0, { t: 'deal', me: [2, 3], opp: [0, 1] }).ok && J(t.hand) === J([[2, 3], [0, 1]]) && t.wait === 4 && t.turn === 1, '2세트 나누기: 후공(백)이 흑 앞 룩 · 비숍');
+  ok(t.log.filter(e => e.k === 'start').length === 2 && t.log.filter(e => e.k === 'deal').length === 2, '세트마다 나누기 기록');
+  // 옵션: 값이 없거나 이상하면 무작위 (옛 기록은 그대로 다시 둘 수 있음)
+  for (const cfg of [{}, { deal: 'rand' }, { deal: 'x' }, { deal: 1 }, undefined]) ok(C.init({ n: 2, seed: 3, cfg }).phase === 'play', '무작위 배정 · 옵션 ' + J(cfg));
+  ok(J(C.init({ n: 2, seed: 3, cfg: { sets: 3 } }).hand) === J(C.init({ n: 2, seed: 3, cfg: { sets: 3, deal: 'rand' } }).hand), '옵션 값이 없는 옛 기록 = 무작위와 같은 판');
+  // 모든 자리에 같은 보임 (전부 공개)
+  const vs = [0, 1, -1, 'all'].map(s => C.view(C.init({ n: 2, seed: 8, cfg: { deal: 'pick' } }), s));
+  ok(new Set(vs.map(v => J(Object.assign({}, v, { seat: 0 })))).size === 1, '나누기 중에도 자리마다 같은 내용');
+  // 점수표 · 작전 점수
+  const T = C.DEAL_TABLE;
+  ok(T.key === C.DEAL_KEY && T.pct.length === 30 && T.pct.every(x => typeof x === 'number' && x >= 0 && x <= 100) && T.games >= 300, `점수표가 지금 배치 목록과 맞음 (게임 수 ${T.games})`);
+  ok(C.PLAN_ORDER.length === 30 && new Set(C.PLAN_ORDER).size === 30, '작전 순서는 30가지 전부');
+  const rep = C.dealReport(1);
+  ok(J(rep.open) === D(5, 8, 18, 14, 0) && rep.min === Math.min(...T.pct) && rep.max === Math.max(...T.pct) && rep.count === 30 && rep.games === T.games, '묶음: 카드별 첫 수 가짓수 · 점수 범위');
+  ok(J(rep.best.opp) === D(0, 4) && J(rep.best.me) === D(2, 3) && rep.best.wait === 1 && rep.best.plan === 27, '추천 작전 = 선공 앞 룩 · 점퍼, 내 앞 어태커 · 나이트');
+  const sc = C.dealScore({ t: 'deal', me: [0, 1], opp: [2, 3] });
+  ok(sc && J(sc.optOpen) === D(18, 14) && J(sc.myOpen) === D(5, 8) && sc.plan === -19 && sc.bestPlan === 27 && typeof sc.v === 'number', '내 배치의 첫 수 가짓수 · 작전 점수');
+  ok(C.dealScore({ t: 'mv' }) === null && C.dealScore(null) === null && C.dealScore({ t: 'deal', me: [0, 1], opp: [1, 2] }) === null, '이상한 배치는 null');
+  ok(C.openMoves(4) === 0 && C.openMoves(0) === 5 && C.openMoves(1) === 8 && C.openMoves(2) === 18 && C.openMoves(3) === 14, '처음 판 첫 수 가짓수: 점퍼 0 · 룩 5 · 비숍 8 · 나이트 14 · 어태커 18');
+  // AI: 모든 단계가 합법 · 같은 seed 는 같은 선택 · 초급은 다양 · 고급은 작전 점수 높은 둘 중 하나
+  const seen = new Set(), hardSeen = new Set(), nSeen = new Set();
+  for (let k = 0; k < 120; k++) {
+    const s0 = C.init({ n: 2, seed: 50 + k, cfg: { deal: 'pick' } }), V1 = C.view(s0, 1), L1 = C.legal(s0, 1).map(J);
+    for (const tier of ['easy', 'normal', 'hard']) {
+      const a = C.ai(V1, 1, tier, mul(k + 1)), b = C.ai(V1, 1, tier, mul(k + 1));
+      ok(a && L1.includes(J(a)) && J(a) === J(b), `AI(${tier}) 나누기가 합법 · 같은 씨앗은 같은 선택`);
+      if (tier === 'easy') seen.add(J(a)); if (tier === 'hard') hardSeen.add(J(a)); if (tier === 'normal') nSeen.add(J(a));
+      ok(C.apply(clone(s0), 1, a).ok, 'AI 나누기를 apply 가 받음');
+    }
+    ok(C.ai(C.view(s0, 0), 0, 'hard', mul(1)) === null, '선공은 나누기 AI 없음');
+  }
+  ok(seen.size >= 15, '초급은 여러 배치를 고름 ' + seen.size);
+  ok(hardSeen.size === 2 && [...hardSeen].every(a => C.dealScore(JSON.parse(a)).plan >= 24), '고급은 작전 점수가 가장 높은 둘 중 하나');
+  ok(nSeen.size >= 3 && nSeen.size <= 8 && [...nSeen].every(a => C.dealScore(JSON.parse(a)).plan >= 7), '중급은 작전 점수 위쪽 여덟 가지 안');
+  // 끝까지 (나누기부터) — AI 끼리 · 1세트 · 3세트
+  for (let k = 0; k < 40; k++) playOut(9000 + k, tierSets[k % 4], k % 3 === 0 ? 3 : 1, 'pick');
+  { const a = playOut(778, ['hard', 'normal'], 3, 'pick'), b = playOut(778, ['hard', 'normal'], 3, 'pick'); ok(J(a) === J(b), '나누기 판도 같은 seed 는 같은 결과'); }
+  // 복기용: 수 비교 점수 — 이기는 수가 맨 위
+  const wv = blank([[ROOK, BISHOP], [ATTACKER, KNIGHT]], JUMPER, 0); put(wv, 12, 0); put(wv, 13, 1); put(wv, 20, 0);
+  const E = C.evalMoves(C.view(wv, 0), 0);
+  ok(E && E.length === C.legal(wv, 0).length && E[0].v > C.WINV - 50 && J(E[0].a) === J(mvA(0, 12, 13)) && E.every((x, i) => i === 0 || E[i - 1].v >= x.v), '수 점수: 이기는 수가 맨 위 · 큰 순');
+  ok(C.evalMoves(C.view(wv, 1), 1) === null && C.evalMoves(C.view(C.init({ n: 2, seed: 1, cfg: { deal: 'pick' } }), 1), 1) === null, '내 차례가 아니거나 나누기 중이면 null');
 }
 
 // 12) 단계별 실력 · 시간 (고급은 원래 값)

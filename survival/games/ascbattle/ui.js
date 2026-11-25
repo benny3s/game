@@ -201,6 +201,48 @@
     return { opp, mine, rec, why };
   }
 
+  // ── 🎞️ 복기 고리 ──
+  // 내 수와 고급 AI 수를 coach 와 같은 계산(B.evalKeep · B.evalPut: 앞으로 뽑힐 카드를 무작위로 보고 둘 다 어울리는 칸에 적는다고 여겨
+  // 끝까지 둬 본 이길 확률)으로, 같은 표본에 대어 견줘요. 시트 · 뽑은 카드는 모두 공개라 그 수를 두기 직전 view 만 써요 (앞날 카드는 모름).
+  const josa = (n, a, b) => ("013678".includes(String(n).slice(-1)) ? a : b);        // 숫자 뒤 받침 (0 1 3 6 7 8 = 받침 있음)
+  const sevOf = gap => (gap < 0.04 ? 0 : Math.min(100, Math.round(gap * 500)));       // 이길 확률 12%p 차이 ≈ 60 (📒)
+  function nbInfo(sh, c, v) {                                                         // 그 칸의 가까운 이웃 (빈칸은 건너뜀) 과 오름차순이 이어지는지
+    let a = c - 1; while (a >= 0 && sh[a] == null) a--;
+    let b = c + 1; while (b < sh.length && sh[b] == null) b++;
+    const fit = (a < 0 || sh[a] <= v) && (b >= sh.length || v <= sh[b]);
+    return { fit, full: `${c + 1}번째 칸(왼쪽 이웃 ${a >= 0 ? sh[a] : "없음"} · 오른쪽 이웃 ${b < sh.length ? sh[b] : "없음"}${fit ? "" : " → 오름차순이 끊겨요"})`, short: `${c + 1}번째 칸${fit ? "" : "(오름차순이 끊겨요)"}` };
+  }
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      if (!V || !myA || !bestA || (seat !== 0 && seat !== 1) || !V.needs.includes(seat)) return none;
+      const r = seeded(((info && info.seed | 0) ^ Math.imul(V.turn + 1, 977) ^ Math.imul(V.pair[0] * 11 + V.pair[1], 31) ^ Math.imul(V.gift + seat + 3, 7) ^ V.sheets.flat().reduce((s, x) => s + (x || 0) * 13, 0)) >>> 0);
+      const S = 160, pc = p => Math.round(p * 100), o = 1 - seat, sh = V.sheets[seat];
+      const tail = gap => (gap >= 0.04 ? ` (${pc(gap)}%p 차이)` : " (거의 같아요)");
+      if (V.phase === "put" && myA.t === "put" && bestA.t === "put") {
+        const L = B.evalPut(V, seat, S, r), m = L.find(x => x.c === myA.c), b = L.find(x => x.c === bestA.c);
+        if (!m || !b) return none;
+        const g = V.gift, gj = josa(g, "을", "를"), nm = nbInfo(sh, m.c, g), nb = nbInfo(sh, b.c, g);
+        const my = `넘어온 ${g}${gj} ${m.c + 1}번째 칸에`, best = `넘어온 ${g}${gj} ${b.c + 1}번째 칸에`;
+        if (m.c === b.c) return { sev: 0, why: `고급 AI 와 같은 칸이에요 — ${nm.full}, 이길 확률 약 ${pc(m.p)}%`, my, best };
+        let sev = sevOf(b.p - m.p); if (info && info.same) sev = Math.min(sev, 15);
+        return { sev, my, best, why: `${g}${gj} ${nm.full}에 두면 이길 확률 약 ${pc(m.p)}%, 고급 AI 의 ${nb.short}이면 약 ${pc(b.p)}%예요${tail(b.p - m.p)}` };
+      }
+      if (V.phase === "keep" && myA.t === "keep" && bestA.t === "keep") {
+        const L = B.evalKeep(V, seat, S, r, B.N), m = L.find(x => x.k === myA.k && x.c === myA.c), b = L.find(x => x.k === bestA.k && x.c === bestA.c);
+        if (!m || !b) return none;
+        const kv = V.pair[m.k], gv = V.pair[1 - m.k], bk = V.pair[b.k], bg = V.pair[1 - b.k], nm = nbInfo(sh, m.c, kv), nb = nbInfo(sh, b.c, bk);
+        const my = `${kv}${josa(kv, "을", "를")} 내 ${m.c + 1}번 칸에 적고 ${gv}${josa(gv, "은", "는")} 상대에게`, best = `${bk}${josa(bk, "을", "를")} 내 ${b.c + 1}번 칸에 적고 ${bg}${josa(bg, "은", "는")} 상대에게`;
+        if (kv === bk && m.c === b.c) return { sev: 0, why: `고급 AI 와 같은 수예요 (같은 숫자 · 같은 칸) — ${nm.full}, 이길 확률 약 ${pc(m.p)}%`, my, best };
+        const ob = B.bestCell(V.sheets[o], gv), oc = B.costs(V.sheets[o], gv)[ob];
+        const give = oc < 1 && b.p - m.p >= 0.04 ? ` · 넘긴 ${gv}${josa(gv, "은", "는")} 상대 ${ob + 1}번째 칸에 딱 맞아요` : "";
+        let sev = sevOf(b.p - m.p); if (info && info.same) sev = Math.min(sev, 15);
+        return { sev, my, best, why: `${kv}${josa(kv, "을", "를")} ${nm.short}에 두고 ${gv}${josa(gv, "을", "를")} 넘기면 이길 확률 약 ${pc(m.p)}%, 고급 AI 수(${bk} 가짐 · ${nb.short}, ${bg} 넘김)는 약 ${pc(b.p)}%예요${tail(b.p - m.p)}${give}` };
+      }
+      return none;
+    } catch (e) { return none; }
+  }
+
   // ── 1분 규칙 ──
   function tutorial() {
     style();
@@ -263,7 +305,7 @@
     src: SRC, diff: DIFF,
     sub: V => (V.over ? "끝" : `${Math.min(V.turn + 1, V.N)}/${V.N}번째 뽑기`),
     chip: (V, i) => ({ t: `${V.runs[i]}칸`, on: V.needs.includes(i) && !V.over, out: false }),
-    render, result, coach, tutorial,
+    render, result, coach, tutorial, review,
     qa: (V, me, rnd) => B.ai(V, me, "easy", rnd),
   };
 })();

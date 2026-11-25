@@ -263,6 +263,129 @@
     ];
   }
 
+  // ── 🎞️ 복기 (ui.review): 그 수를 두기 직전 view 로만 계산 — 숨은 카드는 남은 카드에서 뽑아 봄 ─────────────
+  // 베팅: F.chances (선생님과 같은 확률) → 판돈 몫 eq → 폴드 0 · 콜 eq×(판돈+콜)−콜 · 레이즈는 상대가 다 따라온다고 보고 절반만 인정
+  // 식 만들기 · 선언: 상대 숨긴 카드를 남은 숫자 카드에서 뽑아 실제 공개 규칙(하이 · 로우 · 스윙 · 동점 카드)으로 나눠 받는 칩의 평균
+  //   상대 선언을 두 가지로 가정(쉬운 쪽 · 반반) 해서 둘 다 손해일 때만 손해로 셈
+  // sev = 손해 칩 × 33 → 1.8칩 부터 60 (시작 칩 20 의 약 9%)
+  const mulb = s => { let a = (s >>> 0) || 1; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  const pcs = x => Math.round(x * 100) + "%";
+  const sgc = x => { const v = Math.round(x * 10) / 10; return v === 0 ? "0" : (v > 0 ? "+" : "−") + Math.abs(v).toFixed(1); };
+  const DMEMO = new Map();
+  const dBest = (vs, mu, ro) => {
+    const key = vs.slice().sort((a, b) => a - b).join(",") + "|" + mu + "|" + ro;
+    let r = DMEMO.get(key); if (r) return r;
+    const s = F.search(vs, mu, Math.min(4, ro));     // 숫자 값 0~10 은 그대로 카드 번호(금)라 값만 쓰임
+    r = { h: s.H ? s.H.d : 99, l: s.L ? s.L.d : 99 };
+    if (DMEMO.size > 20000) DMEMO.clear();
+    DMEMO.set(key, r); return r;
+  };
+  const eqLab = a => a.t === "fold" ? "폴드" : a.t === "raise" ? `레이즈 ${a.to | 0}칩` : a.t === "call" ? "콜" : "체크";
+  const sidLab = d => ({ H: "하이", L: "로우", S: "스윙" }[d] || "선언");
+  const NOREV = () => ({ sev: 0, why: "" });
+  const sevOf = loss => Math.max(0, Math.min(100, Math.round(loss * 33)));
+
+  function revBet(V, seat, myA, bestA, r) {
+    const ok = a => a && ["fold", "call", "check", "raise"].includes(a.t);
+    if (!ok(myA) || !ok(bestA)) return NOREV();
+    const c = F.chances(V, seat, 240, r), m = V.hands.filter((h, i) => h && !V.folded[i] && i !== seat).length;
+    const eq = Math.min(1, Math.max(c.pH, c.pL) * 0.5 + c.pB * 0.5), toCall = V.cur - V.bet[seat];
+    const base = toCall > 0 ? eq * (V.pot + toCall) - toCall : eq * V.pot;
+    const ev = a => a.t === "fold" ? 0 : a.t === "raise" ? base + 0.5 * Math.max(0, (a.to | 0) - V.cur) * (eq * (1 + m) - 1) : base;
+    const em = ev(myA), eb = ev(bestA), loss = eb - em;
+    // 폴드 · 콜 · 체크로 환산한 손해는 그대로, 더 걸 수 있었는데 덜 건 몫(레이즈 크기 차)은 기회를 놓친 것이라 45 까지만
+    const lossPass = Math.max(0, (bestA.t === "fold" ? 0 : base) - em);
+    let sev = sevOf(lossPass);
+    if (loss > lossPass) sev = Math.max(sev, Math.min(45, sevOf(loss)));
+    const lab = a => a.t === "call" && toCall > 0 ? `콜(${toCall}칩)` : eqLab(a);
+    return { sev, why: `이길 확률 하이 ${pcs(c.pH)} · 로우 ${pcs(c.pL)} → 판돈 몫 약 ${pcs(eq)} · ${lab(myA)} 기대 ${sgc(em)}칩 vs ${lab(bestA)} ${sgc(eb)}칩${loss <= 0.1 ? " (거의 같아요)" : ""}` };
+  }
+
+  // 상대 숨긴 카드를 남은 숫자 카드에서 뽑은 장면들 (식 만들기 · 선언 때: 상대는 공개 3장 + 숨긴 1장)
+  function sampleOpps(V, seat, N, r) {
+    const seen = new Set();
+    V.hands.forEach(h => { if (!h) return; h.open.forEach(c => seen.add(c)); h.sym.forEach(c => seen.add(c)); if (h.hid >= 0) seen.add(h.hid); });
+    const pool = []; for (let c = 0; c < 44; c++) if (!seen.has(c)) pool.push(c);
+    const opps = V.hands.map((h, i) => i).filter(i => i !== seat && V.hands[i] && !V.folded[i]);
+    const out = [];
+    for (let s = 0; s < N; s++) {
+      const deck = pool.slice(); let top = deck.length;
+      const take = () => { const k = Math.floor(r() * top); const c = deck[k]; deck[k] = deck[--top]; return c; };
+      const row = [];
+      for (const i of opps) {
+        const h = V.hands[i], cards = h.hid >= 0 ? [h.hid].concat(h.open) : [take()].concat(h.open), vs = cards.map(F.val);
+        while (vs.length < 4) vs.push(F.val(take()));
+        const d = dBest(vs.slice(0, 4), h.muls, h.roots);
+        row.push({ i, dH: d.h, dL: d.l, kH: F.keyHi(cards), kL: F.keyLo(cards), pa: d.h < d.l * 6 ? "H" : "L", pb: r() < 0.5 ? "H" : "L" });
+      }
+      out.push(row);
+    }
+    return out;
+  }
+  // 한 장면의 공개 규칙 (core.showdown 과 같은 순서): 내가 받는 칩
+  function gainOf(infos, pot, me) {
+    let pool = infos.slice(), hw = null, lw = null;
+    const bH = xs => xs.filter(x => x.dH < 1e8).sort((a, b) => (Math.abs(a.dH - b.dH) > 1e-9 ? a.dH - b.dH : b.kH - a.kH))[0] || null;
+    const bL = xs => xs.filter(x => x.dL < 1e8).sort((a, b) => (Math.abs(a.dL - b.dL) > 1e-9 ? a.dL - b.dL : a.kL - b.kL))[0] || null;
+    for (let g = 0; g < 10; g++) {
+      hw = bH(pool.filter(x => x.d !== "L")); lw = bL(pool.filter(x => x.d !== "H"));
+      const bad = pool.filter(x => x.d === "S" && (hw !== x || lw !== x));
+      if (!bad.length) break;
+      pool = pool.filter(x => !bad.includes(x));
+    }
+    if (!hw && !lw) return pot / infos.length;
+    if (hw && lw && hw !== lw) return (hw.i === me ? Math.ceil(pot / 2) : 0) + (lw.i === me ? Math.floor(pot / 2) : 0);
+    return (hw || lw).i === me ? pot : 0;
+  }
+  // 내 식 값(dH · dL)으로 H · L · S 를 골랐을 때 평균 칩 — 상대 선언 가정 A(쉬운 쪽) · B(반반)
+  function evalMine(samples, V, seat, mine, cards) {
+    const R = { A: { H: 0, L: 0, S: 0 }, B: { H: 0, L: 0, S: 0 } }, kH = F.keyHi(cards), kL = F.keyLo(cards);
+    for (const row of samples) for (const mod of ["A", "B"]) for (const d of ["H", "L", "S"]) {
+      const infos = row.map(o => ({ i: o.i, d: mod === "A" ? o.pa : o.pb, dH: o.dH, dL: o.dL, kH: o.kH, kL: o.kL }));
+      infos.push({ i: seat, d, dH: mine.dH, dL: mine.dL, kH, kL });
+      R[mod][d] += gainOf(infos, V.pot, seat);
+    }
+    for (const mod of ["A", "B"]) for (const d of ["H", "L", "S"]) R[mod][d] /= samples.length;
+    return R;
+  }
+  const maxOf = o => Math.max(o.H, o.L, o.S);
+  const dOf = e => (e && Array.isArray(e.n) && Array.isArray(e.o) && Array.isArray(e.r)) ? { v: F.evalEq(e), e } : null;
+
+  function revBuild(V, seat, myA, r) {
+    const H = V.hands[seat], cards = [H.hid].concat(H.open);
+    const mh = dOf(myA.h), ml = dOf(myA.l); if (!mh || !ml || !isFinite(mh.v) || !isFinite(ml.v)) return NOREV();
+    const s = F.search(cards, H.muls, H.roots); if (!s.H || !s.L) return NOREV();
+    const mine = { dH: Math.abs(mh.v - 20), dL: Math.abs(ml.v - 1) }, best = { dH: s.H.d, dL: s.L.d };
+    const mTxt = `내 식 20까지 ${F.fmt(mine.dH)} · 1까지 ${F.fmt(mine.dL)}`, bTxt = `최선은 20까지 ${F.fmt(best.dH)} · 1까지 ${F.fmt(best.dL)}`;
+    if (mine.dH <= best.dH + 1e-9 && mine.dL <= best.dL + 1e-9) return { sev: 0, why: `${mTxt} — 이미 가장 가깝게 만들었어요` };
+    const S = sampleOpps(V, seat, 160, r), a = evalMine(S, V, seat, mine, cards), b = evalMine(S, V, seat, best, cards);
+    const la = maxOf(b.A) - maxOf(a.A), lb = maxOf(b.B) - maxOf(a.B), loss = Math.max(0, Math.min(la, lb));
+    return { sev: sevOf(loss), why: `${mTxt}, ${bTxt} — 남은 카드로 짐작한 상대와 겨루면 약 ${sgc(loss)}칩 차이`, my: `하이 ${F.eqText(mh.e)} = ${F.fmt(mh.v)} · 로우 ${F.eqText(ml.e)} = ${F.fmt(ml.v)}`, best: `하이 ${F.eqText(s.H.e)} = ${F.fmt(s.H.v)} · 로우 ${F.eqText(s.L.e)} = ${F.fmt(s.L.v)}` };
+  }
+  function revDecl(V, seat, myA, r) {
+    if (!myA || !["H", "L", "S"].includes(myA.d)) return NOREV();
+    const H = V.hands[seat], cards = [H.hid].concat(H.open), eh = V.eqH && V.eqH[seat], el = V.eqL && V.eqL[seat];
+    const vh = eh ? F.evalEq(eh) : NaN, vl = el ? F.evalEq(el) : NaN;
+    if (!isFinite(vh) || !isFinite(vl)) return NOREV();
+    const S = sampleOpps(V, seat, 200, r), R = evalMine(S, V, seat, { dH: Math.abs(vh - 20), dL: Math.abs(vl - 1) }, cards);
+    const la = maxOf(R.A) - R.A[myA.d], lb = maxOf(R.B) - R.B[myA.d], useA = la <= lb, X = useA ? R.A : R.B, loss = Math.max(0, Math.min(la, lb));
+    const top = ["H", "L", "S"].reduce((p, d) => (X[d] > X[p] + 1e-9 ? d : p), "H");
+    return { sev: sevOf(loss), why: `내 식 하이 ${F.fmt(vh)} · 로우 ${F.fmt(vl)}, 판돈 ${V.pot}칩 → 기대 칩 하이 ${sgc(X.H)} · 로우 ${sgc(X.L)} · 스윙 ${sgc(X.S)} (내 선언 ${sidLab(myA.d)}${top !== myA.d ? ` · 더 나은 쪽 ${sidLab(top)}` : ""})` };
+  }
+  function review(V, seat, myA, bestA, info) {
+    try {
+      if (!V || !V.hands || !V.hands[seat] || !myA || !bestA) return NOREV();
+      if (JSON.stringify(myA) === JSON.stringify(bestA) || (info && info.same)) return NOREV();
+      const r = mulb(((((info && info.seed) | 0) ^ Math.imul((((info && info.k) | 0) + 1), 0x9e3779b1)) >>> 0) + seat * 977);
+      const out = V.phase === "bet1" || V.phase === "bet2" ? revBet(V, seat, myA, bestA, r) : V.phase === "build" ? revBuild(V, seat, myA, r) : V.phase === "declare" ? revDecl(V, seat, myA, r) : NOREV();
+      const ok = x => typeof x === "string" && !/undefined|NaN|null/.test(x);
+      if (!out || typeof out.sev !== "number" || !isFinite(out.sev) || !ok(out.why)) return NOREV();
+      if (out.my && !ok(out.my)) delete out.my;
+      if (out.best && !ok(out.best)) delete out.best;
+      return out;
+    } catch (e) { return NOREV(); }
+  }
+
   window.SVUI = window.SVUI || {};
   window.SVUI.formula = {
     actText: a => !a ? "—" : a.t === "decl" ? ({ H: "하이", L: "로우", S: "스윙" }[a.d] || "선언") : a.t === "eq" ? "식 두 개(하이용 · 로우용)를 냄" : a.t === "raise" ? `레이즈 → ${a.to}칩` : a.t === "call" ? "콜" : a.t === "check" ? "체크" : a.t === "fold" ? "폴드" : "행동",   // 🎞️ 복기 행동 글
@@ -280,5 +403,6 @@
     coach: (V, me, since, names) => F.coach(V, me, since, names),
     qa: (V, me, rnd) => F.ai(V, me, "easy", rnd),                  // 자동 시험이 내 차례에 둘 수 (shell · 화면 시험틀)
     tutorial,
+    review,
   };
 })();

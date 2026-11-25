@@ -227,6 +227,62 @@
     return { opp, mine, rec, why: ex };
   }
 
+  // ── 🎞️ 복기: 아쉬운 수 (선생님과 같은 계산 — 보이는 것만 · 기대 칩 차이로 sev) ──
+  const sg = x => (x < -0.049 ? "−" : "+") + Math.abs(x).toFixed(1);
+  const sameA = (a, b) => !!a && !!b && a.t === b.t && a.to === b.to && a.v === b.v;
+  const REV_K = 28;                                   // 기대 칩 1개 손해 = sev 28 (≈ 2.2칩 손해부터 📒)
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      if (!V || !myA || V.over || (seat !== 0 && seat !== 1) || !V.needs || !V.needs.includes(seat)) return none;
+      const isBest = sameA(myA, bestA), inTally = !!(info && info.same);
+      const fin = (s, why) => ({ sev: isBest ? 0 : inTally ? Math.max(0, Math.min(20, Math.round(s))) : Math.max(0, Math.min(100, Math.round(s))), why });   // 고급 AI 도 두는 수면 아쉬운 장면이 아니에요
+      const ch = BB.chances(V, seat), pcn = x => Math.max(1, Math.min(99, Math.round(x * 100)));
+      if (V.phase === "bet" && ch.opts.length && ["call", "fold", "raise"].includes(myA.t)) {
+        const toCall = V.cur - V.bet[seat];
+        const evOf = a => {                                  // 선생님이 쓰는 options 로 그 행동의 기대 칩 (선택지에 없는 레이즈 금액은 한도를 그 금액으로 두고 다시 셈)
+          if (!a) return null;
+          let L = ch.opts;
+          if (a.t === "raise" && !L.some(o => o.a.t === "raise" && o.a.to === a.to)) {
+            if (!Number.isInteger(a.to) || a.to <= V.cur || V.raises >= V.maxRaise) return null;
+            L = BB.options(Object.assign({}, V, { cap: Math.max(V.cap, a.to) }), seat, ch.wts, true);
+          }
+          const o = L.find(x => x.a.t === a.t && (a.t !== "raise" || x.a.to === a.to));
+          return o ? o.ev : null;
+        };
+        const mine = evOf(myA); if (mine == null) return none;
+        const cands = ch.opts.slice();
+        if (bestA && !cands.some(o => sameA(o.a, bestA))) { const e = evOf(bestA); if (e != null) cands.push({ a: bestA, ev: e }); }
+        if (!cands.some(o => sameA(o.a, myA))) cands.push({ a: myA, ev: mine });
+        cands.sort((x, y) => y.ev - x.ev);
+        const best = cands[0], solid = cands.find(o => o.a.t !== "raise");     // 폴드 · 콜은 상대 반응을 가정하지 않는 값
+        const nmA = a => (a.t === "fold" ? "폴드" : a.t === "call" ? (toCall > 0 ? `콜 ${toCall}칩` : "체크") : `레이즈 → ${a.to}칩`);
+        // 확실한 손해 = 폴드 · 콜 중 가장 좋은 것보다 낮을 때 / 더 걸어 벌 수 있었던 몫은 상대가 접을 확률 가정에 기대니 반만 · 📒 에는 안 담음
+        const hard = solid ? Math.max(0, solid.ev - mine) : 0, soft = Math.max(0, best.ev - Math.max(mine, solid ? solid.ev : mine));
+        const sev = Math.max(hard * REV_K, Math.min(59, soft * REV_K * 0.5));
+        const ref = hard > 0.05 ? solid : best, odds = `이길 확률 ~${pcn(ch.p)}%`;
+        const note = Math.max(V.cur, myA.to || 0) >= 8 ? " (큰 베팅은 위험 보정 포함)" : myA.t === "fold" || ref.a.t === "fold" ? ` (폴드엔 블라인드 ${BB.BIGB}+ 벌칙 ${pcn(ch.pBig)}% 포함)` : "";
+        const why = ref.ev - mine < 0.05 ? `${odds} · 기대 칩 ${nmA(myA)} ${sg(mine)}${cands[1] ? ` (다음 ${nmA(cands[1].a)} ${sg(cands[1].ev)})` : ""}${note}`
+          : `${odds} · 기대 칩 내 ${nmA(myA)} ${sg(mine)} / 최선 ${nmA(ref.a)} ${sg(ref.ev)}${note}`;
+        return fin(sev, why);
+      }
+      if (V.phase === "pick" && myA.t === "open" && ch.rows.length) {
+        // 오픈 카드: 상대가 고르게 낼 때의 기대 칩(선생님 숫자)을, 고급 AI 가 실제로 섞어 내는 카드(10% 이상)끼리 견줘요 — 그 카드는 틀린 수가 아님
+        const T = Math.max(V.bet[0], V.bet[1]), se = BB.showEV(V, seat, ch.wts, T, true), i0 = se.X.indexOf(myA.v), mine = ch.rows.find(r => r.x === myA.v);
+        if (i0 < 0 || !mine || !se.mix) return none;
+        const mp = se.mix[i0] || 0, sup = se.X.map((x, i) => i).filter(i => se.mix[i] >= 0.1);
+        if (!sup.length) sup.push(se.mix.indexOf(Math.max(...se.mix)));
+        const bi = sup.reduce((m, i) => (se.rowMean[i] > se.rowMean[m] ? i : m), sup[0]), best = ch.rows.find(r => r.x === se.X[bi]) || ch.rows[0];
+        const loss = Math.max(0, best.ev - mine.ev);
+        const mixTxt = mp >= 0.08 ? ` · 고급 AI 도 ${pcn(mp)}% 섞어 내요` : "";
+        const why = best.x === myA.v || loss < 0.05 ? `오픈 ${myA.v}: 이길 확률 ~${pcn(mine.pWin)}% · 기대 ${sg(mine.ev)}칩${mixTxt}`
+          : `오픈 ${myA.v}: 이길 확률 ~${pcn(mine.pWin)}% · 기대 ${sg(mine.ev)}칩 / 고급 AI 가 즐겨 내는 ${best.x}: ~${pcn(best.pWin)}% · ${sg(best.ev)}칩${mixTxt}`;
+        return fin(mp >= 0.1 ? Math.min(15, loss * REV_K) : loss * REV_K, why);
+      }
+    } catch (e) { /* 계산 못 하면 아래 */ }
+    return none;
+  }
+
   // ── 1분 규칙 ──
   function tutorial() {
     style();
@@ -279,7 +335,7 @@
     src: SRC, diff: DIFF,
     sub: V => (V.over ? "끝" : `${V.round} / ${V.R} 라운드 · ${V.tno}번째 턴`),
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.over && V.chips[i] <= 0 }),
-    render, coach, result, tutorial,
+    render, coach, result, tutorial, review,
     qa: (V, me, rnd) => BB.ai(V, me, "easy", rnd),
   };
 })();

@@ -344,6 +344,65 @@
     ];
   }
 
+  // ── 🎞️ 복기 (ui.review): 선생님과 같은 계산(N.plan · N.outlook) — 카드 값(점) · 1점의 블록 값 → 한도 ─────────────
+  // 입찰: 합이 한도(= 카드 값 × 1점당 블록 × 0.92)보다 높으면, 낙찰될 때 넘친 블록 ÷ 1점당 블록 = 점수 손해 (sev = 점수 × 20 → 3점부터 60)
+  //   패스: 한도가 (지금 최고 + 1) 보다 크면 겨우 넘겨 낙찰됐을 때의 이득 × 1/2 (상대가 더 올릴 수 있어서) 를 놓친 것 — 같은 식 · 같은 환산
+  // BAD 카드: 다음 사람이 못 넘길 합까지 올릴 수 있으면(블록은 모두 공개) 그 사람이 대신 받고 나는 블록을 돌려받음 → 패스하면 카드 점수 + 낸 블록 전부 손해 (확실)
+  //   그 밖의 BAD 판단은 어림이라 sev 35 까지만. 반납 고르기: 돌려준 뒤 점수(미래 매물 기대 포함) 차이 그대로 (sev = 점수 × 20)
+  const rvNoRev = () => ({ sev: 0, why: "" });
+  const rvSev = (pts, cap) => Math.max(0, Math.min(cap || 100, Math.round(pts * 20)));
+  const rvNext = (V, from) => { for (let k = 1; k <= V.n; k++) { const i = (from + k) % V.n; if (V.active[i]) return i; } return -1; };
+  const rvLab = c => (N.isItem(c) ? `매물 ${c + 1}점` : N.isGood(c) ? "GOOD" : cardLong(c));
+  function review(V, seat, myA, bestA, info) {
+    try {
+      if (!V || !myA || !bestA || V.over || !Array.isArray(V.have) || !V.have[seat]) return rvNoRev();
+      if (JSON.stringify(myA) === JSON.stringify(bestA) || (info && info.same)) return rvNoRev();
+      let out = rvNoRev();
+      if (V.phase === "ret" && myA.t === "ret") {
+        const o = N.outlook(V, "hard"), cs = V.won[seat], fb = o.fut / V.n, opts = cs.filter(c => N.isItem(c) || N.isGood(c));
+        const sc = c => N.scoreOf(cs.filter(x => x !== c), fb), mine = sc(myA.c);
+        let top = opts[0]; for (const c of opts) if (sc(c) > sc(top)) top = c;
+        if (!opts.includes(myA.c) || top == null) return rvNoRev();
+        const loss = Math.max(0, sc(top) - mine);
+        out = { sev: rvSev(loss), why: `돌려준 뒤 예상 점수: ${rvLab(myA.c)} 반납 ${fmt(mine)}점 vs ${rvLab(top)} 반납 ${fmt(sc(top))}점 (앞으로 올 매물 기대 포함)${loss < 0.05 ? " — 같아요" : ""}`, my: `${rvLab(myA.c)} 반납`, best: `${rvLab(top)} 반납` };
+      } else if (V.phase === "bid" && (myA.t === "bid" || myA.t === "pass")) {
+        const hp = N.plan(V, seat, "hard", () => 0.5), val = hp.val, price = hp.p, L = Math.max(0, hp.willing), top = V.top, pile = V.pileSum[seat];
+        const vTxt = (val < 0 ? "−" : "") + fmt(Math.round(Math.abs(val) * 10) / 10), head = `카드 약 ${vTxt}점 · 1점≈블록 ${price.toFixed(1)}개`;
+        const lTxt = `한도 약 ${Math.round(L)}${Math.max(0, val) * price * 0.92 > 0 && L < Math.max(0, val) * price * 0.92 * 0.7 ? "(블록을 남겨야 해서 줄어요)" : ""}`;
+        const add = myA.t === "bid" ? (myA.c || []).reduce((s, k) => s + (N.BLOCKS[k] || 0), 0) : 0, T = pile + add;
+        if (N.isBad(V.card)) {
+          const pen = Math.max(0, -val), X = rvNext(V, seat);
+          const freeIdx = V.have[seat].filter(i => !V.pile[seat].includes(i)), freeSum = freeIdx.reduce((s, i) => s + N.BLOCKS[i], 0);
+          const kTot = X >= 0 && X !== seat ? Math.max(V.haveSum[X], top + 1) : -1, canKill = kTot > 0 && kTot - pile <= freeSum;
+          if (canKill && pen > 0.05) {
+            const kill = myA.t === "bid" && T >= kTot;
+            if (kill) out = { sev: 0, why: `${head}. 합 ${T} 은 다음 사람이 낼 수 있는 블록(${V.haveSum[X]})을 넘어 그 사람이 대신 받고, 나는 낸 블록을 돌려받아요 — 확실히 피한 수예요` };
+            else {
+              const loss = myA.t === "pass" ? pen + pile / price : 0.5 * pen;
+              out = { sev: rvSev(loss, myA.t === "pass" ? 100 : 45), why: `${head}. 받으면 약 −${fmt(Math.round(pen * 10) / 10)}점${myA.t === "pass" && pile > 0 ? ` · 낸 블록 ${pile}도 사라져요` : ""} — 합 ${kTot} 까지 올리면 다음 사람이 못 넘겨 대신 받고 나는 블록을 돌려받아요${myA.t === "pass" ? "" : " (이 합이면 확실)"}` };
+            }
+          } else {
+            const minM = N.pickAdd(freeIdx.reduce((m, i) => m | (1 << i), 0), Math.max(1, top - pile + 1)), S = minM ? pile + (() => { let t = 0; for (let k = 0; k < N.NB; k++) if (minM & (1 << k)) t += N.BLOCKS[k]; return t; })() : 0;
+            const gain = minM ? 0.4 * (pen * price + pile) - 0.6 * S : -1;      // 고급 AI 의 어림 (합을 올리면 다음 사람이 받아 줄 확률 약 40%)
+            const lossB = myA.t === "pass" ? Math.max(0, gain) : Math.max(0, -(0.4 * (pen * price + pile) - 0.6 * T));
+            out = { sev: rvSev(lossB / price, 35), why: `${head}. 받으면 약 −${fmt(Math.round(pen * 10) / 10)}점 — 확실히 피할 합이 없어 어림이에요 (올리면 낸 블록을 잃을 위험)` };
+          }
+        } else if (myA.t === "bid") {
+          const over = T - L, pts = over > 0 ? over / price : 0;
+          out = { sev: rvSev(pts), why: `${head} → ${lTxt}. 합 ${T} 낙찰이면 한도보다 ${Math.max(0, Math.round(over))}블록(≈${fmt(Math.round(pts * 10) / 10)}점) ${over > 0 ? "비싸요" : "— 한도 안이에요"}` };
+        } else {
+          const surplus = L - (top + 1), pts = surplus > 0 ? (0.5 * surplus) / price : 0;
+          out = { sev: rvSev(pts), why: `${head} → ${lTxt} 인데 지금 최고 ${top}. 합 ${top + 1} 만 내도 ${surplus > 0 ? `이득 약 ${fmt(Math.round((surplus / price) * 10) / 10)}점이 남는 카드예요` : "남지 않아 패스도 괜찮아요"}` };
+        }
+      }
+      const ok = x => typeof x === "string" && !/undefined|NaN|null|Infinity/.test(x);
+      if (!out || typeof out.sev !== "number" || !isFinite(out.sev) || !ok(out.why)) return rvNoRev();
+      if (out.my && !ok(out.my)) delete out.my;
+      if (out.best && !ok(out.best)) delete out.best;
+      return out;
+    } catch (e) { return rvNoRev(); }
+  }
+
   const SRC = "방송: 피의 게임 시즌2 · 숫자 경매 (세미파이널)";
   const DIFF = "※ 방송과 다른 점: 3~6명이 해요 · 입찰은 돌아가며 한 명씩 (합이 제일 큰 사람은 차례가 안 와요) · 모두 패스해 한 명만 남으면 블록 없이도 낙찰 · 블록 추가 구매는 없고 블록 · 점수는 모두 공개 · GOOD은 장마다 ×2 · 반납한 카드는 게임에서 빠져요.";
   window.SVUI = window.SVUI || {};
@@ -363,7 +422,7 @@
     ],
     sub: V => (V.over ? "끝" : `${V.round}라운드 · ${PHN[V.phase] || ""} · ${cardLong(V.card)}`),
     chip: (V, i) => ({ t: `${fmt(V.score[i])}점${V.over && V.final && V.final.dq === i ? " ⛔" : ""}`, on: V.needs.includes(i) && !V.over, out: !!(V.over && V.final && V.final.out.includes(i)) }),
-    render, result, coach,
+    render, result, coach, review,
     qa: (V, me, rnd) => N.ai(V, me, "easy", rnd),
     tutorial,
   };

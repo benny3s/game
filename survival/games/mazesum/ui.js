@@ -282,6 +282,34 @@ button.mz-c{cursor:pointer}
     };
   }
 
+  // ── 🎞️ 복기 고리 ──
+  // 숫자판은 외우기가 끝나면 view 에 없고, 사람이 외운 칸은 기록에 남지 않아요 (view.mem = null — AI 만 기억을 실어 보냄).
+  // 그래서 '내 기억으로 본 가능성' 은 못 견줘요: 고급 AI 는 내 기억을 모른 채 합만 보고 고르므로 그 수와 견주는 것은 의미가 없음.
+  // 여기서는 문제(출발 · 도착 · 합) · 앞서 틀린 길 · 숫자 규칙(1~19 서로 다름)만으로 말할 수 있는 것만 짚어요 — 확실히 손해인 수 (불가능한 합 · 같은 오답 길 · 공짜 기회 버리기) + 중립 숫자.
+  // sev 는 늘 60 아래: 연습 판은 숫자판을 다시 못 보여 줘서(외우기부터가 아님) 📒 에 담을 만한 장면이 아니에요.
+  function review(V, seat, myA, bestA, info) {
+    const none = { sev: 0, why: "" };
+    try {
+      if (!V || !myA || (seat !== 0 && seat !== 1)) return none;
+      if (V.phase === "memo") return myA.t === "ready" ? { sev: 0, why: "외운 칸은 기록에 남지 않아서 이 수는 AI 와 견주지 않아요", my: "다 외웠어요", best: "다 외웠어요" } : none;
+      const q = V.q; if (V.phase !== "ask" || !q || V.hold !== seat) return none;
+      const np = M.paths(q.s, q.e).length;
+      const bt = bestA && bestA.t === "path" && Array.isArray(bestA.cells) ? `길 ${pathTxt(bestA.cells)}` : bestA && bestA.t === "pass" ? "넘김" : "";
+      const best = bt ? `${bt} (내 기억 없이 합만 보고)` : undefined;
+      if (myA.t === "pass") {
+        if (V.step === 1) return { sev: 50, why: `이번 기회는 틀려도 감점이 없어요 — 이어진 길 ${np}가지 중 합 ${q.sum}${sf(q.sum, "이", "가")} 맞는 길은 보통 1~3개라, 길을 하나 내 보는 쪽이 잃을 게 없어요`, my: "넘김", best };
+        return { sev: 0, why: `먼저 넘기면 상대가 이어서 풀어요 — 확신이 없을 때 쓰는 수예요 (이어진 길 ${np}가지)`, my: "넘김", best };
+      }
+      if (myA.t !== "path" || M.pathErr(q, myA.cells)) return none;
+      const cells = myA.cells, n = cells.length, key = cells.join(","), lo = n * (n + 1) / 2, hi = n * (39 - n) / 2;
+      const my = `길 ${pathTxt(cells)}`;
+      if (q.sum < lo || q.sum > hi) return { sev: 55, why: `${n}칸 길은 서로 다른 1~19 의 합이라 ${lo}~${hi} 사이만 나와요 — 문제의 합 ${q.sum}${sf(q.sum, "은", "는")} 이 길로 만들 수 없어요`, my, best };
+      if (V.tries.some(t => t.cells && t.cells.join(",") === key)) return { sev: 55, why: "이 길은 앞서 오답으로 나온 길이에요 — 같은 길을 또 내면 똑같이 틀려요", my, best };
+      const avg = (q.sum / n).toFixed(1);
+      return { sev: 0, why: `내 길 ${n}칸: 합 ${q.sum}${sf(q.sum, "이", "가")}면 칸마다 평균 ${avg} (1~19 의 평균은 10) · 외운 숫자는 기록에 없어서 AI 와는 견주지 않아요`, my, best };
+    } catch (e) { return none; }
+  }
+
   // ── 1분 규칙 ──
   const TBD = [7, 3, 12, 9, 15, 4, 8, 1, 11, 6, 17, 2, 5, 14, 10, 13], TQ = { s: 1, e: 14, sum: 37 };
   function tutorial() {
@@ -341,7 +369,7 @@ button.mz-c{cursor:pointer}
     src: SRC, diff: DIFF,
     sub: V => (V.over ? "끝" : V.phase === "memo" ? `${V.round}라운드 · 외우기` : `${V.round}라운드 · 문제 ${V.qNo}/${V.qTotal}${V.ext ? " 연장" : ""}`),
     chip: (V, i) => ({ t: `${V.pts[i]}점`, on: V.needs.includes(i) && !V.over, out: false }),
-    render, coach, result, tutorial,
+    render, coach, result, tutorial, review,
     qa: (V, me, rnd) => M.ai(V, me, "easy", rnd),
   };
 })();

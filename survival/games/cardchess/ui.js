@@ -7,7 +7,7 @@
   const CN = Q.CARDS, SIDE = ["백", "흑"];                                  // 카드 이름 · 자리 0 = 백(아래) · 1 = 흑(위)
   const lbl = i => "ABCDE"[i % SZ] + (((i / SZ) | 0) + 1);               // 칸 이름: 가로 A~E · 위에서 1~5줄
   const SRC = "방송: 피의 게임 시즌X · 카드 체스 (9일차 파이널 3R 1:1)";
-  const DIFF = "※ 방송과 다른 점: 시작 카드는 무작위로 나눠요 (방송은 후공이 고름) · 선공은 백 (2세트부터 진 쪽) · 말은 모두 같고 카드가 움직임을 정해요 · 움직일 수 없으면 차례를 넘겨요 · 60턴이 넘으면 말이 더 많은 쪽 승 · 말이 되돌아와 내 쪽 끝 줄에 닿아도 뒤돌아봐요";
+  const DIFF = "※ 방송과 다른 점: 선공은 백 (2세트부터 진 쪽) · 말은 모두 같고 카드가 움직임을 정해요 · 움직일 수 없으면 차례를 넘겨요 · 60턴이 넘으면 말이 더 많은 쪽 승 · 말이 되돌아와 내 쪽 끝 줄에 닿아도 뒤돌아봐요 · 카드 나누기는 방송처럼 후공이 직접 해요 (설정에서 '무작위'로 바꿀 수 있어요)";
   const NOTE = ["상하좌우 1칸", "대각선 1칸", "앞 2칸 · 앞 대각선", "2칸 + 직각 1칸", "붙은 말 뛰어넘기", "8방향 1칸"];
   // 카드 그림 (5×5, 가운데 = 말, 위쪽 = 말이 보는 쪽) — 초록 = 갈 수 있는 칸
   const PAT = [
@@ -80,6 +80,15 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .cc-flow .ar{font:900 16px var(--round);color:#fde68a}
 .cc-tmsg{min-height:2.7em;text-align:center;line-height:1.4;color:var(--soft)}
 .cc-tmsg b{color:#fde68a}
+.cc-dl{flex:none;display:grid;gap:5px}
+.cc-dr{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:5px;align-items:stretch}
+.cc-dr .cc-card{padding:3px 6px}
+.cc-dz{min-width:54px;border-radius:10px;border:1.5px solid rgba(255,255,255,.18);background:rgba(0,0,0,.28);color:var(--soft);font:800 12px var(--round);padding:0 6px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cc-dz.o.on{border-color:#fb7185;background:rgba(225,29,72,.3);color:#fff}
+.cc-dz.m.on{border-color:#4ade80;background:rgba(34,197,94,.26);color:#fff}
+.cc-dsum{flex:none;display:flex;gap:6px;justify-content:center;flex-wrap:wrap;font:800 12px var(--round);color:var(--soft)}
+.cc-dsum b{color:#fde68a}
+.cc-dgo{flex:none;display:flex;gap:6px;justify-content:center;flex-wrap:wrap}
 @media (max-height:660px){.cc-card small{display:none}}
 .sv-coachfit .cc-wrap{width:min(100%,calc(var(--sv-sh,360px) - 132px))}
 .sv-coachfit .cc-card small,.sv-coachfit .cc-info{display:none}`;
@@ -115,8 +124,56 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
     return "";
   };
 
+  // ── 카드 나누기 (후공): 5장을 '상대 앞 2 · 내 앞 2'로 고르면 남는 1장은 대기 — 이 기기에서만 쥐는 임시 선택 ──
+  let DL = { key: "", z: ["", "", "", "", ""] };
+  const dealFor = (V, ctx) => { const key = `${ctx.g}|${V.set}|${ctx.me}`; if (DL.key !== key) DL = { key, z: ["", "", "", "", ""] }; return DL; };
+  const setPill = (V, me) => V.sets > 1 ? `<span class="cc-pill sm">세트 ${V.set} · ${me >= 0 ? `내 ${V.wins[me]} : ${V.wins[1 - me]} 상대` : `백 ${V.wins[0]} : ${V.wins[1]} 흑`}</span>` : "";
+  const dealText = d => `선공 앞 ${d.opp.map(c => CN[c]).join("·")} · 후공 앞 ${d.me.map(c => CN[c]).join("·")} · 대기 ${CN[d.wait != null ? d.wait : [0, 1, 2, 3, 4].find(c => !d.opp.includes(c) && !d.me.includes(c))]}`;
+  function renderDeal(stage, V, ctx) {
+    const me = ctx.me, D = dealFor(V, ctx), can = !!ctx.canAct && me >= 0 && me === V.dealer;
+    const cnt = k => D.z.filter(x => x === k).length, ready = cnt("o") === 2 && cnt("m") === 2, left = ready ? D.z.findIndex(x => !x) : -1;
+    const dn = nameOf(ctx, V.dealer), SW = ["0", "1", "2", "3", "4"];
+    let h = `<div class="cc-top"><span class="cc-pill ${can ? "me" : "turn"}">${can ? "카드 나누기 · 내 차례" : `${esc(dn)} 이(가) 카드를 나눠요`}</span>${setPill(V, me)}</div>`;
+    let info = "", ic = "";
+    if (can) {
+      h += `<div class="cc-dl">${SW.map(k => { const c = +k;
+        return `<div class="cc-dr">${tile(c, { cls: "sm" + (c === left ? " wt" : ""), sub: c === left ? "남은 1장 → 대기 카드" : NOTE[c] })}<button type="button" class="cc-dz o${D.z[c] === "o" ? " on" : ""}" data-z="o" data-k="${c}" aria-pressed="${D.z[c] === "o"}">상대 앞</button><button type="button" class="cc-dz m${D.z[c] === "m" ? " on" : ""}" data-z="m" data-k="${c}" aria-pressed="${D.z[c] === "m"}">내 앞</button></div>`; }).join("")}</div>`;
+      h += `<div class="cc-dsum"><span>상대 앞 <b>${cnt("o")}</b>/2</span><span>내 앞 <b>${cnt("m")}</b>/2</span><span>대기 <b>${ready ? 1 : 0}</b>/1</span></div>`;
+      h += `<div class="cc-dgo">${ctx.coachOn ? `<button type="button" class="btn" data-rec="1">🧑‍🏫 추천대로</button>` : ""}<button type="button" class="btn primary" data-go="1"${ready ? "" : " disabled"}>이렇게 나누기</button></div>`;
+      info = ready ? `<b>${dealText({ opp: D.z.map((z, i) => z === "o" ? i : -1).filter(i => i >= 0), me: D.z.map((z, i) => z === "m" ? i : -1).filter(i => i >= 0) })}</b> — 맞으면 아래 단추를 눌러요` : `<b>상대(선공)</b>가 처음에 쓸 카드 2장 · <b>내 카드</b> 2장을 골라요 · 점퍼는 처음엔 붙은 말이 없어 못 움직여요`;
+    } else {
+      h += `<div class="cc-dl"><div class="cc-cards">${SW.map(k => tile(+k, { cls: "sm", note: false })).join("")}</div></div>`;
+      info = me >= 0 && me === V.first ? `상대(후공)가 카드 5장을 나눠요 — 내 앞 2장 · 상대 앞 2장 · 대기 1장이 곧 정해져요` : `${esc(dn)} 이(가) 카드를 나눠요… (선공 앞 2장 · 후공 앞 2장 · 대기 1장)`;
+    }
+    h += `<div class="cc-info${ic}"><span>${info}</span></div>`;
+    stage.innerHTML = h;
+    stage.onclick = e => {
+      if (!can) return;
+      const z = e.target.closest("[data-z]"), go = e.target.closest("[data-go]"), rec = e.target.closest("[data-rec]");
+      if (z) {
+        const c = +z.dataset.k, k = z.dataset.z;
+        if (D.z[c] === k) D.z[c] = "";
+        else if (cnt(k) >= 2) { ctx.toast(`${k === "o" ? "상대 앞" : "내 앞"}은 이미 2장이에요 — 다른 카드를 먼저 빼 주세요`, 1600); return; }
+        else D.z[c] = k;
+        ctx.sfx("tap"); renderDeal(stage, V, ctx); return;
+      }
+      if (rec) {
+        const R = Q.dealReport(me).best; D.z = ["", "", "", "", ""];
+        R.opp.forEach(c => { D.z[c] = "o"; }); R.me.forEach(c => { D.z[c] = "m"; });
+        ctx.sfx("tap"); renderDeal(stage, V, ctx); return;
+      }
+      if (go && ready) {
+        const a = { t: "deal", opp: D.z.map((x, i) => x === "o" ? i : -1).filter(i => i >= 0), me: D.z.map((x, i) => x === "m" ? i : -1).filter(i => i >= 0) };
+        ctx.sfx("pop");
+        const r = ctx.act(a);
+        if (r && r.ok === false) renderDeal(stage, V, ctx);
+      }
+    };
+  }
+
   function render(stage, V, ctx) {
     style();
+    if (V.phase === "deal" && !V.over) return renderDeal(stage, V, ctx);
     const me = ctx.me, over = !!V.over, play = V.phase === "play" && !over;
     const can = !!ctx.canAct && me >= 0 && play, flip = me === 1;
     const bot = me >= 0 ? me : 0, top = 1 - bot;
@@ -171,7 +228,8 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
     // 윗줄
     const turnTxt = over ? "끝" : V.phase === "between" ? "세트 끝" : can ? "내 차례" : `${esc(nameOf(ctx, V.turn))} 차례`;
     let h = `<div class="cc-top"><span class="cc-pill ${over || V.phase === "between" ? "" : can ? "me" : "turn"}">${turnTxt}</span>`;
-    if (V.sets > 1) h += `<span class="cc-pill sm">세트 ${V.set} · ${me >= 0 ? `내 ${V.wins[me]} : ${V.wins[1 - me]} 상대` : `백 ${V.wins[0]} : ${V.wins[1]} 흑`}</span>`;
+    h += setPill(V, me);
+    if (V.deal === "pick" && V.tc === 0 && play) h += `<span class="cc-pill sm">🃏 ${esc(nameOf(ctx, 1 - V.first))} 이 카드를 나눴어요</span>`;
     h += `</div>`;
     h += `<div class="cc-opp"><span class="cc-ol">${me >= 0 ? "상대" : SIDE[top]} 카드</span>${V.hand[top].map(c => tile(c, { cls: "sm", note: false })).join("")}</div>`;
     h += `<div class="cc-wrap"><div class="cc-board">${order.map(cell).join("")}</div></div>`;
@@ -258,8 +316,23 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
     else if (t.includes("safe")) out.push("도착 칸은 상대 카드로 닿지 않아 안전해요");
     return out.length ? out.join(" · ") : "무난한 수예요";
   }
+  // 카드 나누기 단계의 선생님: 첫 수 가짓수 · 같은 실력 AI 끼리 둔 결과 (점수표) 로 말함
+  function coachDeal(V, me) {
+    const R = Q.dealReport(me), isD = V.dealer === me, B = R.best, sum = cs => cs.reduce((s, c) => s + R.open[c], 0);
+    const all = [0, 1, 2, 3, 4].map(c => `${CN[c]}(${R.open[c]}가지)`).join(" · ");
+    const opp = isD ? "상대(선공)는 내가 나눠 준 카드 2장 중 하나로 첫 수를 둬요. 말이 첫 줄에 모여 있어서 점퍼는 뛰어넘을 말이 없어 못 움직여요."
+      : me === V.first ? "후공이 카드 5장을 나누는 중이에요 — 내(선공) 앞에 올 카드 2장이 곧 정해져요." : "후공이 카드 5장을 나누는 중이에요.";
+    const mine = `카드 5장으로 첫 줄에서 둘 수 있는 첫 수 가짓수 — ${all}. 나누는 쪽(후공)이 선공 앞 2장 · 후공 앞 2장 · 대기 1장을 정해요 (30가지).`;
+    let rec, why = "";
+    if (isD) {
+      rec = `선공 앞 ${B.opp.map(c => CN[c]).join("·")} / 내 앞 ${B.me.map(c => CN[c]).join("·")} / 대기 ${CN[B.wait]} — 선공의 첫 수는 ${sum(B.opp)}가지로 좁히고 내 첫 수는 ${sum(B.me)}가지로 넓히는 작전이에요.`;
+      why = `AI 끼리 배치마다 ${R.games}판씩 둔 결과 30가지 모두 후공 ${R.min}~${R.max}% (평균 ${R.mean}%) 로 흩어진 정도가 우연 오차와 같은 수준이었어요 — 배치만으로 크게 갈리진 않아요. 그래서 이 추천은 '상대의 선택을 좁히는 작전'이고, 사람이 상대일 땐 상대가 불편해할 카드 조합을 고르는 심리전이 더 커요.`;
+    } else { rec = "지금은 후공이 고르는 중이에요 — 내 앞 카드가 정해지면 그때 추천해 드려요."; }
+    return { opp, mine, rec, why };
+  }
   function coach(V, me, since) {
     if (me !== 0 && me !== 1) me = 0;
+    if (V.phase === "deal" && !V.over) return coachDeal(V, me);
     const opp = 1 - me, A = Q.analyze(V, me), over = !!V.over, play = V.phase === "play" && !over;
     const ev = V.log.filter(e => e.i > since);
     // 👀 상대 흐름
@@ -321,9 +394,11 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
         boardHtml: `<div class="cc-tut">${mini(start())}</div>`, ms: 5600 },
       { tag: "STEP 2 · 카드", title: "카드가 움직임을 정해요", body: "카드 5장: 내 앞 2장 · 상대 앞 2장 · 대기 1장. 말은 다 같고 <b>카드가 어떻게 움직일지</b> 정해요 (초록 칸). 어태커는 말이 <b>보는 쪽</b>으로 가요. 점퍼는 <b>붙은 말을 뛰어넘어</b> 바로 뒤에 내려요.",
         boardHtml: `<div class="cc-tut"><div class="cc-cards">${[0, 1, 2, 3, 4].map(c => tile(c, { cls: "sm" })).join("")}</div></div>`, ms: 6400 },
-      { tag: "STEP 3 · 한 턴", title: "카드 → 말 → 칸", body: "내 차례: ① 앞 카드 2장 중 <b>1장</b> 고르기 ② <b>말</b> 누르기 ③ <b>갈 칸</b> 누르기 (말부터 눌러도 돼요). 상대 말이 있으면 <b>잡아요</b>. 쓴 카드는 대기로, 대기 카드가 내 앞으로 와요.",
+      { tag: "STEP 3 · 카드 나누기", title: "후공이 카드 5장을 나눠요", body: "세트가 시작되면 <b>후공</b>이 카드를 <b>선공 앞 2장 · 후공(내) 앞 2장 · 대기 1장</b>으로 직접 나눠요 (방송과 같아요). 말이 첫 줄에 모여 있을 땐 <b>점퍼</b>가 뛰어넘을 말이 없어 못 움직여요 — 선공 앞에 점퍼 같은 카드를 두면 첫 수 선택이 줄어요.",
+        boardHtml: `<div class="cc-tut"><div class="cc-flow">${tile(4, { cls: "sm", note: false })}${tile(2, { cls: "sm", note: false })}<span class="ar">➜ 선공 앞</span></div><div class="cc-flow">${tile(0, { cls: "sm", note: false })}${tile(1, { cls: "sm", note: false })}<span class="ar">➜ 내 앞</span></div><div class="cc-flow">${tile(3, { cls: "wt sm", note: false })}<span class="ar">➜ 대기</span></div></div>`, ms: 6400 },
+      { tag: "STEP 4 · 한 턴", title: "카드 → 말 → 칸", body: "내 차례: ① 앞 카드 2장 중 <b>1장</b> 고르기 ② <b>말</b> 누르기 ③ <b>갈 칸</b> 누르기 (말부터 눌러도 돼요). 상대 말이 있으면 <b>잡아요</b>. 쓴 카드는 대기로, 대기 카드가 내 앞으로 와요.",
         boardHtml: `<div class="cc-tut"><div class="cc-flow">${tile(0, { cls: "sm" })}${tile(1, { cls: "sm" })}<span class="ar">➜ 쓴 카드는</span>${tile(3, { cls: "wt sm" })}</div><div class="cc-tmsg">쓴 카드는 <b>대기</b> 자리로, 대기 카드는 <b>내 앞</b>으로 돌아요</div></div>`, ms: 5600 },
-      { tag: "STEP 4 · 직접", title: "비숍으로 상대 말 잡기", body: "내 앞 카드는 <b>룩 · 비숍</b>이에요. <b>비숍 카드</b>를 고르고 → 내 말(▲) → 대각선의 상대 말을 눌러 잡아 봐요!",
+      { tag: "STEP 5 · 직접", title: "비숍으로 상대 말 잡기", body: "내 앞 카드는 <b>룩 · 비숍</b>이에요. <b>비숍 카드</b>를 고르고 → 내 말(▲) → 대각선의 상대 말을 눌러 잡아 봐요!",
         interactive: { hint: "👆 반짝이는 것을 차례로 눌러요", doneText: "✅ 비숍으로 대각선 상대 말을 잡았어요!" },
         render(stage, ctrl) {
           const cells = Array(NS).fill(0); cells[17] = 1; cells[11] = 2; cells[3] = 2; cells[22] = 1;
@@ -355,29 +430,65 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
           };
           draw();
         } },
-      { tag: "STEP 5 · 특수", title: "끝 줄에서 뒤돌아봐요", body: "말이 <b>보는 쪽 끝 줄</b>에 닿으면 뒤를 돌아봐요 (▲ → ▼, 어태커 방향도 바뀌어요). 판 위 말이 <b>2개만</b> 남으면 점퍼 카드는 <b>퀸</b>(8방향 1칸)이 돼요.",
+      { tag: "STEP 6 · 특수", title: "끝 줄에서 뒤돌아봐요", body: "말이 <b>보는 쪽 끝 줄</b>에 닿으면 뒤를 돌아봐요 (▲ → ▼, 어태커 방향도 바뀌어요). 판 위 말이 <b>2개만</b> 남으면 점퍼 카드는 <b>퀸</b>(8방향 1칸)이 돼요.",
         boardHtml: `<div class="cc-tut">${mini((() => { const c = Array(NS).fill(0); c[2] = 1; c[22] = 1; c[12] = 2; return c; })(), { faces: { 2: 1, 22: -1, 12: 1 } })}<div class="cc-flow">${tile(4, { cls: "sm", note: false })}<span class="ar">말 2개 → </span>${tile(5, { cls: "sm", note: false })}</div></div>`, ms: 6200 },
-      { tag: "STEP 6 · 승패", title: "한 세트 · 세트 옵션", body: "성 버티기: 내 말이 상대 성에 올라 있는데 <b>상대가 다음 차례에 못 잡으면</b> 이겨요. 움직일 수 없으면 차례를 넘기고, 60턴이 넘으면 말이 많은 쪽 승. 3세트 옵션은 <b>먼저 2승</b> (2세트부터 진 쪽이 먼저). 막히면 <b>🧑‍🏫 AI 선생님</b>이 추천해요.",
+      { tag: "STEP 7 · 승패", title: "한 세트 · 세트 옵션", body: "성 버티기: 내 말이 상대 성에 올라 있는데 <b>상대가 다음 차례에 못 잡으면</b> 이겨요. 움직일 수 없으면 차례를 넘기고, 60턴이 넘으면 말이 많은 쪽 승. 3세트 옵션은 <b>먼저 2승</b> (2세트부터 진 쪽이 먼저). 막히면 <b>🧑‍🏫 AI 선생님</b>이 추천해요.",
         boardHtml: `<div class="cc-tut"><span style="font-size:42px">🏰</span></div>`, ms: 6000 },
     ];
   }
 
+  // ── 🎞️ 복기: 행동 글 · 내 수와 추천 수의 점수 차이 ──
+  function actText(a, V) {
+    if (a && a.t === "deal") return `카드 나누기 — ${dealText({ opp: a.opp, me: a.me })}`;
+    if (!a || a.t !== "mv") return "—";
+    const card = V && V.hand && (V.seat === 0 || V.seat === 1) && V.hand[V.seat] ? CN[V.hand[V.seat][a.slot]] : `카드 ${a.slot + 1}`;
+    return `${card} · ${lbl(a.from)} → ${lbl(a.to)}`;
+  }
+  const J = JSON.stringify, clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
+  function review(Vb, seat, myA, bestA) {
+    try {
+      if (myA && myA.t === "deal") {
+        const m = Q.dealScore(myA); if (!m) return null;
+        const R = Q.dealReport(seat), s2 = x => x[0] + x[1];
+        const why = `내 배치: 선공의 첫 수 ${s2(m.optOpen)}가지 · 내 첫 수 ${s2(m.myOpen)}가지 (추천 작전은 ${s2(R.best.opp.map(c => R.open[c]))}가지 · ${s2(R.best.me.map(c => R.open[c]))}가지). AI 끼리 ${R.games}판씩 둔 결과 이 배치는 후공 ${m.v}% 였고 30가지 모두 ${R.min}~${R.max}% 라서 배치만으로 크게 갈리진 않았어요.`;
+        return { sev: 0, why, my: actText(myA), best: actText(bestA && bestA.t === "deal" ? bestA : dealAct(R.best)) };
+      }
+      const E = Q.evalMoves(Vb, seat); if (!E || !E.length) return null;
+      const W = Q.WINV - 50, top = E[0], mineI = E.findIndex(x => x.a.slot === myA.slot && x.a.from === myA.from && x.a.to === myA.to);
+      if (mineI < 0) return null;
+      const mine = E[mineI], diff = top.v - mine.v, fmt = v => v > W ? "이기는 길" : v < -W ? "지는 길" : `${v > 0 ? "+" : ""}${v}`;
+      let sev = clamp(Math.round(diff * 0.65), 0, 90);
+      if (top.v > W && mine.v <= W) sev = 100; else if (mine.v < -W && top.v >= -W) sev = Math.max(sev, 95);
+      const bi = bestA && bestA.t === "mv" ? E.find(x => x.a.slot === bestA.slot && x.a.from === bestA.from && x.a.to === bestA.to) : null;
+      const exM = Q.explain(Vb, seat, myA), exB = Q.explain(Vb, seat, (bi || top).a);
+      let why;
+      if (diff < 12) why = `내 수의 읽은 점수는 ${fmt(mine.v)}, 가장 좋은 수는 ${fmt(top.v)} — 차이가 작아서 둘 다 괜찮은 수예요 (말 1개 = 100점).`;
+      else why = `몇 수 앞까지 읽은 점수로 내 수는 ${fmt(mine.v)}, 가장 좋은 수는 ${fmt(top.v)} 예요 (말 1개 = 100점). 내 수: ${whyText(exM)}. 추천 수: ${whyText(exB)}.`;
+      return { sev, why, my: actText(myA, Vb), best: actText((bi || top).a, Vb) };
+    } catch (e) { return null; }
+  }
+  const dealAct = ar => ({ t: "deal", me: ar.me.slice(), opp: ar.opp.slice() });
+
   window.SVUI = window.SVUI || {};
   window.SVUI.cardchess = {
-    actText: a => { const c = i => `${Math.floor(i / 5) + 1}행 ${i % 5 + 1}열`; return a && a.t === "mv" ? `${c(a.from)} → ${c(a.to)} (카드 ${a.slot + 1})` : "—"; },   // 🎞️ 복기 행동 글
+    actText, review,
     name: "카드 체스", emoji: "♟️", short: "카드가 움직임을 정하는 5×5 1:1", min: 2, max: 2, defN: 2, board: true, fitCoach: true,
-    opts: [{ k: "sets", label: "세트 수", items: [[1, "1세트"], [3, "3세트 (먼저 2승)"]], def: 3 }],
+    opts: [
+      { k: "sets", label: "세트 수", items: [[1, "1세트"], [3, "3세트 (먼저 2승)"]], def: 3 },
+      { k: "deal", label: "시작 카드", items: [["pick", "후공이 나눠요 (방송)"], ["rand", "무작위"]], def: "pick" },
+    ],
     src: SRC, diff: DIFF,
     howto: [
       "🎯 목표: 상대 말을 <b>모두 없애거나</b>, 내 말을 <b>상대 성(🏰)</b>에 올리고 한 턴을 버텨요",
       "5×5 판, 말 5개씩 (모두 상대 쪽 ▲▼ 을 봐요) · 성 = 각자 첫 줄 가운데 칸 · 카드 5장: 룩 · 비숍 · 어태커 · 나이트 · 점퍼 (내 앞 2 · 상대 앞 2 · 대기 1)",
+      "세트가 시작되면 <b>후공</b>이 카드 5장을 <b>선공 앞 2장 · 후공 앞 2장 · 대기 1장</b>으로 직접 나눠요 (방송과 같아요) — 점퍼는 말이 첫 줄에 모여 있을 땐 못 움직여서, 쓰기 어려운 카드를 선공 앞에 두는 작전이 있어요",
       "내 차례: 앞 카드 <b>1장</b> → 그 카드대로 말 <b>1개</b> 이동 · 상대 말이 있는 칸이면 <b>잡기</b> · 쓴 카드는 대기로, 대기 카드가 내 앞으로",
       "룩 상하좌우 1 · 비숍 대각선 1 · 어태커 보는 쪽 직진 2 또는 앞 대각선 1 · 나이트 2칸+직각 1(뛰어넘음) · 점퍼 붙은 말 뛰어넘기 (말이 2개만 남으면 퀸 = 8방향 1칸)",
       "말이 보는 쪽 끝 줄에 닿으면 <b>뒤돌아봐요</b>",
       "승리: 상대 전멸, 또는 내 말이 상대 성에 올라 있는데 상대가 다음 차례에 못 잡으면 승 · 60턴이 넘으면 말이 많은 쪽 · 3세트 옵션은 먼저 2승",
       SRC, DIFF,
     ],
-    sub: V => V.over ? "끝" : `${V.sets > 1 ? `${V.set}세트 · ` : ""}${Math.min(V.tc + 1, V.maxTurn)} / ${V.maxTurn}턴`,
+    sub: V => V.over ? "끝" : `${V.sets > 1 ? `${V.set}세트 · ` : ""}${V.phase === "deal" ? "카드 나누기" : `${Math.min(V.tc + 1, V.maxTurn)} / ${V.maxTurn}턴`}`,
     chip: (V, i) => ({ t: V.sets > 1 ? `${V.wins[i]}승 · ${V.counts[i]}개` : `${V.counts[i]}개`, on: V.needs.includes(i) && !V.over, out: false }),
     render, coach, result, tutorial,
     qa: (V, me, rnd) => Q.ai(V, me, "easy", rnd),
