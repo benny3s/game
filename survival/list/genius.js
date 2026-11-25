@@ -5,7 +5,7 @@
   { id: "gn-indian", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "인디언 포커", emoji: "🪪", v: 4,
     short: "상대 카드만 보이는 1:1 베팅",
     src: "더 지니어스 시즌 1 인디언 포커 · 6·7화 데스매치 · 12화 결승 1회전 · 디글 클래식 「인디언 포커」 규칙 설명 확인" },
-  { id: "gn-openpass", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "오픈, 패스", emoji: "🔓", v: 2,
+  { id: "gn-openpass", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "오픈, 패스", emoji: "🔓", v: 3,
     short: "뒷면 카드를 열거나 넘기며 10칸 수식 만들기",
     src: "더 지니어스 시즌 1 오픈, 패스 · 7화 메인 매치 · tvN D ENT 「오픈,패스①」 · 디글 클래식 「오픈, 패스 01」 규칙 설명 확인" },
   { id: "gn-yut", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "전략 윷놀이", emoji: "🎲", v: 1,

@@ -244,8 +244,7 @@
       if (front === undefined) return f >= th.first - (loose ? 4 : 0);   // 첫 카드 = 등호 옆 (맨 오른쪽) 숫자
       if (typeof front === "number") return loose || (c.slotsLeft <= 1 && f >= front);   // 연속 숫자는 새 숫자만 남아요 — 마지막 칸이면 더 큰 숫자로 갈아 끼워요
       if (front === "*") return f >= th.mul - (loose ? 1 : 0) && frontVal(board) > 0;
-      if (front === "+") return f >= th.add - (loose ? 4 : 0);
-      return loose;                                                // − · ÷ 왼쪽은 값이 줄어요
+      return f >= th.add - (loose ? 4 : 0);                         // + · − · ÷ 왼쪽: 안 열면 그 기호가 맨 왼쪽 기호가 돼 앞에 0 이 붙어요 (0 − X 는 손해) — 큰 숫자를 얹어요
     }
     if (front === undefined || typeof front === "string") return false;   // 첫 기호(끝 기호는 무효) · 연속 기호는 낭비
     if (f === "*") return frontVal(board) > 0 && c.slotsLeft >= 2 && th.times > 0;
