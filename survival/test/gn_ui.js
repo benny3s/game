@@ -1,4 +1,4 @@
-// 더 지니어스 게임 화면 시험 (node survival/test/gn_ui.js <게임id…> [--shot <폴더>])
+// 더 지니어스 게임 화면 시험 (node survival/test/gn_ui.js <게임id…> [--shot <폴더>] [--small = 375×667])
 // 시험 틀(gn_harness.html)에서 폰 크기(390×844)로: 혼자 한 판 끝까지(내 차례엔 qa 수) · AI 구경 한 판 · 선생님 3줄 · 1분 규칙 단계 · 가로 넘침 · 페이지 오류 0
 'use strict';
 const path = require('path');
@@ -6,6 +6,7 @@ const U = require('../../test/qa/lib/uitest');
 const args = process.argv.slice(2);
 const shotAt = args.indexOf('--shot');
 const shotDir = shotAt >= 0 ? args.splice(shotAt, 2)[1] : null;
+const small = args.includes('--small');
 const ids = args.filter(a => !a.startsWith('--'));
 if (!ids.length) { console.error('사용법: node survival/test/gn_ui.js gn-sunmoon [...]'); process.exit(2); }
 
@@ -15,6 +16,7 @@ U.main(async T => {
       const p = await T.open('survival/test/gn_harness.html', `g=${id}&${extra || ''}`);
       const ok = await U.waitFor(p, () => window.__h && window.__h.ready, null, 15000);
       if (!ok) throw new Error(`${id}: 시험 틀이 안 열림 ${JSON.stringify(await p.evaluate(() => window.__h && window.__h.errors))}`);
+      if (small) await p.setViewportSize({ width: 375, height: 667 });
       return p;
     };
     // 1) 혼자: 내 차례엔 qa 수 (화면의 단추를 통해 act) · 끝까지

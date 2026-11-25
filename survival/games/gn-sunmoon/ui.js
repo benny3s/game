@@ -33,7 +33,8 @@
 .sm-hist{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;flex:none}
 .sm-hist span{font-size:12px;border-radius:8px;padding:2px 6px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.1)}
 .sm-tut{display:grid;gap:8px;justify-items:center;font-size:14px}
-.sm-tut .sm-cols{width:100%}`;
+.sm-tut .sm-cols{width:100%}
+@media (max-width:400px){.sm-step button{width:29px;height:29px;font-size:17px}.sm-step{gap:3px}.sm-col{padding:6px 3px}.sm-col .mine{font-size:19px;min-width:1.6ch}.sm-all{padding:3px 6px;font-size:11px}}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats[i] && ctx.seats[i].name) || `${i + 1}번`;
