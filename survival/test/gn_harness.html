@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>더 지니어스 게임 시험 틀</title>
+<link rel="stylesheet" href="../../common/cozy.css?v=14">
+<link rel="stylesheet" href="../style.css?v=1">
+<style>body{margin:0}#stage{min-height:70vh}.top{padding:6px 12px;font:700 13px var(--round)}</style>
+</head>
+<body class="dark">
+<!-- 공용 껍데기(shell.js)가 나오기 전에도 게임 하나의 core.js + ui.js 를 따로 시험하는 틀.
+     ?g=<id>&n=<인원>&tier=easy|normal|hard&mode=solo|watch&fast=1&rounds=... 로 엶. 규칙 · 화면만 봄 (공용 틀과 같은 약속의 ctx) -->
+<div class="top" id="info"></div>
+<div class="sv-seats" id="seatBar"></div>
+<main class="stage sv-stage" id="stage"></main>
+<script>
+(() => {
+  "use strict";
+  const q = new URLSearchParams(location.search);
+  const id = q.get("g"), n = +(q.get("n") || 0), tier = q.get("tier") || "easy", mode = q.get("mode") || "solo", fast = q.get("fast") !== "0";
+  const cfgOpt = {}; for (const [k, v] of q) if (k.startsWith("o.")) cfgOpt[k.slice(2)] = isNaN(+v) ? v : +v;
+  window.SVCores = {}; window.SVUI = {};
+  const load = src => new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = () => rej(new Error("load " + src)); document.head.appendChild(s); });
+  function mulberry(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const NAMES = ["나", "삐약", "나비", "범수", "뽀송", "치즈", "백호", "몽글"];
+  let T = null, V = null, FAST = fast, seatsInfo = [], sound = 0;
+  const H = window.__h = { ready: false, errors: [], acts: 0, rounds: 0, last: null, sfx: [] };
+  window.addEventListener("error", e => H.errors.push(String(e.message)));
+  async function main() {
+    await load(`../games/${id}/core.js`); await load(`../games/${id}/ui.js`);
+    const core = window.SVCores[id], ui = window.SVUI[id];
+    H.core = core; H.ui = ui;
+    const N = n || ui.defN || ui.min;
+    const watch = mode === "watch";
+    const cfg = {}; for (const it of ui.opts || []) cfg[it.k] = it.def; Object.assign(cfg, cfgOpt);
+    const seed = +(q.get("seed") || (Math.random() * 4294967296) >>> 0);
+    seatsInfo = Array.from({ length: N }, (_, i) => ({ kind: watch || i ? "ai" : "human", name: NAMES[i % NAMES.length], emoji: i ? "🐱" : "🙂", tier: watch ? ["hard", "normal", "easy", "hard", "normal", "easy"][i % 6] : tier }));
+    const me = watch ? -1 : 0;
+    T = { core, st: core.init({ n: N, seed, cfg }), r: mulberry(seed ^ 0x9e3779b9), timers: [], dead: false };
+    const view = s => core.view(T.st, s);
+    function render() {
+      V = view(watch ? "all" : me); H.last = V;
+      document.getElementById("info").textContent = `${ui.name} · ${ui.sub ? ui.sub(V, me) : ""}`;
+      document.getElementById("seatBar").innerHTML = seatsInfo.map((s, i) => { const c = ui.chip ? ui.chip(V, i, me) : {}; return `<div class="sv-seat${c.on ? " on" : ""}${c.out ? " out" : ""}${i === me ? " me" : ""}"><span class="av">${s.emoji}</span><span class="nm">${esc(s.name)}</span><span class="pt">${c.t || ""}</span></div>`; }).join("");
+      const canAct = me >= 0 && V.needs.includes(me) && !V.over;
+      ui.render(document.getElementById("stage"), V, { me, act, canAct, seats: seatsInfo, mode: watch ? "watch" : "solo", fast: 1, coachOn: false, g: 1, wait: false, sfx: (n) => { H.sfx.push(n); }, toast: m => { H.toast = m; } });
+      if (V.over) H.over = true;
+    }
+    function act(a) {
+      const cur = V ? V.needs : [];
+      if (!cur.includes(me)) return { ok: false };
+      const r = core.apply(T.st, me, a);
+      if (!r.ok) { H.toast = r.err; return r; }
+      H.acts++; kick(); return r;
+    }
+    function kick() { render(); sched(); }
+    function sched() {
+      T.timers.forEach(clearTimeout); T.timers = [];
+      if (T.st.over || core.over(T.st)) return;
+      const need = core.needs(T.st);
+      for (const s of need) if (seatsInfo[s].kind === "ai") T.timers.push(setTimeout(() => {
+        if (!core.needs(T.st).includes(s)) return;
+        let a = null; try { a = core.ai(core.view(T.st, s), s, seatsInfo[s].tier, T.r); } catch (e) { H.errors.push("ai " + e.message); }
+        let r = a != null ? core.apply(T.st, s, a) : { ok: false };
+        if (!r.ok && core.legal) { const L = core.legal(T.st, s); if (L.length) { H.fallback = (H.fallback || 0) + 1; r = core.apply(T.st, s, L[Math.floor(T.r() * L.length)]); } }
+        if (r.ok) kick(); else H.stuck = (H.stuck || 0) + 1;
+      }, FAST ? 8 : 500 + T.r() * 500));
+      if (!need.length && core.auto) { const ms = core.auto(T.st); if (ms != null) T.timers.push(setTimeout(() => { core.advance(T.st); H.rounds++; kick(); }, FAST ? 15 : ms)); }
+    }
+    Object.assign(H, {
+      id, me, N, st: () => T.st, view: () => V, legal: () => core.legal ? core.legal(T.st, me) : [], act,
+      qa: () => { if (!V || !V.needs.includes(me)) return false; const a = ui.qa ? ui.qa(V, me, Math.random) : core.ai(V, me, "easy", Math.random); return a != null && !!act(a).ok; },
+      coach: () => { const Vc = core.view(T.st, watch ? "all" : me); return ui.coach(Vc, watch ? Math.max(0, core.needs(T.st)[0] | 0) : me, -1, seatsInfo.map(s => s.name)); },
+      tutorial: () => ui.tutorial(), fast: v => { FAST = !!v; }, pause: () => T.timers.forEach(clearTimeout),
+      result: () => (ui.result ? ui.result(V, me) : ""),
+    });
+    H.ready = true; kick();
+  }
+  main().catch(e => { H.errors.push(String(e && e.message || e)); document.getElementById("info").textContent = "오류: " + e.message; });
+})();
+</script>
+</body>
+</html>
