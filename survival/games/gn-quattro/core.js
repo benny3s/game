@@ -318,7 +318,7 @@
 
   // ── 보이는 것 ─────────────────────────────────────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), me = typeof seat === "number" && seat >= 0 ? seat : -1;
+    const all = seat === "all", me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const reveal = st.over || all;
     const oppHand = s => st.hands[s].map(x => ({ c: reveal || x.o ? x.c : null, o: x.o }));
     const pubObj = { t: st.turn, ph: st.phase, o: st.hands.map(h => h.map(x => (x.o ? x.c : -1))), ne: st.nEx, ov: st.over, w: st.winner };

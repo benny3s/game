@@ -133,7 +133,7 @@ const openAll = (st, seat) => { for (let i = 0; i < 4; i++) if (!st.hands[seat][
   const sa = start(A, [mk(0, 1), mk(1, 2), mk(2, 3), mk(3, 4)], 'b'), sb = start(A, [mk(0, 10), mk(1, 9), mk(2, 8), mk(3, 3)], 'b');
   ok(G.view(sa, 0).pub === G.view(sb, 0).pub, '상대가 안 연 카드가 달라도 공개 지문이 같아요');
   ok(G.view(sa, 0).opp.every(x => x.c === null), '상대의 안 연 카드는 안 보여요');
-  ok(G.view(sa, 0).hands === null && G.view(sa, -1).hands !== null, '끝나기 전엔 전체 공개는 구경 시점에만');
+  ok(G.view(sa, 0).hands === null && G.view(sa, 'all').hands !== null && G.view(sa, -1).hands === null, '끝나기 전엔 전체 공개는 all 에만 (온라인 구경꾼 -1 은 못 봄)');
   for (const tier of ['easy', 'normal', 'hard']) {
     const x = G.ai(G.view(sa, 0), 0, tier, R(4)), y = G.ai(G.view(sb, 0), 0, tier, R(4));
     ok(JSON.stringify(x) === JSON.stringify(y), `${tier} AI 는 상대 · 관전 플레이어의 안 보이는 카드를 몰라요`);
