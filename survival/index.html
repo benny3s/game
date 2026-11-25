@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#120c16">
+<title>베니 서바이벌 — 두뇌 서바이벌 게임 모음</title>
+<link rel="stylesheet" href="../common/cozy.css?v=14">
+<script src="../common/fit.js?v=1"></script>
+<script src="../common/backnav.js?v=3"></script>
+<link rel="stylesheet" href="style.css?v=2">
+</head>
+<body class="dark">
+<div class="wrap">
+  <header class="top">
+    <h1><span class="glogo" aria-hidden="true">🎭</span>베니 서바이벌</h1>
+    <a href="../">게임 목록</a>
+  </header>
+
+  <section id="home" class="card">
+    <div class="progs" id="progTabs" role="tablist" aria-label="방송 고르기"></div>
+    <div class="seasons" id="seasonBar" role="tablist" aria-label="시즌 고르기" hidden></div>
+    <div class="g-cards" id="gameCards" role="radiogroup" aria-label="종목 고르기"><p class="sv-empty">게임 목록을 불러오는 중이에요…</p></div>
+    <p class="sv-empty" id="gameLoad" hidden></p>
+
+    <div id="panel" class="panel" hidden>
+      <div class="tabs" role="tablist">
+        <button class="btn" id="tabSolo" aria-pressed="true">혼자</button>
+        <button class="btn" id="tabLocal" aria-pressed="false" hidden>한 기기</button>
+        <button class="btn" id="tabFriend" aria-pressed="false">친구랑</button>
+        <button class="btn" id="tabWatch" aria-pressed="false">AI 구경</button>
+      </div>
+
+      <div id="soloBox" class="box">
+        <div class="tiers three" id="tiers"></div>
+        <div id="soloOpts" class="opts"></div>
+      </div>
+      <div id="localBox" class="box" hidden>
+        <div id="hsBox"></div>
+        <div id="localOpts" class="opts"></div>
+      </div>
+      <div id="friendBox" class="box" hidden>
+        <p class="lede" id="friendLede"></p>
+      </div>
+      <div id="watchBox" class="box" hidden>
+        <div id="watchOpts" class="opts"></div>
+      </div>
+
+      <ul class="howto" id="howto"></ul>
+
+      <button class="btn primary big" id="startBtn">시작!</button>
+    </div>
+
+    <div class="row center minor">
+      <button class="btn ghost" id="ruleBtn" hidden>❓ 하는 법</button>
+      <button class="btn ghost" id="rankBtn">🏆 랭킹</button>
+    </div>
+  </section>
+</div>
+
+<section class="play" id="play" hidden>
+  <div class="bar">
+    <button class="iconbtn" id="backBtn" aria-label="나가기">‹</button>
+    <div class="mid">
+      <span class="lbl" id="playTitle"></span>
+      <span class="t" id="playSub"></span>
+    </div>
+    <button class="pill" id="sndBtn" aria-label="소리">🔊</button>
+  </div>
+  <div class="sv-seats" id="seatBar"></div>
+  <main class="stage sv-stage" id="stage"></main>
+  <div class="dock" id="dock">
+    <button id="coachBtn"><span class="ic">🧑‍🏫</span><span>AI 선생님</span></button>
+    <button id="ruleBtn2"><span class="ic">❓</span><span>규칙</span></button>
+    <button id="resBtn" hidden><span class="ic">🏁</span><span>결과</span></button>
+    <button id="againBtn"><span class="ic">↺</span><span>새 판</span></button>
+  </div>
+</section>
+
+<div class="overlay" id="resOv" hidden><div id="resBox" class="sv-res"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.js"></script>
+<script src="../common/glog.js?v=8"></script>
+<script src="../common/cozy.js?v=14"></script>
+<script src="../common/me.js?v=19"></script>
+<script src="../common/rank.js?v=14"></script>
+<script src="../common/arena-mock.js?v=10"></script>
+<script src="../common/arena.js?v=16"></script>
+<script src="../common/arena-ui.js?v=20"></script>
+<script src="../common/coach.js?v=4"></script>
+<script src="../common/hotseat.js?v=2"></script>
+<script src="../common/tutorial.js?v=2"></script>
+<!-- 게임은 고를 때 shell.js 가 games/<id>/core.js · ui.js 를 불러옴 (목록 = list/*.js, 형식은 README.md) -->
+<script src="shell.js?v=2"></script>
+</body>
+</html>
