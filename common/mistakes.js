@@ -11,6 +11,7 @@
   const GAMES = {
     gostop: ["🎴", "고스톱"], seotda: ["🀄", "섯다"], onecard: ["🃏", "원카드"], poker: ["♠️", "포커"],
     baduk: ["⚫", "바둑"], omok: ["⚪", "오목"], chess: ["♟️", "체스"], janggi: ["🐘", "장기"], billiards: ["🎱", "당구"], yut: ["🎲", "윷놀이"],
+    survival: ["🎭", "베니 서바이벌"],
   };
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const load = () => { try { const v = JSON.parse(localStorage.getItem(KEY) || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } };

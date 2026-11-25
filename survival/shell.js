@@ -243,22 +243,42 @@
   for (const [t, el] of [["solo", "tabSolo"], ["local", "tabLocal"], ["friend", "tabFriend"], ["watch", "tabWatch"]]) $(el).onclick = () => { sfx("tap"); opt.tab = t; saveOpt("tab"); drawHome(); };
 
   // ── 판 (혼자 · 한 기기 · 구경 · 친구랑 방장) ─────────────────
-  function makeTable(id, seats, cfg, seed, hooks) {
+  // 판 하나. pre = 이미 둔 수들(연습 판 · 📒 에서 온 장면)을 조용히 먼저 되감아 그 자리에서 시작
+  function makeTable(id, seats, cfg, seed, hooks, pre) {
     const core = CORES[id];
     const T = { id, core, seats, cfg, st: core.init({ n: seats.length, seed, cfg }), timers: new Map(), auto: 0, dead: false, r: mulberry(seed ^ 0x9e3779b9) };
     const clear = () => { for (const t of T.timers.values()) clearTimeout(t); T.timers.clear(); clearTimeout(T.auto); T.auto = 0; };
+    // 🎞️ 복기 기록: st 를 바꾸는 길은 T.act(apply) 와 T.adv(advance) 둘뿐 — 여기서만 쌓음 (review.js 가 같은 seed 로 그대로 되감음)
+    const en = entryOf(id) || {};
+    T.rec = { v: 1, id, gv: en.v == null ? 1 : en.v, at: Date.now(), mode: "", n: seats.length, seed, cfg: JSON.parse(JSON.stringify(cfg || {})),
+      seats: seats.map(s => ({ kind: s.kind === "ai" ? "ai" : "human", tier: s.tier || "", name: s.name, emoji: s.emoji })), me: -1, acts: [], fp: null, ranks: null };
     T.view = s => core.view(T.st, s);
     T.needs = () => core.needs(T.st);
     T.over = () => core.over(T.st);
     T.kill = () => { T.dead = true; clear(); };
     T.bot = s => { const x = T.seats[s]; return !!(x && (x.kind === "ai" || x.sub)); };
+    T.adv = () => { T.rec.acts.push({ adv: 1 }); core.advance(T.st); };
+    T.finish = () => {                                             // 판이 끝났을 때 한 번: 기록을 마무리해 이 기기에 저장
+      if (T.rec.fp != null) return;
+      const inf = hooks.info ? hooks.info() : {};
+      T.rec.mode = inf.mode || ""; T.rec.me = inf.me == null ? -1 : inf.me; if (inf.drill) T.rec.drill = 1;
+      try { T.rec.fp = window.SVReview ? SVReview.fp(T.st) : ""; T.rec.ranks = core.ranks(T.st); } catch (e) { T.rec.fp = ""; }
+      if (window.SVReview && T.rec.acts.length && !T.rec.drill) SVReview.save(T.rec);          // 연습 판(📒)은 지난 판 목록에 안 쌓음
+    };
     T.act = (seat, a) => {
       if (T.dead) return { ok: false, err: "끝난 판이에요" };
       if (!T.needs().includes(seat)) return { ok: false, err: "지금은 차례가 아니에요" };
+      const copy = JSON.parse(JSON.stringify(a == null ? null : a));
       let r; try { r = core.apply(T.st, seat, a); } catch (e) { console.error("[survival]", e); r = { ok: false, err: "그렇게는 못 해요" }; }
-      if (r && r.ok) T.kick();
+      if (r && r.ok) { T.rec.acts.push({ s: seat, a: copy, h: T.bot(seat) ? 0 : 1 }); T.kick(); }
       return r || { ok: false };
     };
+    for (const e of pre || []) {                                   // 연습 판: 그 장면 앞까지 조용히 되감음 (안 먹으면 규칙이 바뀐 것 → 던져서 알림)
+      if (e.adv) { T.adv(); continue; }
+      const a = JSON.parse(JSON.stringify(e.a)), r = core.apply(T.st, e.s, a);
+      if (!r || !r.ok) throw new Error("replay");
+      T.rec.acts.push({ s: e.s, a: JSON.parse(JSON.stringify(e.a)), h: e.h ? 1 : 0 });
+    }
     function botMove(s) {
       T.timers.delete(s);
       if (T.dead || !T.needs().includes(s)) return;
@@ -276,7 +296,7 @@
       for (const s of need) if (T.bot(s)) T.timers.set(s, setTimeout(() => botMove(s), FAST ? 12 : (hooks.delay ? hooks.delay(s) : 600 + T.r() * 500)));
       if (!need.length && core.auto) {
         const ms = core.auto(T.st);
-        if (ms != null) T.auto = setTimeout(() => { if (T.dead) return; if (PAUSE) { schedule(); return; } core.advance(T.st); T.kick(); }, FAST ? 25 : ms);
+        if (ms != null) T.auto = setTimeout(() => { if (T.dead) return; if (PAUSE) { schedule(); return; } T.adv(); T.kick(); }, FAST ? 25 : ms);
       }
     }
     T.kick = () => { if (T.dead) return; hooks.update(); if (T.over()) { clear(); hooks.over(); return; } schedule(); };
@@ -357,14 +377,16 @@
     showPlay();
     startTable(seats, SES.cfg, rnd32());
   }
-  function startTable(seats, cfg, seed) {
+  function startTable(seats, cfg, seed, pre) {
     if (SES.T) SES.T.kill();
     SES.seats = seats; SES.cfg = cfg; SES.ranked = 0; SES.memo = {}; SES.resHidden = false; SES.wait = false;
     SES.g = (SES.g || 0) + (SES.mode === "online" ? 0 : 1);
+    if (window.SVReview && SVReview.active) SVReview.close(true);   // 새 판이 시작되면 열려 있던 복기는 닫음
     SES.T = makeTable(SES.id, seats, cfg, seed, {
       update: onTableUpdate, over: onTableOver,
       delay: () => SES && SES.mode === "watch" ? opt.speed * (0.8 + Math.random() * 0.4) : 550 + Math.random() * 600,
-    });
+      info: () => ({ mode: SES ? SES.mode : "", me: SES && SES.mode !== "local" && SES.mode !== "watch" ? SES.me : -1, drill: !!(SES && SES.drill) }),
+    }, pre);
     SES.T.kick();
   }
   function onTableUpdate() {
@@ -373,7 +395,11 @@
     if (SES.mode === "online" && SES.on && SES.on.host) pushViews();
     render();
   }
-  function onTableOver() { onTableUpdate(); sfx("win"); }
+  function onTableOver() {
+    SES.T.finish();                                              // 🎞️ 기록 저장 (이 기기 최근 10판)
+    onTableUpdate(); sfx("win");
+    if (SES && SES.mode === "online" && SES.on && SES.on.host) pushRecs();
+  }
 
   // ── 그리기 ────────────────────────────────────────────────
   function act(a) {
@@ -391,6 +417,7 @@
     const r = SES.T.act(me, a);
     if (!r.ok) { if (r.err) C.toast(r.err, 1600); return r; }
     SES.memo[me] = seqBefore;
+    if (SES && SES.drill) drillCheck(a, me);
     return r;
   }
   function render() {
@@ -400,7 +427,7 @@
     $("playTitle").textContent = `${ui.emoji} ${ui.name}`;
     if (!V) { $("playSub").textContent = "연결 중…"; $("stage").innerHTML = `<p class="sv-wait">방장 화면과 맞추는 중이에요…</p>`; $("seatBar").innerHTML = ""; return; }
     const me = curMe();
-    $("playSub").textContent = ui.sub ? ui.sub(V, me) : "";
+    $("playSub").textContent = (SES.drill ? "🎯 연습 판 · " : "") + (ui.sub ? ui.sub(V, me) : "");
     $("seatBar").innerHTML = SES.seats.map((s, i) => {
       const c = ui.chip ? ui.chip(V, i, me) : {};
       const isMe = (SES.mode === "solo" || SES.mode === "online") && i === SES.me;
@@ -426,9 +453,11 @@
   //  (스테이지 padding-bottom + .sv-coachfit 클래스), 판이 쓸 수 있는 높이를 스테이지의 CSS 변수 --sv-sh 로 알려 줌.
   //  게임 CSS 는 `.sv-coachfit .판 { width: min(100%, calc(var(--sv-sh) - …)) }` 로 판을 줄이고 곁가지(안내 · 범례)는 숨김.
   //  사람이 창을 판과 상관없는 곳으로 끌어다 놓았으면(스테이지 아래쪽에 안 걸침) 건드리지 않음.
-  function fitStage() {
-    const st = $("stage"); if (!st) return;
-    const ui = SES && SES.V && !SES.pend && UIS[SES.id] ? UIS[SES.id] : null, fit = !!(ui && ui.fitCoach);
+  //  stageEl · uiArg 를 주면 그 판(복기 화면 #revStage)에 대해 같은 일을 함. 안 주면 실제 판 화면 — 복기가 열려 있는 동안은 복기 쪽만 다시 맞춤.
+  function fitStage(stageEl, uiArg) {
+    if (!stageEl && window.SVReview && SVReview.active) { SVReview.refit(); return; }
+    const st = stageEl || $("stage"); if (!st) return;
+    const ui = uiArg || (SES && SES.V && !SES.pend && UIS[SES.id] ? UIS[SES.id] : null), fit = !!(ui && ui.fitCoach);
     document.body.classList.toggle("sv-fitcoach", fit);
     st.style.paddingBottom = "";
     if (!fit) { st.classList.remove("sv-coachfit"); st.style.removeProperty("--sv-sh"); return; }
@@ -444,6 +473,7 @@
   if (coach && coach.el && window.ResizeObserver) { try { new ResizeObserver(() => { if (SES) fitStage(); }).observe(coach.el); } catch (e) {} }
   addEventListener("resize", () => { if (SES) fitStage(); });
   function updateCoach() {
+    if (window.SVReview && SVReview.active) return;               // 복기 중에는 선생님 창이 복기 글을 보여 줌
     const seat = coachSeat();
     if (seat < 0 || !SES || !SES.V) { coach.set(`<p>👀 구경 중이에요. 자리에 앉으면 내 차례마다 알려 드려요.</p>`); return; }
     const Vc = viewFor(seat); if (!Vc) return;
@@ -459,7 +489,7 @@
     if (!SES || SES.ranked === SES.g) return;
     SES.ranked = SES.g;
     const V = SES.V, me = SES.mode === "solo" || SES.mode === "online" ? SES.me : -1;
-    if (SES.mode === "watch" || !window.GRank || !V.ranks) return;
+    if (SES.mode === "watch" || SES.drill || !window.GRank || !V.ranks) return;     // 연습 판(📒)은 기록에 안 셈
     if (SES.mode === "local") { try { GRank.result(SITE, { mode: "hot", res: "d", beat: 0 }); } catch (e) {} return; }
     if (me < 0) return;
     const R = V.ranks, mine = R[me], firsts = R.filter(x => x === 0).length;
@@ -481,15 +511,35 @@
     const rows = order.map(i => `<li class="${i === me ? "me" : ""}"><span>${medal(R[i] ?? order.length)}</span><b>${esc(SES.seats[i].emoji)} ${esc(SES.seats[i].name)}</b><i>${(ui.chip && ui.chip(V, i, me).t) || ""}</i></li>`).join("");
     let extra = ""; try { extra = ui.result ? ui.result(V, me) : ""; } catch (e) {}
     let acts = "";
-    if (SES.mode !== "online") acts = `<button class="btn primary big" data-r="again">↺ 한 판 더</button><div class="two"><button class="btn" data-r="peek">👀 판 보기</button><button class="btn" data-r="home">종목 고르기</button></div>`;
+    if (SES.mode !== "online") acts = `<button class="btn primary big" data-r="again">↺ 한 판 더</button><div class="two">${revBtn()}<button class="btn" data-r="peek">👀 판 보기</button><button class="btn" data-r="home">종목 고르기</button></div>`;
     else acts = onlineActs();
     $("resBox").innerHTML = `<h2>${head}</h2><ol class="sv-rank">${rows}</ol>${extra ? `<div class="sv-resx">${extra}</div>` : ""}${acts}`;
     if (ov.hidden) { ov.hidden = false; if (me >= 0 && R[me] === 0) try { C.confetti(); } catch (e) {} }
   }
+  // 🎞️ 복기: 방금 끝난 판의 기록 (방장 · 혼자 · 한 기기 · 구경 = 내 테이블, 손님 = 방장이 끝난 뒤 보내 준 것)
+  function recNow() {
+    if (!SES || !window.SVReview) return null;
+    const T = SES.T;
+    if (T && T.over() && T.rec && T.rec.fp != null && T.rec.acts.length) return T.rec;
+    return SES.recIn && SES.recIn.g === SES.g && SES.recIn.id === SES.id ? SES.recIn.rec : null;
+  }
+  const revBtn = () => (recNow() ? `<button class="btn" data-r="review">🎞️ 복기</button>` : "");
+  function openRev(rec, fromResult) {
+    if (!window.SVReview) { C.toast("복기를 불러오지 못했어요"); return; }
+    ensure(rec.id).then(ok => {
+      if (!ok) { C.toast("이 게임을 불러오지 못했어요", 2400); return; }
+      const opened = SVReview.open({
+        rec, core: CORES[rec.id], ui: UIS[rec.id], coach, toast: (m, ms) => C.toast(m, ms), sfx, fitStage, Mistakes: window.Mistakes,
+        onClose: () => { if (fromResult && SES) { SES.resHidden = false; render(); } },
+      });
+      if (opened && fromResult && SES) { SES.resHidden = true; render(); }
+    });
+  }
   $("resBox").onclick = e => {
     const b = e.target.closest("[data-r]"); if (!b || b.disabled || !SES) return;
     const r = b.dataset.r; sfx("tap");
-    if (r === "again") startLocal(SES.mode);
+    if (r === "review") { const rec = recNow(); if (rec) openRev(rec, true); }
+    else if (r === "again") startLocal(SES.mode);
     else if (r === "home") { endSession(); showHome(); }
     else if (r === "peek") { SES.resHidden = true; render(); }
     else if (r === "next") hostNext();
@@ -641,10 +691,22 @@
       try { on.net.send(u, { t: "v", g: SES.g, id: SES.id, me: s, v: T.view(s), seats, rd: [...on.rdy], pk: Object.keys(on.pick), coach: !!on.cfg.coach }, true); } catch (e) {}
     }
   }
+  // 🎞️ 판이 끝나면 방장이 손님마다 기록(rec)을 한 번 따로 보냄 (매 수 보내는 v 에 싣지 않음 — 크기 · 숨은 패). 손님은 자기 자리(me)로 맞춰서 받음.
+  function pushRecs(only) {
+    const on = SES && SES.on, T = SES && SES.T; if (!on || !on.host || !T || !T.over() || !T.rec || T.rec.fp == null) return;
+    let size = 0; try { size = JSON.stringify(T.rec).length; } catch (e) { return; }
+    if (size > 60000) return;
+    const pl = on.net.players || {};
+    for (const u of Object.keys(pl)) {
+      if (u === on.uid || (only && u !== only)) continue;
+      const s = T.seats.findIndex(x => x.uid === u);
+      try { on.net.send(u, { t: "rec", g: SES.g, id: SES.id, rec: Object.assign({}, T.rec, { me: s, mode: "online" }) }, true); } catch (e) {}
+    }
+  }
   function hostMsg(u, m) {
     if (!m || !SES || SES.mode !== "online" || !SES.T) return;
     const on = SES.on;
-    if (m.t === "hi") { comeBack(u); pushViews(); return; }
+    if (m.t === "hi") { comeBack(u); pushViews(); if (SES.T.over()) pushRecs(u); return; }
     if (m.t === "a") {
       if (m.g !== SES.g) { pushViews(); return; }
       const s = SES.T.seats.findIndex(x => x.uid === u);
@@ -687,8 +749,21 @@
       SES.seats = (m.seats || []).map(x => ({ name: x.n, emoji: x.e, kind: x.k, sub: !!x.s, uid: x.u }));
       SES.on.rdy = new Set(m.rd || []); SES.on.pick = {}; (m.pk || []).forEach(u => { SES.on.pick[u] = 1; });
       SES.on.cfg = Object.assign({}, SES.on.cfg, { coach: !!m.coach });
-      if (newG) { SES.ranked = 0; SES.memo = {}; SES.resHidden = false; }
+      if (newG) { SES.ranked = 0; SES.memo = {}; SES.resHidden = false; SES.recIn = null; if (window.SVReview && SVReview.active) SVReview.close(true); }
       render();
+    } else if (m.t === "rec") {                                  // 🎞️ 방장이 보낸 이 판의 기록 — 모양을 확인하고 이 기기에 저장
+      const r0 = m.rec;
+      if (!r0 || typeof r0 !== "object" || r0.id !== m.id || !Array.isArray(r0.acts) || r0.acts.length < 1 || r0.acts.length > 4000 || !Array.isArray(r0.seats) || r0.seats.length !== r0.n || !(r0.n >= 1 && r0.n <= 12) || typeof r0.seed !== "number" || typeof r0.fp !== "string" || !r0.fp) return;
+      if (!entryOf(r0.id) || entryOf(r0.id).link) return;
+      if (!r0.acts.every(e => e && typeof e === "object" && (e.adv === 1 || (Number.isInteger(e.s) && e.s >= 0 && e.s < r0.n && "a" in e)))) return;
+      // 방장이 보낸 것을 그대로 쓰지 않고 모양을 다시 만들어 저장 (이름 · 이모지 길이 제한, 모르는 칸은 버림)
+      const r = { v: 1, id: r0.id, gv: r0.gv, at: +r0.at || Date.now(), mode: "online", n: r0.n, seed: r0.seed, cfg: r0.cfg && typeof r0.cfg === "object" ? r0.cfg : {},
+        seats: r0.seats.map(s => ({ kind: s && s.kind === "ai" ? "ai" : "human", tier: s && TIERS[s.tier] ? s.tier : "", name: String((s && s.name) || "").slice(0, 24), emoji: String((s && s.emoji) || "🙂").slice(0, 8) })),
+        me: Number.isInteger(r0.me) && r0.me >= 0 && r0.me < r0.n ? r0.me : -1,
+        acts: r0.acts.map(e => e.adv ? { adv: 1 } : { s: e.s, a: e.a, h: e.h ? 1 : 0 }), fp: r0.fp, ranks: Array.isArray(r0.ranks) ? r0.ranks.slice(0, 12) : null };
+      SES.recIn = { g: m.g, id: m.id, rec: r };
+      if (window.SVReview) SVReview.save(r);
+      if (SES.V && SES.V.over) drawResult();
     } else if (m.t === "err") { SES.wait = false; C.toast(m.err || "그렇게는 못 해요", 1600); render(); }
   }
   function guestReady() {
@@ -713,12 +788,12 @@
       const k = wait.filter(u => on.rdy.has(u)).length, all = k === wait.length;
       return `<div class="rdy">${chips.join("")}</div>
         <button class="btn primary big" data-r="next" ${all ? "" : "disabled"}>${all ? "다음 판 시작 ▶" : `다음 판 시작 (준비 ${k}/${wait.length})`}</button>
-        <div class="two">${!all ? `<button class="btn" data-r="force">안 기다리고 시작</button>` : ""}<button class="btn" data-r="lobby">대기실로</button><button class="btn" data-r="peek">👀 판 보기</button></div>`;
+        <div class="two">${!all ? `<button class="btn" data-r="force">안 기다리고 시작</button>` : ""}${revBtn()}<button class="btn" data-r="lobby">대기실로</button><button class="btn" data-r="peek">👀 판 보기</button></div>`;
     }
     const spec = SES.me < 0, done = on.rdy.has(me) || (spec && on.pick[me]);
     return `<div class="rdy">${chips.join("")}</div>
       <button class="btn primary big" data-r="rdy" ${done ? "disabled" : ""}>${done ? "✅ 준비 완료 · 방장을 기다려요" : spec ? "✋ 다음 판에 낄래요" : "✋ 준비"}</button>
-      <div class="two"><button class="btn" data-r="peek">👀 판 보기</button><button class="btn" data-r="leave">나가기</button></div>`;
+      <div class="two">${revBtn()}<button class="btn" data-r="peek">👀 판 보기</button><button class="btn" data-r="leave">나가기</button></div>`;
   }
   function hostUid() { const n = SES && SES.on && SES.on.net; return (n && n.meta && n.meta.host) || (SES.on.host ? SES.on.uid : (SES.seats[0] && SES.seats[0].uid)); }
 
@@ -736,6 +811,39 @@
   $("ruleBtn").onclick = () => openTutorial(opt.tab === "friend" ? null : () => startLocal(opt.tab));
   $("ruleBtn2").onclick = () => openTutorial(null);
   $("rankBtn").onclick = () => { if (window.GRank && window.Arena) Arena.init().then(() => GRank.open(SITE)).catch(() => C.toast("랭킹을 불러오지 못했어요")); };
+  $("revBtn").onclick = () => { sfx("tap"); if (!window.SVReview) { C.toast("복기를 불러오지 못했어요"); return; } SVReview.openList({ metaOf, onPick: r => openRev(r, false) }); };
+  function mstSync() {                                           // 📒 아쉬운 장면: 이 종목 모음의 남은 개수 (없으면 숨김)
+    const b = $("mstBtn"); if (!b) return;
+    let n = 0; try { n = window.Mistakes ? Mistakes.count("survival") : 0; } catch (e) { n = 0; }
+    b.hidden = !n; b.textContent = `📒 아쉬운 장면 ${n}`;
+  }
+  $("mstBtn").onclick = () => { sfx("tap"); if (window.Mistakes) Mistakes.open({ game: "survival" }); };
+  if (window.Mistakes && Mistakes.onChange) Mistakes.onChange(mstSync);
+  mstSync();
+
+  // 📒 → 연습 판: 그 장면 바로 앞까지 되감아 놓고, 내 자리에서 다시 두게 함 (판 기록 · 랭킹에는 안 셈)
+  async function startDrill(m) {
+    const d = m.drill || {}, rec = d.rec;
+    if (!rec || !Array.isArray(rec.acts) || !Array.isArray(rec.seats) || !(d.s >= 0 && d.s < rec.seats.length) || !entryOf(rec.id)) { C.toast("이 장면은 열 수 없어요", 2600); return; }
+    if (!(await ensure(rec.id))) { C.toast("이 게임을 불러오지 못했어요", 2800); return; }
+    endSession();
+    SES = newSes(rec.id, "solo"); SES.me = d.s; SES.drill = { id: m.id, s: d.s, alts: Array.isArray(d.alts) ? d.alts : [], bestText: d.bestText || "", done: false };
+    const seats = rec.seats.map((s, i) => i === d.s ? { kind: "human", name: myName(), emoji: "🙂" } : { kind: "ai", tier: TIERS[s.tier] ? s.tier : "normal", name: s.name, emoji: s.emoji });
+    showPlay();
+    try { startTable(seats, rec.cfg || {}, rec.seed, rec.acts); }
+    catch (e) { console.warn("[survival drill]", e); endSession(); showHome(); C.toast("게임 규칙이 바뀌어 이 장면은 다시 열 수 없어요", 3200); return; }
+    const need = SES.T.needs();
+    if (!need.includes(d.s)) C.toast("이 장면의 자리가 달라서 처음 위치에서 시작해요", 2600);
+    else C.toast(`🎯 연습 판 — 그 장면이에요. 다시 골라 보세요`, 2800);
+  }
+  // 연습 판에서 내가 처음 둔 수가 고급 AI 가 골랐던 수(들) 안에 있으면 ✅ (📒 에서 '해냄')
+  function drillCheck(a, seat) {
+    const D = SES && SES.drill; if (!D || D.done || seat !== D.s) return;
+    D.done = true;
+    let c = ""; try { c = SVReview.canon(a); } catch (e) {}
+    if (D.alts.includes(c)) { try { Mistakes.solved(D.id); } catch (e) {} C.toast("✅ 고급 AI 와 같은 선택이에요! 📒 에서 '해냄'으로 옮겨 뒀어요", 3600); try { sfx("win"); } catch (e) {} }
+    else C.toast(`🔸 이번엔 고급 AI 가 고른 쪽이 아니에요${D.bestText ? ` — AI 는 ${D.bestText}` : ""}. 틀린 건 아니에요, 한 번 더 해 볼까요?`, 4200);
+  }
   $("againBtn").onclick = () => { if (!SES || SES.mode === "online") return; sfx("tap"); startLocal(SES.mode); };
   C.backGuard($("backBtn"), () => {
     sfx("tap");
@@ -762,6 +870,7 @@
       const ok = await ensure(id); if (!ok) return false;
       opt.game = id; syncNav(); if (tab) opt.tab = tab; drawHome(); return true;
     },
+    act: a => act(a),                                          // 내 수 두기 (시험용 — 화면에서 누르는 것과 같은 길)
     canAct() { const me = curMe(); return !!(SES && SES.V && me >= 0 && SES.V.needs && SES.V.needs.includes(me) && !SES.wait && !SES.V.over); },
     autoAct() {
       if (!SES || !SES.V || PAUSE || !window.__survival.canAct()) return false;
@@ -786,7 +895,10 @@
     drawHome();
     if (opt.game) await ensure(opt.game);                      // 처음 보일 게임은 미리 불러 둠
     if (SES == null) drawHome();
-    if (window.ArenaUI && ArenaUI.checkUrl) ArenaUI.checkUrl(friendOpts());
+    const dm = window.Mistakes && Mistakes.fromUrl ? Mistakes.fromUrl("survival") : null;       // 📒 에서 온 연습 판 (?drill=)
+    if (dm) await startDrill(dm);
+    else if (window.ArenaUI && ArenaUI.checkUrl) ArenaUI.checkUrl(friendOpts());
+    mstSync();
     return true;
   });
 })();

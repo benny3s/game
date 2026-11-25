@@ -233,6 +233,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
   const DIFF = "방송과 다른 점: 팀전이 아니라 1:1이에요 · 서로 바꾸는 블록은 '낸 두 블록 중 큰 블록'으로 우리가 정했어요 (방송 문서에 어느 블록인지 없어요) · 히든 찬스를 둘 다 같은 라운드에 쓰면 둘 다 무작위로 한 장씩 넘겨요 · 히든 찬스 뒤 상대 손은 '가능한 경우'로 보여 줘요 · 동시에 숨겨 내서 한 기기로는 못 해요";
   window.SVUI = window.SVUI || {};
   window.SVUI.numchange = {
+    actText: a => a && a.a != null ? `블록 ${a.a} · ${a.b}${a.h ? " (히든 찬스)" : ""}` : "—",                                                   // 🎞️ 복기 행동 글
     name: "넘버 체인지", emoji: "🔢", short: "합이 큰 쪽이 점수, 큰 블록은 서로 바뀌어요", min: 2, max: 2, defN: 2, board: false,
     opts: [],
     howto: [

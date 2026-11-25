@@ -348,6 +348,7 @@
   const DIFF = "※ 방송과 다른 점: 3~6명이 해요 · 입찰은 돌아가며 한 명씩 (합이 제일 큰 사람은 차례가 안 와요) · 모두 패스해 한 명만 남으면 블록 없이도 낙찰 · 블록 추가 구매는 없고 블록 · 점수는 모두 공개 · GOOD은 장마다 ×2 · 반납한 카드는 게임에서 빠져요.";
   window.SVUI = window.SVUI || {};
   window.SVUI.numauction = {
+    actText: a => !a ? "—" : a.t === "pass" ? "패스" : a.t === "bid" ? `블록 ${(a.c || []).join(" + ")} (합 ${(a.c || []).reduce((s, v) => s + v, 0)})` : a.t === "ret" ? `돌려줄 카드 ${a.c < 10 ? a.c + 1 + "점" : "GOOD"}` : "행동",   // 🎞️ 복기 행동 글
     name: "숫자 경매", emoji: "🔨", short: "블록으로 카드를 사는 3~6명 경매", min: 3, max: 6, defN: 5, board: false,
     opts: [],
     src: SRC, diff: DIFF,

@@ -230,6 +230,7 @@
   const DIFF = "방송과 다른 점: 2~6명이 돌아가며 9번 불러요 · 순서 입찰은 없고 시작 순번이 라운드마다 한 칸씩 돌아요 · 딜러 숫자가 들어갈 칸은 무작위 · 점수는 라운드마다 가장 긴 구간 칸 수를 더해요 · 남의 시트는 라운드가 끝나야 보여요";
   window.SVUI = window.SVUI || {};
   window.SVUI.ascend = {
+    actText: a => !a ? "—" : a.t === "say" ? `${a.v} 소리침` : a.t === "put" ? `시트 ${(a.c | 0) + 1}번 칸에 적음` : "행동",                       // 🎞️ 복기 행동 글
     name: "오름차순", emoji: "📈", short: "숫자를 오름차순으로 길게 이어요", min: 2, max: 6, defN: 4, board: false,
     opts: [{ k: "rounds", label: "판 수", items: [[2, "2판 (방송)"], [3, "3판"]], def: 2 }],
     howto: [

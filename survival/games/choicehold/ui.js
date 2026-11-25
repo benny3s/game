@@ -358,6 +358,7 @@
   const DIFF = "※ 방송과 다른 점: 체크가 없고 콜이 체크 역할이에요 · 레이즈는 한 베팅에 3번까지, 둘 중 칩이 적은 쪽만큼까지만 · 카드 선택용 2장은 덱에서 뽑고 판마다 새로 섞어요 · 2차 베팅도 선이 먼저 · 40판(이월 제외)이 끝나면 칩 많은 쪽 승리.";
   window.SVUI = window.SVUI || {};
   window.SVUI.choicehold = {
+    actText: a => !a ? "—" : a.t === "place" ? `카드 ${(a.up | 0) + 1}번을 앞면으로 놓음` : a.t === "take" ? `${a.d === "up" ? "앞면" : "뒷면"} 카드를 가져감` : a.t === "raise" ? `레이즈 → ${a.to}칩` : a.t === "call" ? "콜(체크)" : a.t === "fold" ? "폴드" : "행동",   // 🎞️ 복기 행동 글
     name: "초이스 홀덤", emoji: "♠️", short: "카드를 골라 가져가는 1:1 홀덤", min: 2, max: 2, defN: 2, board: false,
     opts: [],
     src: SRC, diff: DIFF,

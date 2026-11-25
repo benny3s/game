@@ -178,6 +178,32 @@ const shotDir = val('shots', '');
           ok(res.rows >= 2 && !/undefined|NaN|\[object/.test(res.html), `${id} 결과 창 ${res.rows}줄`);
           ok((await overflow(page)) <= 0, `${id} 결과 가로 넘침`);
           await shot(page, `end-${id}`);
+          // 🎞️ 복기: 결과 창 [복기] → 열림 · 내 수 비교가 끝까지 도는지 · 끝까지 넘김 · ⏮ · 닫으면 결과 창으로
+          const rv = await page.$('#resBox [data-r="review"]');
+          ok(!!rv, `${id} 결과 창에 🎞️ 복기 단추`);
+          if (rv) {
+            await rv.click();
+            await page.waitForFunction(() => !document.getElementById('rev').hidden, null, { timeout: 8000 }).catch(() => {});
+            const o = await page.evaluate(() => ({ open: !document.getElementById('rev').hidden, stage: document.getElementById('revStage').children.length, N: +document.getElementById('revRange').max, seats: document.querySelectorAll('#revSeats .sv-seat').length, res: document.getElementById('resOv').hidden }));
+            ok(o.open && o.stage > 0 && o.N > 0 && o.seats >= 2 && o.res, `${id} 복기 열림 (판 ${o.stage}칸 · ${o.N}수 · 자리 ${o.seats} · 결과 창 숨김 ${o.res})`);
+            if (o.open) {
+              await page.waitForFunction(() => { const s = window.SVReview.stat; return !s || s.done; }, null, { timeout: 25000 }).catch(() => {});
+              const stt = await page.evaluate(() => window.SVReview.stat);
+              ok(stt && stt.done && !stt.bad, `${id} 복기 비교가 끝까지 돎 (내 수 ${stt && stt.mine} · 비교 ${stt && stt.cmps} · 같음 ${stt && stt.same} · 아쉬움 ${stt && stt.bads})${stt && stt.bad ? ' ' + stt.bad : ''}`);
+              if (stt && stt.mine > 0) ok(stt.cmps >= Math.ceil(stt.mine * 0.6), `${id} 내 수 ${stt.mine}개 중 비교된 것 ${stt.cmps}`);
+              const lbl = async () => page.evaluate(() => document.getElementById('revLbl').textContent);
+              await page.click('#revBar [data-rv="last"]');
+              ok(/끝/.test(await lbl()), `${id} ⏭ 끝까지 넘김`);
+              await page.click('#revBar [data-rv="prev"]'); await page.click('#revBar [data-rv="first"]');
+              ok(await page.evaluate(() => document.getElementById('revSub').textContent.startsWith('0 /')), `${id} ⏮ 처음으로`);
+              await page.click('#revBar [data-rv="next"]'); await page.click('#revBar [data-rv="mine"]');
+              ok(await page.evaluate(() => { const t = document.querySelector('.cpn-body'); return !!t && !/undefined|NaN|\[object/.test(t.innerText); }), `${id} 복기 선생님 글`);
+              ok((await overflow(page)) <= 0, `${id} 복기 가로 넘침`);
+              await shot(page, `review-${id}`);
+              await page.click('#revBack');
+              ok(await page.evaluate(() => document.getElementById('rev').hidden && !document.getElementById('resOv').hidden), `${id} 복기 닫으면 결과 창으로`);
+            }
+          }
         } else { await shot(page, `stuck-${id}`); }
         // 결과 창의 [종목 고르기] → 첫 화면
         await page.click('#resBox [data-r="home"]', { timeout: 4000 }).catch(() => {});
@@ -186,6 +212,66 @@ const shotDir = val('shots', '');
         ok(errs.length === 0, `${id} 콘솔 오류: ` + errs.slice(0, 3).join(' // '));
         notes.push(`${id} ${((Date.now() - t0) / 1000).toFixed(1)}초 · 내 수 ${acts}`);
       } catch (e) { fail++; console.error(`FAIL: ${id} 예외`, e.message.split('\n')[0]); }
+      await ctx.close();
+    }
+    // ── 5) 📒 → 연습 판 (?drill=): 판 하나를 끝까지 둔 기록에서 내 첫 수 앞까지 되감은 장면을 📒 에 넣고, 주소로 열어 같은 수를 두면 ✅ 해냄 · 규칙이 안 맞는 장면은 조용히 첫 화면 ──
+    {
+      const id = (only && only[0]) || 'hilo';
+      const { page, ctx, errs } = await newPage();
+      try {
+        await page.goto(url(`?g=${id}`));
+        await page.waitForFunction(() => window.__survival && window.__survival.ready, null, { timeout: 15000 });
+        await page.evaluate(() => window.__survival.ready);
+        await page.evaluate(() => window.__survival.fast(1));
+        await page.click('#tabSolo').catch(() => {}); await page.click('#startBtn');
+        for (let i = 0; i < 3000; i++) {
+          const st = await page.evaluate(() => { const s = window.__survival; s.autoAct(); return s.probe().over; });
+          if (st) break; await page.waitForTimeout(8);
+        }
+        const mk = await page.evaluate(() => {
+          const rec = JSON.parse(JSON.stringify(window.SVReview.list()[0] || null));
+          if (!rec) return null;
+          const j = rec.acts.findIndex(e => e.h && !e.adv); if (j < 0) return null;
+          const pre = JSON.parse(JSON.stringify(rec)); pre.acts = pre.acts.slice(0, j); pre.fp = ''; pre.ranks = null; pre.drill = 1;
+          const e = rec.acts[j], bad = JSON.parse(JSON.stringify(pre)); bad.acts.push({ s: e.s, a: { t: '__nope__' }, h: 1 }); bad.at = Date.now() + 1;
+          const mk1 = (p, alts, k) => window.Mistakes.add({ game: 'survival', title: 't', scene: 's', my: 'm', best: 'b', why: 'w', sev: 80, lossText: '손해 80', drill: { rec: p, k, s: e.s, bestA: e.a, alts, bestText: 'b' } });
+          return { good: mk1(pre, [window.SVReview.canon(e.a)], j), badId: mk1(bad, [], j + 1), j, a: e.a, s: e.s };
+        });
+        ok(!!mk && !!mk.good, `연습 판: ${id} 기록에서 📒 장면을 만듦`);
+        if (mk) {
+          await page.goto(url(`?drill=${mk.good}`));
+          await page.waitForFunction(() => window.__survival && window.__survival.ready, null, { timeout: 15000 });
+          await page.evaluate(() => window.__survival.ready);
+          await page.waitForFunction(() => !!window.__survival.ses && !document.getElementById('play').hidden, null, { timeout: 8000 }).catch(() => {});
+          const d = await page.evaluate(() => ({ sub: document.getElementById('playSub').textContent, can: window.__survival.canAct(), url: location.search, ses: !!window.__survival.ses }));
+          ok(d.ses && /연습 판/.test(d.sub) && !/drill/.test(d.url), `연습 판이 열림 (${d.sub}) · 주소의 drill 지움(${d.url || '없음'})`);
+          await page.waitForFunction(() => window.__survival.canAct(), null, { timeout: 6000 }).catch(() => {});
+          const r = await page.evaluate(a => { const r = window.__survival.act(a); const m = window.Mistakes.list('survival').find(x => x.solved); return { ok: !!r.ok, solved: !!m }; }, mk.a);
+          ok(r.ok, '연습 판: 같은 수를 둘 수 있음'); ok(r.solved, '연습 판: 고급 AI 가 고른 수와 같으면 📒 에서 ✅ 해냄');
+          await shot(page, 'drill');
+          // 규칙이 안 맞는 장면 → 첫 화면 + 오류 없음
+          await page.goto(url(`?drill=${mk.badId}`));
+          await page.waitForFunction(() => window.__survival && window.__survival.ready, null, { timeout: 15000 });
+          await page.evaluate(() => window.__survival.ready); await page.waitForTimeout(400);
+          ok(await page.evaluate(() => !document.querySelector('.wrap').hidden && !window.__survival.ses), '연습 판: 안 맞는 장면은 조용히 첫 화면으로');
+          await page.goto(url(`?drill=nonexistent`));
+          await page.waitForFunction(() => window.__survival && window.__survival.ready, null, { timeout: 15000 });
+          await page.evaluate(() => window.__survival.ready);
+          ok(await page.evaluate(() => !document.querySelector('.wrap').hidden), '연습 판: 없는 장면 주소도 첫 화면');
+        }
+        // 첫 화면 단추: 지난 판 · 📒
+        await page.goto(url());
+        await page.waitForFunction(() => window.__survival && window.__survival.ready, null, { timeout: 15000 });
+        await page.evaluate(() => window.__survival.ready);
+        ok(await page.evaluate(() => !document.getElementById('mstBtn').hidden && /\d/.test(document.getElementById('mstBtn').textContent)), '첫 화면: 📒 아쉬운 장면 단추에 개수');
+        await page.click('#revBtn'); await page.waitForTimeout(200);
+        ok(await page.evaluate(() => document.querySelectorAll('.overlay [data-i]').length > 0), '첫 화면: 🎞️ 지난 판 목록에 판이 있음');
+        await page.click('.overlay [data-i]'); await page.waitForFunction(() => !document.getElementById('rev').hidden, null, { timeout: 8000 }).catch(() => {});
+        ok(await page.evaluate(() => !document.getElementById('rev').hidden && document.getElementById('revStage').children.length > 0), '첫 화면: 지난 판을 눌러 복기가 열림');
+        await page.click('#revBack');
+        ok(await page.evaluate(() => document.getElementById('rev').hidden && !document.querySelector('.wrap').hidden), '첫 화면: 복기를 닫으면 첫 화면');
+        ok(errs.length === 0, '연습 판 · 지난 판 콘솔 오류: ' + errs.slice(0, 3).join(' // '));
+      } catch (e) { fail++; console.error('FAIL: 연습 판 시험 예외', e.message.split('\n')[0]); }
       await ctx.close();
     }
   } finally { await browser.close(); await srv.close(); }

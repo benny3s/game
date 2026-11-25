@@ -265,6 +265,7 @@
 
   window.SVUI = window.SVUI || {};
   window.SVUI.formula = {
+    actText: a => !a ? "—" : a.t === "decl" ? ({ H: "하이", L: "로우", S: "스윙" }[a.d] || "선언") : a.t === "eq" ? "식 두 개(하이용 · 로우용)를 냄" : a.t === "raise" ? `레이즈 → ${a.to}칩` : a.t === "call" ? "콜" : a.t === "check" ? "체크" : a.t === "fold" ? "폴드" : "행동",   // 🎞️ 복기 행동 글
     name: "수식 하이 로우", emoji: "🧮", short: "식으로 1 · 20 맞히기 + 칩", min: 2, max: 6, defN: 4, board: false,
     opts: [{ k: "rounds", label: "판 수", items: [[5, "5판"], [8, "8판"]], def: 5 }],
     howto: [

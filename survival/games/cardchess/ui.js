@@ -364,6 +364,7 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
 
   window.SVUI = window.SVUI || {};
   window.SVUI.cardchess = {
+    actText: a => { const c = i => `${Math.floor(i / 5) + 1}행 ${i % 5 + 1}열`; return a && a.t === "mv" ? `${c(a.from)} → ${c(a.to)} (카드 ${a.slot + 1})` : "—"; },   // 🎞️ 복기 행동 글
     name: "카드 체스", emoji: "♟️", short: "카드가 움직임을 정하는 5×5 1:1", min: 2, max: 2, defN: 2, board: true, fitCoach: true,
     opts: [{ k: "sets", label: "세트 수", items: [[1, "1세트"], [3, "3세트 (먼저 2승)"]], def: 3 }],
     src: SRC, diff: DIFF,

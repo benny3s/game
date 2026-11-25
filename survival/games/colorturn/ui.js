@@ -277,6 +277,7 @@ span.ct-c{cursor:default}
 
   window.SVUI = window.SVUI || {};
   window.SVUI.colorturn = {
+    actText: a => { const c = i => `${Math.floor(i / 6) + 1}행 ${i % 6 + 1}열`; return !a ? "—" : a.t === "place" ? `칩을 ${c(a.to)}에 올림` : a.t === "move" ? `칩 ${c(a.from)} → ${c(a.to)} 이동` : "행동"; },   // 🎞️ 복기 행동 글
     name: "컬러턴", emoji: "🎨", short: "숨은 지뢰 위의 칩 4목 1:1", min: 2, max: 2, defN: 2, board: true, fitCoach: true,
     src: SRC, diff: DIFF,
     howto: [

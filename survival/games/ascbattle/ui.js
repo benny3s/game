@@ -245,6 +245,11 @@
   const DIFF = "방송과 다른 점: 시트는 8칸이에요 · 카드는 뽑을 때마다 1~10 중 무작위예요 · 처음 뽑는 사람만 무작위고 그 뒤로는 번갈아 뽑아요 · 같은 칸 수면 공동 1등이에요";
   window.SVUI = window.SVUI || {};
   window.SVUI.ascbattle = {
+    actText: (a, V) => {                                                                                                                        // 🎞️ 복기 행동 글
+      if (!a) return "—";
+      if (a.t === "keep") return V && V.pair ? `${V.pair[a.k]} 을(를) 내 ${a.c + 1}번 칸에 적고 ${V.pair[1 - a.k]} 은(는) 상대에게` : `고른 카드를 내 ${a.c + 1}번 칸에 적음`;
+      return a.t === "put" ? `넘어온 ${V && V.gift ? V.gift + " 을(를) " : "카드를 "}내 ${a.c + 1}번 칸에 적음` : "행동";
+    },
     name: "배틀 오름차순", emoji: "⚔️", short: "둘이 겨뤄 오름차순을 더 길게 이어요", min: 2, max: 2, defN: 2, board: true,
     opts: [],
     howto: [

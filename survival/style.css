@@ -90,6 +90,20 @@ body.sv-fitcoach .cpn{max-height:min(21vh,190px)}
 .sv-res .rdy>span{padding:4px 9px;border-radius:99px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);white-space:nowrap}
 .sv-res .rdy>span.ok{background:rgba(22,163,74,.25);border-color:#4ade80}
 
+/* 🎞️ 복기 (review.js) */
+.sv-rev{z-index:12;background:var(--bg-grad),var(--bg)}
+.sv-rbar{flex:none;display:grid;gap:4px}
+.sv-rlbl{font:700 13px var(--round);color:#fde68a;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:18px}
+.sv-rrange{width:100%;height:26px;accent-color:var(--gold);margin:0}
+.sv-rctl{display:flex;gap:6px;justify-content:center}
+.sv-rctl button{flex:1 1 0;min-width:0;min-height:44px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.08);color:var(--ink);font:800 17px var(--round);cursor:pointer;display:grid;place-items:center;align-content:center;gap:0;padding:0 2px}
+.sv-rctl button small{font:600 10.5px var(--round);color:var(--soft)}
+.sv-rctl button[data-rv="mine"]{border-color:#86efac}
+.sv-rctl button[data-rv="bad"]{border-color:#fca5a5}
+.sv-rctl button:active{transform:scale(.96)}
+.sv-rrow{display:grid;gap:2px;text-align:left;justify-items:start;width:100%;margin:0}
+.sv-rrow small{color:var(--soft);font-size:12px}
+
 @media (max-height:700px){
   .play{gap:6px;padding-top:calc(env(safe-area-inset-top,0px) + 6px)}
   .dock button .ic{width:42px;height:42px;font-size:19px}
