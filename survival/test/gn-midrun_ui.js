@@ -116,7 +116,7 @@ async function play(browser, base, ok, label, query, vp, opts) {
     ok(!m.docx && !m.sx && !m.bad, `${label} ${vp.w}x${vp.h} ${k}: 가로 넘침/이상한 글 (docx ${m.docx}, sx ${m.sx}, bad ${m.bad})`);
     if (opts.fit) {
       ok(m.sy <= 2 && m.outB <= 2, `${label} ${vp.w}x${vp.h} ${k}: 한 화면에 안 들어감 (세로 넘침 ${m.sy}px, 아래로 ${m.outB}px ${m.who})`);
-      if ((m.sy > 2 || m.outB > 2) && vp.w === 375 && B.argv.includes('--shots') && !seen.has('shot' + k)) { seen.add('shot' + k); await page.screenshot({ path: path.join(B.shotDir(), `gn-midrun-${label}-375-FAIL-${k.replace('|', '-')}.png`) }); }
+      if ((m.sy > 2 || m.outB > 2) && B.argv.includes('--shots') && !seen.has('shot' + k)) { seen.add('shot' + k); await page.screenshot({ path: path.join(B.shotDir(), `gn-midrun-${label}-${vp.w}-FAIL-${k.replace('|', '-')}.png`) }); }
       worst.sy = Math.max(worst.sy, m.sy); worst.outB = Math.max(worst.outB, m.outB);
       if (!seen.has(k)) {
         const small = await page.evaluate(() => [...document.querySelectorAll('#stage button')].filter(b => { const r = b.getBoundingClientRect(); return r.width > 0 && (r.height < 36 || r.width < 36); }).map(b => (b.dataset ? Object.keys(b.dataset).join('') : '') + ':' + Math.round(b.getBoundingClientRect().width) + 'x' + Math.round(b.getBoundingClientRect().height)));
@@ -152,7 +152,10 @@ async function play(browser, base, ok, label, query, vp, opts) {
     ok(ONLY || totalClicks > 120, `단추를 실제로 누른 횟수 ${totalClicks}`);
     // 폰 크기 한 화면 (말 10개까지)
     const FIT = [['r9n5', 'cfg_ver=r9&n=5&seed=21'], ['r9n3', 'cfg_ver=r9&n=3&seed=22'], ['r3n5', 'cfg_ver=r3&n=5&seed=23'], ['r3n3', 'cfg_ver=r3&n=3&seed=24'], ['old', 'n=5&seed=25']];
-    for (const vp of B.VPS.filter(v => !VPW || v.w === VPW)) for (const [label, q] of FIT.filter(x => !ONLY || x[0] === ONLY)) await play(browser, base, ok, label, q, vp, { click: false, fit: label !== 'old' });   // 옛 판(ver 없음) 화면은 이번에 안 바꿨어요 — 5명일 때 세로가 넘치는 것은 이전부터 (diff 에 적음)
+    for (const vp of B.VPS.filter(v => !VPW || v.w === VPW)) for (const [label, q] of FIT.filter(x => !ONLY || x[0] === ONLY)) await play(browser, base, ok, label, q, vp, { click: false, fit: true });
+    // 실제 단추를 누르며(끌어오기 · 밀기 · 막기 · 같이 이동 단계까지) 옛 판 5명 · 새 판 5명도 한 화면인지
+    const FITC = [['oldc1', 'n=5&seed=31'], ['oldc2', 'n=5&seed=37'], ['oldc3', 'n=5&seed=41'], ['r9c', 'cfg_ver=r9&n=5&seed=43'], ['r3c', 'cfg_ver=r3&n=5&seed=47']];
+    for (const vp of B.VPS.filter(v => !VPW || v.w === VPW)) for (const [label, q] of FITC.filter(x => !ONLY || x[0] === ONLY || ONLY === 'c')) { const r = await play(browser, base, ok, label, q, vp, { click: true, fit: true }); r.seen.forEach(x => all.add(label.slice(0, 3) + ':' + x)); }
     console.log('  본 단계:', [...all].join(' '));
   });
   process.exit(fails || bad ? 1 : 0);

@@ -54,7 +54,12 @@
 .mr-opt{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%}
 .mr-opt button{padding:10px 0;border-radius:11px;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font:900 17px var(--round);cursor:pointer}
 @media (max-height:780px){.mr-c{min-height:29px}.mr-cards button{padding:8px 0;font-size:18px}.mr-info{font-size:11.5px}.mr-p{padding:2px 6px}}
-@media (max-height:690px){.mr-c{min-height:26px;padding-top:7px}.mr-k{width:13px;height:13px;font-size:8px}.mr-info.hint{display:none}.mr-p .tx{display:flex;gap:6px;align-items:baseline}.mr-cards button{padding:6px 0;font-size:16px}.mr-tg button{padding:5px 8px}.mr-md button{padding:5px 3px}}`;
+@media (max-height:690px){.mr-c{min-height:26px;padding-top:7px}.mr-k{width:13px;height:13px;font-size:8px}.mr-info.hint{display:none}.mr-p .tx{display:flex;gap:6px;align-items:baseline}.mr-p .rt{display:flex!important;gap:6px;align-items:center}.mr-cards button{padding:6px 0;font-size:16px}.mr-tg button{padding:5px 8px}.mr-md button{padding:5px 3px}}
+@media (max-height:690px) and (min-width:0){.mr-pl{gap:2px}.mr-p{padding:1px 6px}.mr-c{min-height:23px;padding-top:6px}.mr-ln{min-height:13px;font-size:11px}.mr-box,.mr-tg,.mr-md{gap:4px}}
+.mr-tg button,.mr-md button{min-height:36px}
+@media (max-height:690px){.mr-tg.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(60px,1fr))}.mr-tg.g .lb{display:none}.mr-tg.g button{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:2px 2px}.mr-tg.g .pp{font-size:10.5px;font-weight:700;opacity:.85}}
+@media (max-height:650px){.mr-n5 .mr-info.ask{display:none}}
+.mr-n5 .mr-p .tx{display:flex;gap:6px;align-items:baseline}.mr-n5 .mr-p .rt{display:flex!important;gap:6px;align-items:center}.mr-n5 .mr-pl{gap:2px}.mr-n5 .mr-p{padding:1px 6px}.mr-n5 .mr-c{min-height:26px;padding-top:7px}.mr-n5 .mr-ln{min-height:13px}.mr-n5 .mr-info.hint{display:none}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats[i] && ctx.seats[i].name) || `${i + 1}번`;
@@ -79,7 +84,7 @@
       const winner = V.over && V.ranks[s] === 0;
       const cls = [s === me && !watch ? "me" : "", V.cur === s && !V.over ? "cur" : "", V.fin[s] >= 0 && !V.over ? "fin" : "", winner ? "win" : ""].join(" ");
       const hand = V.fin[s] >= 0 ? "" : `<div class="mr-h">${G.SETC.map(c => `<b class="${V.hand[s].includes(c) ? "" : "u"}">${c}</b>`).join("")}</div>`;
-      return `<div class="mr-p ${cls}"><span class="mr-k" style="background:${COL[s % 5]};width:18px;height:18px;font-size:10px">${ini(ctx, me, watch, s)}</span><div class="tx"><div class="nm">${who(ctx, me, watch, s)} ${sil ? "🔇" : ""}</div><div class="ab">${a.em} ${a.name}${sil ? " (막힘)" : ""}</div></div>${V.fin[s] >= 0 ? `<span class="ps">🏁 ${place(s)}등</span>` : `<div style="display:grid;gap:1px;justify-items:end"><span class="ps">${V.pos[s]}칸</span>${hand}</div>`}</div>`;
+      return `<div class="mr-p ${cls}"><span class="mr-k" style="background:${COL[s % 5]};width:18px;height:18px;font-size:10px">${ini(ctx, me, watch, s)}</span><div class="tx"><div class="nm">${who(ctx, me, watch, s)} ${sil ? "🔇" : ""}</div><div class="ab">${a.em} ${a.name}${sil ? " (막힘)" : ""}</div></div>${V.fin[s] >= 0 ? `<span class="ps">🏁 ${place(s)}등</span>` : `<div class="rt" style="display:grid;gap:1px;justify-items:end"><span class="ps">${V.pos[s]}칸</span>${hand}</div>`}</div>`;
     }).join("")}</div>`;
   }
   function logLine(V, ctx, me, watch) {
@@ -96,11 +101,12 @@
   }
   function renderOld(stage, V, ctx) {
     style();
+    if (stage.classList) stage.classList.toggle("mr-n5", V.n >= 5);   // 5명이면 줄을 더 촘촘히 (폰 한 화면)
     const me = ctx.me, watch = ctx.mode === "watch" || me < 0, S = rs(V, ctx);
     const mine = !watch && ctx.canAct && V.needs.includes(me) && !V.over;
     const myAb = watch ? null : G.AB[V.ab[me]], wTxt = V.W.map(w => `${w}등`).join("·");
     let h = `<div class="mr-top"><span class="mr-rd">🏃 ${V.over ? "끝" : `${V.round + 1}라운드`}</span><span class="mr-bg">${V.over ? "" : `우승 = ${wTxt}으로 골인${myAb ? ` · 내 능력 ${myAb.em} ${myAb.name}` : ""}`}</span></div>`;
-    h += trackHtml(V, ctx, me, watch) + playersHtml(V, ctx, me, watch);
+    h += trackHtml(V, ctx, me, watch) + (V.over ? "" : playersHtml(V, ctx, me, watch));   // 끝 화면은 아래 순위 목록이 같은 내용이라 줄여서 폰 한 화면에
     if (V.over) {
       h += `<div class="mr-rs">${V.places.map((s, i) => `<div class="mr-rw ${s === me && !watch ? "me" : ""} ${V.ranks[s] === 0 ? "win" : ""}"><b>${i + 1}등${V.fin[s] >= 0 ? " 골인" : " (미골인)"} · ${who(ctx, me, watch, s)}</b> ${V.ranks[s] === 0 ? "🏆 우승" : V.fin[s] < 0 ? `(${V.pos[s]}칸에서 끝)` : ""}</div>`).join("")}</div>`;
       const first = V.ranks.map((x, i) => (x === 0 ? i : -1)).filter(i => i >= 0);
@@ -121,10 +127,10 @@
       const last = hand.length === 1, wt = V.ab[me] === "with" && !G.silenced(st, me) && last ? G.withTargets(st, me) : [];
       if (S.mode === "grav" && !gt.length) S.mode = "move";
       if (canGrav) h += `<div class="mr-md"><button data-mode="move" class="${S.mode === "move" ? "on" : ""}">🏃 카드로 이동</button><button data-mode="grav" class="${S.mode === "grav" ? "on" : ""}" ${gt.length ? "" : "disabled"}>🧲 이동 대신 끌어오기</button></div>`;
-      if (canGrav && S.mode === "grav") h += `<div class="mr-tg"><span class="lb">끌어올 사람</span>${gt.map(t => `<button data-gt="${t}" class="${S.tg === t ? "on" : ""}">${who(ctx, me, watch, t)} (${V.pos[t]}칸)</button>`).join("")}</div>`;
+      if (canGrav && S.mode === "grav") h += `<div class="mr-tg g"><span class="lb">끌어올 사람</span>${gt.map(t => `<button data-gt="${t}" class="${S.tg === t ? "on" : ""}">${who(ctx, me, watch, t)} <span class="pp">(${V.pos[t]}칸)</span></button>`).join("")}</div>`;
       if (wt.length) h += `<div class="mr-tg"><span class="lb">🤝 같이 이동할 사람 (마지막 카드)</span><button data-w="-1" class="${S.w === null ? "on" : ""}">없음</button>${wt.map(t => `<button data-w="${t}" class="${S.w === t ? "on" : ""}">${who(ctx, me, watch, t)}</button>`).join("")}</div>`;
       const needTg = canGrav && S.mode === "grav" && S.tg === null;
-      h += `<div class="mr-info ${S.mode === "grav" && S.tg === null ? "" : "hint"}">${S.mode === "grav" ? (S.tg === null ? "끌어올 사람을 먼저 골라요" : "버릴 카드를 골라요 (이동은 안 해요)") : "이동할 카드를 골라요 — 카드 수만큼 앞으로 가요"}</div><div class="mr-cards">${G.SETC.map(k => `<button data-c="${k}" class="${hand.includes(k) && !needTg ? "go" : ""}" ${hand.includes(k) && !needTg ? "" : "disabled"}>${k}</button>`).join("")}</div>`;
+      h += `<div class="mr-info ${S.mode === "grav" && S.tg === null ? "ask" : "hint"}">${S.mode === "grav" ? (S.tg === null ? "끌어올 사람을 먼저 골라요" : "버릴 카드를 골라요 (이동은 안 해요)") : "이동할 카드를 골라요 — 카드 수만큼 앞으로 가요"}</div><div class="mr-cards">${G.SETC.map(k => `<button data-c="${k}" class="${hand.includes(k) && !needTg ? "go" : ""}" ${hand.includes(k) && !needTg ? "" : "disabled"}>${k}</button>`).join("")}</div>`;
     }
     stage.innerHTML = h;
     stage.onclick = e => {
@@ -182,7 +188,7 @@
 .mr-st .mr-sl{display:flex;flex-wrap:wrap;gap:2px;align-items:center}
 .mr-st .mr-wn{font:800 11px var(--round);color:#fde68a;white-space:nowrap}
 .mr-tg.n button{min-height:38px}
-@media (max-height:660px){.mr-st{min-height:13px}.mr-c{min-height:22px;padding-top:6px}.mr-ln{min-height:12px;font-size:11px}.mr-info{line-height:1.3}.mr-tg.n button{min-height:36px;padding-top:3px;padding-bottom:3px}.mr-cards.n button{padding:4px 0}}
+@media (max-height:660px){.mr-tg.n{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:3px}.mr-tg.n .lb{grid-column:1/-1;text-align:center;line-height:1.1}.mr-tg.n button{display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1}.mr-fin:empty{display:none}.mr-tg.n button .l2{display:block;line-height:1;font-size:11px}.mr-tg.n button{padding:1px 2px!important}.mr-pc{padding:0 5px}.mr-pc .nm,.mr-pc .ps{line-height:1.15}.mr-st{min-height:13px}.mr-c{min-height:22px;padding-top:6px}.mr-ln{min-height:12px;font-size:11px}.mr-info{line-height:1.3}.mr-tg.n button{min-height:36px;padding-top:3px;padding-bottom:3px}.mr-cards.n button{padding:4px 0}}
 .mr-rs.two{grid-template-columns:1fr 1fr}
 .mr-rs.two .mr-rw{padding:4px 6px;font-size:11.5px}
 .mr-rw small{font:700 10px var(--round);color:#94a3b8}
@@ -308,7 +314,7 @@
       const a = abOf(V, cp);
       h += `<div class="mr-info">${watch ? "구경 중 · " : ""}${who(ctx, me, watch, V.cur)} 차례예요 — ${a.em} ${a.name}${V.job ? ` (${({ push: "푸시", uni: "유니온", onc: "원", mir: "미러", rst: "리셋", del: "딜리트", dk: "딜리트", off: "오퍼", cpy: "카피" })[V.job.k] || ""} 선택)` : ""}: ${a.d}</div>`;
     } else {
-      const j = V.job, pn = p => pName(V, ctx, me, watch, p, true), lab = p => `${abOf(V, p).em} ${abOf(V, p).name}${V.ver === "r3" ? "" : ` <small>${who(ctx, me, watch, V.ow[p])}</small>`} <small>${V.pos[p]}칸</small>`;
+      const j = V.job, pn = p => pName(V, ctx, me, watch, p, true), lab = p => `<span class="l1">${abOf(V, p).em} ${abOf(V, p).name}</span> <span class="l2">${V.ver === "r3" ? "" : `<small>${who(ctx, me, watch, V.ow[p])}</small> `}<small>${V.pos[p]}칸</small></span>`;
       h += `<div class="mr-info${V.phase === "card" && S.mode !== "grav" ? " hint" : ""}">${infoN(V, ctx, me, watch, acts, S)}</div>`;
       const btn = (i, label, on) => `<button data-i="${i}" class="${on ? "on" : ""}">${label}</button>`;
       if (V.phase === "card") {

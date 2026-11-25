@@ -36,7 +36,7 @@
     src: "더 지니어스 시즌 2 흑과 백 · 9화 · 11화 (베니 지니어스 모음에서 하기)" },
 
   // ── 시즌 3 블랙가넷 (양면포커 · 베팅 가위바위보는 시즌 4 그랜드 파이널에도 나와요 — 판 선택에서 골라요) ──
-  { id: "gn-midrun", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "중간 달리기", emoji: "🏃", v: 3,
+  { id: "gn-midrun", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "중간 달리기", emoji: "🏃", v: 4,
     short: "1등도 꼴찌도 아닌 중간으로 골인 · 방송 3화 · 9화 판 · 능력 13개",
     src: "더 지니어스 시즌 3 중간 달리기 · 3화 · 9화 메인 매치 · 9화 디글 클래식 「랜덤게임 중간 달리기」 규칙 설명 · 9화 도입 클립 확인 (3화는 영상 못 구해 나무위키 · 예고 영상 기준)" },
   { id: "gn-fruit", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "과일가게", emoji: "🍎", v: 2,
