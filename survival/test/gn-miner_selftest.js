@@ -66,7 +66,7 @@ const bidAll = (st, f) => { for (const s of G.needs(st).slice()) ap(st, s, { t: 
   ok(!ap(st, 3, { t: 'draw' }).ok, '제시 단계에는 꺼낼 수 없어요');
   ok(ap(st, 3, { t: 'bid', v: 12 }).ok && !ap(st, 3, { t: 'bid', v: 5 }).ok, '한 번만 제시해요');
   ok(G.view(st, 3).mineBid === 12 && G.view(st, 4).mineBid === null && G.view(st, 0).mineBid === null, '내 제시만 보여요');
-  ok(G.view(st, 4).bids === null && G.view(st, 0).bids === null && G.view(st, -1).bids && G.view(st, -1).bids[3] === 12, '다른 사람 제시는 비밀 (AI 구경 · 다 보기만 보여요)');
+  ok(G.view(st, 4).bids === null && G.view(st, 0).bids === null && G.view(st, -1).bids === null && G.view(st, 'all').bids && G.view(st, 'all').bids[3] === 12, '다른 사람 제시는 비밀 (AI 구경 · 다 보기만 보여요 · 온라인 구경꾼은 못 봄)');
   ok(G.view(st, 0).bidDone[3] === true && G.view(st, 0).bidDone[4] === false, '누가 제시했는지는 모두 알아요');
   ok(G.needs(st).join() === '4,5,6,7,8', '남은 제시자');
 }

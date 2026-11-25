@@ -146,7 +146,7 @@
 
   // ── 보이는 것 ─────────────────────────────────────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), me = typeof seat === "number" && seat >= 0 ? seat : -1;
+    const all = seat === "all", me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const t = tally(st.drawn), left = leftOf(st.drawn);
     const bidDone = Array(N).fill(false); for (const s of Object.keys(st.bids)) bidDone[+s] = true;
     const tsc = [0, 1, 2].map(g => tsum(st, g));
