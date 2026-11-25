@@ -323,7 +323,9 @@
     for (const h of V.hist || []) { if (!h.bz) continue; n++; if (h.bz[opp] < NO_BUZZ) { pressed++; tot += h.bz[opp]; } if (h.first === opp && !(h.bz[0] >= NO_BUZZ && h.bz[1] >= NO_BUZZ)) first++; }
     return { n, pressed, first, avg: pressed ? tot / pressed : 0 };
   }
-  function coach(V, me, since, names) {
+  // opt.full 이 아니면 💡 는 단계 힌트 — 정답 식(칸 · 값)은 가리고 '있다 · 쓰는 기호' 만, '한 번 더' 를 눌러야 전체 (opt.full)
+  function coach(V, me, since, names, opt) {
+    const full = !!(opt && opt.full);
     me = me === 1 ? 1 : me === 0 ? 0 : (V.seat === 1 ? 1 : 0);
     const nm = i => (names && names[i]) || `${i + 1}번`;
     const opp = 1 - me, who = nm(opp), S = V.score, goal = V.goal;
@@ -341,11 +343,13 @@
     if (V.phase === "buzz") {
       const rc = recommend(V), nSure = rc.sure.length, T = V.target;
       const opp1 = `${who}도 타깃 ${T}${eul(T)} 보고 있어요.${stat}`;
-      const mine = `${scoreTxt} · 공개된 칸 ${nRev}/16 · 타깃 ${T}${nSure ? `${iga(T)} 공개된 칸만으로 ${rc.sure.map(c => formulaOf(c, rc.known)).join(" / ")} 처럼 만들어져요` : `${iga(T)} 공개된 칸만으로는 아직 못 만들어요`}`;
+      const opS = nSure ? rc.known[rc.sure[0][1]] : "", hint1 = nSure ? `공개된 칸만으로 만들 수 있어요 (쓰는 기호는 ${opS})` : `공개된 칸만으로는 확실한 식이 아직 없어요`;
+      const mine = `${scoreTxt} · 공개된 칸 ${nRev}/16 · 타깃 ${T}${nSure ? `${iga(T)} ${full ? `공개된 칸만으로 ${rc.sure.map(c => formulaOf(c, rc.known)).join(" / ")} 처럼 만들어져요` : "공개된 칸만으로 만들어져요"}` : `${iga(T)} 공개된 칸만으로는 아직 못 만들어요`}`;
       if (V.mine) return { opp: opp1, mine, rec: "버저를 눌렀어요 — 상대가 누른 시간과 견주는 중이에요", why: `누른 시간이 더 빠른 쪽이 5초 안에 호명할 기회를 얻어요 (같으면 딜러가 정해요).` };
-      if (nSure) return { opp: opp1, mine, rec: `지금 바로 버저! 호명 ${callTxt(rc.sure[0], rc.known)}`, why: `정답 확률 100% (공개된 칸의 식 ${formulaOf(rc.sure[0], rc.known)} = ${T}) · 새로 공개되는 칸 ${rc.sure[0].filter(i => !V.rev[i]).length}개 → 상대에게 줄 정보도 없어요.` };
+      if (nSure) return full ? { opp: opp1, mine, rec: `지금 바로 버저! 호명 ${callTxt(rc.sure[0], rc.known)}`, why: `정답 확률 100% (공개된 칸의 식 ${formulaOf(rc.sure[0], rc.known)} = ${T}) · 새로 공개되는 칸 ${rc.sure[0].filter(i => !V.rev[i]).length}개 → 상대에게 줄 정보도 없어요.` }
+        : { opp: opp1, mine, rec: `${hint1} — 풀이가 보이면 바로 버저!`, why: `식이 떠오르면 눌러요. 전체 풀이(칸 · 식)는 '한 번 더' 로 볼 수 있어요.`, more: true };
       const b = rc.best;
-      return { opp: opp1, mine, rec: `외운 칸으로 풀이가 떠오르면 버저, 아니면 넘기기 (추측이라면 ${callTxt(b.c, rc.known)})`, why: `공개된 칸만 보면 가장 높은 호명도 정답 확률 약 ${pc(b.p)}예요 · 새로 공개되는 칸 ${b.newc}개 → 틀리면 상대가 그 칸을 보고 호명해요. 둘 다 안 누르면 딜러가 순서를 정해요.` };
+      return { opp: opp1, mine, rec: `외운 칸으로 풀이가 떠오르면 버저, 아니면 넘기기${full ? ` (추측이라면 ${callTxt(b.c, rc.known)})` : ""}`, why: `공개된 칸만 보면 가장 높은 호명도 정답 확률 약 ${pc(b.p)}예요 · 새로 공개되는 칸 ${b.newc}개 → 틀리면 상대가 그 칸을 보고 호명해요. 둘 다 안 누르면 딜러가 순서를 정해요.${full ? "" : " 추측할 호명은 '한 번 더' 로 볼 수 있어요."}`, more: !full };
     }
     if (V.phase === "call") {
       const mineTurn = V.caller === me, T = V.target;
@@ -355,10 +359,11 @@
       const opp1 = mineTurn ? `${who}${eun(who)} 호명을 기다리는 중이에요.${first}${last}` : `${who}${iga(who)} 호명하는 중이에요 — ${V.calls}번째 기회예요.${first}${last}`;
       const rc = recommend(V), nSure = rc.sure.length;
       const mine = `${scoreTxt} · 공개된 칸 ${nRev}/16 · 이번 라운드 호명 ${V.calls}번째 (24번째 호명까지 못 맞히면 무효)`;
-      if (!mineTurn) return { opp: opp1, mine, rec: "상대가 호명하는 동안 방금 공개된 칸을 다시 외워요", why: `틀리면 내 차례예요. 지금 공개된 칸 ${nRev}개로 타깃 ${T}${eul(T)} 만드는 식: ${nSure ? rc.sure.map(c => formulaOf(c, rc.known)).join(" / ") : "아직 없어요"}.` };
-      if (nSure) return { opp: opp1, mine, rec: `${callTxt(rc.sure[0], rc.known)} (숫자 → 기호 → 숫자)`, why: `정답 확률 100% (${formulaOf(rc.sure[0], rc.known)} = ${T}) · 새로 공개되는 칸 ${rc.sure[0].filter(i => !V.rev[i]).length}개.` };
+      if (!mineTurn) return { opp: opp1, mine, rec: "상대가 호명하는 동안 방금 공개된 칸을 다시 외워요", why: `틀리면 내 차례예요. 지금 공개된 칸 ${nRev}개로 타깃 ${T}${eul(T)} 만드는 식: ${nSure ? (full ? rc.sure.map(c => formulaOf(c, rc.known)).join(" / ") : `있어요 (쓰는 기호 ${rc.known[rc.sure[0][1]]}) — 식은 '한 번 더' 로`) : "아직 없어요"}.`, more: !!nSure && !full };
+      if (nSure) return full ? { opp: opp1, mine, rec: `${callTxt(rc.sure[0], rc.known)} (숫자 → 기호 → 숫자)`, why: `정답 확률 100% (${formulaOf(rc.sure[0], rc.known)} = ${T}) · 새로 공개되는 칸 ${rc.sure[0].filter(i => !V.rev[i]).length}개.` }
+        : { opp: opp1, mine, rec: `공개된 칸만으로 확실한 식이 있어요 (쓰는 기호는 ${rc.known[rc.sure[0][1]]}) — 숫자 → 기호 → 숫자로 불러요`, why: `정답 확률 100% · 새로 공개되는 칸 ${rc.sure[0].filter(i => !V.rev[i]).length}개. 어느 칸인지는 '한 번 더' 로 볼 수 있어요.`, more: true };
       const b = rc.best;
-      return { opp: opp1, mine, rec: `${callTxt(b.c, rc.known)} (숫자 → 기호 → 숫자)`, why: `공개된 칸 기준 가장 높은 확률 ${pc(b.p)} · 새로 공개되는 칸 ${b.newc}개 — 틀려도 상대에게 주는 정보는 이 칸들이에요. 외운 칸으로 아는 식이 있으면 그걸 우선!` };
+      return { opp: opp1, mine, rec: full ? `${callTxt(b.c, rc.known)} (숫자 → 기호 → 숫자)` : `정답이 확실한 식은 없어요 — 가장 그럴듯한 호명을 '한 번 더' 로 볼 수 있어요`, why: `공개된 칸 기준 가장 높은 확률 ${pc(b.p)} · 새로 공개되는 칸 ${b.newc}개 — 틀려도 상대에게 주는 정보는 이 칸들이에요. 외운 칸으로 아는 식이 있으면 그걸 우선!`, more: !full };
     }
     // show: 방금 호명의 결과
     const T = V.target;

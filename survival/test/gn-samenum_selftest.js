@@ -187,12 +187,33 @@ const mk = (cfg, seed) => G.init({ n: 2, seed: seed || 1, cfg: Object.assign({ b
       const s = st.caller, V = G.view(st, s), rc = G.recommend(V), cc = G.coach(V, s, -1, ['나', '상대']);
       const hardNoMem = G.aiWith(V, s, Object.assign({}, G.PROF.hard, { mem: 0, err: 0, wild: 0 }), r);
       tot++; if (hardNoMem.c.join() === rc.best.c.join()) same++;
-      ok(/→/.test(cc.rec), '차례인 선생님 추천에 호명이 있다: ' + cc.rec);
+      const cf = G.coach(V, s, -1, ['나', '상대'], { full: true });
+      ok(/→/.test(cf.rec), '(한 번 더) 차례인 선생님 추천에 호명이 있다: ' + cf.rec);
+      // 💡 단계 힌트: 처음엔 정답 호명 · 식을 통째로 말하지 않고 more 로 '한 번 더' 를 안내, 한 번 더 에서 전체
+      const cl = rc.sure.length ? rc.sure[0] : rc.best.c, callS = cl.map(i => G.LET[i] + (rc.known[i] !== undefined ? `(${rc.known[i]})` : '')).join(' → ');
+      ok(!JSON.stringify(cc).includes(callS) && cc.more === true && JSON.stringify(cf).includes(callS), '💡 처음엔 호명 전체를 가리고 한 번 더 에서 보임: ' + cc.rec);
+      if (rc.sure.length) { const f = rc.sure[0].map(i => rc.known[i]).join(' '); ok(!JSON.stringify(cc).includes(f) && JSON.stringify(cf).includes(f), '💡 처음엔 식(' + f + ')을 가림'); }
       G.apply(st, s, hardNoMem); if (st.phase === 'show') G.advance(st);
     }
   }
   ok(same === tot, `선생님 추천 = 기억 없이 공개된 칸만 쓴 고급 AI 의 호명 (${same}/${tot})`);
   console.log(`  추천 = 고급 AI 호명 ${same}/${tot}`);
+  // 부르기 전 버저 단계도: 식을 처음엔 안 보여 줌
+  let bz = 0;
+  for (let k = 0; k < 40; k++) {
+    const st = G.init({ n: 2, seed: 1300 + k, cfg: {} });
+    ready(st);
+    for (let q = 0; q < 6 && st.phase !== 'end'; q++) {
+      if (st.phase === 'buzz') {
+        const V = G.view(st, 0), rc = G.recommend(V);
+        if (rc.sure.length) { const f = rc.sure[0].map(i => rc.known[i]).join(' '), c1 = G.coach(V, 0, -1, ['나', '상대']), c2 = G.coach(V, 0, -1, ['나', '상대'], { full: true }); bz++; ok(!JSON.stringify(c1).includes(f) && JSON.stringify(c2).includes(f) && c1.more, '버저 단계 💡 도 단계 힌트: ' + c1.rec); }
+        G.apply(st, 0, { t: 'buzz', ms: 100 }); G.apply(st, 1, { t: 'buzz', ms: 200 });
+      }
+      if (st.phase === 'call') { const s = st.caller, V = G.view(st, s); G.apply(st, s, G.aiWith(V, s, Object.assign({}, G.PROF.hard, { mem: 0, err: 0, wild: 0 }), mulberry(q))); }
+      if (st.phase === 'show') G.advance(st);
+    }
+  }
+  console.log(`  버저 단계 단계힌트 ${bz}번`);
 }
 
 // 7) AI 끼리 무작위 판 — 합법 수만 두고, 끝까지 가고, 같은 씨앗이면 같다

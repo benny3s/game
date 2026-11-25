@@ -355,6 +355,26 @@
     return null;
   }
 
+  // 💡 는 단계 힌트: 처음엔 '식이 있다 · 쓰는 기호' 만, '한 번 더' 를 누르면 칸 · 식 전체 (그 차례 동안 펼친 채)
+  let HINT = { key: "", open: false, full: "" };
+  function coachHint(V, me, since, names) {
+    const key = `${V.pub}|${V.round}|${V.calls}|${V.phase}|${me}`;
+    if (HINT.key !== key) HINT = { key, open: false, full: "" };
+    const c = G.coach(V, me, since, names, { full: HINT.open });
+    if (c && c.more && !HINT.open) {
+      const f = G.coach(V, me, since, names, { full: true });
+      HINT.full = `<b>${f.rec}</b> ${f.why || ""}`;
+      c.why = `${c.why || ""} <button type="button" class="sn-hbtn" data-snhint style="margin:2px 4px 2px 0;padding:5px 10px;border-radius:999px;border:1px solid rgba(250,204,21,.55);background:rgba(250,204,21,.12);color:#fde68a;font:800 12.5px var(--round);cursor:pointer">💡 한 번 더 — 전체 식 보기</button>`;
+    }
+    return c;
+  }
+  if (typeof document !== "undefined") document.addEventListener("click", e => {
+    const b = e.target && e.target.closest && e.target.closest("[data-snhint]");
+    if (!b) return;
+    e.preventDefault(); HINT.open = true;
+    const sp = document.createElement("span"); sp.innerHTML = HINT.full; b.replaceWith(sp);
+  }, true);
+
   window.SVUI = window.SVUI || {};
   window.SVUI["gn-samenum"] = {
     name: "같은 숫자 찾기", emoji: "🔢", short: "외운 판으로 타깃넘버를 만들어요 · 버저 + 호명 3칸", min: 2, max: 2, defN: 2, board: true, fitCoach: true,
@@ -374,11 +394,12 @@
       "<b>먼저 버저</b>를 누른 사람이 <b>5초 안에</b> 알파벳 3개를 <b>숫자 → 기호 → 숫자</b> 순서로 호명해요 — 부른 칸의 뒷면이 공개돼요",
       "식이 타깃과 같으면 <b>승점 1</b> · 틀리거나 5초를 넘기면 <b>상대에게 기회</b> (번갈아, 정답이 나올 때까지)",
       "<b>먼저 10점</b>을 얻으면 승리",
+      "<b>특수</b> — 한 라운드에서 호명이 <b>24번</b>을 넘으면 그 라운드는 <b>무효</b>예요 (끝없는 판을 막으려는 우리 판 상한, 방송엔 없어요)",
     ],
     sub: V => (V.over ? "끝" : `${V.round}라운드 · 먼저 ${V.goal}점`),
     chip: (V, i) => ({ t: `${V.score[i]}점`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result, actText, review,
-    coach: (V, me, since, names) => G.coach(V, me, since, names),
+    coach: coachHint,
     qa, tutorial,
   };
 })();
