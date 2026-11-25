@@ -17,6 +17,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   const NO_BUZZ = 99999, WINDOW = 60000, MAXH = 16, MAXN = 9999999, RDN = 3 * 16 + 8;
+  const HMIN = (typeof window !== "undefined" && window.SVHuman && window.SVHuman.MIN) || 120;
   const ITEMS = ["double", "safe", "secret"];
   const ITEM_NAME = { double: "더블 스코어", safe: "무감점", secret: "시크릿" };
 
@@ -199,7 +200,7 @@
     }
     if (st.phase === "buzz") {
       if (a.t !== "buzz" || typeof a.ms !== "number" || !Number.isFinite(a.ms)) return { ok: false, err: "버저를 눌러요 (모르면 넘기기)" };
-      const ms = Math.max(0, Math.round(a.ms));
+      const ms = Math.max(HMIN, Math.round(a.ms));                 // 사람 반응 바닥(셸 SVHuman.MIN, 120ms) — 손님 기기가 0 을 보내도 늘 먼저가 되지 않게
       st.bz[seat] = ms >= WINDOW ? NO_BUZZ : ms;
       if (st.bz[0] !== null && st.bz[1] !== null) resolveBuzz(st);
       return { ok: true };

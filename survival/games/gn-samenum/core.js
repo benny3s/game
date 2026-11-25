@@ -19,6 +19,7 @@
   const NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   const OPS = { 3: ["+", "−", "×", "÷"], 4: ["+", "×", "÷", "√"] };
   const NO_BUZZ = 99999, MAXCALLS = 24, MEMPOOL = 12, MIN_MS = 800;   // AI 는 0.8초보다 빨리는 안 눌러요
+  const HMIN = (typeof window !== "undefined" && window.SVHuman && window.SVHuman.MIN) || 120;
   const isOp = v => typeof v === "string", isNum = v => typeof v === "number";
 
   function rnd(st) {
@@ -130,7 +131,8 @@
     }
     if (st.phase === "buzz") {
       if (a.t !== "buzz" || typeof a.ms !== "number" || !Number.isFinite(a.ms)) return { ok: false, err: "버저를 눌러요" };
-      st.bz[seat] = Math.max(0, Math.min(NO_BUZZ, Math.round(+a.ms)));
+      const r = Math.round(+a.ms);                                  // 사람 반응 바닥(셸 SVHuman.MIN, 120ms) — 손님 기기가 0 을 보내도 늘 먼저가 되지 않게 · NO_BUZZ(안 누름)는 그대로
+      st.bz[seat] = r >= NO_BUZZ ? NO_BUZZ : Math.max(HMIN, Math.min(NO_BUZZ, r));
       if (st.bz[0] !== null && st.bz[1] !== null) resolveBuzz(st);
       return { ok: true };
     }

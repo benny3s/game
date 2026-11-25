@@ -118,8 +118,13 @@ const mk = (cfg, seed) => G.init({ n: 2, seed: seed || 1, cfg: Object.assign({ b
   ok(win(0).ok && G.over(st) && st.phase === 'end' && G.needs(st).length === 0, '먼저 5점이면 끝');
   ok(G.ranks(st).join() === '0,1' && G.view(st, 0).ranks.join() === '0,1', '순위');
   const o = mk({ goal: 7 }, 3); ok(G.view(o, 0).goal === 7 && G.view(mk({ goal: 99 }, 3), 0).goal === 10, '목표 점수 옵션 5 · 7 · 10 (기본 10 = 방송)');
-  const z = mk({ targets: [12] }, 3); ready(z); G.apply(z, 0, { t: 'buzz', ms: 1 }); G.apply(z, 1, { t: 'buzz', ms: 2 }); G.apply(z, 0, { t: 'call', c: [0, 4, 9] }); G.advance(z);
+  const z = mk({ targets: [12] }, 3); ready(z); G.apply(z, 0, { t: 'buzz', ms: 200 }); G.apply(z, 1, { t: 'buzz', ms: 300 }); G.apply(z, 0, { t: 'call', c: [0, 4, 9] }); G.advance(z);
   ok(G.over(z), '타깃이 바닥나면 점수로 끝남');
+  // 사람 반응 바닥: 손님 기기가 ms 0 을 보내도 120ms 로 (안 누름 NO_BUZZ 는 그대로)
+  const h = mk({ targets: [12] }, 3); ready(h); G.apply(h, 0, { t: 'buzz', ms: 0 });
+  ok(h.bz[0] === 120, '버저 ms 0 → 사람 바닥 120ms');
+  const h2 = mk({ targets: [12] }, 3); ready(h2); G.apply(h2, 1, { t: 'buzz', ms: 99999 });
+  ok(h2.bz[1] === 99999, '안 누름(NO_BUZZ)은 바닥에 안 걸림');
 }
 
 // 5) 숨은 정보
