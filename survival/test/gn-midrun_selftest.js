@@ -397,7 +397,15 @@ const tgs = st => G.actions(st).map(a => a.tg).join();
   const st = mkN('r9', ['grav', 'push', 'del', 'offer', 'with', 'union']);
   const V0 = G.view(st, 0);
   ok(V0.ver === 'r9' && V0.W.join() === '3,4' && V0.need === 4 && V0.cur === G.cur(st), 'view 에 판 · 우승 순위 · 끝나는 골인 수');
-  ok(V0.hand.every(h => h && h.join() === '1,2,3,4'), '처음엔 모든 말의 카드가 공개된 세트라 알아요 (낸 카드만 공개)');
+  ok(V0.hand.every((h, p) => (st.ow[p] === 0 ? h && h.join() === '1,2,3,4' : h === null)), '남은 손패는 비밀: 내 말만 손패가 보이고 남의 말은 장수(cnt)만 보여요 (방송대로)');
+  ok(V0.cnt.every(c => c === 4) && V0.sup.every((x, p) => (st.ow[p] === 0 ? x === null : x && x.join() === '1,2,3,4')), '남의 말은 낸 카드를 지워 가며 짐작하는 범위(sup)만 AI 에게 보여요');
+  { const sp = G.view(st, -1); ok(sp.hand.every(h => h === null), '구경꾼(-1)은 아무 손패도 못 봐요'); const al = G.view(st, 'all'); ok(al.hand.every(h => h && h.join() === '1,2,3,4'), '복기(all)는 전부 보여요'); }
+  { // 낸 카드를 지워 가며 sup 이 줄어요 (남의 말은 sup 으로만 짐작)
+    const s2 = mkN('r9', ['grav', 'push', 'del', 'offer', 'with', 'union']); turnN(s2, 3); const own = s2.ow[3], other = (own + 1) % 3;
+    apN(s2, 3, { t: 'card', c: 2 });
+    const after = G.view(s2, other);
+    ok(after.hand[3] === null && after.cnt[3] === 3 && after.sup[3].join() === '1,3,4', '남이 카드 2 를 내면 그 말의 남은 카드는 1·3·4 로 짐작해요 (손패는 안 보임)');
+  }
   const b = snap(st); G.view(st, 0); G.view(st, 'all'); G.view(st, 2); ok(snap(st) === b, 'view 는 상태를 안 바꿔요');
   ok(!apN(st, 0, { t: 'card', c: 9 }).ok && !G.apply(st, 2, { t: 'card', c: 1 }).ok && snap(st) === b, '실패한 apply 는 상태를 안 바꿔요');
   G.ai(G.view(st, 0), 0, 'hard', G.sampler(3)); G.coach(G.view(st, 0), 0, 0, ['a', 'b', 'c']); ok(snap(st) === b, 'ai · coach 는 상태를 안 바꿔요');
@@ -454,5 +462,26 @@ const tgs = st => G.actions(st).map(a => a.tg).join();
   ok(/→/.test(G.actText({ t: 'card', c: 1 }, i => `${i}번`, G.view(st, 0))), '행동 문장: 몇 칸 → 몇 칸');
 }
 
+
+// 시간 예산: AI · 선생님은 일의 양(WORK)으로 잘려요 — 같은 판이면 같은 수 · 일의 양은 상한 근처 · 시계는 넉넉한 한도만 (이 PC 에선 AI ≤150ms · 선생님 ≤200ms 가 목표)
+{
+  const mulberry = seed => { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  let n = 0, worstW = 0, worstMs = 0, worstCoach = 0, same = 0;
+  const { performance } = require('perf_hooks');
+  for (const ver of ['r3', 'r9']) for (const nn of [3, 5]) for (let seed = 1; seed <= 2; seed++) {
+    const st = G.init({ n: nn, seed: seed * 11, cfg: { ver } }), r = mulberry(seed); let g = 0;
+    while (!G.over(st) && g++ < 400) {
+      const s = G.needs(st)[0], V = G.view(st, s), w0 = G.WORK.n, t0 = performance.now(), a = G.ai(V, s, 'hard', mulberry(g));
+      const dt = performance.now() - t0, dw = G.WORK.n - w0; worstW = Math.max(worstW, dw); worstMs = Math.max(worstMs, dt); n++;
+      if (g % 9 === 0) { const b = G.ai(V, s, 'hard', mulberry(g)); if (JSON.stringify(a) === JSON.stringify(b)) same++; else ok(false, '같은 판 · 같은 난수인데 AI 수가 달라요'); }
+      if (g % 17 === 0) { const t1 = performance.now(); G.coach(V, s, -1, null); worstCoach = Math.max(worstCoach, performance.now() - t1); }
+      if (!G.apply(st, s, a).ok) G.apply(st, s, G.legal(st, s)[0]);
+    }
+  }
+  ok(worstW <= G.WCAP.hard + 22000, `고급 AI 일의 양 최대 ${worstW} (상한 ${G.WCAP.hard} + 첫 표본)`);
+  ok(worstMs < 700, `고급 AI 한 번 최대 ${worstMs.toFixed(0)}ms (목표 150ms · 시험 한도 700ms)`);
+  ok(worstCoach < 900, `선생님 한 번 최대 ${worstCoach.toFixed(0)}ms (목표 200ms · 시험 한도 900ms)`);
+  console.log(`  AI ${n}번: 일의 양 최대 ${worstW} · 최대 ${worstMs.toFixed(0)}ms · 선생님 최대 ${worstCoach.toFixed(0)}ms · 같은 수 ${same}번`);
+}
 console.log(`gn-midrun selftest: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

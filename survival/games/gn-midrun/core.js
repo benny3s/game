@@ -568,9 +568,10 @@
   // ── 보이는 것 (그 자리 시점 — 남의 손패는 몰라요, 'all' 은 복기용 전부 공개) ──
   function viewN(st, seat) {
     const all = seat === "all", S = all ? -2 : seat;
-    const knows = p => all || st.ow[p] === S || (st.vis[p] || []).includes(S) || !!st.hk[p];
+    // 남은 손패는 비밀 (방송대로): 내 말 · 딜리트로 본 말만 손패가 보여요. hk = '낸 카드를 지워 가면 알 수 있는 손패' 라서 AI 는 sup(가능한 카드)으로만 알고 화면엔 안 보여요
+    const knows = p => all || st.ow[p] === S || (st.vis[p] || []).includes(S);
     const hand = st.hand.map((h, p) => (knows(p) ? h.slice() : null));
-    const sup = st.hand.map((h, p) => (knows(p) ? null : st.sup[p].slice()));
+    const sup = st.hand.map((h, p) => (knows(p) ? null : (st.hk[p] || st.sup[p]).slice()));
     const cnt = st.hand.map(h => h.length), pubK = st.hk.map(h => (h ? h.slice() : null));
     const sn = { ver: st.ver, n: st.n, P: st.P, ow: st.ow.slice(), ab: st.ab.slice(), tord: st.tord.slice(), ti: st.ti, phase: st.phase, pos: st.pos.slice(), fin: st.fin.slice(), finOrder: st.finOrder.slice(), cnt, hand, sup, cp: st.cp.slice(), sil: st.sil.slice(), lt: cl(st.lt), qf: st.qf.slice(), stk: cl(st.stk), round: st.round, turnNo: st.turnNo, over: st.over };
     const curP = st.over ? -1 : st.phase === "res" ? topJ(st).p : curPN(st);
@@ -601,9 +602,11 @@
     }
     return best === 0 || !open ? 1 / (1 + best) : -1;
   }
+  const WORK = { n: 0 };   // 일 단위(행동 한 번 = 1) 세기 — 시간 대신 일의 양으로 예산을 잘라 같은 판이면 언제나 같은 수가 나와요
   function rolloutN(st0, me, r) {
     const st = st0; st.nl = 1; let g = 0, nf = -1;
     while (!st.over && g++ < 4000) {
+      WORK.n++;
       if (st.finOrder.length !== nf) { nf = st.finOrder.length; const x = settledN(st, me); if (x >= 0) return x; }
       const acts = actionsN(st); if (!acts.length) break; applyT(st, curSeatN(st), acts[Math.floor(r() * acts.length)]);
     }
@@ -611,18 +614,23 @@
     return reward(st, me);
   }
   function trialN(base, me, a, sd) {
+    WORK.n += 40;
     const s2 = cl(base); s2.nl = 1; applyT(s2, me, a);
     if (s2.over) return reward(s2, me);
     const x = settledN(s2, me);
     return x >= 0 ? x : rolloutN(s2, me, sampler((sd ^ 0x5bd1e995) >>> 0));
   }
-  function evalN(V, me, r, trials) {
-    const acts = actionsN(fromViewN(V)), res = acts.map(a => ({ a, v: 0, wp: 0 }));
+  // 일의 양 상한 (행동 수 단위 · 이 PC 에서 일 1 ≈ 0.0035ms): AI 한 번 ≈ 90ms · 선생님 한 번 ≈ 140ms 안 — 시계가 아니라 일의 양으로 잘라 같은 판이면 언제나 같은 수예요
+  const WCAP = { hard: 15000, normal: 8000, coach: 28000 };
+  function evalN(V, me, r, trials, cap) {
+    const acts = actionsN(fromViewN(V)), res = acts.map(a => ({ a, v: 0, wp: 0 })), w0 = WORK.n; let done = 0;
     for (let i = 0; i < trials; i++) {
-      const sd = Math.floor(r() * 4294967296) >>> 0, base = fromViewN(V, sampler(sd));
+      if (i >= 6 && cap && WORK.n - w0 > cap) break;   // 표본을 6번은 모아야 비교가 돼요
+      const sd = Math.floor(r() * 4294967296) >>> 0, base = fromViewN(V, sampler(sd)); WORK.n += 40;
       for (const x of res) { const v = trialN(base, me, x.a, sd); x.v += v; if (v > 0.999) x.wp++; }
+      done++;
     }
-    for (const x of res) { x.v /= trials; x.wp /= trials; }
+    for (const x of res) { x.v /= Math.max(1, done); x.wp /= Math.max(1, done); }
     return res;
   }
   function aiN(V, me, tier, r) {   // 좋아 보이는 수를 남기며 표본을 모아요 (반씩 줄이기) — 모르는 손패는 표본으로
@@ -631,11 +639,13 @@
     if (acts.length === 1 || tier === "easy") return acts[Math.floor(r() * acts.length)];
     const hard = tier === "hard", bud = BUDGET[hard ? "hard" : "normal"][V.ver];
     let alive = acts.map(a => ({ a, v: 0, n: 0 }));
+    const w0 = WORK.n, cap = WCAP[hard ? "hard" : "normal"];
     const rounds = Math.max(1, Math.ceil(Math.log2(alive.length)));
     for (let rd = 0; rd < rounds; rd++) {
       const t = Math.max(BUDGET.min, Math.round(bud / rounds / alive.length));
       for (let i = 0; i < t; i++) {
-        const sd = Math.floor(r() * 4294967296) >>> 0, base = fromViewN(V, sampler(sd));
+        if (i >= 1 && WORK.n - w0 > cap) break;   // 일의 양 상한 — 후보마다 표본 1번은 모아요
+        const sd = Math.floor(r() * 4294967296) >>> 0, base = fromViewN(V, sampler(sd)); WORK.n += 40;
         for (const x of alive) { x.v += trialN(base, me, x.a, sd); x.n++; }
       }
       if (rd === rounds - 1 || alive.length === 1) break;
@@ -711,10 +721,10 @@
       const guess = hc ? `카드 ${hc.join("·")}라서 다음엔 ${x + Math.min(...hc) >= GOAL ? "골인" : `${x + Math.min(...hc)}칸`}~${x + Math.max(...hc) >= GOAL ? "골인" : `${x + Math.max(...hc)}칸`}이 돼요` : `카드 ${c}장 중 ${V.sup[p].join("·")} 중에서 나올 거예요 (남의 손패는 비밀이라 낸 카드로 짐작해요)`;
       return { opp, mine, rec: "기다려요", why: `${pLabel(V, p, who)}(${V.job ? V.job.k : "차례"}) — ${x}칸에서 ${guess}. 내 말은 ${mineP.map(m => `${V.fin[m] >= 0 ? `${V.fin[m] + 1}등 골인` : `${V.pos[m]}칸`}`).join(" · ")}예요. 우승 순위는 ${wTxt} · 지금 ${V.finOrder.length}개 말이 골인했고 ${V.need}번째가 골인하면 끝나요.` };
     }
-    const res = evalN(V, me, sampler(V.turnNo * 17 + me * 5 + V.pos.reduce((x, y) => x + y, 0) + 1), 24).sort((x, y) => (y.wp - x.wp) || (y.v - x.v));
+    const res = evalN(V, me, sampler(V.turnNo * 17 + me * 5 + V.pos.reduce((x, y) => x + y, 0) + 1), 24, WCAP.coach).sort((x, y) => (y.wp - x.wp) || (y.v - x.v));
     const top = res[0], second = res[1];
     return { opp, mine, rec: actTextN(top.a, who, V), why: `이 수로 끝까지 해 보면 우승 순위로 끝날 가능성이 약 ${Math.round(top.wp * 100)}%${second ? ` (다음 후보 ${actTextN(second.a, who, V)} ${Math.round(second.wp * 100)}%)` : ""}예요 — 상대 손패는 비밀이라 짐작한 표본으로 재요. 우승은 1등이 아니라 ${wTxt}이고, 지금 ${V.finOrder.length}개 말이 골인했어요.` };
   }
 
-  return { id: "gn-midrun", BUDGET, GOAL, SETC, KEYS, AB, WIN, NEED, ROST, NAB, winPlaces, numN, effN, silencedN, jumpTo, init, needs, apply, view, over, ranks, legal, auto, advance, actions, fromView, ai, coach, rollout, evalActions, compareActs, actText, canon, sampler, hash, cur, silenced, silTargets, gravTargets, withTargets };
+  return { id: "gn-midrun", WORK, WCAP, BUDGET, GOAL, SETC, KEYS, AB, WIN, NEED, ROST, NAB, winPlaces, numN, effN, silencedN, jumpTo, init, needs, apply, view, over, ranks, legal, auto, advance, actions, fromView, ai, coach, rollout, evalActions, compareActs, actText, canon, sampler, hash, cur, silenced, silTargets, gravTargets, withTargets };
 });
