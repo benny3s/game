@@ -424,5 +424,26 @@ C.TIER.hard.nodes = FULL;
   ok(mx < 300, '고급 한 수가 300ms 안쪽');
 }
 
+// 💡 추천 = 고급 AI 의 수 · 시간 예산 (ai 한 번 150ms · 선생님 계산 200ms 안, 이 PC 기준)
+{
+  let n = 0, diff = 0; const ta = [], tc = [];
+  for (let g = 0; g < 4; g++) {
+    const st = C.init({ n: 2, seed: 700 + g, cfg: {} }), r = mul(g + 9); let steps = 0;
+    while (!C.over(st) && steps++ < 300) {
+      const need = C.needs(st); if (!need.length) { C.advance(st); continue; }
+      const s = need[0], V = C.view(st, s);
+      let t0 = performance.now(); const a = C.ai(V, s, 'hard', r); ta.push(performance.now() - t0);
+      if (V.phase === 'play' && V.turn === s) {
+        t0 = performance.now(); const A = C.analyze(V, s); tc.push(performance.now() - t0);
+        if (A.rec) { n++; if (J(C.ai(V, s, 'hard', () => 0.5)) !== J(A.rec.a)) diff++; }
+      }
+      C.apply(st, s, a);
+    }
+  }
+  ok(n > 30 && diff === 0, `추천 = 고급 AI (같은 고정 난수) — 다른 수 ${diff}/${n}`);
+  const q = (arr, p) => arr.slice().sort((x, y) => x - y)[Math.min(arr.length - 1, Math.floor(arr.length * p))];
+  ok(q(ta, 0.99) <= 150 && q(tc, 0.99) <= 200, `시간: ai 99% ${Math.round(q(ta, 0.99))}ms (≤150) · 선생님 99% ${Math.round(q(tc, 0.99))}ms (≤200)`);
+}
+
 console.log(`카드 체스 selftest · 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);
