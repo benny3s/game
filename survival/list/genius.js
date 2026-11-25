@@ -5,9 +5,6 @@
   { id: "gn-indian", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "인디언 포커", emoji: "🪪", v: 2,
     short: "상대 카드만 보이는 1:1 베팅",
     src: "더 지니어스 시즌 1 인디언 포커 · 6·7·9화 데스매치 · 12화 결승 1회전" },
-  { id: "gn-link-blackwhite", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "흑과 백", emoji: "⬛", link: "../genius/",
-    short: "색만 보이는 9라운드 심리전 · 눌러서 베니 지니어스 게임 고르기 화면이 열려요",
-    src: "더 지니어스 흑과 백 (베니 지니어스 모음에서 하기)" },
   { id: "gn-link-gyeolhap", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "결! 합!", emoji: "🔷", link: "../genius/",
     short: "3가지 속성 조합 · 순발력 · 눌러서 베니 지니어스 게임 고르기 화면이 열려요",
     src: "더 지니어스 시즌 1 결! 합! · 12화 결승 2회전 (베니 지니어스 모음에서 하기)" },
@@ -25,6 +22,9 @@
   { id: "gn-truth", prog: "genius", season: "S2", seasonName: "룰 브레이커", title: "진실탐지기", emoji: "🔔", v: 1,
     short: "거짓말로 답하는 질문 게임 · 상대 4자리를 먼저 맞혀요",
     src: "더 지니어스 시즌 2 진실탐지기 · 12화 결승 2회전" },
+  { id: "gn-link-blackwhite", prog: "genius", season: "S2", seasonName: "룰 브레이커", title: "흑과 백", emoji: "⬛", link: "../genius/",
+    short: "색만 보이는 9라운드 심리전 · 눌러서 베니 지니어스 게임 고르기 화면이 열려요",
+    src: "더 지니어스 시즌 2 흑과 백 · 9화 · 11화 (베니 지니어스 모음에서 하기)" },
 
   // ── 시즌 3 블랙가넷 (양면포커 · 베팅 가위바위보는 시즌 4 그랜드 파이널에도 나와요 — 판 선택에서 골라요) ──
   { id: "gn-fruit", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "과일가게", emoji: "🍎", v: 1,
@@ -44,7 +44,7 @@
     src: "더 지니어스 시즌 3 투자와 기부 · 8화 메인 매치" },
   { id: "gn-link-twelve", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "십이장기", emoji: "🦁", link: "../genius/",
     short: "포로 · 승급 · 적진 입성 · 눌러서 베니 지니어스 게임 고르기 화면이 열려요",
-    src: "더 지니어스 시즌 3 십이장기 · 결승 (베니 지니어스 모음에서 하기)" },
+    src: "더 지니어스 시즌 3 십이장기 · 7화 · 12화 결승 (베니 지니어스 모음에서 하기)" },
 
   // ── 시즌 4 그랜드 파이널 ──
   { id: "gn-howmuch", prog: "genius", season: "S4", seasonName: "그랜드 파이널", title: "하우머치", emoji: "🛒", v: 1,
