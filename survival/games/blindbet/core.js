@@ -8,7 +8,7 @@
      오픈 카드 1 또는 2 로 이기면 상대에게서 칩 10개를 더 가져감 (칩이 모자라면 있는 만큼)
    · 오픈 카드 10장을 다 쓰면 라운드 끝 (폴드한 턴은 오픈 카드를 안 씀). 2라운드 뒤 칩이 많은 쪽 승. 상대 칩이 다 없어지면 바로 승
    방송과 다른 점 (우리가 정함): ① 합이 같으면 오픈 카드가 큰 쪽 승 (원문 각주 추정), 오픈도 같으면 판돈을 다음 턴으로 이월
-     ② 칩은 두 라운드에 걸쳐 이어짐 · 라운드마다 오픈 카드 1~10 을 새로 받고 블라인드 24장을 새로 섞음 (한 턴에 2장씩, 모자라면 라운드 끝)
+     ② 칩은 두 라운드에 걸쳐 이어짐 · 라운드마다 오픈 카드 1~10 을 새로 받고 블라인드 24장을 새로 섞음 (한 턴에 2장씩, 폴드가 많아 24장이 모자라면 새로 섞음 — 라운드는 오픈 카드 10장을 다 쓸 때 끝)
      ③ 한 턴 레이즈는 4번까지 · 걸린 칩이 없을 땐 폴드 못 하고 체크 ④ 구경꾼은 두 블라인드를 다 봄 (둘 다 모르는 건 방송 시청자와 같음)
      ⑤ 필기 없음 (써 둘 수 없으니 쓴 블라인드 · 오픈 카드는 화면에 기록으로 보여 줌) ⑥ 한 기기로는 못 함, 2명 고정 */
 (function (root, factory) {
@@ -50,7 +50,8 @@
   }
   function startTurn(st) {
     if (st.pot === 0 && st.chips.some(c => c <= 0)) return finish(st);                  // 칩이 다 없어지면 바로 끝
-    if (!st.left[0].length || st.deck.length < 2) return st.round >= ROUNDS ? finish(st) : startRound(st);
+    if (!st.left[0].length) return st.round >= ROUNDS ? finish(st) : startRound(st);        // 라운드 끝 = 오픈 카드 10장을 다 썼을 때 (방송대로)
+    if (st.deck.length < 2) { st.deck = shuffle(() => rnd(st), range(BMAX).concat(range(BMAX))); st.seen = []; }   // 폴드가 많아 블라인드 24장이 모자라면 다시 섞음 (오픈 카드는 그대로)
     st.turn++;
     st.blind = [st.deck.pop(), st.deck.pop()];
     const ante = Math.min(1, st.chips[0], st.chips[1]);

@@ -231,5 +231,29 @@ function playOut(seed, t0, t1, check) {
   for (const a of G.legal(st, 1)) ok(G.apply(clone(st), 1, a).ok, 'legal 은 모두 통함');
 }
 
+// 블라인드 덱이 2장 미만이어도 라운드는 오픈 카드 10장을 다 쓸 때만 끝 (방송대로) — 모자라면 다시 섞음
+{
+  let checked = 0;
+  for (let seed = 900; seed < 930; seed++) {
+    const st = G.init({ n: 2, seed, cfg: {} }); let g = 0, forced = false;
+    while (!G.over(st) && g++ < 400 && st.turn < 2) {
+      const need = G.needs(st); if (!need.length) { G.advance(st); continue; }
+      if (!forced && st.turn === 1 && st.phase === 'pick') { st.deck = [5]; forced = true; }
+      const s = need[0]; G.apply(st, s, G.ai(G.view(st, s), s, 'hard', () => 0.5));
+    }
+    if (!forced || st.turn !== 2 || st.round !== 1) continue;
+    checked++;
+    ok(!G.over(st) && st.round === 1 && st.left[0].length >= 9, `덱이 모자라도 1라운드 계속 (오픈 ${st.left[0].length}장 남음 · 라운드 ${st.round})`);
+    ok(G.view(st, 0).deckLeft === 22, `블라인드를 다시 섞어 2장 나눠 줌 (남은 ${G.view(st, 0).deckLeft}장)`);
+  }
+  ok(checked >= 10, `덱 모자람 시험이 충분히 돎 (${checked})`);
+  // 폴드를 많이 하는 판도 오픈 카드 10장을 다 쓴 라운드만 끝남
+  for (let seed = 1; seed <= 40; seed++) {
+    const st = playOut(1200 + seed, 'easy', 'easy'); let r1 = 0;
+    for (const h of st.hist) if (h.r === 1 && !h.fold && h.w !== -2) r1++;
+    ok(st.round === 1 || st.hist.filter(h => h.r === 1 && !h.fold).length <= 10, '1라운드에서 오픈 카드는 10장 넘게 안 씀');
+  }
+}
+
 console.log(`블라인드 베팅 selftest · 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);
