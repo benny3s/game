@@ -4,7 +4,7 @@
   // ── 시즌 1 게임의 법칙 ──
   { id: "gn-indian", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "인디언 포커", emoji: "🪪", v: 3,
     short: "상대 카드만 보이는 1:1 베팅",
-    src: "더 지니어스 시즌 1 인디언 포커 · 6·7·9화 데스매치 · 12화 결승 1회전" },
+    src: "더 지니어스 시즌 1 인디언 포커 · 6·7화 데스매치 · 12화 결승 1회전 · 디글 클래식 「인디언 포커」 규칙 설명 확인" },
   { id: "gn-openpass", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "오픈, 패스", emoji: "🔓", v: 1,
     short: "뒷면 카드를 열거나 넘기며 10칸 수식 만들기",
     src: "더 지니어스 시즌 1 오픈, 패스 · 7화 메인 매치" },
@@ -18,16 +18,16 @@
   // ── 시즌 2 룰 브레이커 ──
   { id: "gn-sunmoon", prog: "genius", season: "S2", seasonName: "룰 브레이커", title: "해 달 별", emoji: "🌓", v: 2,
     short: "정답 칸에 칩을 걸어 3배",
-    src: "더 지니어스 시즌 2 해 달 별 · 2화 · 4화" },
+    src: "더 지니어스 시즌 2 해 달 별 · 2화 · 4화 · tvN Joy 「데스매치_해달별」 규칙 설명 확인" },
   { id: "gn-quattro", prog: "genius", season: "S2", seasonName: "룰 브레이커", title: "콰트로", emoji: "🃏", v: 2,
-    short: "색도 숫자도 다른 4장을 먼저 모아요 · 관전 플레이어와 카드 교환",
-    src: "더 지니어스 시즌 2 콰트로 · 1화 · 12화 결승 3회전" },
+    short: "색도 숫자도 다른 4장 · 합이 큰 콰트로가 승 · 관전 플레이어와 카드 교환",
+    src: "더 지니어스 시즌 2 콰트로 · 1화 1회전 데스매치 · 12화 결승 3회전 · tvN Joy 「콰트로 룰 소개」 · 「EP.12 콰트로」 규칙 설명 확인" },
   { id: "gn-holdem", prog: "genius", season: "S2", seasonName: "룰 브레이커", title: "인디언 홀덤", emoji: "🃏", v: 3,
     short: "공유카드 2장 · 상대 카드만 보이는 1:1 베팅",
-    src: "더 지니어스 시즌 2 인디언 홀덤 · 7·10화 데스매치 · 12화 결승 1회전" },
+    src: "더 지니어스 시즌 2 인디언 홀덤 · 7·10화 데스매치 · 12화 결승 1회전 · tvN Joy 「7화 · 10화 인디언 홀덤 룰 설명」 · EP.12 결승 규칙 설명 확인" },
   { id: "gn-truth", prog: "genius", season: "S2", seasonName: "룰 브레이커", title: "진실탐지기", emoji: "🔔", v: 1,
     short: "거짓말로 답하는 질문 게임 · 상대 4자리를 먼저 맞혀요",
-    src: "더 지니어스 시즌 2 진실탐지기 · 12화 결승 2회전" },
+    src: "더 지니어스 시즌 2 진실탐지기 · 12화 결승 2회전 · tvN Joy 「최종화 진실탐지기」 · 「EP.12」 규칙 설명 확인" },
   { id: "gn-link-blackwhite", prog: "genius", season: "S2", seasonName: "룰 브레이커", title: "흑과 백", emoji: "⬛", link: "../genius/",
     short: "색만 보이는 9라운드 · 게임 고르기 화면이 열려요",
     src: "더 지니어스 시즌 2 흑과 백 · 9화 · 11화 (베니 지니어스 모음에서 하기)" },
@@ -38,7 +38,7 @@
     src: "더 지니어스 시즌 3 중간 달리기 · 3화 · 9화 메인 매치" },
   { id: "gn-fruit", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "과일가게", emoji: "🍎", v: 1,
     short: "과일마다 가장 싼 값을 낸 사람이 독식해요 · 4라운드 수입 대결",
-    src: "더 지니어스 시즌 3 과일가게 · 1화 메인 매치" },
+    src: "더 지니어스 시즌 3 과일가게 · 1화 메인 매치 · 디글 클래식 「[#더지니어스3] 과일가게 01」 규칙 설명 확인" },
   { id: "gn-twoface", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "양면포커", emoji: "🃏", v: 2,
     short: "앞뒤가 다른 카드 · 면을 골라 겨루는 1:1 베팅",
     src: "더 지니어스 시즌 3 양면포커 · 4·5화 · 시즌 4 그랜드 파이널 10화" },
@@ -50,7 +50,7 @@
     src: "더 지니어스 시즌 3 별자리 게임 · 7화 메인 매치" },
   { id: "gn-invest", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "투자와 기부", emoji: "💰", v: 1,
     short: "대주주는 노리고 수전노는 피해요 · 9라운드 동안 돈을 나눠 써요",
-    src: "더 지니어스 시즌 3 투자와 기부 · 8화 메인 매치" },
+    src: "더 지니어스 시즌 3 투자와 기부 · 8화 메인 매치 · 디글 클래식 투자와 기부 규칙 설명 확인" },
   { id: "gn-miner", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "광부 게임", emoji: "⛏️", v: 1,
     short: "광부는 광물을 캐고 제시자는 점수를 비밀로 불러요 · 9명 3조",
     src: "더 지니어스 시즌 3 광부 게임 · 5화 메인 매치" },
@@ -64,5 +64,5 @@
   // ── 시즌 4 그랜드 파이널 ──
   { id: "gn-howmuch", prog: "genius", season: "S4", seasonName: "그랜드 파이널", title: "하우머치", emoji: "🛒", v: 1,
     short: "손님 5명의 최고가를 넘지 않게 · 가격 맞히기",
-    src: "더 지니어스 시즌 4 그랜드 파이널 하우머치 · 11화 메인 매치" }
+    src: "더 지니어스 시즌 4 그랜드 파이널 하우머치 · 11회전 메인 매치 · tvN Joy 「11회전 메인매치 하우머치 룰 영상」 규칙 설명 확인" }
 );
