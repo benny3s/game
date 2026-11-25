@@ -48,6 +48,7 @@
 .ep-tmsg{min-height:2.7em;text-align:center;line-height:1.4;color:var(--soft)}
 .ep-tmsg b{color:#fde68a}
 .ep-res{display:grid;gap:3px;font-size:12.5px;line-height:1.4}
+.ep-hbtn{display:inline-block;margin:2px 4px 2px 0;padding:5px 10px;border-radius:999px;border:1px solid rgba(250,204,21,.55);background:rgba(250,204,21,.12);color:#fde68a;font:800 12.5px var(--round);cursor:pointer}
 @media (max-height:700px){.ep-c{width:60px;height:44px;font-size:19px}.ep-pyr{gap:4px}.ep-row{gap:4px}.ep-tg b{font-size:26px}.ep-b{min-height:44px}.ep-info{min-height:2.4em;font-size:12px}.ep-ex{font-size:17px}}
 @media (min-height:760px){.ep-c{width:70px;height:56px;font-size:23px}.ep-b{min-height:52px}}`;
   let styled = false;
@@ -145,8 +146,15 @@
   }
 
   // ── 선생님 ──
-  let CC = { key: "", r: null };
-  function recOf(V, me) { const key = `${V.pub}|${V.round}|${V.cnt}|${me}`; if (CC.key !== key) CC = { key, r: K.recommend(V, me) }; return CC.r; }
+  // 💡 는 단계 힌트: 처음엔 남은 정답 수 · 가장 쉬운 답의 칸 하나만, '한 번 더' 를 누르면 전체 식 (그 차례 동안 펼친 채)
+  let CC = { key: "", r: null, open: false, full: "" };
+  function recOf(V, me) { const key = `${V.pub}|${V.round}|${V.cnt}|${me}`; if (CC.key !== key) CC = { key, r: K.recommend(V, me), open: false, full: "" }; return CC.r; }
+  if (typeof document !== "undefined") document.addEventListener("click", e => {
+    const b = e.target && e.target.closest && e.target.closest("[data-ephint]");
+    if (!b) return;
+    e.preventDefault(); CC.open = true;
+    const sp = document.createElement("span"); sp.innerHTML = CC.full; b.replaceWith(sp);
+  }, true);
   function wayOf(cells, k) {
     const i = L.indexOf(k[0]), j = L.indexOf(k[1]), m = L.indexOf(k[2]);
     const a = cells[i].n, b = cells[j].n, c = cells[m].n, o1 = cells[j].op, o2 = cells[m].op, hi = o => o === "×" || o === "÷";
@@ -154,6 +162,7 @@
     const t = K.calc2(a, o1, b); return `앞 두 칸 먼저: ${a} ${SYM[o1]} ${b} = ${t} → ${t} ${SYM[o2]} ${c}`;
   }
   function coach(V, me, since, names) {
+    if (typeof document !== "undefined") style();
     const watch = !(me >= 0 && me < V.n);
     if (watch) me = -1;
     const nm = s => esc(nmOf(names, s, me));
@@ -175,9 +184,10 @@
       const R = recOf(V, me);
       if (R.a.t === "pass") { rec = "넘기기."; why = `남은 정답이 없어요 — 말하면 오답 −1. 모두 이어서 넘기면 라운드가 끝나요.`; }
       else {
-        const k = R.a.k, ex = exprHtml(V.cells, k);
-        rec = `${k} — ${ex} = ${V.target}.`;
-        why = `${wayOf(V.cells, k)} → ${V.target}. 아직 안 나온 정답이 ${R.rows.length}개 있어요${R.rows.length > 1 ? ` (가장 쉬운 것부터 · 다음은 ${R.rows[1].k})` : ""}. 틀리면 −1 이니 확실할 때만 선언해요.`;
+        const k = R.a.k, ex = exprHtml(V.cells, k), c0 = V.cells[L.indexOf(k[0])];
+        rec = `남은 정답 ${R.rows.length}개 · 가장 쉬운 것에는 <b>${k[0]}</b> 칸(${c0.n})이 맨 앞에 들어가요.`;
+        CC.full = `<b>${k}</b> — ${ex} = ${V.target}. ${wayOf(V.cells, k)} → ${V.target}.`;
+        why = `${CC.open ? CC.full : `<button type="button" class="ep-hbtn" data-ephint>💡 한 번 더 — 전체 식 보기</button>`} 틀리면 −1 이니 확실할 때만 선언해요.`;
       }
     }
     return { opp: p.join(" "), mine: m, rec, why };

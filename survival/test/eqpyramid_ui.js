@@ -32,7 +32,18 @@ const DRAW = () => {
 const COACH = () => {
   const h = window.__h, C = h.C, U = h.U, me = h.ME, V = C.view(h.st(), me);
   const c = U.coach(V, me, -1, h.seats.map(s => s.name)), r = C.recommend(V, me);
-  return { c, text: c.opp + c.mine + c.rec + c.why, recOk: !r || C.apply(JSON.parse(JSON.stringify(h.st())), me, r.a).ok, ans: V.ans };
+  // 단계 힌트: 처음엔 정답 식이 안 보이고, '한 번 더' 를 누르면 전체 식 · 다시 그려도 펼친 채
+  let hint = null;
+  if (r && r.a.t === 'say' && V.needs.includes(me) && V.phase === 'play') {
+    const k = r.a.k, box = document.createElement('div');
+    box.innerHTML = '<p>' + c.rec + '</p><p>' + c.why + '</p>'; document.body.appendChild(box);
+    const before = box.innerText, b = box.querySelector('[data-ephint]');
+    if (b) b.click();
+    const after = box.innerText; box.remove();
+    const c2 = U.coach(V, me, -1, h.seats.map(s => s.name));
+    hint = { k, hid: !!b && !before.includes(k) && !/=/.test(before.replace(/−1/g, '')), shown: after.includes(k) && after.includes('= ' + V.target), keep: c2.why.includes(k) && !/data-ephint/.test(c2.why), first: c.rec.includes(k[0]) && /남은 정답 \d+개/.test(c.rec) };
+  }
+  return { c, hint, text: c.opp + c.mine + c.rec + c.why, recOk: !r || C.apply(JSON.parse(JSON.stringify(h.st())), me, r.a).ok, ans: V.ans };
 };
 const SIZES = () => [...document.querySelectorAll('#stage .ep-act button, #stage .ep-c')]
   .map(b => { const r = b.getBoundingClientRect(); return [b.className + JSON.stringify(b.dataset), Math.round(r.width), Math.round(r.height)]; }).filter(z => z[1] < 44 || z[2] < 44);
@@ -60,7 +71,7 @@ async function doAct(page, a, test) {
 const sameAct = (L, a) => L && (a.t === 'pass' ? L.k === 'pass' : L.k === 'say' && L.key === a.k);
 
 async function playOne(page, tag, ok, shot, opt = {}) {
-  let over = false, k = 0, says = 0, passes = 0, sizeTested = 0, coachTested = 0, pickTested = 0;
+  let over = false, k = 0, says = 0, passes = 0, sizeTested = 0, coachTested = 0, pickTested = 0, hintTested = 0;
   const shown = new Set();
   for (k = 1; k <= 3000; k++) {
     const s = await page.evaluate(() => { const h = window.__h, V = h.view(); return { over: !!V.over, mine: V.needs.includes(h.ME), phase: V.phase }; });
@@ -78,6 +89,7 @@ async function playOne(page, tag, ok, shot, opt = {}) {
     if (coachTested < (QUICK ? 3 : 5)) {
       const r = await page.evaluate(COACH); coachTested++;
       ok(r.recOk && r.ans === null && r.text.length > 60 && !/undefined|NaN|null|\[object|\(가\)|\(는\)|\(이\)|\(를\)/.test(r.text) && /\d/.test(r.c.mine) && (r.c.rec === '넘기기.' || /\d/.test(r.c.why)), `${tag} #${k}: 선생님 글 ${r.text.slice(0, 240)}`);
+      if (r.hint) { hintTested++; ok(r.hint.hid && r.hint.shown && r.hint.keep && r.hint.first, `${tag} #${k}: 💡 단계 힌트 ${JSON.stringify(r.hint)} ${r.c.rec}`); }
       if (opt.sample && coachTested <= 2) console.log(`· 선생님 글 예시:\n   👀`, r.c.opp, '\n   📊', r.c.mine, '\n   💡', r.c.rec, '\n   👉', r.c.why);
     }
     const a = await page.evaluate(kk => { const h = window.__h; return h.C.ai(h.view(), h.ME, kk % 4 ? 'normal' : 'hard', h.rnd); }, k);
@@ -88,7 +100,7 @@ async function playOne(page, tag, ok, shot, opt = {}) {
     ok(sameAct(L, a), `${tag} #${k}: 기록 ${JSON.stringify(L)} (${JSON.stringify(a)})`);
     if (a.t === 'say') says++; else passes++;
   }
-  return { over, says, passes, k };
+  return { over, says, passes, k, hintTested };
 }
 
 async function extras({ browser, base, ok }) {
@@ -102,6 +114,7 @@ async function extras({ browser, base, ok }) {
     if (vp.w === 375) sample = false;
     ok(r.over, `${tag}: 게임이 끝나지 않음 (${r.k}걸음)`);
     ok(r.says >= 1, `${tag}: 선언 ${r.says} · 넘기기 ${r.passes}`);
+    ok(r.hintTested >= 1, `${tag}: 💡 단계 힌트를 본 적 없음`);
     const e = await page.evaluate(() => { const h = window.__h, t = document.getElementById('stage'); return { st: t.querySelector('.ep-info').innerText, res: h.result(), btn: t.querySelectorAll('.ep-act button').length }; });
     ok(/(이겼|1위|위 \()/.test(e.st) && /라운드/.test(e.res) && /1위/.test(e.res) && e.btn === 0, `${tag}: 끝 글 · 결과 글 ${e.st} / ${e.res.slice(0, 160)}`);
     if (vp.w === 375 && me === 0) await shot('end');

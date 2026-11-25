@@ -98,6 +98,7 @@ function playAI(seed, tiers, cfg, check) {
   ok(!C.apply(st, 0, { t: 'pass' }).ok && C.needs(st).length === 0, '끝나면 막음');
 }
 // 6) 보기 · AI · 추천 · 결정적
+const hardMiss = []; let hardSay = 0;
 {
   const seeds = QUICK ? [1, 2] : [1, 2, 3, 4];
   for (const sd of seeds) {
@@ -109,14 +110,36 @@ function playAI(seed, tiers, cfg, check) {
       ok(V.ans === null, '라운드 중 정답 숨김');
       if (tiers[seat] === 'hard') {
         const R = C.recommend(V, seat);
-        ok(J(C.ai(V, seat, 'hard', mul(9))) === J(a) && R && J(R.a) === J(a), '고급 rnd 무시 · 추천 = 고급');
-        ok(a.t === 'pass' ? R.rows.length === 0 : C.solve(V.cells, V.target).includes(a.k) && !V.found.some(x => x.k === a.k), '고급은 아직 안 나온 정답만');
+        ok(J(C.ai(V, seat, 'hard', mul(9))) === J(a), '고급 rnd 무시');
+        ok(R && J(R.a) === J(R.rows.length ? { t: 'say', k: R.rows[0].k } : { t: 'pass' }), '추천 = 남은 정답 중 가장 쉬운 것');
+        ok(a.t === 'pass' || C.solve(V.cells, V.target).includes(a.k) && !V.found.some(x => x.k === a.k), '고급은 헛답 없음 (아직 안 나온 정답 또는 넘김)');
+        if (a.t === 'pass') hardMiss.push(R.rows.length); else hardSay++;
         const Jd = C.judge(V, seat, { t: 'pass' }, a); ok(Jd && Jd.my === 0 && Jd.best === (a.t === 'pass' ? 0 : 1), '복기 판정');
       }
     });
     const st2 = playAI(sd, tiers, sd % 2 ? { src: 'tv' } : {});
     ok(J(st.sc) === J(st2.sc) && st.hist.length === st.R, `씨앗 ${sd} 결정적 · ${st.R}라운드`);
   }
+}
+// 6b) 고급도 완벽한 풀이기는 아님: 어려운 식일수록 덜 보임 · 쉬운 식은 거의 다 봄
+{
+  const sh = d => C.seeOf(C.PROF.hard, d);
+  ok(sh(1) >= 0.95 && sh(1.6) > 0.85 && sh(1.6) < 0.95 && sh(4) < 0.65 && sh(2) > sh(3), '고급 보는 확률 ' + [1, 1.6, 2, 3, 4].map(d => sh(d).toFixed(2)).join(' '));
+  for (const t of ['easy', 'normal']) ok(C.seeOf(C.PROF[t], 2) < sh(2), t + ' 은 고급보다 덜 봄');
+  // 여러 판에서: 남은 답이 있는데 고급이 넘긴 적이 있음 (못 봄) · 그래도 대부분은 맞힘
+  let miss = 0, tot = 0;
+  for (let sd = 30; sd < 30 + (QUICK ? 4 : 10); sd++) {
+    let st = C.init({ n: 2, seed: sd });
+    for (let g = 0; g < 400 && !C.over(st); g++) {
+      const nd = C.needs(st);
+      if (!nd.length) { C.advance(st); continue; }
+      const s = nd[0], V = C.view(st, s), a = C.ai(V, s, 'hard'), rem = C.remainOf(V).length;
+      if (rem) { tot++; if (a.t === 'pass') miss++; }
+      C.apply(st, s, a);
+    }
+  }
+  console.log(`· 고급이 남은 답을 놓친 차례 ${miss}/${tot}`);
+  ok(miss > 0 && miss / tot < 0.35, '고급도 가끔 놓침 ' + miss + '/' + tot);
 }
 // 7) 실력: 고급 vs 쉬움 · 보통 (2명)
 {

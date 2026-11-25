@@ -193,12 +193,16 @@
     };
   }
 
-  // ── AI: 보이는 판을 스스로 풂. 쉬움 · 보통은 어려운 답을 못 볼 때가 있고 가끔 헛답 ──
+  // ── AI: 보이는 판을 스스로 풂. 답마다 '이번 차례에 눈에 띌 확률' = see × (1.6 / 어려움)^fall (cap 까지) ──
+  // 쉬움 · 보통은 어려운 답을 자주 못 보고 가끔 헛답, 고급도 사람처럼 어려운 식은 가끔 놓침 (헛답은 없음)
+  // 선생님(💡 · 복기)만 남은 답을 다 봄 = SEER
   const PROF = {
     easy: { see: 0.32, wrong: 0.16, pass: 0.25 },
     normal: { see: 0.6, wrong: 0.06, pass: 0.08 },
-    hard: { see: 1, wrong: 0, pass: 0 },
+    hard: { see: 0.9, fall: 0.5, cap: 0.97, wrong: 0, pass: 0 },
   };
+  const SEER = { see: 1, wrong: 0, pass: 0 };
+  const seeOf = (P, d) => Math.min(P.cap || 9, P.see * Math.pow(1.6 / d, P.fall || 1));
   const keyV = (V, s) => hash(`${V.pub}|${V.round}|${s}|${V.cnt}`);
   function remainOf(V) {
     const all = solve(V.cells, V.target), got = new Set(V.found.map(x => x.k));
@@ -206,11 +210,11 @@
   }
   function aiWith(V, s, P, rnd) {
     if (!V || V.over || !V.needs || !V.needs.includes(s)) return null;
-    const R = P === PROF.hard || typeof rnd !== "function" ? seeded(keyV(V, s)) : rnd;
+    const R = P === PROF.hard || P === SEER || typeof rnd !== "function" ? seeded(keyV(V, s)) : rnd;
     const rem = remainOf(V);
-    if (P.see >= 1) return rem.length ? { t: "say", k: rem[0].k } : { t: "pass" };
+    if (P === SEER) return rem.length ? { t: "say", k: rem[0].k } : { t: "pass" };
     if (P.pass && R() < P.pass) return { t: "pass" };   // 이번 차례엔 못 찾음
-    const seen = rem.filter(x => R() < P.see / x.d * 1.6);
+    const seen = rem.filter(x => R() < seeOf(P, x.d));
     if (seen.length) return { t: "say", k: seen[0].k };
     if (R() < P.wrong) {   // 헛답: 계산을 잘못한 그럴듯한 3칸 (아직 안 나온 것)
       const got = new Set(V.found.map(x => x.k).concat(V.tries.map(x => x.k), solve(V.cells, V.target)));   // 헛답이 우연히 정답이 되지 않게
@@ -225,7 +229,7 @@
   function recommend(V, s) {
     if (!V || V.over || !V.needs || !V.needs.includes(s)) return null;
     const rows = remainOf(V);
-    return { a: aiWith(V, s, PROF.hard), rows };
+    return { a: aiWith(V, s, SEER), rows };
   }
   // 복기: 그 수의 점수 변화 (+1 · 0 · −1)
   function judge(V, s, myA, bestA) {
@@ -237,6 +241,6 @@
 
   return {
     id: "eqpyramid", L, NCELL, OPTS, TV, PROF, optsOf, evalK, calc2, solve, hardOf, exprOf, valTxt, makeBoard, isK,
-    init, needs, apply, view, over, ranks, legal, auto, advance, ai, aiWith, recommend, judge, remainOf,
+    init, needs, apply, view, over, ranks, legal, auto, advance, ai, aiWith, recommend, judge, remainOf, SEER, seeOf,
   };
 });
