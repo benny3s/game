@@ -41,8 +41,8 @@
 .ip-tut{display:grid;gap:8px;justify-items:center;font-size:14px}
 .ip-tut .row{display:flex;gap:14px;align-items:flex-end}
 .ip-tut .ip-card{width:62px;height:86px;font-size:42px;border-width:3px}
-@media (max-height:780px){.ip-card{width:74px;height:100px;font-size:50px;border-width:3px}.ip-track{gap:2px}.ip-pip{padding:1px 3px;min-width:24px}.ip-btns .btn{padding:9px 6px}.ip-table{gap:3px}}
-@media (max-height:690px){.ip-card{width:60px;height:80px;font-size:40px}.ip-forehead,.ip-warn{display:none}.ip-acts{gap:5px}.ip-info{font-size:11.5px}}`;
+@media (max-height:900px){.ip-card{width:66px;height:88px;font-size:46px;border-width:3px}.ip-track{gap:2px}.ip-pip{padding:1px 3px;min-width:24px}.ip-btns .btn{padding:9px 6px}.ip-table{gap:3px}}
+@media (max-height:690px){.ip-card{width:60px;height:80px;font-size:40px}.ip-forehead,.ip-warn{display:none}.ip-acts{gap:5px}.ip-info{font-size:11px;line-height:1.25}.ip-card{width:50px;height:66px;font-size:34px;border-width:2px}.ip-table{gap:1px}.ip-seat{gap:1px}.ip-bet{min-height:0;font-size:11.5px}.ip-btns .btn{padding:7px 6px;font-size:14px}.ip-raise button{height:30px}.ip-acts .btn.big{padding:8px 10px;font-size:14px;min-height:0}.ip-pip{padding:0 3px;font-size:10px;min-width:21px}.ip-top{gap:6px}.ip-rd{padding:2px 9px;font-size:13px}.ip-pot{padding:1px 10px;font-size:14px}}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats[i] && ctx.seats[i].name) || `${i + 1}번`;
@@ -177,12 +177,13 @@
       { k: "chips", label: "시작 칩", items: [[45, "45칩 (7화 · 가넷 9개)"], [25, "25칩 (결승 · 20 + 아이템 5)"]], def: 45 },
       { k: "rounds", label: "판 수", items: [[30, "끝까지 (최대 30판)"], [12, "12판 승부"]], def: 30 },
     ],
-    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송 규칙 설명에 없음) · 30판이 넘으면 칩이 많은 쪽 승리 · 방송은 가넷을 칩으로 바꿔(가넷 1개당 5칩) 시작했고, 결승은 20칩에서 시작해 두 사람이 '칩 5개 추가' 아이템을 써서 25칩이었어요 (아이템 · 가넷 교환은 없어요)",
+    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송 규칙 설명에 없음) · 30판이 넘으면 칩이 많은 쪽 승리 (마지막 판에 이월 판돈이 남으면 반씩) · 칩이 0 이어도 이월 판돈이 남으면 계속 · 포기 벌칙은 가진 칩까지만 · 방송은 가넷을 칩으로 바꿔(가넷 1개당 5칩) 시작했고, 결승은 20칩에서 시작해 두 사람이 '칩 5개 추가' 아이템을 써서 25칩이었어요 (아이템 · 가넷 교환은 없어요)",
     howto: [
       "<b>큰 숫자</b>를 가진 사람이 베팅된 칩을 다 가져가요 — 카드는 <b>1~10 두 세트, 20장</b> · 내 카드는 확인하지 않고 <b>이마에 붙여</b> 상대만 봐요",
       "<b>기본베팅 칩 1개씩</b> → <b>선 플레이어부터</b> 베팅 · <b>같은 개수</b>로 베팅(콜)하면 바로 카드 공개 · <b>더 많이</b> 베팅(레이즈)하면 계속 · 하지 않고 <b>포기</b>(폴드)",
       "포기한 카드가 <b>10</b>이었다면 <b>패널티로 칩 10개</b>를 상대에게 줘요 · 두 카드가 같은 숫자면 베팅된 칩을 <b>기본베팅으로 걸어 두고</b> 다음 게임",
       "한 사람이 <b>칩을 모두 잃으면</b> 끝 · 남은 카드를 세면 유리해요",
+      "<b>특수</b> — 칩이 0 이 돼도 이월된 판돈이 남아 있으면 다음 판에서 가려요 · 포기 벌칙은 가진 칩까지만 내요 · <b>30판</b>이 끝나면 칩이 많은 쪽 승리 (남은 이월 판돈은 반씩 나눠요 — 끝없는 판을 막는 우리 판 상한, 방송엔 없어요)",
     ],
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),
