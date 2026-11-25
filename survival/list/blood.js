@@ -13,6 +13,7 @@
   // 시즌3
   { id: "blindbet", prog: "blood", season: "S3", title: "블라인드 베팅", emoji: "🎴", v: 2, short: "남의 카드만 보고 베팅하는 1:1 승부" },
   { id: "mazesum", prog: "blood", season: "S3", title: "수식미로", emoji: "🧭", v: 2, short: "숫자판을 외우고 합이 맞는 길을 찾는 기억 미로" },
+  { id: "pyramid", prog: "blood", season: "S3", title: "피라미드 넘버", emoji: "🔺", v: 1, short: "숫자 3개로 피라미드 속 목표 숫자를 만드는 두뇌 대결" },
   // 시즌X
   { id: "hilo", prog: "blood", season: "SX", title: "하이 앤 로우", emoji: "🃏", v: 2, short: "숨겨 낸 숫자로 점수 카드를 가져가요" },
   { id: "choicehold", prog: "blood", season: "SX", title: "초이스 홀덤", emoji: "♠️", v: 2, short: "카드를 골라 가져가는 1:1 홀덤" },
