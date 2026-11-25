@@ -298,6 +298,26 @@ function play(t0, t1, seed, bo = 3) {
   ok(sawMill > 0 && sawBlock > 0, `추천에 밀 · 막기가 나옴 (밀 ${sawMill} · 막기 ${sawBlock})`);
   ok(maxMs < 1500, `선생님 글 한 번 1.5초 안 (${maxMs}ms)`);
   console.log(`· 선생님 글 ${n}번 · 최대 ${maxMs}ms`);
+  // 복기 고리: actText · review (sev 0~100 · 숫자 근거)
+  ok(U.actText(pl(4)) === 'd6 에 말 놓기' && U.actText(mv(4, 7)) === 'd6 말을 d5로 옮기기' && U.actText(rm(15)) === 'c3 의 상대 말 빼기' && U.actText(mv(1, 6)) === 'd7 말을 c5로 옮기기', '행동 글 (조사 포함)');
+  {
+    const sc = scene({ b: [4, 13], w: [21, 22], hand: [6, 6], turn: 0 }), V = C.view(sc, 0);
+    const rv = U.review(V, 0, pl(0), pl(23), { k: 0 });
+    ok(rv.sev >= 60 && /점/.test(rv.why) && /막아야/.test(rv.why), `상대 밀 자리를 안 막은 수 = 아쉬운 장면 (${rv.sev}: ${rv.why})`);
+    const same = U.review(V, 0, pl(23), pl(23), { k: 0 });
+    ok(same.sev <= 5, '같은 수면 아쉬움 없음');
+    const vj = J(V); U.review(V, 0, pl(0), pl(23), {}); ok(J(V) === vj, 'review 는 view 를 안 바꿈');
+    const s3 = scene({ b: [0, 1, 20], w: [9, 10, 23], hand: [3, 3], turn: 0 }); C.apply(s3, 0, pl(2));
+    const r3 = U.review(C.view(s3, 0), 0, rm(23), rm(9), {});
+    ok(r3.sev >= 40 && /빼야/.test(r3.why), `빼기 복기: 곧 밀이 될 줄의 말 (${r3.sev}: ${r3.why})`);
+    // 3:3 날기 — 하양 a1·d1 줄의 g1 을 안 막으면 하양이 날아와 밀 → 검정 2개 = 짐
+    const s4 = scene({ b: [3, 7, 16], w: [21, 22, 5], hand: [0, 0], turn: 0 }), V4 = C.view(s4, 0);
+    const r4 = U.review(V4, 0, mv(3, 0), mv(3, 23), {});
+    ok(r4.sev === 100 && /이기는 길/.test(r4.why), `지는 수 = 아쉬움 100 (${r4.sev}: ${r4.why})`);
+    const r5 = U.review(V4, 0, mv(7, 23), mv(3, 23), {});
+    ok(r5.sev <= 20, `둘 다 막는 수면 아쉬움 작음 (${r5.sev}: ${r5.why})`);
+    ok(C.judge(V4, 1, mv(3, 0), mv(3, 23)) === null, 'judge: 내 차례가 아니면 null');
+  }
   // 결과 글
   const st = C.init({ n: 2, seed: 2, cfg: { bo: 1 } }); const r = mul(2);
   while (!st.over) { if (C.auto(st)) { C.advance(st); continue; } C.apply(st, st.turn, C.ai(C.view(st, st.turn), st.turn, 'normal', r)); }

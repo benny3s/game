@@ -7,7 +7,7 @@
   const COL = ["검정", "하양"], DOT = ["⚫", "⚪"];
   const SRC = "방송: 데블스 플랜 시즌 1 · 7일차 결승전 1회전 (1:1)";
   const DIFF = "놓기 90초 제한 없음 · 1판 선공은 무작위, 다음 판부터 번갈아 (방송은 1 · 3판 선후공을 베네핏 가진 사람이 정함) · 상대 말이 모두 밀이면 아무 말이나 뺌 · '교착 10턴' = 빼기 없이 둘이 10번씩, 3:3 이면 그 판 무승부 · 빼기 없이 100수가 지나면 말이 적은 쪽 패 · 무승부 판은 다시 함 (최대 5판) — 방송 글에 없어서 우리가 정함";
-  const pos = v => (6 + v * 88 / 6).toFixed(2);
+  const pos = v => (7 + v * 86 / 6).toFixed(2);
   // 받침에 맞춘 조사 (한글이 아니면 '이(가)')
   const jong = w => { const ch = String(w).trim().slice(-1), k = ch.charCodeAt(0) - 0xAC00; return k >= 0 && k <= 11171 ? (k % 28 ? 1 : 0) : -1; };
   const ga = w => { const j = jong(w); return j < 0 ? "이(가)" : j ? "이" : "가"; };
@@ -37,14 +37,14 @@
 .mo-board svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .mo-board svg rect,.mo-board svg line{fill:none;stroke:rgba(253,230,138,.55);stroke-width:2;vector-effect:non-scaling-stroke}
 .mo-board svg line.ml{stroke:#4ade80;stroke-width:5}
-.mo-p{position:absolute;width:12.6%;height:12.6%;transform:translate(-50%,-50%);display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:transparent;color:#fff;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.mo-p{position:absolute;width:14%;height:14%;transform:translate(-50%,-50%);display:grid;place-items:center;padding:0;border:0;border-radius:50%;background:transparent;color:#fff;font:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
 span.mo-p{cursor:default}
-.mo-p::before{content:"";width:26%;height:26%;border-radius:50%;background:rgba(253,230,138,.6)}
+.mo-p::before{content:"";width:23%;height:23%;border-radius:50%;background:rgba(253,230,138,.6)}
 .mo-p.f::before{display:none}
-.mo-pc{width:86%;height:86%;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,.6)}
+.mo-pc{width:78%;height:78%;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,.6)}
 .mo-pc.b{background:radial-gradient(circle at 35% 30%,#64748b,#0b0f17 68%);border:2px solid #cbd5e1}
 .mo-pc.w{background:radial-gradient(circle at 35% 30%,#fff,#cbd5e1 78%);border:2px solid #334155}
-.mo-p.pl::after,.mo-p.tg::after{content:"";position:absolute;inset:10%;border-radius:50%;pointer-events:none}
+.mo-p.pl::after,.mo-p.tg::after{content:"";position:absolute;inset:14%;border-radius:50%;pointer-events:none}
 .mo-p.pl::after{border:2px dashed #f5b301}
 .mo-p.tg::after{border:2.5px dashed #4ade80;background:rgba(74,222,128,.16)}
 .mo-p.mv .mo-pc{box-shadow:0 0 0 2px rgba(253,230,138,.7),0 2px 4px rgba(0,0,0,.6)}
@@ -57,7 +57,7 @@ span.mo-p{cursor:default}
 .mo-x{position:absolute;font:900 15px var(--round);font-style:normal;color:#f43f5e;pointer-events:none;text-shadow:0 1px 2px #000}
 .mo-bang,.mo-star{position:absolute;right:-6%;top:-6%;width:18px;height:18px;border-radius:50%;background:#e11d48;color:#fff;font:900 12px/18px var(--round);text-align:center;box-shadow:0 0 0 2px #fff;pointer-events:none;z-index:2}
 .mo-star{background:#f5b301;color:#3b2a00;box-shadow:0 0 0 2px #fff7d6}
-.mo-lb{position:absolute;left:50%;top:100%;transform:translate(-50%,-2px);font:700 8px var(--round);font-style:normal;color:rgba(253,230,138,.45);pointer-events:none}
+.mo-lb{position:absolute;transform:translate(-50%,-2px);font:700 8px var(--round);font-style:normal;color:rgba(253,230,138,.45);pointer-events:none}
 @keyframes moPulse{from{transform:scale(1)}to{transform:scale(1.07)}}
 .mo-info{flex:none;text-align:center;font-size:12.5px;line-height:1.4;color:var(--soft);min-height:2.8em;display:grid;place-items:center}
 .mo-info b{color:#fde68a}
@@ -82,7 +82,7 @@ span.mo-p{cursor:default}
     const has = (k, i) => o[k] && o[k].has(i);
     const P = XY.map(([x, y]) => [pos(x), pos(y)]);
     let g = `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">`;
-    for (const k of [0, 1, 2]) { const a = pos(k), w = (88 - k * 88 / 3).toFixed(2); g += `<rect x="${a}" y="${a}" width="${w}" height="${w}"/>`; }
+    for (const k of [0, 1, 2]) { const a = pos(k), w = (86 - k * 86 / 3).toFixed(2); g += `<rect x="${a}" y="${a}" width="${w}" height="${w}"/>`; }
     g += `<line x1="${pos(3)}" y1="${pos(0)}" x2="${pos(3)}" y2="${pos(2)}"/><line x1="${pos(3)}" y1="${pos(4)}" x2="${pos(3)}" y2="${pos(6)}"/>`;
     g += `<line x1="${pos(0)}" y1="${pos(3)}" x2="${pos(2)}" y2="${pos(3)}"/><line x1="${pos(4)}" y1="${pos(3)}" x2="${pos(6)}" y2="${pos(3)}"/>`;
     for (const m of o.millLines || []) { const a = P[m[0]], b = P[m[2]]; g += `<line class="ml" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`; }
@@ -95,9 +95,9 @@ span.mo-p{cursor:default}
       if (has("x", i)) inner += `<i class="mo-x">✕</i>`;
       if (!c && has("bang", i)) inner += `<span class="mo-bang">!</span>`;
       else if (!c && has("star", i)) inner += `<span class="mo-star">★</span>`;
-      if (o.labels) inner += `<i class="mo-lb">${LBL[i]}</i>`;
       const what = c ? `${COL[c - 1]} 말` : "빈 점";
       g += `<${tag}${btn ? ' type="button"' : ""} class="${cls}" data-c="${i}"${has("tp", i) ? ' data-tp="1"' : ""} style="left:${P[i][0]}%;top:${P[i][1]}%" aria-label="${LBL[i]} ${what}">${inner}</${tag}>`;
+      if (o.labels) g += `<i class="mo-lb" style="left:${P[i][0]}%;top:${(+P[i][1] + 7).toFixed(2)}%">${LBL[i]}</i>`;   // 점 이름 (단추 밖, 바로 아래)
     }
     return `<div class="mo-wrap"><div class="mo-board" aria-label="나인 멘스 모리스 판">${g}</div></div>`;
   }
@@ -252,6 +252,33 @@ span.mo-p{cursor:default}
     return { opp: p.join(" "), mine: m, rec, why };
   }
 
+  // ── 복기 고리 ──
+  function review(Vb, seat, myA, bestA) {
+    const J = K.judge(Vb, seat, myA, bestA);
+    if (!J || J.my === null || J.best === null) return { sev: 0, why: "같은 수가 아니어도 틀린 것은 아니에요" };
+    const W = J.WINV - 50, loss = Math.max(0, Math.round(J.best - J.my));
+    const ex = a => K.explain(Vb, seat, a), em = ex(myA), eb = ex(bestA), has = (e, t) => e.tags.includes(t);
+    let sev, why;
+    if (J.best >= W && J.my < W) { sev = 100; why = `고급 AI 의 수(${actText(bestA)})면 몇 수 안에 이 판을 이기는 길이 있었어요`; }
+    else if (J.my <= -W && J.best > -W) { sev = 100; why = `이 수 뒤엔 상대가 몇 수 안에 이기는 길이 생겨요 — ${actText(bestA)} 로 버틸 수 있었어요`; }
+    else {
+      sev = loss >= 150 ? 90 : loss >= 90 ? 75 : loss >= 60 ? 60 : loss >= 30 ? 40 : loss > 8 ? 20 : 5;
+      const r = [];
+      if (Vb.rem) {
+        if (has(eb, "breakTwo") && !has(em, "breakTwo")) r.push("상대가 곧 밀을 만들 줄의 말을 빼야 했어요");
+        else if (has(eb, "breakRun") && !has(em, "breakRun")) r.push("밀 자리로 옮겨 올 상대 말을 빼야 했어요");
+      } else {
+        if (has(eb, "mill") && !has(em, "mill")) r.push("그때 밀을 만들어 상대 말 하나를 뺄 수 있었어요");
+        if (has(eb, "block") && !has(em, "block")) r.push(`상대 밀 자리(${list(eb.opE)})를 막아야 했어요`);
+        if ((em.oppAfter || 0) > (eb.oppAfter || 0)) r.push(`내 수 뒤 상대 밀 자리가 ${em.oppAfter}곳 (고급 AI 수 뒤엔 ${eb.oppAfter || 0}곳)`);
+        if (has(eb, "squeeze") && !has(em, "squeeze")) r.push(`고급 AI 수는 상대 길을 ${eb.mob[0]} → ${eb.mob[1]}개로 줄여요`);
+      }
+      why = loss <= 8 ? `고급 AI: ${actText(bestA)} — 몇 수 앞까지 읽어도 내 수와 거의 같은 값이에요 (차이 ${loss}점, 말 1개 = 100점)`
+        : `고급 AI: ${actText(bestA)} — 몇 수 앞까지 읽으면 내 수보다 약 ${loss}점 나아요 (말 1개 = 100점)${r.length ? " · " + r.join(" · ") : ""}`;
+    }
+    return { sev, why, my: actText(myA), best: actText(bestA) };
+  }
+
   function result(V, me) {
     const ctx = {};
     const rows = V.hist.map(r => roundLine(r, me, ctx)).join("<br>");
@@ -319,7 +346,7 @@ span.mo-p{cursor:default}
     ],
     sub: V => `${V.over ? "끝" : V.bo === 3 ? `${V.round}판` : `단판${V.round > 1 ? ` (${V.round}번째)` : ""}`}${V.bo === 3 || V.over ? ` · ${DOT[0]}${V.wins[0]} : ${V.wins[1]}${DOT[1]}` : ""}`,
     chip: (V, i) => ({ t: `${DOT[i]}${V.total[i]}`, on: V.needs.includes(i) && !V.over, out: false }),
-    render, coach, result, tutorial,
+    render, coach, result, tutorial, review, actText: a => actText(a),
     qa: (V, me, rnd) => K.ai(V, me, "easy", rnd),
   };
 })();

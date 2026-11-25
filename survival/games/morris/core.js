@@ -337,6 +337,7 @@
   function scoreC(x, s, cfg) {
     const B = boardFrom(x);
     let mv = rootMoves(B, x, s);
+    if (cfg.only) mv = mv.filter(cfg.only);
     if (!mv.length) return null;
     mv = sortBy(mv, m => orderKey(B, m, s));
     const q3 = x.q3 || 0, quiet = x.quiet || 0;
@@ -357,7 +358,7 @@
         if (v > alpha) alpha = v;
       }
       if (B.stop) break;
-      done = sc;
+      done = sc; done.depth = d;
       if (Math.abs(alpha) >= WINV - 50) break;                // 이기거나 지는 길을 찾았으면 그만
       // 다음 깊이는 좋은 수부터
       const val = new Map(sc.map(z => [z[0], z[1]]));
@@ -417,6 +418,27 @@
     if (mill && m[2] < 0) { ex.tags.push("skipMill"); ex.millAt = mill[0][1]; }
     return Object.assign({ a, rm: m[2] }, ex);
   }
+  // 복기: 내 수 · 고급 AI 수의 값 (같은 깊이로 읽은 값, 말 1개 = 100). 밀을 만드는 수는 가장 좋은 빼기를 한 것으로 셈
+  //   넓게 읽을 때 창 밖으로 잘린 값(위쪽 한계뿐)이면 그 수만 같은 깊이로 다시 정확히 읽음
+  function judge(V, seat, a, b) {
+    if (V.over || V.phase !== "play" || V.turn !== seat || !a || !b) return null;
+    const hitOf = act => m => (V.rem ? act.t === "remove" && m[2] === act.at
+      : act.t === "place" ? m[0] === -1 && m[1] === act.to : act.t === "move" && m[0] === act.from && m[1] === act.to);
+    const done = scoreC(V, seat, Object.assign({}, TIER.coach, { slack: 400 }));
+    if (!done || !done.length) return null;
+    const val = (list, act) => {
+      let best = null; const hit = hitOf(act);
+      for (const [m, v, bd] of list) if (hit(m) && (best === null || v > best.v)) best = { v, exact: !bd };
+      return best;
+    };
+    let my = val(done, a), bs = val(done, b);
+    if ((my && !my.exact) || (bs && !bs.exact)) {
+      const ha = hitOf(a), hb = hitOf(b);
+      const again = scoreC(V, seat, Object.assign({}, TIER.coach, { slack: 0, depth: done.depth || TIER.coach.depth, only: m => ha(m) || hb(m) }));
+      if (again && again.length) { my = val(again, a) || my; bs = val(again, b) || bs; }
+    }
+    return { my: my ? my.v : null, best: bs ? bs.v : null, top: done[0][1], WINV };
+  }
   function analyze(V, me) {
     const opp = 1 - me;
     return { me: threatsOf(V.cells, V.hand, me), opp: threatsOf(V.cells, V.hand, opp), rec: recommend(V, me) };
@@ -425,6 +447,6 @@
   return {
     id: "morris", NP, MEN, Q3, QCAP, XY, MILLS, ADJ, LBL,
     init, needs, apply, view, over, ranks, legal, auto, advance, ai,
-    onBoard, millsAt, inMill, removable, baseMoves, threatsOf, explain, recommend, analyze, TIER,
+    onBoard, millsAt, inMill, removable, baseMoves, threatsOf, explain, recommend, analyze, judge, TIER,
   };
 });
