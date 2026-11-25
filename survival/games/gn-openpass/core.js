@@ -2,9 +2,11 @@
    방송: 더 지니어스 시즌 1 게임의 법칙 7화 메인 매치 — 카드 20장을 뒷면으로 깔고, 한 장씩 오픈 또는 패스해서 10칸 수식판을 채워요
    · 기본 카드 20장 (숫자 0~9 각 1장 · 기호 − 3 · ÷ 3 · × 2 · + 2). 가넷으로 추가 팩 구입 (1가넷 검정 · 2가넷 빨강 · 3가넷 파랑 — 팩마다 숫자 10장 + 기호 10장)
    · 가진 카드 중 20장을 골라 내면 섞여서 뒷면으로 깔려요. 앞면은 오픈하기 전엔 몰라요 (뒷면 색만 보여요)
-   · 카드마다 오픈(수식판 다음 칸에 들어감) 또는 패스(수식에서 제외, 최대 10장). 수식판 10칸이 차면 끝 — 남은 카드는 안 써요
-   · 계산: 왼쪽에서 오른쪽으로 읽되 숫자가 연달아 있으면 맨 왼쪽 숫자만, 기호가 연달아 있으면 맨 왼쪽 기호만 유효 ·
-     등호 바로 왼쪽(맨 끝) 카드가 기호면 그 기호는 무효 · 맨 왼쪽 카드가 기호면 그 앞에 0 이 있는 것으로 계산 · 곱셈 · 나눗셈 먼저
+   · 카드마다 오픈(수식판에 들어감) 또는 패스(수식에서 제외, 최대 10장). 수식판 10칸이 차면 끝 — 남은 카드는 안 써요
+   · 놓는 방향 (방송 영상 확인): 연 카드는 수식판의 등호(=) 바로 옆 오른쪽 끝(1번 칸)부터 왼쪽으로 채워요 — 첫 번째 카드가 1번 칸, 열 번째가 맨 왼쪽(10번 칸).
+     그래서 st.boards[s] 는 '화면에 보이는 왼쪽 → 오른쪽 순서'(맨 앞 = 가장 나중에 연 카드)이고, 연 순서는 st.tr · 로그 · 덱 위치로 알아요
+   · 계산: 왼쪽에서 오른쪽으로 읽되 숫자가 연달아 있으면 맨 왼쪽 숫자만(= 나중에 연 카드가 남고 앞서 연 카드는 버려져요), 기호가 연달아 있으면 맨 왼쪽 기호만 유효 ·
+     등호 바로 왼쪽(맨 끝 = 첫 번째로 연) 카드가 기호면 그 기호는 무효 · 맨 왼쪽(= 열 번째로 연) 카드가 기호면 그 앞에 0 이 있는 것으로 계산 · 곱셈 · 나눗셈 먼저
    · 값이 가장 큰 사람이 우승, 가장 작은 사람이 탈락 후보 (방송 기록: 10×8×8×8×7 = 35,840 · 9+7×8+9×7 = 128 …)
    우리 판 다듬기(방송 문서에 없음): 시작 가넷은 모두 같은 값(옵션) · 카드 나눠 쓰기(공동 구입)와 뒷면 방향 요령은 없음 · 순서는 무작위(방송은 가넷이 적은 사람부터) ·
    0 으로 나누면 그 항은 0 · 소수는 그대로 비교 · 값이 같으면 같은 등수 */
@@ -59,6 +61,7 @@
   // ── 수식 계산 ────────────────────────────────────────────
   const gcd = (a, b) => { a = Math.abs(a); b = Math.abs(b); while (b) { const t = a % b; a = b; b = t; } return a || 1; };
   const fr = (p, q) => { if (q < 0) { p = -p; q = -q; } const g = gcd(p, q); return { p: p / g, q: q / g }; };
+  // board = 화면에 보이는 왼쪽 → 오른쪽 순서 (맨 오른쪽 = 등호 옆 = 첫 번째로 연 카드)
   function keepRaw(board) {   // 연속 숫자 · 연속 기호는 맨 왼쪽만, 맨 왼쪽이 기호면 앞에 0 (끝 기호는 남겨 둠)
     const seq = [];
     if (board.length && typeof board[0] === "string") seq.push(0);
@@ -66,8 +69,8 @@
     return seq;
   }
   function keepSeq(board) { const s = keepRaw(board); if (s.length && typeof s[s.length - 1] === "string") s.pop(); return s; }
-  function evalBoard(board) {   // → { p, q } 분수 (칸이 비면 0)
-    const s = keepSeq(board);
+  function evalBoard(board) { return evalSeq(keepSeq(board)); }   // → { p, q } 분수 (칸이 비면 0)
+  function evalSeq(s) {
     if (!s.length) return fr(0, 1);
     let sum = fr(0, 1), cur = fr(s[0], 1), sign = 1;
     for (let i = 1; i < s.length; i += 2) {
@@ -130,8 +133,8 @@
   }
   function openCard(st, s, forced) {
     const c = st.decks[s][st.pos[s]++];
-    st.boards[s].push(c.f); st.okeys[s].push(gkey(c.b, c.f)); st.tr[s].push("o");
-    push(st, { k: "open", s, f: c.f, b: c.b, forced: !!forced });
+    st.boards[s].unshift(c.f); st.okeys[s].push(gkey(c.b, c.f)); st.tr[s].push("o");   // 새 카드는 맨 왼쪽에 (첫 카드가 등호 옆 1번 칸)
+    push(st, { k: "open", s, f: c.f, b: c.b, forced: !!forced, slot: st.boards[s].length });   // slot = 놓인 칸 번호 (등호 옆이 1번)
   }
   function apply(st, seat, a) {
     if (st.over) return { ok: false, err: "끝난 판이에요" };
@@ -222,26 +225,31 @@
     return v;
   }
   // ── AI (내가 보는 것만) ─────────────────────────────────────
-  // 오픈할지 정하는 기본 규칙(휴리스틱): 연속 숫자 · 연속 기호는 칸만 차지하니 패스, 곱셈 앞에선 2 이상 숫자, 덧셈 앞에선 큰 숫자만 열어요
+  // 오픈할지 정하는 기본 규칙(휴리스틱). 새 카드는 맨 왼쪽(board[0] 의 왼쪽)에 놓여요 — 그래서 '맨 왼쪽 카드(front)' 를 보고 정해요:
+  //  · 연속 숫자 · 연속 기호는 새 카드만 남고 앞 카드는 버려지니 칸만 쓰므로 패스 · 맨 왼쪽이 기호(× · +)면 그 왼쪽에 놓을 숫자만 열어요 (× 왼쪽엔 2 이상, + 왼쪽엔 큰 숫자)
+  //  · 기호는 왼쪽에 숫자가 더 올 자리(칸 2 이상)가 있을 때만 — 마지막 칸의 기호는 맨 앞 기호(앞에 0)가 돼서 위험해요
   const TH = {
     easy: { first: 3, mul: 1, add: 3, plus: 0.6, times: 0.6, loose: 0 },
     normal: { first: 6, mul: 2, add: 6, plus: 1, times: 1, loose: 1, addVal: 60 },
     hard: { first: 6, mul: 2, add: 6, plus: 1, times: 1, loose: 1, addVal: 60 },
   };
+  function frontVal(board) {   // 맨 왼쪽에 아직 숫자가 안 온 기호는 빼고 계산한 지금까지의 값 (곱할지 정할 때)
+    let i = 0; while (i < board.length && typeof board[i] === "string") i++;
+    return num(evalBoard(i ? board.slice(i) : board));
+  }
   function want(board, f, th, c) {
     if (c.passesLeft <= 0) return true;
-    const raw = keepRaw(board), last = raw[raw.length - 1];
-    const loose = c.passesLeft <= th.loose;
+    const front = board[0], loose = c.passesLeft <= th.loose;
     if (typeof f === "number") {
-      if (typeof last === "number") return loose;                 // 연속 숫자는 맨 왼쪽만 써서 낭비
-      if (last === undefined) return f >= th.first - (loose ? 4 : 0);
-      if (last === "*") return f >= th.mul - (loose ? 1 : 0) && num(evalBoard(board)) > 0;
-      if (last === "+") return f >= th.add - (loose ? 4 : 0);
-      return loose;                                                // − · ÷ 뒤는 값이 줄어요
+      if (front === undefined) return f >= th.first - (loose ? 4 : 0);   // 첫 카드 = 등호 옆 (맨 오른쪽) 숫자
+      if (typeof front === "number") return loose || (c.slotsLeft <= 1 && f >= front);   // 연속 숫자는 새 숫자만 남아요 — 마지막 칸이면 더 큰 숫자로 갈아 끼워요
+      if (front === "*") return f >= th.mul - (loose ? 1 : 0) && frontVal(board) > 0;
+      if (front === "+") return f >= th.add - (loose ? 4 : 0);
+      return loose;                                                // − · ÷ 왼쪽은 값이 줄어요
     }
-    if (last === undefined || typeof last === "string") return false;   // 처음 기호 · 연속 기호는 낭비
-    if (f === "*") return num(evalBoard(board)) > 0 && c.slotsLeft >= 2 && th.times > 0;
-    if (f === "+") return th.plus > 0 && c.slotsLeft >= 2 && num(evalBoard(board)) < (th.addVal || 40);
+    if (front === undefined || typeof front === "string") return false;   // 첫 기호(끝 기호는 무효) · 연속 기호는 낭비
+    if (f === "*") return frontVal(board) > 0 && c.slotsLeft >= 2 && th.times > 0;
+    if (f === "+") return th.plus > 0 && c.slotsLeft >= 2 && frontVal(board) < (th.addVal || 40);
     return false;
   }
   // 모르는 카드(unk)와 뒷면 색만 보고 정하는 기본 규칙 — 같은 색의 남은 카드 중 '열고 싶은 카드'가 절반을 넘으면 열어요
@@ -255,7 +263,7 @@
     const b = board.slice(), unk = Object.assign({}, unk0); let ps = passes;
     for (let i = pos; i < DECK && b.length < SLOTS; i++) {
       const c = { passesLeft: MAXPASS - ps, cardsLeft: DECK - i, slotsLeft: SLOTS - b.length };
-      if (ps >= MAXPASS || blindOpen(b, unk, backs[i], c, th)) { b.push(faces[i]); const k = gkey(backs[i], faces[i]); if (unk[k] > 0) unk[k]--; } else ps++;
+      if (ps >= MAXPASS || blindOpen(b, unk, backs[i], c, th)) { b.unshift(faces[i]); const k = gkey(backs[i], faces[i]); if (unk[k] > 0) unk[k]--; } else ps++;
     }
     return num(evalBoard(b));
   }
@@ -276,7 +284,7 @@
     for (let t = 0; t < trials; t++) {
       const faces = sampleFaces(V.unk, V.backs[me], pos, r);
       const unkO = Object.assign({}, V.unk), ko = gkey(V.backs[me][pos], faces[pos]); if (unkO[ko] > 0) unkO[ko]--;
-      const vo = playRest(board.concat([faces[pos]]), ps, pos + 1, faces, V.backs[me], unkO, th);
+      const vo = playRest([faces[pos]].concat(board), ps, pos + 1, faces, V.backs[me], unkO, th);
       const vp = ps < MAXPASS ? playRest(board, ps + 1, pos + 1, faces, V.backs[me], V.unk, th) : -Infinity;
       if (Tn !== null) { eo += vo > Tn ? 1 : 0; ep += vp > Tn ? 1 : 0; } else { eo += lg(vo); ep += vp === -Infinity ? -1e9 : lg(vp); }
     }
@@ -382,7 +390,7 @@
     for (let t = 0; t < trials; t++) {
       const faces = sampleFaces(V.unk, backs, pos, r);
       const unkO = Object.assign({}, V.unk), ko = gkey(backs[pos], faces[pos]); if (unkO[ko] > 0) unkO[ko]--;
-      vo.push(playRest(board.concat([faces[pos]]), ps, pos + 1, faces, backs, unkO, th));
+      vo.push(playRest([faces[pos]].concat(board), ps, pos + 1, faces, backs, unkO, th));
       vp.push(canPass ? playRest(board, ps + 1, pos + 1, faces, backs, V.unk, th) : null);
     }
     const res = { win: Tn !== null, T, nOpp: Math.max(1, V.n - 1), canPass, vOpen: lgShow(meanOf(vo.map(lg))), vPass: canPass ? lgShow(meanOf(vp.map(lg))) : null };
@@ -449,13 +457,13 @@
     const mineTxt = `${V.boards[me].length}/${SLOTS}칸 · 패스 ${V.passes[me]}/${MAXPASS} · 수식 ${exprText(V.boards[me]) || "(비어 있음)"} = ${showVal(evalBoard(V.boards[me]))} · ${unkTxt(u)}`;
     if (V.passes[me] >= MAXPASS) return { opp, mine: mineTxt, rec: "오픈 (패스를 다 썼어요)", why: `패스를 ${MAXPASS}장 다 써서 남은 카드 ${DECK - p}장은 자동으로 열려요.` };
     const ev = evalPlay(V, me, p * 131 + V.passes[me] * 17 + me + 11, 500);
-    const pend = keepRaw(V.boards[me]), last = pend[pend.length - 1];
-    const tip = last === undefined ? "처음 칸에는 큰 숫자가 좋아요." : typeof last === "number" ? "숫자 뒤에는 기호(특히 ×)가 필요해요 — 숫자가 또 나오면 칸만 차지해요." : "기호 뒤에는 숫자가 필요해요 — 기호가 또 나오면 소용없어요.";
+    const front = V.boards[me][0];   // 새 카드는 맨 왼쪽에 놓여요 (첫 카드는 등호 옆 1번 칸)
+    const tip = front === undefined ? "첫 카드는 등호 옆 맨 오른쪽 칸에 놓여요 — 큰 숫자가 좋아요 (기호가 먼저 나오면 끝 기호라 무효예요)." : typeof front === "number" ? "맨 왼쪽 숫자 왼쪽에는 기호(특히 ×)가 필요해요 — 숫자가 또 나오면 새 숫자만 남고 앞 숫자는 버려져요." : "맨 왼쪽 기호 왼쪽에는 숫자가 필요해요 — 기호가 또 나오면 새 기호만 남고, 마지막 칸의 기호는 앞에 0 이 붙어요.";
     if (!ev) return { opp, mine: mineTxt, rec: "오픈", why: `${BACK_NAME[col]} 뒷면 카드예요. ${tip}` };
     const rec = ev.open >= ev.pass ? "오픈" : "패스";
     const why = `${BACK_NAME[col]} 뒷면 카드예요 — ${ev.win ? `지금 최고(${showVal(ev.T)})를 넘길 확률이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}` : `이길 확률(상대 ${ev.nOpp}명도 내 덱과 비슷하다고 볼 때)이 오픈 ${pct(ev.open)} · 패스 ${pct(ev.pass)}`}예요 (끝까지 해 봤을 때 대표 값 오픈 약 ${ev.vOpen} · 패스 약 ${ev.vPass}). ${tip}`;
     return { opp, mine: mineTxt, rec, why };
   }
 
-  return { id: "gn-openpass", TH, want, playRest, sampleFaces, judgePlay, pickDeck, simDeck, bestDeck, allBuys, ai, coach, packTxt, selTxt, bestOther, DECK, SLOTS, MAXPASS, MAXBUY, SYM, BACKS, BACK_NAME, BASE, PACKS, init, needs, apply, view, over, ranks, legal, auto, advance, poolOf, poolSize, groupList, buyCost, faceOfKey, backOfKey, gkey, keepRaw, keepSeq, evalBoard, num, cmpF, showVal, exprText, symTxt, sampler, hash, autoPick, deckOutcomes, evalDeck, evalBuy, evalPlay, beatProb, lgShow, unkInfo, unkTxt };
+  return { id: "gn-openpass", TH, want, playRest, sampleFaces, judgePlay, pickDeck, simDeck, bestDeck, allBuys, ai, coach, packTxt, selTxt, bestOther, DECK, SLOTS, MAXPASS, MAXBUY, SYM, BACKS, BACK_NAME, BASE, PACKS, init, needs, apply, view, over, ranks, legal, auto, advance, poolOf, poolSize, groupList, buyCost, faceOfKey, backOfKey, gkey, keepRaw, keepSeq, evalBoard, evalSeq, frontVal, num, cmpF, showVal, exprText, symTxt, sampler, hash, autoPick, deckOutcomes, evalDeck, evalBuy, evalPlay, beatProb, lgShow, unkInfo, unkTxt };
 });

@@ -18,8 +18,14 @@
 .op-p .st{font:700 10.5px var(--round);color:var(--soft);white-space:nowrap}
 .op-bd{flex:none;display:grid;gap:4px;padding:6px;border-radius:12px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.14)}
 .op-bd .lb{font:800 11.5px var(--round);color:var(--soft);text-align:center}
-.op-sl{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
-.op-s{display:grid;place-items:center;height:38px;border-radius:9px;border:2px dashed rgba(255,255,255,.2);font:900 20px var(--round);color:#fff;background:rgba(255,255,255,.04);position:relative}
+.op-sl{display:grid;grid-template-columns:repeat(10,minmax(0,1fr)) 14px;gap:3px;align-items:center}
+.op-sw3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:100%}
+.op-eq{font:900 18px var(--round);color:#fde68a;text-align:center;line-height:1}
+.op-no{display:grid;grid-template-columns:repeat(10,minmax(0,1fr)) 14px;gap:3px;margin-top:-2px}
+.op-no i{font:800 9.5px var(--round);font-style:normal;color:#94a3b8;text-align:center;line-height:1;white-space:nowrap}
+.op-no i.n1{color:#fde68a}
+.op-s{display:grid;place-items:center;height:38px;min-width:0;border-radius:7px;border:2px dashed rgba(255,255,255,.2);font:900 18px var(--round);color:#fff;background:rgba(255,255,255,.04);position:relative;box-sizing:border-box;overflow:hidden}
+.op-s.w2{font-size:12.5px;letter-spacing:-1px}
 .op-s.f{border-style:solid}
 .op-s.cb{background:#1f2937;border-color:#6b7280}.op-s.cr{background:#b91c1c;border-color:#fca5a5}.op-s.cu{background:#1d4ed8;border-color:#93c5fd}
 .op-s.sy{color:#fde68a}
@@ -74,6 +80,7 @@
 .op-tut{display:grid;gap:8px;justify-items:center;font-size:14px;width:100%}
 .op-tut .op-info{width:100%}
 .op-tut .op-sl{width:100%}
+.op-tb{display:grid;gap:4px;width:100%}
 .op-opt{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;width:100%}
 .op-opt button{padding:10px 0;border-radius:11px;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font:900 17px var(--round);cursor:pointer}
 @media (max-height:780px){.op-s{height:33px;font-size:18px}.op-c{height:22px}.op-info{font-size:11.5px}.op-acts button{padding:8px 4px;font-size:14px}.op-p{padding:3px 5px}.op-ex b{font-size:15px}.op-pr{padding:4px 7px}.op-sw{height:30px}.op-ch button{font-size:14px}}
@@ -92,22 +99,29 @@
   };
   const spent = p => G.buyCost(p);
   // 수식판 칸 색은 '열린 카드의 뒷면 색' 을 쓰려고 trace · deck 정보를 같이 받아요
-  const boardCells = (V, o) => {
-    const out = []; let j = 0;
-    const tr = V.tr[o], backs = V.backs ? V.backs[o] : null;
-    for (let i = 0; i < tr.length; i++) if (tr[i] === "o") { out.push({ f: V.boards[o][j++], b: backs ? backs[i] : "b" }); }
+  // V.boards[o] = 화면에 보이는 왼쪽 → 오른쪽 순서 (맨 왼쪽 = 가장 나중에 연 카드). 연 순서(첫 카드 = 등호 옆 1번 칸)는 tr · 뒷면 목록으로 맞춰요
+  const openSeq = (V, o) => {
+    const out = [], tr = V.tr[o], backs = V.backs ? V.backs[o] : null, bd = V.boards[o], L = bd.length; let j = 0;
+    for (let i = 0; i < tr.length; i++) if (tr[i] === "o") { out.push({ f: bd[L - 1 - j], b: backs ? backs[i] : "b" }); j++; }
     return out;
   };
-  const slotRow = (cells, nNew) => {
-    let h = "";
+  const boardCells = (V, o) => openSeq(V, o).reverse();   // 화면 순서 (왼쪽 → 오른쪽)
+  // 10칸을 등호 옆 오른쪽부터 채워요 (cells = 화면 순서, 빈 칸은 왼쪽). 칸 번호는 10 9 … 1 =
+  const slots = (cells, o) => {
+    o = o || {}; const off = G.SLOTS - cells.length;
+    let h = `<div class="op-sl">`;
     for (let i = 0; i < G.SLOTS; i++) {
-      const c = cells[i];
-      h += c === undefined ? `<div class="op-s"></div>` : `<div class="op-s f ${CB[c.b]} ${typeof c.f === "string" ? "sy" : ""} ${i === nNew ? "new" : ""}">${face(c.f)}</div>`;
+      const c = i < off ? null : cells[i - off];
+      if (!c) { h += `<div class="op-s"></div>`; continue; }
+      const cls = ["op-s", "f", c.b ? CB[c.b] : "", typeof c.f === "string" ? "sy" : "", String(c.f).length > 1 ? "w2" : "", c.dim ? "dim" : "", o.fresh && i === off ? "new" : ""].filter(Boolean).join(" ");
+      h += `<div class="${cls}"${c.b ? "" : ` style="background:#334155"`}>${face(c.f)}</div>`;
     }
-    return h;
+    h += `<div class="op-eq">=</div></div><div class="op-no">`;
+    for (let i = 0; i < G.SLOTS; i++) h += `<i${i === G.SLOTS - 1 ? ` class="n1"` : ""}>${G.SLOTS - i}</i>`;
+    return h + `<i></i></div>`;
   };
   const deckRow = (V, o) => {
-    const tr = V.tr[o], backs = V.backs[o], pos = V.pos[o], faces = boardCells(V, o); let j = 0, h = "";
+    const tr = V.tr[o], backs = V.backs[o], pos = V.pos[o], faces = openSeq(V, o); let j = 0, h = "";
     for (let i = 0; i < G.DECK; i++) {
       const b = CB[backs[i]];
       if (i < pos) {
@@ -122,7 +136,7 @@
     const e = V.log.slice().reverse().find(x => x.k === "open" || x.k === "pass" || x.k === "done");
     if (!e) return "";
     const nm = who(ctx, V, me, watch, e.s);
-    if (e.k === "open") return `${nm}: ${cardTxt(e.b, e.f)} 카드를 열었어요${e.forced ? " (패스를 다 써서 자동)" : ""}`;
+    if (e.k === "open") return `${nm}: ${cardTxt(e.b, e.f)} 카드를 열었어요${e.slot ? ` → ${e.slot}번 칸` : ""}${e.forced ? " (패스를 다 써서 자동)" : ""}`;
     if (e.k === "pass") return `${nm}: ${G.BACK_NAME[V.backs[e.s][Math.max(0, V.pos[e.s] - 1)]] || ""} 카드를 패스했어요 (앞면은 비밀)`;
     return `${nm}: 수식이 끝났어요 = ${esc(e.v)}`;
   };
@@ -165,8 +179,8 @@
       return `<div class="op-p ${cls}"><div class="nm">${ix + 1}. ${who(ctx, V, me, watch, i)}</div><div class="vl">${V.vals[i] ? "" : "≈ "}${val(i)}</div><div class="st">${V.vals[i] ? "✔ 끝" : `${V.boards[i].length}/${G.SLOTS}칸 · 패스 ${V.passes[i]}/${G.MAXPASS}`}</div></div>`;
     }).join("")}</div>`;
     if (!V.over) {
-      const cells = boardCells(V, o), fresh = V.log.length && V.log[V.log.length - 1].k === "open" && V.log[V.log.length - 1].s === o ? cells.length - 1 : -1;
-      h += `<div class="op-bd"><div class="lb">${who(ctx, V, me, watch, o)} 수식판 (${V.boards[o].length}/${G.SLOTS}) · 패스 ${V.passes[o]}/${G.MAXPASS}</div><div class="op-sl">${slotRow(cells, fresh)}</div><div class="op-ex">${esc(G.exprText(V.boards[o])) || "—"} = <b>${val(o)}</b></div><div class="op-dk">${deckRow(V, o)}</div></div>`;
+      const cells = boardCells(V, o), fresh = !!(V.log.length && V.log[V.log.length - 1].k === "open" && V.log[V.log.length - 1].s === o);
+      h += `<div class="op-bd"><div class="lb">${who(ctx, V, me, watch, o)} 수식판 (${V.boards[o].length}/${G.SLOTS}) · 패스 ${V.passes[o]}/${G.MAXPASS} · 등호 옆부터 왼쪽으로</div>${slots(cells, { fresh })}<div class="op-ex">${esc(G.exprText(V.boards[o])) || "—"} = <b>${val(o)}</b></div><div class="op-dk">${deckRow(V, o)}</div></div>`;
       h += `<div class="op-ln">${lastLine(V, ctx, me, watch)}</div>`;
     } else {
       h += `<div class="op-rs">${V.order.slice().sort((a, b) => V.ranks[a] - V.ranks[b]).map(i => {
@@ -264,27 +278,28 @@
   }
   function tutorial() {
     style();
-    const cells = (arr, hl) => `<div class="op-sl">${[...Array(G.SLOTS).keys()].map(i => { const f = arr[i]; return f === undefined ? `<div class="op-s"></div>` : `<div class="op-s f ${typeof f === "string" ? "sy" : ""} ${hl && hl.includes(i) ? "dim" : ""}" style="background:#334155">${face(f)}</div>`; }).join("")}</div>`;
+    // arr = 화면 순서 (왼쪽 → 오른쪽) · 등호 옆 오른쪽부터 채워져요 · hl = 흐리게 할 카드 번호 (arr 안 자리)
+    const cells = (arr, hl) => `<div class="op-tb">${slots(arr.map((f, i) => ({ f, dim: !!(hl && hl.includes(i)) })))}</div>`;
     const ex = arr => `${G.exprText(arr)} = <b>${G.showVal(G.evalBoard(arr))}</b>`;
     const A = [10, "*", 8, "*", 8, "*", 8, "*", 7];
     const B = [3, 4, "+", "*", 5, "-"];
     return [
-      { tag: "STEP 1 · 목표", title: "수식판 10칸으로 큰 값을 만들어요", body: "카드를 한 장씩 <b>오픈</b>하면 수식판 칸에 차례로 들어가요. 완성한 수식의 <b>값이 가장 큰 사람이 우승</b>, 가장 작은 사람이 탈락 후보예요. (방송 기록: 10×8×8×8×7 = 35,840)",
-        boardHtml: `<div class="op-tut">${cells(A)}<div class="op-info op-ex">${ex(A)}</div></div>`, ms: 7000 },
-      { tag: "STEP 2 · 카드와 팩", title: "카드는 기본 20장 + 가넷으로 산 팩", body: "기본 카드는 <b>숫자 0~9 각 1장</b>과 기호 <b>− 3 · ÷ 3 · × 2 · + 2</b>. 가넷으로 팩(<b>검정 1 · 빨강 2 · 파랑 3 가넷</b>)을 사서 카드를 늘리고, 그중 <b>20장</b>을 골라 내요. 큰 숫자와 ×(곱셈)가 많은 파랑 팩이 가장 강해요. 팩마다 <b>뒷면 색이 달라요</b> (기본 카드는 모두 검정 뒷면).",
-        boardHtml: `<div class="op-tut"><div class="op-sl">${["검정", "빨강", "파랑"].map((n, i) => `<div class="op-s f ${["cb", "cr", "cu"][i]}" style="font-size:12px">${n}</div>`).join("")}</div><div class="op-info">파랑 뒷면에는 7·8·9 가 많고, 빨강은 4·5·6 이 많아요 — 뒷면 색은 힌트일 뿐 (검정에도 7·8 이 있어요)</div></div>`, ms: 8000 },
-      { tag: "STEP 3 · 오픈 / 패스", title: "앞면은 열기 전엔 몰라요", body: "내가 낸 20장은 <b>섞여서 뒷면으로</b> 깔려요 (색만 보여요). 카드마다 <b>오픈</b>(수식판에 들어가요) 또는 <b>패스</b>(수식에서 빠져요) — 패스는 <b>최대 10장</b>, 10칸이 차면 끝나요. 패스를 다 쓰면 남은 카드는 자동으로 열려요.",
-        boardHtml: `<div class="op-tut"><div class="op-dk" style="width:100%">${["cu", "cb", "cu", "cr", "cu", "cb", "cu", "cu", "cr", "cb"].map((c, i) => `<div class="op-c ${c} ${i === 3 ? "now" : ""} ${i === 1 ? "pass" : ""}"></div>`).join("")}</div><div class="op-info">⏭ 두 번째 카드는 패스 (✕) · 노란 테두리가 지금 카드예요</div></div>`, ms: 7500 },
-      { tag: "STEP 4 · 계산 규칙", title: "겹친 카드는 맨 왼쪽만, 곱셈이 먼저", body: "숫자가 연달아 나오면 <b>맨 왼쪽 숫자만</b>, 기호가 연달아 나오면 <b>맨 왼쪽 기호만</b> 써요. <b>맨 끝 기호는 무효</b>, 맨 앞이 기호면 그 앞에 0 이 있는 것으로 계산해요. × ÷ 가 + − 보다 먼저예요.",
-        boardHtml: `<div class="op-tut">${cells(B, [1, 3, 5])}<div class="op-info op-ex">${ex(B)}<br>(흐린 카드: 겹치거나 끝에 있어서 무효)</div></div>`, ms: 9000 },
-      { tag: "STEP 5 · 직접", title: "9 × 다음에 어떤 카드가 올 때 가장 클까요?", body: "수식판이 <b>9 ×</b> 에요. 다음 카드의 앞면이 <b>2 · 7 · + · ÷</b> 중 하나일 때 값이 가장 커지는 카드는?",
-        interactive: { hint: "👆 가장 큰 값이 되는 카드를 눌러요", doneText: "✅ 7 이 오면 9 × 7 = 63! 기호가 또 나오면 맨 왼쪽 기호(×)만 쓰여서 값이 안 변하고, 칸만 차지해요." },
+      { tag: "STEP 1 · 목표", title: "수식판 10칸으로 큰 값을 만들어요", body: "카드를 한 장씩 <b>오픈</b>하면 수식판에 들어가요. 카드는 <b>등호(=) 바로 옆 오른쪽 끝(1번 칸)부터 왼쪽으로</b> 채워지고, <b>열 장이 모두 채워지면</b> 수식을 완성해 계산해요. <b>수식값이 가장 높은 사람이 우승</b>, 가장 낮은 사람이 <b>탈락후보</b>예요. (방송 기록: 홍진호 10×8×8×8×7 = 35,840)",
+        boardHtml: `<div class="op-tut">${cells(A)}<div class="op-info op-ex">${ex(A)}<br><span style="font-size:11.5px;font-weight:700">10번 칸은 아직 비었어요 — 다음 카드는 맨 왼쪽에 놓여요</span></div></div>`, ms: 8000 },
+      { tag: "STEP 2 · 카드와 팩", title: "카드는 기본 20장 + 가넷으로 산 팩", body: "<b>기본카드</b>는 숫자 0~9 각 1장과 기호 <b>− 3 · ÷ 3 · × 2 · + 2</b>. 가넷으로 카드(<b>1가넷 검정 · 2가넷 빨강 · 3가넷 파랑</b> 팩)를 사서 늘리고, 그중 <b>20장</b>을 골라 카드 더미를 만들어 딜러에게 내요. 큰 숫자와 ×(곱셈)가 많은 파랑 팩이 가장 강해요. 팩마다 <b>뒷면 색이 달라요</b> (기본카드는 모두 검정 뒷면).",
+        boardHtml: `<div class="op-tut"><div class="op-sw3">${["검정", "빨강", "파랑"].map((n, i) => `<div class="op-s f ${["cb", "cr", "cu"][i]}" style="font-size:12px">${n}</div>`).join("")}</div><div class="op-info">파랑 뒷면에는 7·8·9 가 많고, 빨강은 4·5·6 이 많아요 — 뒷면 색은 힌트일 뿐 (검정에도 7·8 이 있어요)</div></div>`, ms: 8000 },
+      { tag: "STEP 3 · 오픈 / 패스", title: "앞면은 열기 전엔 몰라요", body: "내가 낸 20장은 <b>섞여서 뒷면으로</b> 깔려요 (색만 보여요). 카드마다 <b>오픈</b>(수식에 포함 — 등호 옆 1번 칸부터 왼쪽으로 놓여요) 또는 <b>패스</b>(카드 제거) — 패스는 <b>최대 10장</b>, 10칸이 차면 끝나요. 패스를 다 쓰면 남은 카드는 자동으로 열려요.",
+        boardHtml: `<div class="op-tut"><div class="op-dk" style="width:100%">${["cu", "cb", "cu", "cr", "cu", "cb", "cu", "cu", "cr", "cb"].map((c, i) => `<div class="op-c ${c} ${i === 3 ? "now" : ""} ${i === 1 ? "pass" : ""}"></div>`).join("")}</div><div class="op-info">⏭ 두 번째 카드는 패스 (✕) · 노란 테두리가 지금 카드예요</div></div>`, ms: 8000 },
+      { tag: "STEP 4 · 계산 규칙", title: "겹친 카드는 맨 왼쪽만, 곱셈이 먼저", body: "숫자끼리 · 기호끼리 나란히 놓이면 <b>맨 왼쪽 카드만</b> 남고 나머지는 버려져요 (왼쪽 = 나중에 연 카드라서, 나중에 연 카드가 남아요). 등호 옆 <b>첫 카드가 기호면 등호와 겹쳐 무효</b>, <b>열 번째(맨 왼쪽) 카드가 기호면 그 앞에 0</b> 이 있는 것으로 계산해요. × ÷ 가 + − 보다 먼저예요.",
+        boardHtml: `<div class="op-tut">${cells(B, [1, 3, 5])}<div class="op-info op-ex">${ex(B)}<br><span style="font-size:11.5px;font-weight:700">연 순서(오른쪽부터): − · 5 · × · + · 4 · 3 — 흐린 카드는 겹치거나 끝 기호라 무효</span></div></div>`, ms: 9500 },
+      { tag: "STEP 5 · 직접", title: "× 9 의 왼쪽에 어떤 카드가 올 때 가장 클까요?", body: "수식판 등호 옆에 <b>9</b>, 그 왼쪽에 <b>×</b> 가 놓여 있어요. 다음 카드는 맨 왼쪽에 놓여요. 앞면이 <b>2 · 7 · + · ÷</b> 중 하나일 때 값이 가장 커지는 카드는?",
+        interactive: { hint: "👆 가장 큰 값이 되는 카드를 눌러요", doneText: "✅ 7 이 오면 7 × 9 = 63! 기호가 오면 맨 왼쪽 기호(새 기호)만 남고 × 는 버려져서 값이 안 커져요." },
         render(stage, ctrl) {
-          stage.innerHTML = `<div class="op-tut">${cells([9, "*"])}<div class="op-opt">${["2", "7", "+", "÷"].map(x => `<button data-w="${x}">${x}</button>`).join("")}</div><div class="op-info" id="op-tm">9 × ? — 어떤 카드가 가장 클까요?</div></div>`;
+          stage.innerHTML = `<div class="op-tut">${cells(["*", 9])}<div class="op-opt">${["2", "7", "+", "÷"].map(x => `<button data-w="${x}">${x}</button>`).join("")}</div><div class="op-info" id="op-tm">? × 9 — 어떤 카드가 가장 클까요?</div></div>`;
           stage.onclick = e => {
             const b = e.target.closest("[data-w]"); if (!b) return;
             if (b.dataset.w === "7") { ctrl.sfx("win"); ctrl.complete(); }
-            else { ctrl.sfx("tap"); const m = stage.querySelector("#op-tm"); if (m) m.textContent = b.dataset.w === "2" ? "9 × 2 = 18 — 더 큰 숫자가 있어요" : "기호가 또 나오면 맨 왼쪽 기호(×)만 쓰여서 칸만 차지해요"; }
+            else { ctrl.sfx("tap"); const m = stage.querySelector("#op-tm"); if (m) m.textContent = b.dataset.w === "2" ? "2 × 9 = 18 — 더 큰 숫자가 있어요" : "기호가 또 나오면 새 기호(맨 왼쪽)만 남고 × 가 버려져서 값이 안 커져요"; }
           };
         } },
     ];
@@ -294,13 +309,13 @@
   window.SVUI["gn-openpass"] = {
     name: "오픈, 패스", emoji: "🔓", short: "뒷면 카드를 열거나 넘기며 10칸 수식판으로 가장 큰 값을 만들어요", min: 2, max: 7, defN: 4, board: false,
     show: "더 지니어스 · 시즌 1 · 오픈, 패스", season: "시즌 1 게임의 법칙",
-    opts: [{ k: "gar", label: "시작 가넷", items: [[0, "추가 팩 없음 (기본 카드만)"], [4, "가넷 4개 (방송 평균)"], [8, "가넷 8개"]], def: 4 }],
-    diff: "방송은 후보마다 시작 가넷이 달라 가넷이 적은 사람부터 순서를 정하지만, 우리는 모두 같은 가넷으로 시작하고 순서는 무작위예요 · 카드 나눠 쓰기(공동 구입)와 뒷면 방향 요령은 없어요 · 0 으로 나누면 그 항은 0, 소수는 그대로 비교(같은 값이면 같은 등수) · 곱셈 · 나눗셈 먼저(방송 설명으로 추정) · 최대 7명",
+    opts: [{ k: "gar", label: "시작 가넷", items: [[0, "추가 팩 없음 (기본 카드만)"], [4, "가넷 4개 (방송에서 산 3~5가넷쯤)"], [8, "가넷 8개 (방송 시작 가넷 최저)"], [10, "가넷 10개 (방송 시작 가넷 평균쯤)"]], def: 4 }],
+    diff: "방송은 시작 가넷이 8~13개로 달라 가넷이 적은 사람부터 하고 우승 가넷 5개 · 2위 2개를 주지만, 우리는 같은 가넷으로 시작 · 순서 무작위 · 가넷 보상 없음 · 공동 구입 · 뒷면 방향 요령 없음 · 0 으로 나누면 그 항은 0, 소수는 그대로 비교(같은 값이면 같은 등수) · 곱셈 · 나눗셈 먼저 (곱셈은 방송 결과 128 로 확인, 나눗셈은 방송 예 없음) · 최대 7명",
     howto: [
-      "카드는 <b>기본 20장</b> + 가넷으로 산 <b>팩</b> (검정 1 · 빨강 2 · 파랑 3 가넷) — 그중 <b>20장</b>을 골라 내요",
-      "내 카드는 <b>섞여서 뒷면으로</b> 깔려요 (색만 보여요) · 한 장씩 <b>오픈</b>(수식판 다음 칸) 또는 <b>패스</b>(최대 10장)",
-      "숫자가 연달아면 <b>맨 왼쪽만</b>, 기호가 연달아면 <b>맨 왼쪽 기호만</b> · 끝 기호는 무효 · 맨 앞 기호는 앞에 0 · × ÷ 먼저",
-      "10칸이 차면 끝 — 한 사람씩 차례로 해요 · <b>값이 가장 큰 사람 우승</b>, 가장 작은 사람이 탈락 후보",
+      "<b>기본카드 20장</b> + 가넷으로 산 카드(<b>1 · 2 · 3가넷</b> = 검정 · 빨강 · 파랑 <b>팩</b>) — 그중 <b>20장</b>으로 카드 더미를 만들어 내요",
+      "카드 더미는 <b>섞여서 뒷면으로</b> 깔려요 (색만 보여요) · 한 장씩 <b>오픈</b>하면 수식판의 <b>등호(=) 옆 오른쪽 끝부터 왼쪽으로</b> 놓이고, <b>패스</b>하면 카드 제거 (패스는 최대 10장)",
+      "열 장이 채워지면 수식 완성 — 숫자끼리 · 기호끼리 겹치면 <b>맨 왼쪽만</b> 남아요 (나중에 연 카드) · 첫 카드가 기호면 등호와 겹쳐 무효 · 열 번째(맨 왼쪽) 카드가 기호면 앞에 0 · × ÷ 먼저",
+      "한 사람씩 차례로 해요 · <b>수식값이 가장 높은 사람 우승</b>, 가장 낮은 사람이 <b>탈락후보</b>",
     ],
     sub: V => (V.over ? "끝" : V.phase === "buy" ? "팩 구입" : V.phase === "submit" ? "카드 제출" : `${V.vals.filter(Boolean).length}/${V.n}명 끝`),
     chip: (V, i) => ({ t: V.phase === "play" || V.over ? (V.vals[i] ? G.showVal(V.vals[i]) : `${V.boards[i].length}/${G.SLOTS}`) : V.phase === "buy" ? (V.buyDone[i] ? "구입 ✓" : "구입 중") : (V.subDone[i] ? "제출 ✓" : "고르는 중"), on: V.needs.includes(i) && !V.over, out: false }),
