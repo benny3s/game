@@ -52,8 +52,8 @@
 .hd-tut .hd-card.sh{width:50px;height:68px;font-size:34px}
 .hd-tut small{display:block;text-align:center;color:var(--soft);font-size:11.5px;margin-top:2px}
 .hd-table>.hd-seat:first-child .hd-lb{margin-bottom:8px}
-@media (max-height:780px){.hd-card .lbl{display:none}.hd-card{width:66px;height:88px;font-size:46px;border-width:3px}.hd-card.sh{width:52px;height:70px;font-size:36px}.hd-track{gap:2px}.hd-pip{padding:1px 3px;min-width:23px}.hd-btns .btn{padding:9px 6px}.hd-table{gap:3px}.hd-sharedrow{gap:8px}}
-@media (max-height:690px){.hd-card{width:52px;height:68px;font-size:36px}.hd-card.sh{width:44px;height:58px;font-size:30px}.hd-forehead,.hd-warn,.hd-order{display:none}.hd-acts{gap:5px}.hd-info{font-size:11.5px}.hd-pip i{display:none}.hd-lb{font-size:11.5px}.hd-sharedlb small{display:none}}`;
+@media (max-height:900px){.hd-order{display:none}.hd-card .lbl{display:none}.hd-card{width:60px;height:80px;font-size:42px;border-width:3px}.hd-card.sh{width:52px;height:70px;font-size:36px}.hd-track{gap:2px}.hd-pip{padding:1px 3px;min-width:23px}.hd-btns .btn{padding:9px 6px}.hd-table{gap:3px}.hd-sharedrow{gap:8px}}
+@media (max-height:690px){.hd-card{width:52px;height:68px;font-size:36px}.hd-card.sh{width:44px;height:58px;font-size:30px}.hd-forehead,.hd-warn,.hd-order{display:none}.hd-acts{gap:5px}.hd-info{font-size:11.5px}.hd-pip i{display:none}.hd-lb{font-size:11.5px}.hd-sharedlb small{display:none}.hd-card{width:46px;height:60px;font-size:32px;border-width:2px}.hd-card.sh{width:40px;height:52px;font-size:28px}.hd-card.back::after{font-size:15px;right:-6px;top:-6px}.hd-cat{top:-8px;font-size:10px;padding:0 6px}.hd-table{gap:1px}.hd-seat{gap:1px}.hd-bet{min-height:0;font-size:11.5px}.hd-table>.hd-seat:first-child .hd-lb{margin-bottom:5px}.hd-btns .btn{padding:7px 6px;font-size:14px}.hd-btns{gap:6px}.hd-raise button{height:30px}.hd-acts .btn.big{padding:8px 10px;font-size:14px;min-height:0}.hd-top{gap:6px}.hd-pip{padding:0 3px;font-size:10px;min-width:21px;border-radius:6px}.hd-info{line-height:1.25;font-size:11px}.hd-rd{padding:2px 9px;font-size:13px}.hd-pot{padding:1px 10px;font-size:14px}}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   const nameOf = (ctx, i) => (ctx.seats[i] && ctx.seats[i].name) || `${i + 1}번`;
@@ -201,12 +201,13 @@
       { k: "ver", label: "판", items: [["a", "7화 (칩 15 · 포기 패널티 10)"], ["b", "결승 (칩 20 · 더블 포기 5 추가)"]], def: "a" },
       { k: "rounds", label: "판 수", items: [[30, "끝까지 (최대 30판)"], [12, "12판 승부"]], def: 30 },
     ],
-    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송은 7화 두 사람이 정했고 10화는 가넷 많은 쪽이 선) · 공유카드 둘이 같고 내 카드가 다르면 '없음' (방송 설명에 없음) · 30판이 넘으면 칩이 많은 쪽 승리 · 방송은 가넷을 칩으로 바꿔 시작했어요 (7화 15칩 · 10화 가넷 1개당 2칩이라 52 대 30 · 결승 20칩 + 아이템) — 여기선 같은 수로 시작하고 아이템 · 카드 앞면이 보이면 그 판 무효인 규칙은 없어요",
+    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송은 7화 두 사람이 정했고 10화는 가넷 많은 쪽이 선) · 공유카드 둘이 같고 내 카드가 다르면 '없음' (방송 설명에 없음) · 30판이 넘으면 칩이 많은 쪽 승리 (마지막 판에 이월 판돈이 남으면 반씩) · 칩이 0 이어도 이월 판돈이 남으면 계속 · 포기 벌칙은 가진 칩까지만 · 방송은 가넷을 칩으로 바꿔 시작했어요 (7화 15칩 · 10화 가넷 1개당 2칩이라 52 대 30 · 결승 20칩 + 아이템) — 여기선 같은 수로 시작하고 아이템 · 카드 앞면이 보이면 그 판 무효인 규칙은 없어요",
     howto: [
       "인디언 포커와 같은 방식에 <b>공유카드 2장</b>이 더해져요 — 카드는 <b>1~10 네 세트, 40장</b> · 공유카드를 먼저 열고, 내 카드는 확인하지 않고 <b>이마에 붙여</b> 상대만 봐요",
       "조합은 <b>더블</b>(내 카드 = 공유 한 장) &lt; <b>스트레이트</b>(세 장이 이어지는 숫자 · 10과 1도 이어짐) &lt; <b>트리플</b>(세 장 모두 같은 숫자) · 조합이 없거나 같으면 <b>카드 숫자</b>가 큰 쪽",
       "<b>기본베팅 칩 1개씩</b> → <b>선 플레이어부터</b> 베팅 · <b>같은 개수</b>(콜)면 바로 공개 · <b>더 많이</b>(레이즈)면 계속 · 하지 않고 <b>포기</b>(폴드)",
       "<b>스트레이트 · 트리플로 포기하면 패널티 칩 10개</b> (결승은 더블 포기도 5개) · 같은 숫자면 칩이 다음 게임으로 · 한 사람이 칩을 모두 잃으면 끝",
+      "<b>특수</b> — 칩이 0 이 돼도 이월된 판돈이 남아 있으면 다음 판에서 가려요 · 포기 벌칙은 가진 칩까지만 내요 · <b>30판</b>이 끝나면 칩이 많은 쪽 승리 (남은 이월 판돈은 반씩 나눠요 — 끝없는 판을 막는 우리 판 상한, 방송엔 없어요)",
     ],
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),

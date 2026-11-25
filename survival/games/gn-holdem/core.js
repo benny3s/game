@@ -151,7 +151,7 @@
   // ── 보이는 것 ─────────────────────────────────────────────
   function view(st, seat) {
     const all = seat === "all", show = st.phase === "reveal" || st.phase === "end";
-    const cards = st.cards.map((c, i) => (all || show || i !== seat ? c : -1));
+    const cards = st.cards.map((c, i) => (all || show || (seat >= 0 && i !== seat) ? c : -1));
     const pubObj = { r: st.round, p: st.phase, c: st.chips, ct: st.phase === "bet" ? st.contrib : 0, cy: st.carry, t: st.turn, sh: st.shared, u: st.used.length, res: show && st.res ? [st.res.type, st.res.win, st.res.cards] : 0, ov: st.over };
     return {
       n: 2, round: st.round, maxR: st.maxR, ver: st.ver, doublePen: st.doublePen, phase: st.phase, chips: st.chips.slice(), contrib: st.phase === "bet" ? st.contrib.slice() : [0, 0], carry: st.carry, pot: st.phase === "bet" ? pot(st) : 0,
