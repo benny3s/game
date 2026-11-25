@@ -116,21 +116,21 @@
     style();
     const cols = (a, b, ans) => `<div class="sm-cols">${[0, 1, 2].map(k => `<div class="sm-col${ans === k ? " ans" : ""}"><span class="ic">${G.EM[k]}</span><span class="nm">${G.MARKS[k]}</span>${a ? `<span class="opp">${a[k] ? "선 " + a[k] : ""}</span>` : ""}<span class="mine">${b ? b[k] || "" : ""}</span></div>`).join("")}</div>`;
     return [
-      { tag: "STEP 1 · 정답", title: "관전 플레이어가 하나를 숨겨요", body: "라운드마다 관전 플레이어가 <b>해 · 달 · 별</b> 중 하나를 컵 아래에 숨겨요. 그게 이번 라운드 정답이에요. 두 사람은 정답이 뭔지 맞혀서 <b>칩을 걸어요</b>. 시작 칩은 4개씩이에요.",
-        boardHtml: `<div class="sm-tut"><div class="sm-cols"><div class="sm-col"><span class="ic">🥤</span><span class="nm">컵</span></div></div><small>관전 플레이어는 두 사람에게 따로 귀띔을 줘요 (맞을 확률 50%)</small></div>`, ms: 5600 },
-      { tag: "STEP 2 · 선", title: "선이 먼저, 상대 칩의 절반까지", body: "라운드마다 <b>선 · 후</b>가 바뀌어요. 선이 먼저 걸어요. 걸 수 있는 건 <b>0칩 ~ 상대 칩의 절반</b>(소수는 버림). 해 · 달 · 별 <b>세 칸에 나눠서</b> 걸어도 돼요.",
-        boardHtml: `<div class="sm-tut">${cols(null, [2, 0, 1], -1)}<small>상대 칩 7개 → 선은 최대 3칩</small></div>`, ms: 5600 },
-      { tag: "STEP 3 · 후", title: "후는 선의 2배 이상", body: "후는 선이 건 칩을 <b>칸별로 보고</b> 걸어요. 합계가 <b>선의 2배 이상</b>이어야 해요 (칩이 모자라면 올인). 선이 3칩 걸었다면 후는 6칩 이상!",
-        boardHtml: `<div class="sm-tut">${cols([2, 0, 1], [4, 0, 2], -1)}<small>선 3칩 → 후는 6칩 이상</small></div>`, ms: 5600 },
-      { tag: "STEP 4 · 정산", title: "맞힌 칸은 3배", body: "컵을 열어요. <b>맞힌 칸의 칩은 3배</b>로 돌려받고, 틀린 칸의 칩은 사라져요. 세 칸에 똑같이 나눠 걸면 본전이에요.",
-        interactive: { hint: "👆 정답이 ☀️ 해일 때 칸을 눌러 3배를 받아 봐요", doneText: "✅ 맞힌 칸은 3배! 칩 6 → 18" },
+      { tag: "STEP 1 · 표식", title: "관전 플레이어가 컵 아래 표식을 숨겨요", body: "탈락후보 두 사람은 <b>베팅 칩 4개</b>씩 받고 시작해요. 관전 플레이어는 번호 순서대로 한 라운드에 한 명씩, 자기 컵 아래 <b>해 · 달 · 별</b> 중 하나의 <b>표식</b>을 숨겨 둬요 (2화는 10명 · 4화는 8명 → 10라운드 · 8라운드). 그 표식이 정답이에요.",
+        boardHtml: `<div class="sm-tut"><div class="sm-cols"><div class="sm-col"><span class="ic">🥤</span><span class="nm">컵</span></div></div><small>우리 판에선 관전 플레이어가 두 사람에게 따로 귀띔을 줘요 (맞을 확률 50% · 방송은 대화로 정보를 얻어요)</small></div>`, ms: 6200 },
+      { tag: "STEP 2 · 선", title: "선 플레이어가 먼저, 상대 칩의 절반까지", body: "<b>선 플레이어</b>가 먼저 원하는 표식에 베팅해요. 걸 수 있는 건 <b>상대가 가진 칩의 절반까지</b>(소수는 버림)이고, <b>베팅하지 않아도 돼요</b>. 해 · 달 · 별 <b>세 칸에 나눠서</b> 걸어도 돼요.",
+        boardHtml: `<div class="sm-tut">${cols(null, [1, 0, 0], -1)}<small>상대 칩 4개 → 선은 최대 2칩 (해에 1칩 베팅)</small></div>`, ms: 5600 },
+      { tag: "STEP 3 · 후", title: "후 플레이어는 선이 건 칩의 2배 이상", body: "선이 베팅하면 <b>후 플레이어</b>가 이어서 베팅해요. 반드시 선이 베팅한 칩의 <b>2배 이상</b> 걸어야 해요 (칩이 모자라면 올인). 선이 1칩 걸었다면 후는 2칩 이상! 선 · 후는 라운드마다 바뀌어요.",
+        boardHtml: `<div class="sm-tut">${cols([1, 0, 0], [2, 1, 0], -1)}<small>선 1칩 → 후는 2칩 이상 (해 2칩 + 달 1칩)</small></div>`, ms: 5600 },
+      { tag: "STEP 4 · 정산", title: "표식을 맞힌 칸은 3배", body: "베팅이 끝나면 컵을 뒤집어 표식을 확인해요. <b>맞힌 칸은 베팅한 칩의 3배</b>로 돌려받고, 틀린 칸의 칩은 모두 잃어요. 세 칸에 똑같이 나눠 걸면 본전이에요.",
+        interactive: { hint: "👆 달 칸을 눌러 컵을 열어 봐요 (정답이 🌙 달이에요)", doneText: "✅ 맞힌 칸은 3배! 칩 2 → 6" },
         render(stage, ctrl) {
-          stage.innerHTML = `<div class="sm-tut">${cols(null, [0, 6, 0], -1).replace('class="sm-col"', 'class="sm-col"')}<small>🌙 달에 6칩을 걸었어요. 정답은 ☀️ 해 같아요 — 눌러서 바꿔 봐요</small></div>`;
+          stage.innerHTML = `<div class="sm-tut">${cols(null, [0, 2, 0], -1)}<small>🌙 달에 2칩을 걸었어요 — 달 칸을 눌러서 컵을 열어 봐요</small></div>`;
           let on = false;
-          stage.onclick = e => { const c = e.target.closest(".sm-col"); if (!c || on) return; const k = [...stage.querySelectorAll(".sm-col")].indexOf(c); if (k === 1) { on = true; ctrl.sfx("win"); c.classList.add("ans"); c.querySelector(".mine").textContent = "18"; ctrl.complete(); } else ctrl.sfx("tap"); };
+          stage.onclick = e => { const c = e.target.closest(".sm-col"); if (!c || on) return; const k = [...stage.querySelectorAll(".sm-col")].indexOf(c); if (k === 1) { on = true; ctrl.sfx("win"); c.classList.add("ans"); c.querySelector(".mine").textContent = "6"; ctrl.complete(); } else ctrl.sfx("tap"); };
         } },
-      { tag: "STEP 5 · 끝", title: "마지막에 칩이 더 많은 쪽 승리", body: "10라운드(또는 8라운드)가 끝났을 때 칩이 많은 쪽이 이겨요. 도중에 칩이 0개가 되면 바로 탈락! 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
-        boardHtml: `<div class="sm-tut"><span style="font-size:42px">🏆</span></div>`, ms: 4200 },
+      { tag: "STEP 5 · 끝", title: "칩이 더 적은 쪽이 최종 탈락자", body: "마지막 관전 플레이어(10번 또는 8번)의 베팅까지 끝났을 때 <b>칩이 더 적은 쪽이 최종 탈락자</b>예요. 도중에 칩을 모두 잃어도 바로 최종 탈락자! 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
+        boardHtml: `<div class="sm-tut"><span style="font-size:42px">🏆</span></div>`, ms: 4800 },
     ];
   }
 
@@ -138,13 +138,13 @@
   window.SVUI["gn-sunmoon"] = {
     name: "해 달 별", emoji: "🌓", short: "정답 칸에 칩을 걸어 3배", min: 2, max: 2, defN: 2, board: false,
     show: "더 지니어스 · 시즌 2 · 해 달 별", season: "시즌 2 룰 브레이커",
-    opts: [{ k: "rounds", label: "방송 판", items: [[10, "10라운드 (2화)"], [8, "8라운드 (4화)"]], def: 10 }],
-    diff: "관전 플레이어는 AI 가 맡고, 대화 대신 한 줄 귀띔(맞을 확률 50%)을 줘요 · 1라운드 선은 동전 던지기 (방송은 가넷이 많은 쪽이 골라요)",
+    opts: [{ k: "rounds", label: "방송 판", items: [[10, "10라운드 (2화 · 10명)"], [8, "8라운드 (4화 · 8명)"]], def: 10 }],
+    diff: "관전 플레이어는 AI 가 맡고, 방송처럼 대화로 정보를 얻는 대신 한 줄 귀띔(맞을 확률 50%)을 줘요 · 표식은 라운드마다 AI 가 정해요 (방송은 시작 전에 컵 아래 숨겨 둬요) · 1라운드 선은 동전 던지기 (방송은 가넷이 많은 쪽이 골라요) · 칩이 모자란 후는 올인으로 처리해요 (방송 설명 문구엔 없어요) · 방송의 가넷 베팅(관전 플레이어가 우승자 맞히기)은 없어요",
     howto: [
-      "라운드마다 관전 플레이어가 <b>해 · 달 · 별</b> 중 하나를 숨겨요 (칩 4개씩 시작)",
-      "<b>선</b>은 0 ~ 상대 칩의 절반까지, <b>후</b>는 선의 2배 이상 — 세 칸에 나눠 걸 수 있어요",
-      "맞힌 칸은 <b>3배</b>, 틀린 칸은 잃어요. 선 · 후는 매 라운드 바뀌어요",
-      "마지막에 칩이 더 많은 쪽 승리 · 칩 0개면 바로 탈락",
+      "<b>탈락후보</b> 두 사람이 <b>베팅 칩 4개</b>씩 받고 시작해요 — 관전 플레이어가 번호 순서대로 한 라운드에 한 명씩, 자기 컵 아래 <b>해 · 달 · 별</b> 중 하나의 <b>표식</b>을 숨겨요 (그 표식이 정답)",
+      "<b>선 플레이어</b>가 먼저 원하는 표식에 베팅 — 0 ~ <b>상대 칩의 절반</b>까지 (안 걸어도 돼요) · <b>후 플레이어</b>는 선이 건 칩의 <b>2배 이상</b> (모자라면 올인) · 세 칸에 나눠 걸 수 있어요",
+      "컵을 열어 표식을 맞힌 칸은 베팅한 칩의 <b>3배</b>, 틀린 칸의 칩은 모두 잃어요 · 선 · 후는 라운드마다 바뀌어요",
+      "마지막 플레이어(2화 10번 · 4화 8번)의 베팅까지 끝났을 때 칩이 <b>더 적은 쪽이 최종 탈락자</b> — 칩을 모두 잃으면 중간에도 최종 탈락자예요",
     ],
     sub: V => V.over ? "끝" : `${V.round} / ${V.R}라운드`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),

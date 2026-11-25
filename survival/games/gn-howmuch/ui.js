@@ -200,20 +200,20 @@
   function tutorial() {
     style();
     return [
-      { tag: "STEP 1 · 게임", title: "손님들이 몰래 정한 가격 중 최고가를 맞혀요", body: "상품이 10개 나와요. 손님 5명(AI)이 상품마다 가격을 몰래 정해 두었고, 그중 <b>가장 높은 값 = M</b>이에요. 우리는 가격을 비밀로 제시하는데, <b>M을 넘으면 무효</b>이고 M 이하 중 <b>가장 높은 값</b>이 이겨요! 예산은 <b>10개 합쳐 2억원</b>이에요.",
-        boardHtml: `<div class="hm-tut"><div class="hm-item">🛒 아이스 아메리카노 한 잔<small>손님 5명 가격 중 최고가가 M</small></div></div>`, ms: 6600 },
-      { tag: "STEP 2 · 승자", title: "같은 값은 서로 무효", body: "예를 들어 M이 <b>100만원</b>인데 세 사람이 <b>999,999 / 1,000,000 / 1,000,000</b>원을 냈다면? 1,000,000을 낸 두 사람은 <b>같은 값이라 둘 다 무효</b> — 999,999원을 낸 사람이 이겨요. M과 같은 값은 유효하고, 높은 값이 겹치면 다음으로 높은 값이 이겨요.",
-        boardHtml: `<div class="hm-tut"><div class="hm-res"><div class="row w"><b>A</b><span>999,999원</span><span>🏆 승</span></div><div class="row d"><b>B</b><span>1,000,000원</span><span>⚠️ 무효</span></div><div class="row d"><b>C</b><span>1,000,000원</span><span>⚠️ 무효</span></div></div></div>`, ms: 7200 },
-      { tag: "STEP 3 · 정보", title: "손님에게 물어봐요 (1 ~ 9라운드)", body: "제시 전에 <b>비공개 질문 1번</b>(나만 확인)과 <b>공개 질문 1번</b>(돌아가며 한 사람이 골라 모두가 같은 답을 봐요)을 해요. 질문은 둘: <b>💰 손님 한 명이 낸 가격</b> / <b>🥇 그 손님이 5명 중 몇 번째로 높은 가격을 냈는지</b>. 손님 위의 숫자는 그 손님이 <b>10개 상품에 낸 가격 합계</b>예요 — 큰 손님이 최고가를 냈을 가능성이 높아요.",
+      { tag: "STEP 1 · 게임", title: "게스트들이 미리 정한 가격 중 최고가를 맞혀요", body: "상품이 <b>10개</b> 나오고, 라운드마다 한 개씩 열려요 (게스트들이 낸 가격이 낮은 상품부터). <b>게스트</b> 5명(AI, 화면의 손님)이 게임 전에 상품마다 가격을 미리 정해 두었고 공개되지 않아요. 그중 <b>가장 높은 값 = M</b>이에요. M을 넘지 않으면서 <b>가장 높은 가격</b>을 낸 사람이 <b>승점</b>을 얻어요! 처음부터 보이는 것은 손님 아래 숫자, <b>10개 상품에 낸 가격 총합</b>뿐이에요.",
+        boardHtml: `<div class="hm-tut"><div class="hm-item">🛒 아이스 아메리카노 한 잔<small>손님 5명 가격 중 최고가가 M</small></div></div>`, ms: 8600 },
+      { tag: "STEP 2 · 정보", title: "게스트에게 물어봐요 (1 ~ 9라운드)", body: "제시 전에 질문으로 <b>공개 정보 1개</b>(모두가 같은 답을 봐요)와 <b>비공개 정보 1개</b>(나만 확인)를 알아내요. 질문은 둘: <b>🥇 게스트 순위 확인</b>(그 게스트가 5명 중 몇 번째로 높은 가격을 냈는지) / <b>💰 가격 확인</b>(그 게스트가 낸 가격). 총합이 큰 게스트가 최고가를 냈을 가능성이 높아요.",
         boardHtml: `<div class="hm-tut"><div class="hm-guests" style="width:100%"><div class="hm-g sel"><b>🎩</b><span>손님 1</span><i>2.2억</i><em>🔒 가격 1,000만원</em></div><div class="hm-g"><b>🧢</b><span>손님 2</span><i>1.8억</i></div><div class="hm-g"><b>🎀</b><span>손님 3</span><i>2.3억</i><em>📢 1등</em></div><div class="hm-g"><b>🕶️</b><span>손님 4</span><i>2.2억</i></div><div class="hm-g"><b>🎒</b><span>손님 5</span><i>2.1억</i></div></div></div>`, ms: 7600 },
-      { tag: "STEP 4 · 직접", title: "누가 이길까요?", body: "M은 <b>100만원</b>이에요. 세 사람이 <b>나 999,999원 · 철수 1,000,000원 · 영희 1,000,000원</b>을 냈어요. 이번 판의 승자를 눌러요!",
+      { tag: "STEP 3 · 승자", title: "가장 높은 가격이 여럿이면 그다음 가격", body: "각자 비밀로 이번 상품 가격을 제시해요 — <b>1원부터</b>, 10개 합쳐 <b>2억 원</b>을 넘으면 안 돼요. M은 모두 낸 뒤 공개돼요. <b>M을 넘지 않으면서 가장 높은 가격</b>이 이기고 (M과 같은 값도 괜찮아요), 가장 높은 가격이 <b>여럿이면 그다음으로 높은 가격</b>이 이겨요 (같은 값은 서로 무효). 예를 들어 M이 <b>1,000만원</b>일 때 <b>1,100만 · 990만 · 300만원</b>을 냈다면 990만원이 승점!",
+        boardHtml: `<div class="hm-tut"><div class="hm-res"><div>🎯 M = 10,000,000원</div><div class="row x"><b>A</b><span>11,000,000원</span><span>🚫 M 초과</span></div><div class="row w"><b>B</b><span>9,900,000원</span><span>🏆 승</span></div><div class="row"><b>C</b><span>3,000,000원</span><span>유효 (더 높은 값이 있음)</span></div></div></div>`, ms: 9600 },
+      { tag: "STEP 4 · 직접", title: "누가 이길까요?", body: "M은 <b>100만원</b>이에요. 세 사람이 <b>나 999,999원 · 철수 1,000,000원 · 영희 1,000,000원</b>을 냈어요. 가장 높은 값이 겹치면 그다음 값이 이겨요. 이번 판의 승자를 눌러요!",
         interactive: { hint: "👆 승자를 눌러요", doneText: "✅ 철수와 영희는 같은 값이라 무효 — 999,999원을 낸 내가 이겼어요!" },
         render(stage, ctrl) {
           stage.innerHTML = `<div class="hm-tut"><div class="hm-res"><div>🎯 M = 1,000,000원</div><div class="row"><b>나</b><span>999,999원</span><span></span></div><div class="row"><b>철수</b><span>1,000,000원</span><span></span></div><div class="row"><b>영희</b><span>1,000,000원</span><span></span></div></div><div class="hm-kinds" style="grid-template-columns:repeat(3,1fr);width:100%"><button class="hm-pre" data-w="0" style="padding:10px;border-radius:12px;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font:800 14px var(--round)">나</button><button data-w="1" style="padding:10px;border-radius:12px;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font:800 14px var(--round)">철수</button><button data-w="2" style="padding:10px;border-radius:12px;border:2px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font:800 14px var(--round)">영희</button></div></div>`;
           stage.onclick = e => { const b = e.target.closest("[data-w]"); if (!b) return; if (b.dataset.w === "0") { ctrl.sfx("win"); ctrl.complete(); } else ctrl.sfx("tap"); };
         } },
-      { tag: "STEP 5 · 예산", title: "앞에서 다 쓰면 마지막 4점을 놓쳐요", body: "점수는 <b>1~7라운드 1점 · 8, 9라운드 2점 · 10라운드 4점</b>(합 15)이에요. 예산 2억은 10개 합계라서 <b>너무 크게 쓰면 10라운드에 큰 값을 못 내요</b>. 최고 승점이 같으면 <b>10라운드 승자</b>가 우승! 끝자리를 어긋나게 해서 남과 같은 값을 피하는 것도 요령이에요. 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
-        boardHtml: `<div class="hm-tut"><div class="hm-bud" style="width:100%"><div class="hm-b me"><b>나</b><span class="bar"><i style="width:35%"></i></span><span>7천만원 · 3점</span></div><div class="hm-b"><b>철수</b><span class="bar"><i style="width:80%"></i></span><span>1.6억원 · 2점</span></div></div></div>`, ms: 7200 },
+      { tag: "STEP 5 · 승점", title: "승점은 뒤로 갈수록 커요", body: "승점은 <b>1~7라운드 1점 · 8, 9라운드 2점 · 10라운드 4점</b>(합 15)이에요. <b>10라운드는 정보 없이</b> 바로 제시해요. 가격 합계 2억이 10개 전체의 예산이라서 <b>앞에서 너무 크게 쓰면 10라운드에 큰 값을 못 내요</b>. 10라운드 뒤 <b>승점이 가장 높은 사람이 우승자</b>, 같으면 <b>10라운드 승점을 얻은 사람</b>이 우승자예요. 끝자리를 어긋나게 해서 남과 같은 값을 피하는 것도 요령이에요. 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
+        boardHtml: `<div class="hm-tut"><div class="hm-bud" style="width:100%"><div class="hm-b me"><b>나</b><span class="bar"><i style="width:35%"></i></span><span>7천만원 · 3점</span></div><div class="hm-b"><b>철수</b><span class="bar"><i style="width:80%"></i></span><span>1.6억원 · 2점</span></div></div></div>`, ms: 9000 },
     ];
   }
 
@@ -222,12 +222,12 @@
     name: "하우머치", emoji: "🛒", short: "손님 5명의 최고가를 넘지 않게 · 가격 맞히기", min: 2, max: 6, defN: 3, board: false,
     show: "더 지니어스 · 시즌 4 · 하우머치", season: "시즌 4 그랜드 파이널",
     opts: [],
-    diff: "손님 5명은 AI예요 — 가격은 게임마다 새로 만들어져요 (방송은 출연자가 직접 정함) · 10분 토론은 없고 정보 질문만 · 공개 질문은 라운드마다 돌아가며 한 사람이 골라요 · 방송은 3명, 우리는 2~6명 · 모두 최고가 초과면 득점 없음 · 남은 라운드마다 최소 1원은 남겨야 제시할 수 있어요",
+    diff: "방송의 '게스트' 5명은 화면에서 '손님'으로 나와요 — AI 라서 가격은 게임마다 새로 만들어져요 (방송은 게스트가 직접 정함) · 10분 토론은 없고 정보 질문만 · 공개 정보는 방송에선 플레이어 세 명이 상의해 정하지만 우리는 라운드마다 돌아가며 한 사람이 골라요 · 방송은 3명이고 우승자를 뺀 두 명이 탈락후보(데스매치)지만 우리는 2~6명이고 순위만 가려요 · 모두 최고가 초과면 득점 없음 · 남은 라운드마다 최소 1원은 남겨야 제시할 수 있어요",
     howto: [
-      "상품 10개 — 손님 5명이 낸 가격 중 <b>최고가(M)</b>를 넘지 않으면서 <b>가장 높은 값</b>이 이겨요",
-      "<b>같은 값은 서로 무효</b> · M 초과도 무효 · 끝자리를 어긋나게!",
-      "예산은 <b>10개 합쳐 2억원</b> · 점수 1×7, 2, 2, <b>10라운드 4점</b> (1~9라운드는 정보 질문 가능)",
-      "총 승점이 많은 쪽 우승 · 같으면 <b>10라운드 승자</b>",
+      "상품 10개 — <b>게스트</b>(화면의 손님) 5명이 미리 낸 가격 중 <b>최고가(M)</b>를 넘지 않으면서 <b>가장 높은 가격</b>을 낸 사람이 <b>승점</b> (게스트별 10개 가격 총합만 처음부터 공개)",
+      "1~9라운드: 질문으로 <b>공개 정보 1개 · 비공개 정보 1개</b> — <b>게스트 순위 확인</b>(몇 번째로 높은 가격?) · <b>가격 확인</b>",
+      "가격은 비밀로 <b>1원부터</b>, 10개 합쳐 <b>2억 원</b>까지 · 가장 높은 가격이 여럿이면 <b>그다음 가격</b>이 이겨요 (같은 값은 서로 무효 · M 초과도 무효)",
+      "승점 <b>1~7라운드 1점 · 8, 9라운드 2점 · 10라운드 4점</b> (10라운드는 정보 없이 제시) · 총 승점 우승, 같으면 <b>10라운드 승자</b>",
     ],
     sub: V => (V.over ? "끝" : `${V.round}/${V.rounds}라운드 · ${V.pts}점`),
     chip: (V, i) => ({ t: `${V.points[i]}점`, on: V.needs.includes(i) && !V.over, out: false }),
