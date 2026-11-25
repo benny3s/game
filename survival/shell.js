@@ -457,16 +457,16 @@
   function fitStage(stageEl, uiArg) {
     if (!stageEl && window.SVReview && SVReview.active) { SVReview.refit(); return; }
     const st = stageEl || $("stage"); if (!st) return;
-    const ui = uiArg || (SES && SES.V && !SES.pend && UIS[SES.id] ? UIS[SES.id] : null), fit = !!(ui && ui.fitCoach);
+    const ui = uiArg || (SES && SES.V && !SES.pend && UIS[SES.id] ? UIS[SES.id] : null), fit = !!ui && ui.fitCoach !== false;   // 기본 켬 (11-26): 끄려면 ui.fitCoach=false
     document.body.classList.toggle("sv-fitcoach", fit);
-    st.style.paddingBottom = "";
+    st.style.paddingBottom = ""; st.style.scrollPaddingBottom = "";
     if (!fit) { st.classList.remove("sv-coachfit"); st.style.removeProperty("--sv-sh"); return; }
     const sb = st.getBoundingClientRect(), cs = getComputedStyle(st);
     const pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
     let res = 0;
     const el = coach && coach.visible && !coach.collapsed ? coach.el : null;
     if (el && !el.hidden) { const cb = el.getBoundingClientRect(); if (cb.height > 0 && cb.bottom >= sb.bottom - 8 && cb.top < sb.bottom) res = Math.ceil(sb.bottom - cb.top + 6); }
-    if (res) st.style.paddingBottom = (pb + res) + "px";
+    if (res) { st.style.paddingBottom = (pb + res) + "px"; st.style.scrollPaddingBottom = (pb + res) + "px"; }
     st.classList.toggle("sv-coachfit", res > 0);
     st.style.setProperty("--sv-sh", Math.max(100, Math.floor(sb.height - pt - pb - res)) + "px");
   }

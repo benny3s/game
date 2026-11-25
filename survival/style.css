@@ -73,6 +73,8 @@
 .sv-why{color:#fde68a}
 .cpn-body p{margin:0 0 5px}
 /* 선생님 창이 판을 가리지 않는 게임(ui.fitCoach): 창은 화면의 21%(최대 190px)까지만, 글은 창 안에서 스크롤 — 판은 shell 이 비워 둔 위쪽(--sv-sh)에 맞춰 줄어듦 */
+/* 판 줄이기를 모르는 게임도 창만큼 아래를 비우고, 그래도 넘치면 판 칸 안에서 스크롤 (잘려서 못 누르는 일 없게) */
+.sv-stage.sv-coachfit{overflow-y:auto}
 body.sv-fitcoach .cpn{max-height:min(21vh,190px)}
 
 /* 결과 창 */
