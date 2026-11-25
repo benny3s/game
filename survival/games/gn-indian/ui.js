@@ -125,19 +125,19 @@
     style();
     const c = (v, cls = "") => card(v, cls);
     return [
-      { tag: "STEP 1 · 카드", title: "내 카드는 상대만 봐요", body: "카드는 <b>1 ~ 10</b> 두 장씩 20장이에요. 각자 카드 한 장을 <b>이마에 붙여서</b> 상대 카드만 보여요. 내 카드가 뭔지는 <b>상대 표정과 베팅</b>으로 짐작해야 해요.",
-        boardHtml: `<div class="ip-tut"><div class="row"><div>${c(8)}<small>상대 카드 (보임)</small></div><div>${c(0)}<small>내 카드 (안 보임)</small></div></div></div>`, ms: 5600 },
-      { tag: "STEP 2 · 베팅", title: "기본 1칩 · 콜 · 레이즈 · 폴드", body: "매 판 <b>기본 베팅 1칩</b>씩 내요. 선부터 <b>레이즈</b>(더 걸기) · <b>콜</b>(따라가며 공개) · <b>폴드</b>(포기, 낸 칩만 잃음)를 골라요. 콜하면 두 카드가 공개되고 <b>높은 숫자</b>가 판돈을 다 가져가요.",
-        boardHtml: `<div class="ip-tut"><span class="ip-pot">🪙 판돈 8</span><div class="ip-btns" style="width:100%"><span class="btn primary">콜 3칩</span><span class="btn fold">폴드</span></div></div>`, ms: 5600 },
+      { tag: "STEP 1 · 카드", title: "내 카드는 상대만 봐요", body: "<b>큰 숫자</b>를 가진 사람이 베팅된 칩을 다 가져가는 게임이에요. 카드는 <b>1 ~ 10 숫자카드 두 세트, 총 20장</b> — 각자 한 장을 확인하지 않고 <b>이마에 붙여서</b> 상대 카드만 보여요. 내 카드가 뭔지는 <b>상대 표정과 베팅</b>으로 짐작해야 해요.",
+        boardHtml: `<div class="ip-tut"><div class="row"><div>${c(8)}<small>상대 카드 (보임)</small></div><div>${c(0)}<small>내 카드 (안 보임)</small></div></div></div>`, ms: 6600 },
+      { tag: "STEP 2 · 베팅", title: "기본베팅 1칩 · 세 가지 선택", body: "매 판 <b>기본베팅으로 칩을 한 개씩</b> 내고 <b>선 플레이어부터</b> 베팅해요. 선택은 셋 — <b>같은 개수</b>를 베팅(콜)하면 바로 끝나고 두 카드를 공개 · <b>더 많이</b> 베팅(레이즈)하면 공개 없이 계속 · 베팅하지 않고 <b>포기</b>(폴드)하면 낸 칩만 잃어요. 공개하면 <b>큰 숫자</b>가 판돈을 다 가져가요.",
+        boardHtml: `<div class="ip-tut"><span class="ip-pot">🪙 판돈 8</span><div class="ip-btns" style="width:100%"><span class="btn primary">콜 3칩</span><span class="btn fold">폴드</span></div></div>`, ms: 7600 },
       { tag: "STEP 3 · 직접", title: "누가 이길까요?", body: "상대 카드가 <b>2</b>예요. 내 카드가 2보다 클 가능성이 높으니 <b>레이즈</b>가 좋아요! 눌러서 판돈을 키워 봐요.",
         interactive: { hint: "👆 '레이즈'를 눌러요", doneText: "✅ 상대 카드가 낮으면 레이즈! (내 카드는 7이었어요)" },
         render(stage, ctrl) {
           stage.innerHTML = `<div class="ip-tut"><div>${c(2)}</div><div class="ip-btns" style="width:100%"><button class="btn primary" data-k="call">콜 · 공개</button><button class="btn" data-k="raise">레이즈</button><button class="btn fold" data-k="fold">폴드</button></div></div>`;
           stage.onclick = e => { const b = e.target.closest("[data-k]"); if (!b) return; if (b.dataset.k === "raise") { ctrl.sfx("win"); stage.innerHTML = `<div class="ip-tut"><div class="row">${c(2, "lose")}${c(7, "win")}</div><div class="ip-res">내 카드 7 > 2 · 레이즈가 통했어요!</div></div>`; ctrl.complete(); } else ctrl.sfx("tap"); };
         } },
-      { tag: "STEP 4 · 함정", title: "10 을 들고 폴드하면 −10칩", body: "내 카드가 <b>10</b>인 채 폴드하면 칩 <b>10개를 더</b> 내야 해요. 내 카드를 모르니까 큰 베팅에 겁먹고 폴드했다가 당하는 게 핵심 함정! 같은 숫자면 <b>무승부</b>라 판돈이 다음 판 승자에게 가요.",
-        boardHtml: `<div class="ip-tut"><div class="ip-res bad">내가 폴드 → 내 카드는 10!<br>기본 1칩 + 페널티 10칩 = −11칩</div></div>`, ms: 6000 },
-      { tag: "STEP 5 · 세기", title: "남은 카드를 세요", body: "공개된 카드는 버려져요. 20장 안에서 <b>남은 숫자</b>를 세면 내 카드를 더 잘 짐작해요 (화면 아래 숫자 줄). 칩이 0이 되면 바로 패배! 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
+      { tag: "STEP 4 · 함정", title: "10 을 들고 포기하면 패널티 10칩", body: "포기(폴드)한 카드가 <b>10</b>이었다면 <b>패널티로 칩 10개</b>를 상대에게 더 줘야 해요. 내 카드를 모르니까 큰 베팅에 겁먹고 포기했다가 당하는 게 핵심 함정! 두 카드가 <b>같은 숫자</b>면 승자 없이, 베팅된 칩을 <b>기본베팅으로 걸어 두고</b> 다음 판을 해요 (그 판 이긴 사람이 가져가요).",
+        boardHtml: `<div class="ip-tut"><div class="ip-res bad">내가 폴드 → 내 카드는 10!<br>기본 1칩 + 패널티 10칩 = −11칩</div></div>`, ms: 7200 },
+      { tag: "STEP 5 · 세기", title: "남은 카드를 세요", body: "공개된 카드는 버려져요. 20장 안에서 <b>남은 숫자</b>를 세면 내 카드를 더 잘 짐작해요 (화면 아래 숫자 줄). 한 사람이 <b>칩을 모두 잃으면</b> 바로 끝! 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
         boardHtml: `<div class="ip-tut"><div class="ip-track">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => `<span class="ip-pip${r === 3 || r === 9 ? " gone" : ""}">${r}<i>${r === 3 || r === 9 ? "○○" : "●●"}</i></span>`).join("")}</div></div>`, ms: 5000 },
     ];
   }
@@ -174,15 +174,15 @@
     name: "인디언 포커", emoji: "🪪", short: "상대 카드만 보이는 1:1 베팅", min: 2, max: 2, defN: 2, board: false,
     show: "더 지니어스 · 시즌 1 · 인디언 포커", season: "시즌 1 게임의 법칙",
     opts: [
-      { k: "chips", label: "시작 칩", items: [[45, "45칩 (7화)"], [25, "25칩 (결승)"]], def: 45 },
+      { k: "chips", label: "시작 칩", items: [[45, "45칩 (7화 · 가넷 9개)"], [25, "25칩 (결승 · 20 + 아이템 5)"]], def: 45 },
       { k: "rounds", label: "판 수", items: [[30, "끝까지 (최대 30판)"], [12, "12판 승부"]], def: 30 },
     ],
-    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송 문서에 없음) · 무승부 뒤 판은 기본 베팅 없음 (홀덤 규칙을 따름) · 30판이 넘으면 칩이 많은 쪽 승리",
+    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송 규칙 설명에 없음) · 30판이 넘으면 칩이 많은 쪽 승리 · 방송은 가넷을 칩으로 바꿔(가넷 1개당 5칩) 시작했고, 결승은 20칩에서 시작해 두 사람이 '칩 5개 추가' 아이템을 써서 25칩이었어요 (아이템 · 가넷 교환은 없어요)",
     howto: [
-      "카드는 <b>1~10 두 장씩 20장</b> — 내 카드는 이마에 붙어 <b>상대만 봐요</b>",
-      "기본 1칩 → 선부터 <b>콜 · 레이즈 · 폴드</b>. 콜하면 공개, <b>높은 숫자</b>가 판돈을 가져가요",
-      "내 카드가 <b>10인 채 폴드하면 칩 10개를 더</b> 내요 · 같은 숫자면 무승부(판돈 이월)",
-      "칩이 0이 되면 바로 패배 · 남은 카드를 세면 유리해요",
+      "<b>큰 숫자</b>를 가진 사람이 베팅된 칩을 다 가져가요 — 카드는 <b>1~10 두 세트, 20장</b> · 내 카드는 확인하지 않고 <b>이마에 붙여</b> 상대만 봐요",
+      "<b>기본베팅 칩 1개씩</b> → <b>선 플레이어부터</b> 베팅 · <b>같은 개수</b>로 베팅(콜)하면 바로 카드 공개 · <b>더 많이</b> 베팅(레이즈)하면 계속 · 하지 않고 <b>포기</b>(폴드)",
+      "포기한 카드가 <b>10</b>이었다면 <b>패널티로 칩 10개</b>를 상대에게 줘요 · 두 카드가 같은 숫자면 베팅된 칩을 <b>기본베팅으로 걸어 두고</b> 다음 게임",
+      "한 사람이 <b>칩을 모두 잃으면</b> 끝 · 남은 카드를 세면 유리해요",
     ],
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),

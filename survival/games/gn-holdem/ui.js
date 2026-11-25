@@ -147,21 +147,21 @@
     const c = (v, cls = "", cat = 0, label = "") => card(v, cls, label, cat);
     const cell = (v, cap, cls = "", cat = 0) => `<div>${c(v, cls, cat)}<small>${cap}</small></div>`;
     return [
-      { tag: "STEP 1 · 카드", title: "공유카드 2장 + 이마의 카드", body: "카드는 <b>1 ~ 10 네 장씩 40장</b>이에요. 매 판 <b>공유카드 2장</b>이 모두에게 보이고, 각자 카드 한 장을 <b>이마에 붙여서</b> 상대 카드만 보여요. 내 카드가 뭔지는 상대 표정과 베팅으로 짐작해요.",
-        boardHtml: `<div class="hd-tut"><div class="row">${cell(8, "상대 카드 (보임)")}${cell(3, "공유", "sh")}${cell(7, "공유", "sh")}${cell(0, "내 카드 (안 보임)")}</div></div>`, ms: 6200 },
-      { tag: "STEP 2 · 조합", title: "트리플 > 스트레이트 > 더블", body: "내 카드와 공유카드 둘이 만드는 조합이에요. <b>트리플</b>은 세 장이 같은 숫자, <b>스트레이트</b>는 세 장이 이어지는 숫자(<b>10과 1도 이어져요</b>), <b>더블</b>은 내 카드가 공유 하나와 같은 경우예요. 조합이 높은 쪽이 이기고, 같은 조합이면 <b>내 카드 숫자</b>가 큰 쪽이 이겨요.",
-        boardHtml: `<div class="hd-tut"><div class="row">${cell(4, "공유", "sh")}${cell(5, "공유", "sh")}${cell(6, "스트레이트", "", 2)}</div><div class="row">${cell(9, "공유", "sh")}${cell(10, "공유", "sh")}${cell(1, "10 → 1 도 이어짐", "", 2)}</div></div>`, ms: 7600 },
-      { tag: "STEP 3 · 베팅", title: "기본 1칩 · 콜 · 레이즈 · 폴드", body: "매 판 <b>기본 베팅 1칩</b>씩 내요. 선부터 <b>레이즈</b>(더 걸기) · <b>콜</b>(따라가며 공개) · <b>폴드</b>(포기, 낸 칩만 잃음)를 골라요. 콜하면 카드가 공개돼요. 같으면 <b>무승부</b>라 판돈이 다음 판 승자에게 가요.",
-        boardHtml: `<div class="hd-tut"><span class="hd-pot">🪙 판돈 8</span><div class="hd-btns" style="width:100%"><span class="btn primary">콜 3칩</span><span class="btn fold">폴드</span></div></div>`, ms: 5600 },
+      { tag: "STEP 1 · 카드", title: "공유카드 2장 + 이마의 카드", body: "카드는 <b>1 ~ 10 네 세트, 40장</b>이에요. 딜러가 섞은 뒤 <b>공유카드 2장</b>을 먼저 열어 모두에게 보여 주고, 각자 받은 카드는 확인하지 않고 <b>이마에 붙여서</b> 상대 카드만 보여요. 내 카드가 뭔지는 상대 표정과 베팅으로 짐작해요.",
+        boardHtml: `<div class="hd-tut"><div class="row">${cell(8, "상대 카드 (보임)")}${cell(3, "공유", "sh")}${cell(7, "공유", "sh")}${cell(0, "내 카드 (안 보임)")}</div></div>`, ms: 6800 },
+      { tag: "STEP 2 · 조합", title: "더블 → 스트레이트 → 트리플", body: "공유카드 둘과 내 카드가 만드는 조합이에요 — 더블, 스트레이트, 트리플 순으로 높아요. <b>더블</b>은 내 카드가 공유카드 한 장과 같은 숫자(이마 숫자와 상관없이 이겨요), <b>스트레이트</b>는 세 장이 이어지는 숫자(<b>10과 1도 이어져요</b>), <b>트리플</b>은 세 장이 모두 같은 숫자예요. 조합이 없거나 같으면 <b>카드 숫자</b>가 큰 쪽이 이겨요.",
+        boardHtml: `<div class="hd-tut"><div class="row">${cell(4, "공유", "sh")}${cell(5, "공유", "sh")}${cell(6, "스트레이트", "", 2)}</div><div class="row">${cell(9, "공유", "sh")}${cell(10, "공유", "sh")}${cell(1, "10 → 1 도 이어짐", "", 2)}</div></div>`, ms: 8600 },
+      { tag: "STEP 3 · 베팅", title: "기본베팅 1칩 · 세 가지 선택", body: "매 판 <b>기본베팅으로 칩을 한 개씩</b> 내고 <b>선 플레이어부터</b> 베팅해요. <b>같은 개수</b>를 베팅(콜)하면 바로 끝나고 카드 공개 · <b>더 많이</b> 베팅(레이즈)하면 공개 없이 계속 · 베팅하지 않고 <b>포기</b>(폴드)하면 낸 칩만 잃어요. 같은 숫자면 판돈이 <b>다음 판</b>으로 넘어가요.",
+        boardHtml: `<div class="hd-tut"><span class="hd-pot">🪙 판돈 8</span><div class="hd-btns" style="width:100%"><span class="btn primary">콜 3칩</span><span class="btn fold">폴드</span></div></div>`, ms: 7200 },
       { tag: "STEP 4 · 직접", title: "누가 이길까요?", body: "공유카드가 <b>2 · 9</b> (간격이 멀어 스트레이트 · 트리플이 안 나와요)이고 상대 카드는 <b>1</b>이에요. 숫자 싸움이니 내 카드가 1보다 클 가능성이 높아요 — <b>레이즈</b>를 눌러 판돈을 키워 봐요!",
         interactive: { hint: "👆 '레이즈'를 눌러요", doneText: "✅ 상대 카드가 낮으면 레이즈! (내 카드는 6이었어요)" },
         render(stage, ctrl) {
           stage.innerHTML = `<div class="hd-tut"><div class="row">${c(2, "sh")}${c(9, "sh")}${c(1)}</div><div class="hd-btns" style="width:100%"><button class="btn primary" data-k="call">콜 · 공개</button><button class="btn" data-k="raise">레이즈</button><button class="btn fold" data-k="fold">폴드</button></div></div>`;
           stage.onclick = e => { const b = e.target.closest("[data-k]"); if (!b) return; if (b.dataset.k === "raise") { ctrl.sfx("win"); stage.innerHTML = `<div class="hd-tut"><div class="row">${c(2, "sh")}${c(9, "sh")}</div><div class="row">${c(1, "lose")}${c(6, "win")}</div><div class="hd-res">내 카드 6 > 1 · 레이즈가 통했어요!</div></div>`; ctrl.complete(); } else ctrl.sfx("tap"); };
         } },
-      { tag: "STEP 5 · 함정", title: "조합을 들고 폴드하면 −10칩", body: "내 카드가 <b>스트레이트나 트리플</b>인 채 폴드하면 칩 <b>10개를 더</b> 내야 해요 (결승 판은 <b>더블 폴드도 5개</b>). 공유카드 간격이 <b>0~2</b>면 조합이 나올 수 있으니 큰 베팅에 쉽게 접지 마세요! 간격이 3 이상이면 큰 페널티는 걱정 안 해도 돼요.",
-        boardHtml: `<div class="hd-tut"><div class="hd-res bad">내가 폴드 → 내 카드가 스트레이트!<br>기본 1칩 + 페널티 10칩 = −11칩</div></div>`, ms: 6400 },
-      { tag: "STEP 6 · 세기", title: "안 보인 카드를 세요", body: "공개된 카드와 공유카드를 빼고 <b>남은 숫자</b>를 세면 내 카드를 더 잘 짐작해요 (화면 아래 숫자 줄). 칩이 0이 되면 바로 패배! 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
+      { tag: "STEP 5 · 함정", title: "조합을 들고 포기하면 패널티 10칩", body: "내 카드가 <b>스트레이트나 트리플</b>인 채 포기(폴드)하면 <b>패널티로 칩 10개</b>를 상대에게 더 줘야 해요 (결승 판은 <b>더블 포기도 5개</b>). 공유카드 간격이 <b>0~2</b>면 조합이 나올 수 있으니 큰 베팅에 쉽게 접지 마세요! 간격이 3 이상이면 큰 패널티는 걱정 안 해도 돼요.",
+        boardHtml: `<div class="hd-tut"><div class="hd-res bad">내가 폴드 → 내 카드가 스트레이트!<br>기본 1칩 + 패널티 10칩 = −11칩</div></div>`, ms: 6800 },
+      { tag: "STEP 6 · 세기", title: "안 보인 카드를 세요", body: "공개된 카드와 공유카드를 빼고 <b>남은 숫자</b>를 세면 내 카드를 더 잘 짐작해요 (화면 아래 숫자 줄). 한 사람이 <b>칩을 모두 잃으면</b> 바로 끝! 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
         boardHtml: `<div class="hd-tut"><div class="hd-track">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => `<span class="hd-pip${r === 3 || r === 7 ? " sh" : ""}"><span>${r}</span><i>×${r === 3 || r === 7 ? 3 : 4}</i></span>`).join("")}</div></div>`, ms: 5000 },
     ];
   }
@@ -198,15 +198,15 @@
     name: "인디언 홀덤", emoji: "🃏", short: "공유카드 2장 · 상대 카드만 보이는 1:1 베팅", min: 2, max: 2, defN: 2, board: false,
     show: "더 지니어스 · 시즌 2 · 인디언 홀덤", season: "시즌 2 룰 브레이커",
     opts: [
-      { k: "ver", label: "판", items: [["a", "7화 (칩 15 · 폴드 페널티 10)"], ["b", "결승 (칩 20 · 더블 폴드 5 추가)"]], def: "a" },
+      { k: "ver", label: "판", items: [["a", "7화 (칩 15 · 포기 패널티 10)"], ["b", "결승 (칩 20 · 더블 포기 5 추가)"]], def: "a" },
       { k: "rounds", label: "판 수", items: [[30, "끝까지 (최대 30판)"], [12, "12판 승부"]], def: 30 },
     ],
-    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송 문서에 없음) · 무승부 뒤 판은 기본 베팅 없음 · 공유카드 둘이 같고 내 카드가 다르면 '없음' · 30판이 넘으면 칩이 많은 쪽 승리",
+    diff: "선(먼저 거는 사람)은 첫 판 동전 던지기, 이후 번갈아요 (방송은 7화 두 사람이 정했고 10화는 가넷 많은 쪽이 선) · 공유카드 둘이 같고 내 카드가 다르면 '없음' (방송 설명에 없음) · 30판이 넘으면 칩이 많은 쪽 승리 · 방송은 가넷을 칩으로 바꿔 시작했어요 (7화 15칩 · 10화 가넷 1개당 2칩이라 52 대 30 · 결승 20칩 + 아이템) — 여기선 같은 수로 시작하고 아이템 · 카드 앞면이 보이면 그 판 무효인 규칙은 없어요",
     howto: [
-      "카드는 <b>1~10 네 장씩 40장</b> · 공유카드 2장이 보이고, 내 카드는 이마에 붙어 <b>상대만 봐요</b>",
-      "조합 <b>트리플 &gt; 스트레이트(10과 1도 이어짐) &gt; 더블</b> · 같은 조합이면 내 카드 숫자가 큰 쪽",
-      "기본 1칩 → 선부터 <b>콜 · 레이즈 · 폴드</b>. 콜하면 공개 · 같으면 무승부(판돈 이월)",
-      "<b>스트레이트 · 트리플을 든 채 폴드하면 칩 10개를 더</b> 내요 (결승 판은 더블 5개도) · 칩이 0이면 패배",
+      "인디언 포커와 같은 방식에 <b>공유카드 2장</b>이 더해져요 — 카드는 <b>1~10 네 세트, 40장</b> · 공유카드를 먼저 열고, 내 카드는 확인하지 않고 <b>이마에 붙여</b> 상대만 봐요",
+      "조합은 <b>더블</b>(내 카드 = 공유 한 장) &lt; <b>스트레이트</b>(세 장이 이어지는 숫자 · 10과 1도 이어짐) &lt; <b>트리플</b>(세 장 모두 같은 숫자) · 조합이 없거나 같으면 <b>카드 숫자</b>가 큰 쪽",
+      "<b>기본베팅 칩 1개씩</b> → <b>선 플레이어부터</b> 베팅 · <b>같은 개수</b>(콜)면 바로 공개 · <b>더 많이</b>(레이즈)면 계속 · 하지 않고 <b>포기</b>(폴드)",
+      "<b>스트레이트 · 트리플로 포기하면 패널티 칩 10개</b> (결승은 더블 포기도 5개) · 같은 숫자면 칩이 다음 게임으로 · 한 사람이 칩을 모두 잃으면 끝",
     ],
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),
