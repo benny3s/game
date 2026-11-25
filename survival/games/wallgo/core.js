@@ -353,14 +353,29 @@
     const ckey = `${me}|${V.pub}`;
     const g = coachCache.key === ckey ? coachCache.val : (coachCache = { key: ckey, val: ai(V, me, "hard", r) }).val;
     if (!g) return { opp, mine, rec: "-", why: "" };
-    if (g.t === "place") return { opp, mine, rec: `${KOK[g.k]}을 ${coord(g.r, g.c)} 에`, why: "말 둘레로 먼저 닿는 칸이 가장 많아지고, 상대와 영역이 덜 겹치는 자리예요. 한쪽 귀퉁이에만 몰리면 협공당하기 쉬워요." };
+    // 숫자 근거: 그 수를 둔 뒤 내가 먼저 닿는 칸 수와 가장 센 상대의 칸 수 (갈라졌으면 말이 있는 구역의 칸 수 합)
+    const snap = T => {
+      const seats = T.ord, A = areas(T, seats), others = seats.filter(s => s !== me);
+      if (A.sep) return { sep: true, mine: A.score[me], opp: Math.max(...others.map(s => A.score[s])) };
+      const w = terr(T, seats), oc = {}; for (const o of seats) oc[o] = 0;
+      for (const x of w) if (x >= 0) oc[x]++;
+      return { sep: false, mine: oc[me], opp: Math.max(...others.map(s => oc[s])) };
+    };
+    const line = s => (s.sep ? `구역이 갈라져 말이 있는 구역의 칸 수 합이 나 ${s.mine} · 가장 센 상대 ${s.opp}` : `내가 먼저 닿는 칸 ${s.mine}개 · 가장 센 상대 ${s.opp}개`);
+    const nowOpp = Math.max(0, ...oth.map(s => cnt[s]));
+    if (g.t === "place") {
+      const S2 = fromView(V); S2.pieces.push({ o: me, k: g.k, r: g.r, c: g.c, fx: false });
+      return { opp, mine, rec: `${KOK[g.k]}을 ${coord(g.r, g.c)} 에`, why: `여기에 놓으면 ${line(snap(S2))}예요 — 말 둘레로 먼저 닿는 칸이 가장 많고 상대와 덜 겹치는 자리예요. 한쪽 귀퉁이에만 몰리면 협공당하기 쉬워요.` };
+    }
     const S = fromView(V);
     if (g.t === "move") {
       const P = S.pieces[g.p], mv = allMoves(S, me).find(m => m.p === g.p && JSON.stringify(m.dirs) === JSON.stringify(g.dirs) && m.brk === g.brk);
       const T = cloneS(S); doMove(T, mv); const w = bestWall(T, me);
-      return { opp, mine, rec: `${coord(P.r, P.c)} 의 ${KOK[P.k]}을 ${coord(mv.to[0], mv.to[1])} 로${mv.brk !== null ? " (벽 부수기)" : ""}`, why: `${w ? `이동한 뒤 ${DN[w.d]}쪽에 벽을 세우면` : "이렇게 하면"} 내가 먼저 닿는 칸이 늘고 상대 쪽이 줄어요.${mv.brk !== null ? " 벽 부수기는 한 번뿐이라 정말 이득일 때만 써요." : ""}` };
+      if (w) { const Q = T.pieces[T.moved]; setWall(T, Q.r, Q.c, w.d, true); }
+      return { opp, mine, rec: `${coord(P.r, P.c)} 의 ${KOK[P.k]}을 ${coord(mv.to[0], mv.to[1])} 로${mv.brk !== null ? " (벽 부수기)" : ""}`, why: `${w ? `이동한 뒤 ${DN[w.d]}쪽에 벽을 세우면` : "이렇게 하면"} ${line(snap(T))}예요 (지금은 나 ${cnt[me]}칸 · 상대 ${nowOpp}칸).${mv.brk !== null ? " 벽 부수기는 한 번뿐이라 정말 이득일 때만 써요." : ""}` };
     }
-    return { opp, mine, rec: `${DN[g.d]}쪽에 벽`, why: "이 면에 벽을 세우면 내가 먼저 닿는 영역은 지키고 상대가 파고들 길은 막아요. 구역을 가르면 말이 있는 구역의 칸 수 합으로 끝나니, 끝났을 때 내가 더 넓은지 늘 세어 봐요." };
+    const T2 = cloneS(S), P2 = T2.pieces[T2.moved]; setWall(T2, P2.r, P2.c, g.d, true);
+    return { opp, mine, rec: `${DN[g.d]}쪽에 벽`, why: `이 면에 벽을 세우면 ${line(snap(T2))}예요 (지금은 나 ${cnt[me]}칸 · 상대 ${nowOpp}칸) — 내가 먼저 닿는 영역은 지키고 상대가 파고들 길은 막아요. 구역을 가르면 말이 있는 구역의 칸 수 합으로 끝나니 늘 세어 봐요.` };
   }
 
   return { id: "wallgo", R, FIX, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, moves, allMoves, areas, terr, regions, coord, wall, fromView, cloneS, doMove, sides, evalS, DN, candMoves, wallEvals, placeOpts };

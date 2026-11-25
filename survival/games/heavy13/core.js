@@ -287,7 +287,9 @@
     if (V.phase === "place" && V.needs.includes(me)) {
       const o = evalPlace(V, me), b = o[0];
       const txt = b.kind === "pass" ? "패스" : V.picks[me].chip === 3 ? `${PN[b.pi]} 받침대에 놓기` : "놓기";
-      return { opp, mine, rec: txt, why: b.kind === "pass" ? "지금 놓으면 벌점이 크고, 뒤에 놓는 사람들이 받침대를 먼저 넘치게 할 수 있어요 — 패스하면 가장 나중에 놓아요." : `이 선택이면 이번 라운드 예상 벌점은 약 ${b.e.toFixed(1)}점이에요${b.now ? ` (놓자마자 넘쳐서 ${b.now}개를 받아요)` : ""}.` };
+      const bp = o.find(x => x.kind === "put");
+      const tie = b.kind === "pass" && bp && !bp.now && Math.abs(bp.e - b.e) < 0.1;
+      return { opp, mine, rec: txt, why: b.kind === "pass" ? (tie ? `놓아도 패스해도 예상 벌점은 약 ${b.e.toFixed(1)}점으로 같아요 — 패스하면 이 바위를 가장 나중에 놓아서 받침대 합을 지금 ${bp.after} 으로 올리지 않아요.` : `지금 놓으면 예상 벌점이 약 ${bp ? bp.e.toFixed(1) : "?"}점${bp && bp.now ? ` (놓자마자 넘쳐서 ${bp.now}개)` : ""}이고, 패스하면 약 ${b.e.toFixed(1)}점이에요 — 뒤에 놓는 사람들이 받침대를 먼저 넘치게 할 수 있어서 가장 나중에 놓아요.`) : `이 선택이면 이번 라운드 예상 벌점은 약 ${b.e.toFixed(1)}점이에요${b.now ? ` (놓자마자 넘쳐서 ${b.now}개를 받아요)` : ""}.` };
     }
     return { opp, mine, rec: "다른 사람을 기다려요", why: "" };
   }

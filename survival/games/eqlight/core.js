@@ -321,7 +321,13 @@
     const want = tier === "hard" ? 30 : 1, att = tier === "hard" ? 8000 : tier === "normal" ? 45000 : 12000;
     const c = findCands(use, r, want, att);
     if (!c.length) return { g: bestEffort(use, r), n: 0, why: "none" };
-    return { g: want > 1 ? bestSplit(c, r) : c[0], n: c.length, why: "cand" };
+    const g = want > 1 ? bestSplit(c, r) : c[0];
+    return { g, n: c.length, why: "cand", st: want > 1 ? splitStat(g, c) : null };
+  }
+  // 이 추측을 하면 찾은 후보들이 힌트 모양 몇 가지로 갈라지고, 가장 큰 묶음이 몇 개인가 (선생님 숫자 근거)
+  function splitStat(g, c) {
+    const m = new Map(); for (const y of c) { const f = feedback(g, y); m.set(f, (m.get(f) || 0) + 1); }
+    return { groups: m.size, worst: Math.max(...m.values()) };
   }
   function tryGenN(r) { for (let a = 0; a < 4000; a++) { const s = tryGen(null, r, O_FIND); if (s) return s; } return null; }
 
@@ -358,7 +364,7 @@
     if (V.phase === "set") {
       const s = sample(r, "hard");
       return { opp, mine: "내 수식을 상대가 맞혀야 해요. 성립해야 제출돼요.", rec: V.needs.includes(me) ? `예: ${s}` : "상대를 기다려요",
-        why: "÷ · ^ 가 들어가고 서로 다른 글자가 많을수록 맞히기 어려워요. 계산 순서는 ^ → × ÷ → + - 예요." };
+        why: `예시 수식은 9칸 중 서로 다른 글자가 ${distinct(s)}종이에요 — ÷ · ^ 가 들어가고 서로 다른 글자가 많을수록 맞히기 어려워요. 계산 순서는 ^ → × ÷ → + - 예요.` };
     }
     const K = cons(mine);
     const pat = [...Array(LEN).keys()].map(i => K.fix[i] || "·").join(" ");
@@ -367,9 +373,9 @@
     if (!V.needs.includes(me)) return { opp, mine: info, rec: "상대를 기다려요", why: "" };
     const ckey = me + "|" + mine.map(x => x.g + x.f).join("|");
     const c = nextCache.key === ckey ? nextCache.val : (nextCache = { key: ckey, val: nextGuess(mine, r, "hard") }).val;
-    const why = c.why === "first" ? "성립하는 수식 중 서로 다른 숫자 · 기호가 많은 것이 첫 힌트를 가장 많이 줘요."
-      : c.why === "cand" ? `지금까지 힌트를 모두 만족하는 수식이에요 (찾아본 후보 중 힌트를 가장 잘 가르는 것). 🟩은 그대로, 🟨은 다른 칸으로, 🟥 글자는 빼요.`
-        : "힌트를 모두 만족하는 수식을 못 찾았어요. 가장 덜 어긋나는 수식이에요 — 상대 수식이 = 양쪽에 계산이 있는 꼴일 수 있어요.";
+    const why = c.why === "first" ? `성립하는 수식 중 9칸에 서로 다른 글자가 ${distinct(c.g)}종 들어간 것이 첫 힌트를 가장 많이 줘요.`
+      : c.why === "cand" ? `지금까지 ${mine.length}번의 힌트를 모두 만족하는 후보를 ${c.n}개${c.n >= 30 ? " (더 있을 수 있어요)" : ""} 찾았고${c.st ? `, 이 수식을 내면 후보가 힌트 모양 ${c.st.groups}가지로 갈라져 가장 큰 묶음이 ${c.st.worst}개예요` : ""}. 🟩은 그대로, 🟨은 다른 칸으로, 🟥 글자는 빼요.`
+        : `${mine.length}번의 힌트를 모두 만족하는 수식을 못 찾았어요. 가장 덜 어긋나는 수식이에요 — 상대 수식이 = 양쪽에 계산이 있는 꼴일 수 있어요.`;
     return { opp, mine: info, rec: c.g, why };
   }
 
