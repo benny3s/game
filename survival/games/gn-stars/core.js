@@ -12,7 +12,7 @@
    우리 판 다듬기: 별자리는 별이 모이면 자동 완성 (흰 별은 점수가 가장 높아지는 별자리에 자동으로 써요 — 별자리 판에 직접 놓지 않아요)
    · 별자리 묶음은 점수가 가장 높은 쪽으로 정해요 (별자리 3개 10점보다 2개 12점이 높으면 3개로 끝나지 않아요)
    · 흰 별은 같은 색 3개 교환에는 못 써요 (방송 규칙 화면 · 문서에 흰 별 교환 얘기가 없어서 우리가 정한 처리)
-   · 3 ~ 7명, 별 수는 인원만큼(방송 7명=7개) · 라운드 30 넘으면 승점 비교
+   · 화면은 4 ~ 7명 (core 는 시험용으로 3명도 받아요), 별 수는 인원만큼(방송 7명=7개) · 라운드 30 넘으면 승점 비교 (탈락 없이 끝)
    · cfg.white = 주머니에 더하는 흰 별 수 (방송 5 · 새 판은 5 가 기본). cfg 에 white 가 없으면 흰 별이 없는 옛 규칙 그대로라 옛 복기가 같은 판으로 재생돼요 (흰 별 없는 판은 st 에 흰 별 칸을 만들지도 않아요)
    · take(가져가기) 배열 = [빨강, 노랑, 파랑, 초록, 폭탄] (+ 흰 별 판은 6번째에 흰 별, 5칸으로 보내도 흰 별 0 으로 받아요) */
 (function (root, factory) {
@@ -325,7 +325,7 @@
 
   // ── 보이는 것 ─────────────────────────────────────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), me = typeof seat === "number" && seat >= 0 ? seat : -1;
+    const all = seat === "all", me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const shown = st.rev && (st.phase === "pick" || st.phase === "rev" || st.phase === "end") ? st.rev : null;
     const pts = st.hold.map((h, i) => ptsOf(h, wh(st, i)));
     const pubObj = { r: st.round, p: st.phase, t: st.table, tb: st.tbomb, h: st.hold, b: st.bombs, d: st.cards.map(c => (c === null ? 0 : 1)), rev: shown ? [shown.cards, shown.takes] : 0, pk: st.picker, o: st.over, bag: st.bag };

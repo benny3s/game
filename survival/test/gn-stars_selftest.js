@@ -133,7 +133,7 @@ const cards = (st, arr) => arr.forEach((c, i) => ap(st, i, { t: 'card', c }));
   const a = mk(1, 4), b = mk(5, 2);
   ok(JSON.stringify(G.view(a, 0).pub) === JSON.stringify(G.view(b, 0).pub), '남이 낸 카드가 달라도 공개 지문은 같아요');
   ok(G.view(a, 0).cards === null && G.view(a, 0).mine === null, '내 시점엔 남의 카드가 없어요');
-  ok(G.view(a, -1).cards && G.view(a, -1).cards[1] === 1, '구경(전체) 시점엔 보여요');
+  ok(G.view(a, 'all').cards && G.view(a, 'all').cards[1] === 1 && G.view(a, -1).cards === null, '전체(all) 시점엔 보이고 온라인 구경꾼(-1)은 못 봐요');
   const r1 = (() => { let s = 7; return () => { s = (s * 1103515245 + 12345) >>> 0; return (s >>> 8) / 16777216; }; })(), r2 = (() => { let s = 7; return () => { s = (s * 1103515245 + 12345) >>> 0; return (s >>> 8) / 16777216; }; })();
   for (const tier of ['easy', 'normal', 'hard']) {
     const x = G.ai(G.view(a, 0), 0, tier, (() => { let s = 5; return () => { s = (s * 1103515245 + 12345) >>> 0; return (s >>> 8) / 16777216; }; })());
