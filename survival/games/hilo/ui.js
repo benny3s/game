@@ -206,7 +206,7 @@
     const mine = `내 점수 ${fmt(V.score[me])}점 · 남은 숫자 ${hd.nums.length ? hd.nums.join("·") : "없음"} · 노멀 ${hd.norm}장 · 리버스 ${hd.rev ? "있음" : "썼음"} · 이번 더미 ${fmt(pileSum)} · 남은 라운드 ${V.left}`;
     let rec = "상대 차례를 기다려요", why = "";
     if (V.phase === "play" && V.needs.includes(me)) {
-      const L = H.evalPlay(V, me, 60, R), b = L[0], sp = b.s === "R" ? "리버스" : "노멀";
+      const RC = H.recommend(V, me), b = RC.L.find(x => x.n === RC.a.n && x.s === RC.a.s) || RC.L[0], sp = b.s === "R" ? "리버스" : "노멀";
       rec = `${b.n} 을(를) ${sp}로 내요`;
       const meaning = `숫자 ${b.n} 은(는) 1~10 중 ${b.n >= 6 ? "높은" : "낮은"} 편(뒷면 ${b.n <= 5 ? "파랑" : "노랑"})이에요`;
       const money = pileSum > 0 ? `더미가 ${fmt(pileSum)} 이라 이기면 점수를 얻어요 — 내가 혼자 가장 우위일 확률은 약 ${pct(b.p)}` : pileSum < 0 ? `더미가 ${fmt(pileSum)} 이라 이기면 마이너스를 떠안아요 — 이길 확률이 낮은 카드(약 ${pct(b.p)})가 이득이에요` : `더미 합이 0 이라 이겨도 점수 변화가 없어요 — 이길 확률 약 ${pct(b.p)}`;
@@ -214,14 +214,14 @@
       why = `${meaning}. ${money}. 같은 숫자를 여럿이 내면 그 숫자는 건너뛰는 점도 계산에 넣었어요. ${rv}.`;
     } else if (V.phase === "play") { rec = "다른 사람이 내는 중이에요"; why = `내가 낸 ${sub ? sub.n : ""} 은(는) 공개 차례가 올 때까지 비밀이에요.`; }
     else if (V.phase === "reveal" && V.needs.includes(me)) {
-      const e = H.evalReveal(V, me, 100, R), quit = V.canQuit && e.evQuit > e.evShow + 0.05;
+      const RC = H.recommend(V, me), e = RC.e, quit = RC.a.t === "quit";
       rec = quit ? "포기해요" : "공개해요";
       why = `내 숫자 ${sub.n} 을(를) 공개하면 내가 더미 ${fmt(pileSum)} 을(를) 가져갈 확률이 약 ${pct(e.pShow)}(기대 ${f1(e.evShow)}점)이에요.${V.canQuit ? ` 포기하면 기대 ${f1(e.evQuit)}점 — 마이너스 더미를 떠안을 수 있고, 같은 숫자를 낸 사람이 있을 확률은 약 ${pct(e.pShare)}예요.` : " 이번엔 꼭 공개해야 해요."}`;
     } else if (V.phase === "reveal") { rec = `${nm(V.turn)} 이(가) 공개할지 정하는 중이에요`; why = `내 숫자 ${sub ? sub.n : ""} 은(는) 아직 비밀이에요. 앞사람들이 공개하는 숫자와 겹치는지 눈여겨봐요.`; }
     else if (V.phase === "pass" && V.needs.includes(me)) {
       const po = V.passOpts || [];
       if (!po.length) { rec = "내가 가져가요"; why = "같은 숫자를 낸 사람이 없어서 넘길 수 없어요."; }
-      else { const t = po.slice().sort((a, b) => V.score[b] - V.score[a])[0]; rec = `${nm(t)} 에게 넘겨요`; why = `같은 숫자를 낸 사람 중 점수가 가장 높은 ${nm(t)}(${fmt(V.score[t])}점)에게 마이너스를 넘기면 내 순위가 지켜져요.`; }
+      else { const t = H.recommend(V, me).a.to; rec = `${nm(t)} 에게 넘겨요`; why = `같은 숫자를 낸 사람 중 점수가 가장 높은 ${nm(t)}(${fmt(V.score[t])}점)에게 마이너스를 넘기면 내 순위가 지켜져요.`; }
     } else if (V.phase === "pass") { rec = `${nm(V.quit)} 이(가) 정하는 중이에요`; why = "포기한 사람이 마이너스 더미를 가져갈지 넘길지 고르고 있어요."; }
     else if (V.phase === "show") { rec = "다음 라운드를 준비해요"; why = "남은 숫자와 리버스를 어디에 쓸지 미리 생각해 둬요."; }
     return { opp, mine, rec, why };

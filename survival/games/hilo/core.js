@@ -256,9 +256,19 @@
     return null;
   }
 
+  // 💡 추천 = 고급 AI 의 수 그대로 (보이는 것으로 정한 고정 난수 → 같은 판 같은 수). stats 는 같은 난수로 다시 센 같은 표본
+  const recRnd = (V, me) => { let a = parseInt(hash(JSON.stringify([V.round, V.cur, V.pile, V.hands && V.hands[me], V.shown, V.hist.length, V.phase, V.dir, me])), 36) >>> 0; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; };
+  function recommend(V, me) {
+    const a = ai(V, me, "hard", recRnd(V, me));
+    if (!a) return null;
+    if (V.phase === "play") return { a, L: evalPlay(V, me, SAMPLES.hard, recRnd(V, me)) };
+    if (V.phase === "reveal") return { a, e: evalReveal(V, me, SAMPLES.hard, recRnd(V, me)) };
+    return { a };
+  }
+
   return {
     id: "hilo", ROUNDS, NORMALS, SCORES, colorOf,
-    init, needs, apply, view, over, ranks, legal, auto, advance, ai,
+    init, needs, apply, view, over, ranks, legal, auto, advance, ai, recommend, recRnd,
     winnerOf, revPost, meanPos, evalPlay, evalReveal, pools,
   };
 });

@@ -15,7 +15,7 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
   nok(U.board === false && U.min === 4 && U.max === 4, '4명 고정 · 한 기기 안 됨');
   nok(U.src && U.diff && /^방송: /.test(U.src) && U.howto[U.howto.length - 2] === U.src && U.howto[U.howto.length - 1].startsWith('※ 방송과 다른 점'), 'howto 끝 두 줄 = 방송 출처 · 방송과 다른 점');
   const names = ['나', '범수', '치즈', '삐약'];
-  let n = 0, phases = new Set();
+  let recN = 0, n = 0, phases = new Set();
   for (let k = 0; k < 14; k++) {
     const st = core.init({ n: 4, seed: 400 + k, cfg: {} });
     let rs = k + 9; const r = () => { rs = (rs * 1664525 + 1013904223) >>> 0; return rs / 4294967296; };
@@ -36,6 +36,12 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
         nok(JSON.stringify(c1) === JSON.stringify(c2), `선생님 글이 숨은 정보로 바뀜 (자리 ${s}, ${st.phase}, ${st.round}R)`);
         nok(JSON.stringify(c1) === JSON.stringify(c3), `선생님 글이 남의 손패를 읽음 (자리 ${s}, ${st.phase})`);
         nok(c1.opp && c1.mine && c1.rec && !/undefined|NaN|null/.test(JSON.stringify(c1)), '선생님 글 이상 ' + JSON.stringify(c1));
+        if (need.includes(s)) {   // 💡 추천 = 고급 AI 의 수 (같은 고정 난수)
+          const V0 = core.view(st, s), ha = core.ai(V0, s, 'hard', core.recRnd(V0, s)); recN++;
+          if (st.phase === 'play') nok(c1.rec === `${ha.n} 을(를) ${ha.s === 'R' ? '리버스' : '노멀'}로 내요`, `추천 ≠ 고급 AI (play) ${c1.rec} vs ${JSON.stringify(ha)}`);
+          else if (st.phase === 'reveal') nok(c1.rec === (ha.t === 'quit' ? '포기해요' : '공개해요'), `추천 ≠ 고급 AI (reveal) ${c1.rec} vs ${ha.t}`);
+          else if (st.phase === 'pass' && ha.to >= 0) nok(new RegExp(`^${names[ha.to] || (ha.to + 1) + '번'} `).test(c1.rec), `추천 ≠ 고급 AI (pass) ${c1.rec} vs ${ha.to}`);
+        }
         if (need.includes(s)) { nok(c1.why, `차례인데 이유가 비었음 (${st.phase})`); phases.add(st.phase); }
         n++;
       }
@@ -47,6 +53,7 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
     const rs2 = U.result(core.view(st, 0), 0);
     nok(typeof rs2 === 'string' && /가져간 점수 카드/.test(rs2) && !/undefined|NaN/.test(rs2), '결과 html');
   }
+  nok(recN > 100, '추천 시험이 충분히 돎 ' + recN);
   nok(['play', 'reveal'].every(p => phases.has(p)), '차례 단계를 다 겪어 보지 못함 ' + [...phases]);
   nok(n > 500, '선생님 시험 횟수 ' + n);
   console.log(`  선생님 글 숨은 정보 시험 ${n}번 (겪은 단계: ${[...phases].join(' · ')})`);
