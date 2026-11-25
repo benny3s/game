@@ -131,12 +131,12 @@
         boardHtml: row([7, 5, 3, 1, -1], `<span class="hs-lim">한계 9</span>`), ms: 5400 },
       { tag: "STEP 2 · 받기", title: "3장 받고 1장만 보여 줘요", body: "기본 베팅 1칩을 내고 카드 <b>3장</b>을 받아요. 그중 <b>1장만 공개</b>하고 나머지 2장은 나만 봐요. 그리고 1차 베팅 (콜 · 레이즈 · 폴드).",
         boardHtml: `<div class="hs-tut"><div class="hs-row hs-big"><span class="hs-c top">4</span>${cardHtml(3, " hid")}${cardHtml(2, " hid")}</div><small>🔒 숨긴 카드는 나만 · 공개한 카드는 모두에게 보여요</small></div>`, ms: 5400 },
-      { tag: "STEP 3 · HIT", title: "직접 해 봐요: 9 에 딱 맞추기", body: "한계 <b>9</b>, 내 카드 <b>4 + 3 = 7</b>. <b>HIT</b>(한 장 더)로 9 를 맞춰 보세요. 넘으면 <b>bust</b> — 그 라운드 최하위예요!",
+      { tag: "STEP 3 · HIT", title: "직접 해 봐요: 9 에 딱 맞추기", body: "한계 <b>9</b>, 내 카드 3장 <b>4 + 2 + 1 = 7</b>. <b>HIT</b>(한 장 더)로 9 를 맞춰 보세요. 넘으면 <b>bust</b> — 그 라운드 최하위예요!",
         interactive: { hint: "👆 HIT 을 눌러 보세요 (두 번 누르면 넘어요)", doneText: "✅ 7 + 2 = 9, 한계에 딱 맞았어요!" },
         render(stage, ctrl) {
           const deck = [2, 5]; let sum = 7, k = 0, msg = "";
           const draw = () => {
-            stage.innerHTML = `<div class="hs-tut"><span class="hs-lim">한계 9</span><div class="hs-row hs-big">${cardHtml(4)}${cardHtml(3)}${deck.slice(0, k).map(c => cardHtml(c)).join("")}</div><b style="font-size:18px">합 ${sum}</b><div class="hs-btns" style="width:100%"><button class="btn primary" data-a="hit">HIT</button><button class="btn" data-a="stay">STAY</button></div><small>${msg}</small></div>`;
+            stage.innerHTML = `<div class="hs-tut"><span class="hs-lim">한계 9</span><div class="hs-row hs-big">${cardHtml(4)}${cardHtml(2)}${cardHtml(1)}${deck.slice(0, k).map(c => cardHtml(c)).join("")}</div><b style="font-size:18px">합 ${sum}</b><div class="hs-btns" style="width:100%"><button class="btn primary" data-a="hit">HIT</button><button class="btn" data-a="stay">STAY</button></div><small>${msg}</small></div>`;
             if (sum === 9) ctrl.complete();
           };
           stage.onclick = e => {
@@ -160,7 +160,7 @@
     name: "HIT, STAY", emoji: "✋", short: "카드 합을 한계 숫자에 맞춰요", min: 2, max: 6, defN: 4, board: false,
     opts: [{ k: "chips", label: "시작 칩", items: [[30, "30칩 (방송 그대로)"], [15, "15칩 (빠르게)"]], def: 30 }],
     howto: [
-      "카드 3장을 받고 <b>1장만 공개</b> · 2장은 나만 봐요",
+      "카드 3장을 받고 <b>1장만 공개</b> · 2장은 나만 봐요 (공개는 모두 고른 뒤 한꺼번에)",
       "<b>한계 숫자(5~12)</b>에 합이 가까울수록 승 — 넘기면(bust) 최하위",
       "베팅 뒤 <b>HIT</b>(한 장 더, 모두에게 공개) 또는 <b>STAY</b>, 다시 베팅",
       "칩이 0 이 되면 탈락 · 마지막 한 명이 1등",

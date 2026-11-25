@@ -178,5 +178,44 @@ for (const [n, seed, tiers, chips] of [[2, 1, ['hard'], 15], [3, 2, ['normal'], 
   }
 }
 
+// 8) 동시 공개: 먼저 고른 사람 카드가 둘째 · 구경꾼에게 안 보임 (view · log · pub), 둘 다 고른 뒤 함께 공개
+{
+  const st = H.init({ n: 3, seed: 5, cfg: { chips: 30 } });
+  ok(st.phase === 'reveal', '공개 단계');
+  const need = H.needs(st).slice();
+  const first = need[0], second = need[1];
+  H.apply(st, first, { t: 'reveal', k: 1 });
+  for (const s of [second, -1]) {
+    const v = H.view(st, s);
+    eq(v.hands[first].open, [], '먼저 고른 카드는 view(' + s + ') 에 안 보임');
+    ok(v.hands[first].first === undefined, 'first 도 숨김');
+    ok(!v.log.some(e => e.k === 'reveal'), '로그에도 아직 없음 (view ' + s + ')');
+  }
+  eq(H.view(st, first).hands[first].open.length, 1, '내가 고른 카드는 나에게 보임');
+  ok(H.view(st, second).pub === H.view(st, -1).pub && H.view(st, second).pub === H.view(st, first).pub, 'pub 지문에도 안 실림');
+  for (const s of need.slice(1)) H.apply(st, s, { t: 'reveal', k: 0 });
+  ok(st.phase === 'bet1', '모두 고르면 베팅');
+  const v = H.view(st, -1);
+  ok(v.hands.every(h => !h || h.open.length === 1), '둘 다 고른 뒤에는 모두에게 공개');
+  eq(v.log.filter(e => e.k === 'reveal').length, 3, '로그에 한꺼번에 올라감');
+}
+
+// 9) 추천 = 고급 AI (같은 고정 난수)
+{
+  let cmp = 0, bad = 0;
+  for (let seed = 1; seed <= 12; seed++) {
+    const st = H.init({ n: 4, seed, cfg: { chips: 15 } }), r = rngOf(seed); let steps = 0;
+    while (!H.over(st) && steps++ < 300) {
+      const need = H.needs(st); if (!need.length) { H.advance(st); continue; }
+      const s = need[0], V = H.view(st, s);
+      const c = H.coach(V, s, -1, null), a = H.ai(V, s, 'hard', H.coachRng(V, s)), rec = c.rec;
+      const want = a.t === 'reveal' ? new RegExp('^' + V.hands[s].raw[a.k] + ' 공개') : a.t === 'hit' ? /^HIT/ : a.t === 'stay' ? /^STAY/ : a.t === 'fold' ? /^폴드/ : a.t === 'call' ? /^콜/ : a.t === 'check' ? /^체크/ : new RegExp('레이즈 → ' + a.to + '칩');
+      cmp++; if (!want.test(rec)) { bad++; console.error('추천 어긋남', rec, JSON.stringify(a)); }
+      H.apply(st, s, H.ai(V, s, 'normal', r));
+    }
+  }
+  ok(cmp > 50 && bad === 0, '💡 추천 = 고급 AI (' + cmp + '곳 중 어긋남 ' + bad + ')');
+}
+
 console.log(`HIT, STAY 시험: 통과 ${pass} · 실패 ${fail}`);
 process.exit(fail ? 1 : 0);

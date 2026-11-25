@@ -244,19 +244,22 @@
   // ── 보이는 것: 내 카드만 (공개된 라운드 카드는 last) ──
   function view(st, seat) {
     const me = typeof seat === "number" && seat >= 0 && seat < st.n ? seat : -1;
+    const isAll = seat === "all";     // 'all' = AI 구경(다 보기) · -1 = 친구랑 구경꾼(공개된 것만)
     const pubObj = { r: st.round, p: st.phase, b: st.bid && [st.bid.s, st.bid.c, st.bid.cnt, st.bid.amt], d: st.duel && [st.duel.put, st.duel.turn], pc: st.pc, ch: st.chips, o: st.out, bu: st.buy.map(x => (x === null ? 0 : 1)), cur: st.cur };
     const D = st.duel;
-    return {
+    const V = {
       n: st.n, opt: Object.assign({}, st.opt), round: st.round, phase: st.phase, seat: me, order: st.seat.slice(), starter: st.starter, cur: st.cur,
       pc: st.pc.slice(), chips: st.chips.slice(), slots: st.chips.map(c => c + 1), out: st.out.slice(), outAt: st.outAt.slice(),
       hand: me >= 0 && st.hands[me] ? st.hands[me].slice() : [], total: st.phase === "buy" ? 0 : st.hands.reduce((k, h) => k + h.length, 0),
       bid: st.bid ? { s: st.bid.s, c: st.bid.c, cnt: st.bid.cnt, amt: st.bid.amt } : null, prev: st.prev.map(x => Object.assign({}, x)),
       duel: D ? { b: D.b, d: D.d, put: Object.assign({}, D.put), turn: D.turn, first: D.first, acts: D.acts.map(x => Object.assign({}, x)) } : null,
       // 사기 단계 중 남의 선택은 '정함(-1)'만
-      buy: st.buy.map((x, s) => (x === null || s === me || st.phase !== "buy" ? x : -1)), last: st.last ? JSON.parse(JSON.stringify(st.last)) : null, hist: st.hist.map(h => Object.assign({}, h)),
+      buy: st.buy.map((x, s) => (x === null || s === me || st.phase !== "buy" || isAll ? x : -1)), last: st.last ? JSON.parse(JSON.stringify(st.last)) : null, hist: st.hist.map(h => Object.assign({}, h)),
       needs: needs(st), over: st.over, end: st.end, final: st.final ? st.final.slice() : null, ranks: ranks(st), goal: st.goal,
       log: st.log.map(e => JSON.parse(JSON.stringify(e))), pub: hash(JSON.stringify(pubObj)).toString(36),
     };
+    if (isAll) V.hands = st.hands.map(h => h.slice());
+    return V;
   }
 
   // ── AI: 내 카드로 남은 덱의 초기하 분포 → 선언이 맞을 확률. 고급은 앞사람들의 선언 색을 '그 사람이 그 색을 들고 있을 것'으로 조금 반영 ──

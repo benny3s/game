@@ -183,5 +183,22 @@ function rig(st, hands) { st.hands = hands.map(h => h.slice()); }
     ok(pair / N >= need, `${A} 이 ${B} 를 이김 ${(pair / N).toFixed(2)}`);
   }
 }
+// 구경꾼 view(-1) 는 공개된 것만 · view('all')(AI 구경) 만 다 보기
+{
+  const st = C.init({ n: 4, seed: 9 }), r = mul(3);
+  let checked = 0, bad = 0, steps = 0;
+  while (!C.over(st) && steps++ < 400) {
+    const need = C.needs(st); if (!need.length) { if (C.auto(st) != null) C.advance(st); else break; continue; }
+    const sp = C.view(st, -1), al = C.view(st, 'all');
+    checked++;
+    if (sp.hands !== undefined || sp.hand.length || JSON.stringify(sp) === JSON.stringify(al)) bad++;
+    if (!(al.hands && al.hands.length === 4 && al.hands.every((h, i) => JSON.stringify(h) === JSON.stringify(st.hands[i])))) bad++;
+    if (st.phase === 'buy' && st.buy.some(x => x !== null) && sp.buy.some(x => x !== null && x !== -1)) bad++;
+    if (st.phase !== 'show' && JSON.stringify(sp).includes(JSON.stringify(st.hands.find(h => h.length)))) bad++;
+    const s = need[0]; C.apply(st, s, C.ai(C.view(st, s), s, 'normal', r));
+  }
+  ok(checked > 20 && bad === 0, '구경꾼 view(-1) 는 카드 · 먼저 정한 선택이 안 보임, view("all") 만 다 보임 (어긋남 ' + bad + ')');
+}
+
 console.log(`doubtbet selftest: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

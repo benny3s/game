@@ -140,8 +140,8 @@
       c.open = [c.hand[a.k]]; c.hid = c.hand.filter((x, k) => k !== a.k); c.hidx = a.k; c.extra = [];
       c.hand = c.hand.slice();
       st.revealed[seat] = true;
-      push(st, { k: "reveal", s: seat, c: c.open[0] });
-      if (!needs(st).length) startBet(st, 1);
+      // 동시 공개: 둘 다 고른 뒤에야 로그 · view 에 올라감 (먼저 고른 사람 카드를 보고 고르는 것 방지)
+      if (!needs(st).length) { st.cards.forEach((cc, i) => { if (cc && !st.folded[i]) push(st, { k: "reveal", s: i, c: cc.open[0] }); }); startBet(st, 1); }
       return { ok: true };
     }
     if (st.phase === "bet1" || st.phase === "bet2") {
@@ -198,15 +198,16 @@
   function view(st, seat) {
     const all = seat === "all", showAll = st.phase === "show" && st.res && !st.res.fold;
     const sees = i => all || i === seat || (showAll && st.cards[i] && !st.folded[i]);
+    const hideOpen = i => st.phase === "reveal" && !all && i !== seat;   // 동시 공개 중에는 남이 고른 카드가 아직 안 보임
     const hands = st.cards.map((c, i) => (c && c.hand ? {
-      open: (c.open || []).concat(c.extra || []),
-      first: (c.open || [])[0],
+      open: hideOpen(i) ? [] : (c.open || []).concat(c.extra || []),
+      first: hideOpen(i) ? undefined : (c.open || [])[0],
       extraN: (c.extra || []).length,
       hid: sees(i) ? (c.hid || []).slice() : (c.hid || []).map(() => null),
       hidN: (c.hid || []).length,
       raw: sees(i) && st.phase === "reveal" ? c.hand.slice() : null,
     } : null));
-    const pubObj = { h: st.hand, p: st.phase, c: st.chips, f: st.folded, pot: st.pot, b: st.bet, cur: st.cur, t: st.turn, o: hands.map(x => x && x.open), L: st.L, st: st.stay, rv: st.revealed, r: st.res && st.res.gain, ov: st.over };
+    const pubObj = { h: st.hand, p: st.phase, c: st.chips, f: st.folded, pot: st.pot, b: st.bet, cur: st.cur, t: st.turn, o: st.phase === "reveal" ? null : st.cards.map(c => (c && c.hand ? (c.open || []).concat(c.extra || []) : null)), L: st.L, st: st.stay, rv: st.revealed, r: st.res && st.res.gain, ov: st.over };
     return {
       n: st.n, hand: st.hand, phase: st.phase, L: st.L, ante: st.ante, start: st.start, chips: st.chips.slice(), alive: st.alive.slice(), folded: st.folded.slice(), pot: st.pot,
       bet: st.bet.slice(), cur: st.cur, cap: st.cap, turn: st.turn, dealer: st.dealer, deckN: st.deck ? st.deck.length : 0,
@@ -312,12 +313,13 @@
 
   // ── AI 선생님 ───────────────────────────────────────────────
   const pc = x => Math.round(x * 100) + "%";
+  // 선생님 추천 = 고급 AI 의 수 (같은 고정 난수로 ai(hard) 를 그대로 부름 · 시험도 같은 함수로 비교)
+  const coachRng = (V, me) => { let a = 4242 + V.hand * 17 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; };
   function coach(V, me, since, names) {
     const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
     const nm = i => esc((names && names[i]) || `${i + 1}번`);
     if (V.over) return { opp: "판이 끝났어요.", mine: `내 칩 ${V.chips[me]}개 · ${V.ranks[me] + 1}등`, rec: "한 판 더 해 봐요!", why: "" };
     if (!V.hands[me]) return { opp: "이번 판은 칩이 없어 쉬어요.", mine: `칩 ${V.chips[me]}개`, rec: "구경하며 상대 버릇을 봐 두세요.", why: "" };
-    const r = (() => { let a = 4242 + V.hand * 17 + me; return () => { a = (a * 1103515245 + 12345) >>> 0; return (a >>> 8) / 16777216; }; })();
     const h = V.hands[me], L = V.L, cur = mySum(V, me);
     // 👀 상대 흐름: 공개된 카드와 최근 행동
     const evs = V.log.filter(e => e.i > since && e.s !== me && (e.k === "hit" || e.k === "stay" || e.k === "bet" || e.k === "reveal"));
@@ -334,17 +336,19 @@
     let rec = "상대 차례를 기다려요", why = "";
     const myTurn = V.needs.includes(me);
     if (V.phase === "reveal" && myTurn) {
-      const raw = h.raw || [], idx = raw.map((v, k) => k).sort((a, b) => raw[a] - raw[b]), k = idx[1];
+      const raw = h.raw || [], k = ai(V, me, "hard", coachRng(V, me)).k;
       rec = `${raw[k]} 공개`;
       why = `한가운데 값(${raw[k]})을 보여 주면 내 합이 높은지 낮은지 상대가 읽기 어려워요. 가장 큰 카드를 보이면 bust 위험으로, 작은 카드를 보이면 여유로 읽혀요.`;
     } else if ((V.phase === "bet1" || V.phase === "bet2") && myTurn) {
-      const p = betPlan(V, me, "hard", r), t = p.a.t;
+      const p = betPlan(V, me, "hard", coachRng(V, me));
+      p.a = ai(V, me, "hard", coachRng(V, me));
+      const t = p.a.t;
       rec = t === "fold" ? "폴드" : t === "call" ? `콜 (${p.toCall}칩)` : t === "check" ? "체크" : `레이즈 → ${p.a.to}칩까지`;
       why = `내가 이길 확률은 약 ${pc(p.p)}예요. ${t === "fold" ? `콜에 ${p.toCall}칩인데 판돈 ${p.potAfter}칩의 몫으로는 손해가 커요.` : t === "raise" ? "앞서 있다고 보여서 판돈을 키워요 — 상대가 따라오면 더 받아요." : t === "call" ? "따라가도 본전 이상이에요." : "걸 만큼 앞서지는 않아요 — 공짜로 다음 단계를 봐요."}`;
     } else if (V.phase === "hit" && myTurn) {
-      const p = hitPlan(V, me, "hard", r);
-      rec = p.hit > p.stay + 0.01 ? "HIT (한 장 더)" : "STAY";
-      why = `지금 STAY 로 이길 확률 ${pc(p.stay)} · 한 장 더 받으면 ${pc(p.hit)} (넘길 위험 ${pc(p.bustRisk)}). ${p.hit > p.stay ? "한계에 더 가까워질 수 있어서 받는 게 나아요." : "넘길 위험이 이득보다 커요."}`;
+      const p = hitPlan(V, me, "hard", coachRng(V, me)), doHit = ai(V, me, "hard", coachRng(V, me)).t === "hit";
+      rec = doHit ? "HIT (한 장 더)" : "STAY";
+      why = `지금 STAY 로 이길 확률 ${pc(p.stay)} · 한 장 더 받으면 ${pc(p.hit)} (넘길 위험 ${pc(p.bustRisk)}). ${doHit ? "한계에 더 가까워질 수 있어서 받는 게 나아요." : "넘길 위험이 이득보다 커요."}`;
     } else if (V.phase === "show") { rec = "결과를 보고 다음 라운드를 준비해요"; if (V.res && !V.res.fold) why = `한계 ${V.L} · 승자 ${V.res.win.map(nm).join(", ")}`; }
     return { opp, mine, rec, why };
   }
@@ -352,6 +356,6 @@
   return {
     id: "hitstay", DECK, anteOf,
     init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach,
-    unseenPool, winProb, hitPlan, betPlan, mySum, minRaise,
+    unseenPool, winProb, hitPlan, betPlan, mySum, minRaise, coachRng,
   };
 });

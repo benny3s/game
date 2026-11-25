@@ -177,6 +177,7 @@
     h += seatsHtml(V, me, names, show);
     if (L && L.cards) h += revealHtml(L, me, names);
     else if (me >= 0 && !V.out[me]) h += `<div class="db-hand"><span class="db-lb">내 카드</span>${V.hand.length ? V.hand.map(x => card(x)).join("") : `<small>${V.phase === "buy" ? "슬롯을 정하면 카드를 받아요" : "—"}</small>`}</div>`;
+    else if (me < 0 && V.hands) h += `<div class="db-rev">${V.hands.map((hd, s) => (hd.length ? `<div class="db-rr" data-s="${s}"><b>${esc(nmOf(names, s, me))}</b>${hd.map(x => card(x, "sm")).join("")}</div>` : "")).join("")}</div>`;
     else h += `<div class="db-hand"><small>${me >= 0 ? "탈락 — 구경 중" : "구경 중"}</small></div>`;
     let info = "", ic = "";
     if (over) {
