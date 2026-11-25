@@ -261,21 +261,23 @@
   const PROF = {
     easy:   { predSims: 0, subSims: 0, noise: 0.35, predNoise: 0.45 },
     normal: { predSims: 10, subSims: 0, noise: 0.08, predNoise: 0.1 },
-    hard:   { predSims: 36, subSims: 24, noise: 0, predNoise: 0, cands: 12 },
+    hard:   { predSims: 36, subSims: 24, noise: 0, predNoise: 0, cands: 12, scale: 2.2 },
   };
+  // 굴려 보는 횟수는 인원이 늘수록 한 번이 비싸므로 인원에 맞춰 줄임 (이 PC 에서 ai() 150ms 안 — 폰은 3~4배 느림)
+  const simsFor = (P, V, k) => (P.scale ? Math.max(8, Math.min(P[k], Math.round(P[k] * P.scale / V.n))) : P[k]);
   // 예측: 계획마다 굴려 보고 기대 승점이 가장 큰 것
   function predRows(V, s, P, seed) {
     const rows = [];
     for (let p = 0; p < 4; p++) {
-      let ev = 0, ok = 0; const R = seeded(seed);
-      for (let k = 0; k < P.predSims; k++) {
+      let ev = 0, ok = 0; const R = seeded(seed), NS = simsFor(P, V, "predSims");
+      for (let k = 0; k < NS; k++) {
         const sim = simFrom(V, s, R);
         for (let o = 0; o < V.n; o++) sim.plan[o] = o === s ? p : guessPlan(sim.dice[o], [...Array(11).keys()]);
         sim.trick = 1; sim.ti = 0; sim.order = orderFrom(V.n, V.first); sim.subs = Array(V.n).fill(null);
         const x = rollout(sim, s, null, R, 0.05)[s];
         ev += gainOf(p, x); if (predOk(p, x)) ok++;
       }
-      rows.push({ p, ev: ev / P.predSims, ok: ok / P.predSims });
+      rows.push({ p, ev: ev / NS, ok: ok / NS });
     }
     rows.sort((a, b) => b.ev - a.ev || a.p - b.p);
     return rows;
@@ -305,7 +307,7 @@
     for (const c of bestSets(vals, idx)) add(c);
     const step = Math.max(1, Math.floor(all.length / 6)); for (let j = 0; j < all.length; j += step) add(all[j]);
     const top = cands.slice(0, P.cands || 12);
-    for (const c of top) { const e = evalSub(V, s, c.d, P.subSims, seed); c.ev = e.ev; c.ok = e.ok; }
+    for (const c of top) { const e = evalSub(V, s, c.d, simsFor(P, V, "subSims"), seed); c.ev = e.ev; c.ok = e.ok; }
     top.sort((a, b) => b.ev - a.ev || a.k - b.k);
     return top;
   }
@@ -351,7 +353,7 @@
     if (!V || !myA || !bestA || V.phase !== (myA.t === "pred" ? "pred" : "play")) return null;
     const P = PROF.hard, seed = keyV(V, s);
     if (myA.t === "pred") { const rows = predRows(V, s, P, seed), f = p => rows.find(r => r.p === p); return { my: f(myA.p), best: f(bestA.p), rows }; }
-    const sims = P.subSims * 2;
+    const sims = simsFor(P, V, "subSims") * 2;
     return { my: evalSub(V, s, myA.d, sims, seed), best: evalSub(V, s, bestA.d, sims, seed) };
   }
 

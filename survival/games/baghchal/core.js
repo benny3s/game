@@ -240,7 +240,7 @@
   const sortBy = (mv, key) => mv.map(m => [key(m), m]).sort((x, y) => y[0] - x[0]).map(z => z[1]);
   function negamax(B, depth, role, alpha, beta, ply) {
     if (B.stop) return 0;
-    if (++B.nodes > B.limit) { B.stop = 1; return 0; }
+    if (++B.nodes > B.limit || ((B.nodes & 63) === 0 && Date.now() > B.t1)) { B.stop = 1; return 0; }
     if (B.cap >= WINCAP) return role === "g" ? -(WINV - ply) : WINV - ply;
     let mv = movesOf(B.c, B.h, role);
     if (!mv.length) {
@@ -265,10 +265,10 @@
   const TIER = {
     easy: { depth: 1, nodes: 2000, noise: 120, rand: 0.35 },
     normal: { depth: 3, nodes: 10000, noise: 25, rand: 0.05 },
-    hard: { depth: 6, nodes: 40000, noise: 1, rand: 0 },
-    coach: { depth: 6, nodes: 40000, noise: 0, rand: 0 },
+    hard: { depth: 6, nodes: 40000, ms: 90, noise: 1, rand: 0 },
+    coach: { depth: 6, nodes: 40000, ms: 140, noise: 0, rand: 0 },
   };
-  const boardOf = bd => ({ c: Int8Array.from(bd.c), h: bd.h, cap: bd.cap, nodes: 0, limit: 1e9, stop: 0 });
+  const boardOf = bd => ({ c: Int8Array.from(bd.c), h: bd.h, cap: bd.cap, nodes: 0, limit: 1e9, t1: Infinity, stop: 0 });
   // 수마다 값 [[수, 값], …] — 반복 깊이, 끝까지 읽은 마지막 깊이의 값
   function scoreC(bd, role, cfg) {
     const B = boardOf(bd);
@@ -276,7 +276,7 @@
     if (cfg.only) mv = mv.filter(cfg.only);
     if (!mv.length) return null;
     mv = sortBy(mv, m => orderKey(B, m, role));
-    B.limit = cfg.nodes;
+    B.limit = cfg.nodes; B.t1 = Date.now() + (cfg.ms || 1e9);       // 시간 마감: 이 PC 에서 한 번에 150ms 안(고급) · 선생님 200ms 안 — 못 끝낸 깊이는 버리고 앞 깊이의 값을 씀
     let done = null;
     for (let d = 1; d <= cfg.depth; d++) {
       B.nodes = 0; B.stop = 0;
@@ -347,7 +347,7 @@
   function judge(V, seat, a, b) {
     if (V.over || !V.cur || V.cur.seat !== seat || !a || !b) return null;
     const hit = act => m => act.t === "place" ? m[0] === -1 && m[1] === act.to : m[0] === act.from && m[1] === act.to;
-    const done = scoreC(V.B[V.cur.b], V.cur.role, TIER.coach);
+    const done = scoreC(V.B[V.cur.b], V.cur.role, Object.assign({}, TIER.coach, { ms: 2500 }));
     if (!done) return null;
     const val = act => { const z = done.find(q => hit(act)(q[0])); return z ? z[1] : null; };
     return { my: val(a), best: val(b), top: done[0][1], WINV };

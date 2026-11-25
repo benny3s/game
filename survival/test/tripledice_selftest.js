@@ -248,5 +248,26 @@ function playAI(seed, tiers, cfg, check) {
   ok(U.chip(C.view(s2, 0), 1).t === '6점' || /점$/.test(U.chip(C.view(s2, 0), 1).t), '칩 글');
 }
 
+// 시간 예산: 고급 AI 한 번 두는 데 걸리는 시간 (11-26 · 목표 150ms — 시험 PC 흔들림을 넉넉히 보아 최대 600ms · p95 300ms)
+{
+  const { performance } = require('perf_hooks'); const T = []; let seed0 = 7;
+  const rnd = () => { seed0 = (seed0 * 1664525 + 1013904223) >>> 0; return seed0 / 4294967296; };
+  for (const n of [2, 4]) for (let g = 0; g < (process.argv.includes('--quick') ? 2 : 4); g++) {
+    const st = C.init({ n, seed: 40 + g, cfg: {} }); let steps = 0;
+    while (!C.over(st) && steps++ < 400 && T.length < 400) {
+      const nd = C.needs(st); if (!nd.length) { if (C.auto && C.auto(st) != null) { C.advance(st); continue; } break; }
+      for (const s of nd) {
+        if (!C.needs(st).includes(s)) continue;
+        const V = C.view(st, s), t = performance.now(); let a; try { a = C.ai(V, s, 'hard', rnd); } catch (e) { a = null; } T.push(performance.now() - t);
+        let r = a != null ? C.apply(st, s, a) : { ok: false };
+        if (!r.ok) { const Lg = C.legal && C.legal(st, s); if (Lg && Lg.length) r = C.apply(st, s, Lg[0]); }
+        if (!r.ok) { steps = 1e9; break; }
+      }
+    }
+  }
+  T.sort((a, b) => a - b); const mx = T[T.length - 1] || 0, p95 = T[Math.floor(T.length * 0.95)] || 0;
+  console.log(`· tripledice 고급 AI ${T.length}번 최대 ${mx.toFixed(0)}ms · p95 ${p95.toFixed(0)}ms`);
+  ok(T.length > 10 && mx <= 600 && p95 <= 300, `tripledice AI 시간 예산 (최대 ${mx.toFixed(0)}ms · p95 ${p95.toFixed(0)}ms)`);
+}
 console.log(`tripledice selftest: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

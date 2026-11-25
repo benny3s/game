@@ -266,7 +266,9 @@
   function sample(r, tier) {
     const o = O_SECRET[tier] || O_SECRET.normal, tries = tier === "hard" ? 10 : tier === "normal" ? 4 : 1;
     let best = null, bs = -1;
+    const t1 = Date.now() + (tier === "hard" ? 70 : 1e9);       // 시간 마감: 이 PC 에서 ai() 한 번 150ms 안 (폰은 3~4배 느림) — 마감이 지나면 지금까지 중 가장 좋은 것
     for (let t = 0; t < tries; t++) {
+      if (best && Date.now() > t1) break;
       let s = null;
       for (let a = 0; a < 4000 && !s; a++) s = tryGen(null, r, o);
       if (!s) continue;
@@ -276,9 +278,10 @@
     return best || pick(["12+3×4=24", "9×8-7=65", "81÷9+5=14", "6×7+8=50", "2^5+4=36"].filter(x => x.length === LEN).concat(["12+3×4=24"]), r);
   }
   // 지금까지 힌트를 모두 만족하는 수식 후보 (최대 want 개, 시도 횟수 attempts)
-  function findCands(hist, r, want, attempts) {
-    const K = hist.length ? cons(hist) : null, out = [], seen = new Set();
+  function findCands(hist, r, want, attempts, ms) {
+    const K = hist.length ? cons(hist) : null, out = [], seen = new Set(), t1 = Date.now() + (ms || 1e9);
     for (let a = 0; a < attempts && out.length < want; a++) {
+      if ((a & 31) === 31 && Date.now() > t1) break;
       const s = tryGen(K, r, O_FIND);
       if (s && !seen.has(s) && (!K || consistent(s, hist))) { seen.add(s); out.push(s); }
     }
@@ -286,8 +289,9 @@
   }
   // 후보가 하나도 없을 때(양쪽 식 같은 드문 꼴): 힌트와 가장 덜 어긋나는 수식
   function bestEffort(hist, r) {
-    let best = null, bm = 1e9;
+    let best = null, bm = 1e9; const t1 = Date.now() + 60;
     for (let a = 0; a < 500; a++) {
+      if ((a & 15) === 15 && best && Date.now() > t1) break;
       const s = tryGen(null, r, O_FIND); if (!s) continue;
       const m = mismatch(s, hist) + r() * 0.1; if (m < bm) { bm = m; best = s; }
     }
@@ -310,7 +314,7 @@
   function nextGuess(hist, r, tier) {
     if (!hist.length) {                                          // 첫 추측: 글자가 골고루 섞인 수식
       if (tier === "hard") {                                     // 후보 40개를 가장 잘게 가르는 첫 추측
-        const pool = []; for (let t = 0; t < 40; t++) { const s = tryGenN(r); if (s) pool.push(s); }
+        const pool = [], t1 = Date.now() + 60; for (let t = 0; t < 40 && (pool.length < 8 || Date.now() < t1); t++) { const s = tryGenN(r); if (s) pool.push(s); }
         if (pool.length > 4) return { g: bestSplit(pool, r, pool), n: 0, why: "first" };
       }
       const k = tier === "hard" ? 12 : tier === "normal" ? 5 : 1; let best = null, bs = -1;
@@ -319,7 +323,7 @@
     }
     const use = tier === "easy" ? hist.slice(-2) : hist;
     const want = tier === "hard" ? 30 : 1, att = tier === "hard" ? 8000 : tier === "normal" ? 45000 : 12000;
-    const c = findCands(use, r, want, att);
+    const c = findCands(use, r, want, att, tier === "hard" ? 90 : 0);
     if (!c.length) return { g: bestEffort(use, r), n: 0, why: "none" };
     const g = want > 1 ? bestSplit(c, r) : c[0];
     return { g, n: c.length, why: "cand", st: want > 1 ? splitStat(g, c) : null };

@@ -210,7 +210,8 @@
   function scoreMove(V, s, m, P, R) {
     if (P.sims) {                                          // 몬테카를로: 다음 내 차례까지 상대는 욕심쟁이(가끔 아무 수), 내 다음 수까지 두고 평가
       let tot = 0, pv0 = null;
-      for (let k = 0; k < P.sims; k++) {
+      const NS = Math.max(8, Math.min(P.sims, Math.round(P.sims * 4.5 / V.n)));      // 인원이 많을수록 한 번이 비싸니 굴림을 줄임 (이 PC 에서 ai() 150ms 안)
+      for (let k = 0; k < NS; k++) {
         const S = simOf(V); pv0 = simMove(S, s, m.from, m.seq, m.col);
         for (let d = 0; d < S.n - 1 && !S.over; d++) {
           const who = S.order[S.ti];
@@ -222,7 +223,7 @@
         if (P.next && !S.over) { const g = greedyMove(S, s); if (g) simMove(S, s, g.from, g.seq); }
         tot += evalFor(S, s, P);
       }
-      return { v: tot / P.sims, pv: pv0 };
+      return { v: tot / NS, pv: pv0 };
     }
     const S = simOf(V);
     const pv = simMove(S, s, m.from, m.seq, m.col);

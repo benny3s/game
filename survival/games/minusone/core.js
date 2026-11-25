@@ -348,7 +348,7 @@
     return pool.map(p => ({ a: p.a, v: p.u / p.k, surv: p.sv / p.k, k: p.k })).sort((x, y) => y.k - x.k || y.v - x.v);
   }
   const ENV = k => (typeof process !== "undefined" && process.env && process.env[k]) || 0;
-  const TIER = { normal: { B: 0 }, hard: { B: +ENV("MO_B") || 600, top: +ENV("MO_TOP") || 10 }, coach: { B: 650, top: 10 } };   // 선생님 = 고급과 같은 셈 (폰에서도 한 번에 0.5초 안쪽)
+  const TIER = { normal: { B: 0 }, hard: { B: +ENV("MO_B") || 450, top: +ENV("MO_TOP") || 10 }, coach: { B: 450, top: 10 } };   // 선생님 = 고급과 같은 셈 (폰에서도 한 번에 0.5초 안쪽)
   function candsOf(V, me) {
     if (V.phase === "sub") return pairsOf(V.usable[me]).map(c => ({ t: "sub", c }));
     if (V.phase === "pick" && V.sub[me]) return V.sub[me].map(c => ({ t: "pick", c }));
@@ -363,7 +363,7 @@
     const cands = candsOf(V, me);
     if (!cands.length) return null;
     if (cands.length === 1) return { a: cands[0], list: [{ a: cands[0], v: 0, surv: 0, k: 0 }] };
-    const T = TIER[tier] || TIER.hard, B0 = Math.max(T.B, Math.min(T.B * 2.4, Math.round((T.B * 7) / V.alive.filter(Boolean).length)));   // 사람이 적으면 굴림이 싸니 더 많이
+    const T = TIER[tier] || TIER.hard, B0 = Math.max(T.B, Math.min(T.B * 1.6, Math.round((T.B * 7) / V.alive.filter(Boolean).length)));   // 사람이 적으면 굴림이 싸니 더 많이
     const list = mcScore(V, me, cands, V.phase === "pick" ? Math.round(B0 * 0.6) : B0, r, T.top);
     return { a: list[0].a, list };
   }

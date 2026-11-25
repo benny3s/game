@@ -292,7 +292,7 @@
   const sortBy = (mv, key) => mv.map(m => [key(m), m]).sort((x, y) => y[0] - x[0]).map(z => z[1]);
   function negamax(B, depth, s, alpha, beta, ply, q3, quiet) {
     if (B.stop) return 0;
-    if (++B.nodes > B.limit) { B.stop = 1; return 0; }
+    if (++B.nodes > B.limit || ((B.nodes & 63) === 0 && Date.now() > B.t1)) { B.stop = 1; return 0; }
     if (onBoard(B.c, s) + B.h[s] <= 2) return -(WINV - ply);
     if (B.h[s] === 0 && blocked(B.c, s)) return -(WINV - ply);
     if (depth <= 0) return evalS(B, s);
@@ -314,10 +314,10 @@
   const TIER = {
     easy: { depth: 1, nodes: 3000, noise: 90, rand: 0.3, slack: 0 },
     normal: { depth: 3, nodes: 12000, noise: 18, rand: 0.04, slack: 0 },
-    hard: { depth: 6, nodes: 40000, noise: 1, rand: 0, slack: 2 },
-    coach: { depth: 6, nodes: 40000, noise: 0, rand: 0, slack: 45 },      // 선생님 추천: 최선 근처 수들의 값을 정확히
+    hard: { depth: 6, nodes: 40000, ms: 90, noise: 1, rand: 0, slack: 2 },
+    coach: { depth: 6, nodes: 40000, ms: 140, noise: 0, rand: 0, slack: 45 },      // 선생님 추천: 최선 근처 수들의 값을 정확히
   };
-  const boardFrom = x => ({ c: Int8Array.from(x.cells), h: x.hand.slice(), nodes: 0, limit: 1e9, stop: 0 });
+  const boardFrom = x => ({ c: Int8Array.from(x.cells), h: x.hand.slice(), nodes: 0, limit: 1e9, t1: Infinity, stop: 0 });
   // 지금 차례에 둘 묶은 수 (빼기 차례면 [-2, -2, rm])
   function rootMoves(B, x, s) {
     if (x.rem) return removable(B.c, 1 - s).map(r => [-2, -2, r]);
@@ -341,7 +341,7 @@
     if (!mv.length) return null;
     mv = sortBy(mv, m => orderKey(B, m, s));
     const q3 = x.q3 || 0, quiet = x.quiet || 0;
-    B.limit = cfg.nodes;
+    B.limit = cfg.nodes; B.t1 = Date.now() + (cfg.ms || 1e9);       // 시간 마감: 이 PC 에서 한 번에 150ms 안(고급) · 선생님 200ms 안 — 못 끝낸 깊이는 버리고 앞 깊이의 값을 씀
     let done = null;
     for (let d = 1; d <= cfg.depth; d++) {
       B.nodes = 0; B.stop = 0;
@@ -424,7 +424,7 @@
     if (V.over || V.phase !== "play" || V.turn !== seat || !a || !b) return null;
     const hitOf = act => m => (V.rem ? act.t === "remove" && m[2] === act.at
       : act.t === "place" ? m[0] === -1 && m[1] === act.to : act.t === "move" && m[0] === act.from && m[1] === act.to);
-    const done = scoreC(V, seat, Object.assign({}, TIER.coach, { slack: 400 }));
+    const done = scoreC(V, seat, Object.assign({}, TIER.coach, { slack: 400, ms: 2500 }));
     if (!done || !done.length) return null;
     const val = (list, act) => {
       let best = null; const hit = hitOf(act);
@@ -434,7 +434,7 @@
     let my = val(done, a), bs = val(done, b);
     if ((my && !my.exact) || (bs && !bs.exact)) {
       const ha = hitOf(a), hb = hitOf(b);
-      const again = scoreC(V, seat, Object.assign({}, TIER.coach, { slack: 0, depth: done.depth || TIER.coach.depth, only: m => ha(m) || hb(m) }));
+      const again = scoreC(V, seat, Object.assign({}, TIER.coach, { slack: 0, ms: 2500, depth: done.depth || TIER.coach.depth, only: m => ha(m) || hb(m) }));
       if (again && again.length) { my = val(again, a) || my; bs = val(again, b) || bs; }
     }
     return { my: my ? my.v : null, best: bs ? bs.v : null, top: done[0][1], WINV };
