@@ -131,7 +131,7 @@
 
   // ── 보이는 것: 증인의 표식은 가상 판만 공개 · 귀띔은 내 것만 · 상대의 선택은 공개 뒤에 ──────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), rev = st.phase === "reveal" || st.phase === "end";
+    const all = seat === "all", rev = st.phase === "reveal" || st.phase === "end";
     const pubObj = { r: st.round, p: st.phase, c: st.chips, du: st.duel, v: st.virtual ? st.mark : -1, d: st.act.map(a => (a ? 1 : 0)), res: rev && st.res ? [st.res.result, st.res.mark, st.res.hand, st.res.bet ? [st.res.bet.kind, st.res.bet.n] : 0] : 0, ov: st.over };
     const T = VERS[st.ver];
     return {
