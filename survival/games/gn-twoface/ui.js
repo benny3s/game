@@ -117,12 +117,12 @@
         h += `<div class="tf-info">상대가 <b>양면베팅 ${V.dbl[1 - me]}칩</b>! 콜하면 <b>${need}칩</b> 더 · 상대의 앞 · 뒤가 <b>둘 다</b> 내 면보다 크면 상대 성공 (칩 10개 더 잃어요)</div>`;
         acts = `<div class="tf-acts"><div class="tf-btns"><button class="btn primary" data-a="call">콜 ${need}칩 · ${SIDE[S.side]}</button><button class="btn fold" data-a="fold" title="양면베팅에 폴드하면 칩 10개를 더 내요">폴드 ⚠️ −10</button></div>${chosen ? "" : `<div class="tf-info">👆 위 내 카드에서 승부할 면을 눌러요 (지금 ${SIDE[S.side]})</div>`}</div>`;
       } else {
-        h += `<div class="tf-info">${need > 0 ? `상대가 <b>${V.cur}칩</b>까지 걸었어요 · 콜하면 <b>${need}칩</b> 더` : V.chk ? `상대가 넘겼어요 · 콜하면 <b>바로 공개</b>` : `내가 먼저예요 · 넘기거나(상대도 넘기면 공개) 걸어요`}${chosen ? ` · 내 면 <b>${SIDE[V.side[me]]}</b> 고정` : `<br>👆 위 내 카드의 <b>앞면 / 뒷면</b>을 눌러 승부할 면을 골라요 (한 번 고르면 못 바꿔요)`}</div>`;
-        const canD = R2.hi >= R2.lo;
+        h += `<div class="tf-info">${need > 0 ? `상대가 <b>${V.cur}칩</b>까지 걸었어요 · 콜하면 <b>${need}칩</b> 더` : V.chk ? `상대가 넘겼어요 · 콜하면 <b>바로 공개</b>` : `내가 먼저예요 · 넘기거나(상대는 면만 골라 콜 · 바로 공개) 걸어요`}${chosen ? ` · 내 면 <b>${SIDE[V.side[me]]}</b> 고정` : `<br>👆 위 내 카드의 <b>앞면 / 뒷면</b>을 눌러 승부할 면을 골라요 (한 번 고르면 못 바꿔요)`}</div>`;
+        const canD = R2.hi >= R2.lo && !V.chk;
         S.x = Math.max(R2.lo, Math.min(R2.hi, S.x));
         acts = `<div class="tf-acts">
-          <div class="tf-btns"><button class="btn primary" data-a="call">${need > 0 ? `콜 ${need}칩 · 공개` : V.chk ? "콜 · 바로 공개" : "넘기기"}</button><button class="btn fold" data-a="fold">폴드</button></div>
-          ${V.canRaise ? `<div class="tf-row"><button class="st" data-r="-1" ${S.to <= V.cur + 1 ? "disabled" : ""}>−</button><span class="to">${S.to}칩</span><button class="st" data-r="1" ${S.to >= V.cap ? "disabled" : ""}>+1</button><button class="st" data-r="5" ${S.to >= V.cap ? "disabled" : ""}>+5</button><button class="btn" data-a="raise">레이즈 → ${S.to}칩</button></div>` : ""}
+          <div class="tf-btns"><button class="btn primary" data-a="call">${need > 0 ? `콜 ${need}칩 · 공개` : V.chk ? "콜 · 바로 공개" : "넘기기"}</button>${V.chk ? "" : `<button class="btn fold" data-a="fold">폴드</button>`}</div>
+          ${V.canRaise && !V.chk ? `<div class="tf-row"><button class="st" data-r="-1" ${S.to <= V.cur + 1 ? "disabled" : ""}>−</button><span class="to">${S.to}칩</span><button class="st" data-r="1" ${S.to >= V.cap ? "disabled" : ""}>+1</button><button class="st" data-r="5" ${S.to >= V.cap ? "disabled" : ""}>+5</button><button class="btn" data-a="raise">레이즈 → ${S.to}칩</button></div>` : ""}
           ${canD ? `<div class="tf-row"><button class="st" data-x="-1" ${S.x <= R2.lo ? "disabled" : ""}>−</button><span class="to">${S.x}칩</span><button class="st" data-x="1" ${S.x >= R2.hi ? "disabled" : ""}>+</button><button class="btn dbl" data-a="double" title="앞 · 뒤 두 면에 각각 ${S.x}칩 (내 총액 ${1 + 2 * S.x}칩). 성공하면 상대 칩 10개 추가!">양면베팅 ×${S.x} · 총 ${1 + 2 * S.x}칩</button></div>` : ""}
           <div class="tf-info tf-warn">양면베팅은 <b>앞 · 뒤 둘 다</b> 상대 면보다 커야 성공 (성공 +10칩, 실패하면 건 칩 전부)</div></div>`;
       }
@@ -213,13 +213,14 @@
       { k: "ver", label: "판", items: [["a", "블랙가넷 (카드 90장 · 칩 30)"], ["b", "그랜드 파이널 (200장 · 앞뒤 홀짝 반대 · 칩 40)"]], def: "a" },
       { k: "rounds", label: "판 수", items: [[30, "칩 다 잃을 때까지 (최대 30판)"], [12, "12판 승부"]], def: 30 },
     ],
-    diff: "선은 첫 판 동전 던지기, 이후 번갈아요 (방송 문서에 없음) · 양면베팅은 방송처럼 상대가 건 칩과 같은 수를 앞 · 뒷면에 각각 걸고, 우리 판은 더 많이도 걸 수 있어요 (레이즈는 없음) · 양면베팅이 실패하면 건 칩(1 + 2×) 전부를 잃어요 (방송 문서에 정확한 정산 없음) · 양면베팅에 포기하면 10칩을 더 내는 규칙은 방송 규칙 화면에는 안 나와요 (회차 문서 기준) · 방송은 앞면이 '공개된 상태'라고만 설명해요 — 우리 판은 내 앞면을 가리고 상대 앞면만 보여줘요 · 30판이 넘으면 칩이 많은 쪽 승리",
+    diff: "선은 첫 판 동전 던지기, 이후 번갈아요 (방송 문서에 없음) · 양면베팅은 방송처럼 상대가 건 칩과 같은 수를 앞 · 뒷면에 각각 걸고, 우리 판은 더 많이도 걸 수 있어요 (레이즈는 없음) · 양면베팅이 실패하면 건 칩(1 + 2×) 전부를 잃어요 (방송 문서에 정확한 정산 없음) · 양면베팅에 포기하면 10칩을 더 내는 규칙은 방송 규칙 화면에는 안 나와요 (회차 문서 기준) · 방송은 앞면이 '공개된 상태'라고만 설명해요 — 우리 판은 내 앞면을 가리고 상대 앞면만 보여줘요 · 30판이 넘으면 칩이 많은 쪽 승리 (마지막 판이 무승부라 이월 판돈이 남으면 반씩 나눠요) · 기본 판돈만 걸고 넘기면 상대는 콜(바로 공개)만 해요 — 방송처럼 콜은 언제나 바로 공개",
     howto: [
       "양면 카드: 앞 · 뒷면에 <b>서로 다른 숫자(1~10)</b> · 칩 <b>30개</b>씩(그랜드 파이널 40개)으로 시작해 상대 칩을 <b>모두 얻으면</b> 승리 · 내 뒷면과 상대 앞면만 보여요",
       "판마다 <b>기본베팅</b> 1칩씩 → <b>선</b>부터 베팅할 <b>면(앞 · 뒷)</b>을 정해요 (시작하면 못 바꿔요)",
       "베팅은 셋 중 하나 — <b>같은 개수</b>(콜): 바로 공개, 큰 숫자 승 · <b>더 많이</b>(레이즈): 계속 · <b>포기</b>(폴드): 상대 승 · 같은 숫자는 무승부(판돈은 다음 판 승자가)",
       "<b>양면베팅</b>: 앞 · 뒷면 두 곳에 각각 걸어요(2배) → 두 숫자가 <b>모두</b> 상대 면보다 높으면 승 + 상대 칩 <b>10개 추가</b> · 하나라도 같거나 낮으면 패",
       "양면베팅에 <b>포기하면 칩 10개를 더</b> 내요",
+      "기본베팅만 하고 <b>넘기면</b> 상대는 면을 골라 콜(바로 공개)만 할 수 있어요 · <b>특수</b> — 30판이 끝나면 칩이 많은 쪽 승리, 마지막 판이 무승부라 판돈이 남으면 반씩 나눠요 (끝없는 판을 막는 우리 판 상한, 방송엔 없어요)",
     ],
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),

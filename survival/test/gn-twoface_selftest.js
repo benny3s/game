@@ -87,7 +87,7 @@ const total = st => st.chips[0] + st.chips[1] + st.carry + st.contrib[0] + st.co
   const v0 = G.view(st, 0), v1 = G.view(st, 1), va = G.view(st, 'all'), vs = G.view(st, -1);
   ok(v0.cards[0].f === -1 && v0.cards[0].b === 5 && v0.cards[1].f === 6 && v0.cards[1].b === -1, '내 뒷면 · 상대 앞면만 보임');
   ok(v1.cards[1].f === -1 && v1.cards[1].b === 9 && v1.cards[0].f === 2 && v1.cards[0].b === -1, '반대편도 마찬가지');
-  ok(va.cards[0].f === 2 && va.cards[0].b === 5 && vs.cards[1].b === 9, '구경꾼은 모두 보임');
+  ok(va.cards[0].f === 2 && va.cards[0].b === 5 && va.cards[1].b === 9 && vs.cards[0].f === -1 && vs.cards[0].b === -1 && vs.cards[1].f === -1 && vs.cards[1].b === -1, 'all 은 모두 보이고 온라인 구경꾼(-1)은 아무것도 못 봄');
   ok(v0.pub === v1.pub && v1.pub === va.pub && va.pub === vs.pub, '공개 지문 같음');
   for (const ver of ['a', 'b']) {
     const s = G.init({ n: 2, seed: 77, cfg: { ver } });
@@ -133,6 +133,18 @@ for (const tier of ['easy', 'normal', 'hard']) {
   }
   ok(bad === 0, `${tier}: AI 가 거절당한 수 ${bad}`);
   console.log(`  ${tier}(좌석1) 대 중급(좌석0): 좌석0 ${w[0]} · 좌석1 ${w[1]} · 무 ${draws} / 60판 · 평균 ${(rounds / 60).toFixed(1)}판 · 양면베팅 ${dbl}번(성공 ${dblOk}) · 폴드 ${folds}번(페널티 ${pens})`);
+}
+
+// 방송대로 콜 = 바로 공개: 기본 판돈만 걸고 넘기면 상대는 면을 골라 콜(공개)만 — 더 걸기 · 접기 · 양면베팅 거절
+{
+  const st = G.init({ n: 2, seed: 5, cfg: { first: 0, cards: [[3, 7, 5, 2]] } });
+  ok(ap(st, 0, { t: 'call', side: 1 }).ok && st.chk && st.turn === 1 && st.phase === 'bet', '선이 기본 판돈만 걸고 넘김 → 상대 차례');
+  ok(JSON.stringify(G.legal(st, 1).map(a => a.t)) === '["call"]', '넘긴 뒤 상대의 합법 수는 콜뿐');
+  ok(!G.apply(st, 1, { t: 'raise', to: 2, side: 1 }).ok && !G.apply(st, 1, { t: 'fold' }).ok && !G.apply(st, 1, { t: 'double', x: 1 }).ok && st.phase === 'bet', '넘긴 뒤 상대는 레이즈 · 폴드 · 양면베팅을 못 해요');
+  const V = G.view(st, 1), a = G.ai(V, 1, 'hard', () => 0.5);
+  ok(a && a.t === 'call', '고급 AI 도 콜만 (바로 공개)');
+  ok(ap(st, 1, { t: 'call', side: 1 }).ok && (st.phase === 'reveal' || st.phase === 'end'), '콜하면 바로 공개');
+  for (const tier of ['easy', 'normal', 'hard']) { const s2 = G.init({ n: 2, seed: 5, cfg: { first: 0, cards: [[3, 7, 5, 2]] } }); G.apply(s2, 0, { t: 'call', side: 1 }); const c = G.coach(G.view(s2, 1), 1, -1, ['나', '상대']); ok(c && c.rec && !/undefined|NaN/.test(JSON.stringify(c)), '넘긴 뒤 선생님 글 ' + tier); }
 }
 console.log(`gn-twoface selftest: ${pass} pass, ${fail} fail`);
 process.exit(fail ? 1 : 0);

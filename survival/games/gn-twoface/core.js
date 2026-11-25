@@ -1,4 +1,4 @@
-﻿/* 베니 서바이벌 · 양면포커 — 규칙 (결정적, Node · 브라우저 공용)
+﻿﻿/* 베니 서바이벌 · 양면포커 — 규칙 (결정적, Node · 브라우저 공용)
    방송: 더 지니어스 시즌 3 (블랙가넷) 4 · 5화 데스매치, 시즌 4 (그랜드 파이널) 10화 (나무위키 회차 문서 기준)
    · 두 사람. 카드는 앞면 · 뒷면에 서로 다른 숫자(1 ~ 10). 각자 카드 1장을 받는데 — 내 뒷면과 상대 앞면만 보임
    · 기본 베팅 1칩(무승부 뒤에도 매 판). 선이 한 면을 골라 베팅 → 콜하면 고른 두 면의 숫자를 공개, 큰 쪽이 판돈. 같으면 무승부 · 판돈 이월
@@ -8,7 +8,7 @@
    · 시작 칩: 블랙가넷 30 (카드 90장) / 그랜드 파이널 40 (카드 200장, 앞뒤 홀짝이 반대). 칩이 0 이 되면 바로 패배
    우리 판 다듬기(방송 문서에 없음): 첫 판 선은 동전, 이후 번갈아 · 올인 상한은 적은 쪽 칩 · 양면베팅 실패는 건 칩(1 + 2x) 전부 잃음
    · 양면베팅에 레이즈 · 맞양면은 없음 · 칩이 모자라 10 개를 못 내면 있는 만큼 · 30판 안전장치
-   · 기본 베팅만 하고 넘기기(체크): 먼저 넘긴 사람이 면을 고르고, 상대도 넘기면(콜) 바로 공개 (방송 표의 '기본 1칩 판돈 이월' 장면) */
+   · 기본 베팅만 하고 넘기기(체크): 먼저 넘긴 사람이 면을 고르면 상대는 면을 골라 콜(바로 공개)만 해요 — 더 걸거나 접을 수 없어요 (콜 = 바로 공개, 방송 표의 '기본 1칩 판돈 이월' 장면) */
 (function (root, factory) {
   const m = factory();
   if (typeof module === "object" && module.exports) module.exports = m;
@@ -82,6 +82,7 @@
       if (a.side !== 0 && a.side !== 1) return false;
       st.side[seat] = a.side; return true;
     };
+    if (st.chk && a.t !== "call") return { ok: false, err: "상대가 넘겼어요 — 면을 골라 콜하면 바로 공개돼요" };   // 방송: 콜 = 바로 공개 (넘긴 판은 상대가 더 걸거나 접을 수 없어요)
     if (a.t === "fold") {
       const pen = vs ? Math.min(BONUS, st.chips[seat]) : 0;
       st.chips[seat] -= pen;
@@ -168,17 +169,17 @@
   const ranks = st => st.chips.map(c => st.chips.filter(x => x > c).length);
   function legal(st, seat) {
     if (!needs(st).includes(seat)) return [];
-    const L = [{ t: "fold" }], vs = dblOpp(st) === 1 - seat;
+    const L = st.chk ? [] : [{ t: "fold" }], vs = dblOpp(st) === 1 - seat;
     if (st.cur - st.contrib[seat] <= st.chips[seat]) L.push({ t: "call", side: st.side[seat] >= 0 ? st.side[seat] : 1 });
-    if (!vs && canRaise(st)) L.push({ t: "raise", to: st.cur + 1, side: st.side[seat] >= 0 ? st.side[seat] : 1 });
+    if (!vs && !st.chk && canRaise(st)) L.push({ t: "raise", to: st.cur + 1, side: st.side[seat] >= 0 ? st.side[seat] : 1 });
     return L;
   }
 
   // ── 보이는 것: 내 뒷면 · 상대 앞면만 (구경꾼은 모두) ──────────────
   function view(st, seat) {
-    const all = seat === "all" || (typeof seat === "number" && seat < 0), show = st.phase === "reveal" || st.phase === "end";
+    const all = seat === "all", show = st.phase === "reveal" || st.phase === "end";
     const open = show && st.res && st.res.show;
-    const cards = st.card.map((c, i) => ({ f: all || open || i !== seat ? c[0] : -1, b: all || open || i === seat ? c[1] : -1 }));
+    const cards = st.card.map((c, i) => ({ f: all || open || (seat >= 0 && i !== seat) ? c[0] : -1, b: all || open || i === seat ? c[1] : -1 }));
     const bet = st.phase === "bet";
     const pubObj = { r: st.round, p: st.phase, c: st.chips, ct: bet ? st.contrib : 0, cy: st.carry, t: st.turn, sd: st.side, d: st.dbl, res: show && st.res ? [st.res.type, st.res.win, st.res.ok ? 1 : 0, open ? st.res.cards : 0] : 0, ov: st.over };
     const R = bet && needs(st).length ? dblRange(st, st.turn) : { lo: 1, hi: 0 };
@@ -251,6 +252,10 @@
   function plan(V, me, tier, r) {
     const opp = 1 - me, mine = V.contrib[me], q = V.contrib[opp], need = V.cur - mine, carry = V.carry;
     const thr = tier === "easy" ? 0.6 : tier === "normal" ? 0.5 : 0.45;
+    if (V.chk) {   // 상대가 기본 판돈만 걸고 넘겼어요 — 면을 골라 콜(바로 공개)만 할 수 있어요
+      const d0 = oppFace(V, me, tier), side0 = bestSide(V, me, d0);
+      return { a: { t: "call", side: side0 }, why: "chkCall", side: side0, o: faceOdds(V, me, side0, d0), need };
+    }
     // 상대가 양면베팅을 건 경우: 콜 또는 폴드
     if (V.dbl[opp] > 0) {
       const x = V.dbl[opp], side = V.side[me] >= 0 ? V.side[me] : (vsDouble(V, me, tier, 0) > vsDouble(V, me, tier, 1) + 0.04 ? 0 : 1);
