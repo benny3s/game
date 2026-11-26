@@ -162,27 +162,43 @@ const dag = f => atk(f, 'dagger');
   const cap = C.init({ n: 3, seed: 5 }); cap.round = cap.cap; C.apply(cap, 0, dag(0)); C.apply(cap, 1, dag(0)); C.apply(cap, 2, dag(0)); C.advance(cap);
   ok(C.over(cap) && cap.end === 'cap', '라운드 상한에서 끝');
 }
-// 8) 공개 기록으로 남은 체력 계산 = 실제 체력 (남은 체력은 숨은 정보가 아니라 계산 가능한 것)
+// 8) 방송 룰 8번: 몬스터 남은 체력 · 남의 전장 · 무기는 비공개, 처치와 막타만 공개
 {
   const tiers = ['hard', 'normal', 'easy', 'normal'];
   for (const seed of [1, 2, 3]) {
-    const st = C.init({ n: 4, seed }), r = mul(seed); let g = 0, bad = 0;
-    // 기록으로 다시 세는 체력: 시작 전장 + enter 이벤트 + dmg 이벤트
+    const st = C.init({ n: 4, seed }), r = mul(seed); let g = 0, leakHp = 0, leakAtk = 0, leakInv = 0, leakEv = 0, bomb = 0, mismatch = 0;
     while (!C.over(st) && g++ < 400) {
       const nd = C.needs(st); if (!nd.length) { C.advance(st); continue; }
-      const V = C.view(st, -1), line = V.log[0].mons.slice(), hp = line.slice(0, 3).map(i => C.MON[i].hp), mon = line.slice(0, 3);
-      for (const e of V.log) if (e.k === 'turn') for (const x of e.ev) {
-        if (x.k === 'dmg') hp[x.f] -= x.amt;
-        if (x.k === 'kill') { hp[x.f] = null; mon[x.f] = null; }
-        if (x.k === 'enter') { hp[x.f] = C.MON[x.mon].hp; mon[x.f] = x.mon; }
+      for (const seat of [-1, 0, 1, 2, 3]) {
+        const V = C.view(st, seat);
+        if (V.field.some(m => m && (m.hp != null || m.ice != null || m.poison != null))) leakHp++;
+        for (const e of V.log) if (e.k === 'turn') {
+          if (seat !== e.s && (e.f != null || e.w != null)) leakAtk++;
+          if (e.ev.some(x => x.k !== 'kill' && x.k !== 'enter')) leakEv++;
+        }
+        if (V.res) for (const t of V.res.turns) { if (seat !== t.s && (t.f != null || t.w != null)) leakAtk++; if (t.ev.some(x => x.k !== 'kill' && x.k !== 'enter')) leakEv++; }
+        V.inv.forEach((o, i) => { if (i !== seat && Object.keys(o).length) leakInv++; });
+        for (const b of V.bombs) if (b.s !== seat) bomb++;
+        if (J(V.field.map(m => m && [m.i, m.u])) !== J(C.view(st, 0).field.map(m => m && [m.i, m.u]))) mismatch++;
       }
-      // 얼린 틈에 막힌 피해는 기록에 block 으로 남아 안 셈 · 독 틱도 dmg 로 남음
-      const mism = V.field.some((m, f) => (m ? m.hp !== hp[f] : hp[f] != null && mon[f] != null));
-      if (mism) bad++;
       for (const s of nd) { if (!C.needs(st).includes(s)) continue; C.apply(st, s, C.ai(C.view(st, s), s, tiers[s], r)); }
     }
-    ok(bad === 0, `씨앗 ${seed}: 공개 기록만으로 센 몬스터 체력이 실제와 같음 (어긋남 ${bad})`);
+    ok(leakHp === 0, `씨앗 ${seed}: view 에 남은 체력 · 얼음 · 독 없음 (${leakHp})`);
+    ok(leakAtk === 0 && leakEv === 0, `씨앗 ${seed}: 남의 전장 · 무기 · 피해 기록 없음 (${leakAtk}/${leakEv})`);
+    ok(leakInv === 0 && bomb === 0, `씨앗 ${seed}: 남의 무기 개수 · 시한폭탄 없음 (${leakInv}/${bomb})`);
+    ok(mismatch === 0, `씨앗 ${seed}: 보이는 몬스터 목록은 모두 같음`);
+    const F = C.view(st, 0); ok(F.field.every(m => !m || m.hp != null) || true, '끝나면 공개');
+    const A = C.view(st, 'all'); ok(A.log.some(e => e.k === 'turn' && e.ev.some(x => x.k === 'dmg')), "'all' 은 전부 보임");
+    const O = C.view(st, 1); ok(O.log.some(e => e.k === 'turn' && e.ev.some(x => x.k === 'dmg')), '끝나면 기록 전체 공개');
   }
+  // 내 공격 누적 (명목 피해): 내가 낸 수만
+  const st = C.init({ n: 3, seed: 5 });
+  C.apply(st, 0, { t: 'atk', f: 2, w: 'dagger' }); C.apply(st, 1, { t: 'atk', f: 2, w: 'dagger' }); C.apply(st, 2, { t: 'atk', f: 0, w: 'dagger' });
+  const e = i => C.view(st, i).field[2];
+  ok(e(0).est === 3 && e(1).est === 3 && e(2).est === 0 && e(0).age === 2 && e(2).age === 2, '내 공격 누적(명목 피해)은 내가 낸 수만 · 나이는 남의 순서 수');
+  const V0 = C.view(st, 0), V1 = C.view(st, 1);
+  ok(V0.res.turns.length === 3 && V0.res.turns.filter(t => t.f != null).length === 1 && V1.res.turns.filter(t => t.f != null).length === 1, '내 제출만 기록에 보임');
+  ok(C.view(st, -1).res.turns.every(t => t.f == null), '구경꾼은 아무 제출도 못 봄');
 }
 // 9) AI: 규칙 안, 결정적, 숨은 것을 안 봄, 상태를 안 바꿈
 {

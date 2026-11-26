@@ -15,7 +15,10 @@ const DRAW = () => {
     const c = cards[f]; if (!c) return;
     if (!m) { if (!c.classList.contains('empty')) bad.push('빈 전장 ' + f); return; }
     const hv = c.querySelector('.hv').innerText.replace(/\s/g, '');
-    if (hv !== `♥${m.hp}/${m.max}`) bad.push(`체력 ${f}: ${hv} ≠ ${m.hp}/${m.max}`);
+    if (hv !== `♥최대${m.max}`) bad.push(`최대 체력 ${f}: ${hv} ≠ ${m.max}`);
+    if (m.hp != null && !V.over) bad.push('보이는 view 에 남은 체력 ' + f);
+    if (c.querySelector('.hv2').innerText.replace(/\s/g, '') !== `내공격${m.est}`) bad.push(`내 공격 ${f}`);
+    if (/♥\s*\d+\s*\/\s*\d+/.test(c.innerText)) bad.push('남은 체력 글 ' + f);
   });
   if (V.phase === 'show' && V.res && st.querySelectorAll('.hw-show .r').length !== V.res.turns.length) bad.push('결과 줄');
   if (V.phase === 'pick' && st.querySelector('.hw-show')) bad.push('고르는 중에 결과 줄');

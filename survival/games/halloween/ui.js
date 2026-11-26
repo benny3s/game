@@ -4,7 +4,7 @@
   const K = window.SVCores.halloween, MON = K.MON, WP = K.WP;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const SRC = "방송: 데블스 플랜: 데스룸 (시즌 2) · 3일차 메인 매치 (11명) · 규칙 확인: 나무위키 데스룸 3일차 문서 (룰 · 몬스터 13종 표 · 무기 효과 · 피해 순서 각주 · 4 · 5라운드 기록, 공식 클립에서 규칙 장면은 못 찾음)";
-  const DIFF = "3~6명 개인전 (방송 11명 · 동맹 · 승점 양도 · 스카우터 · 순서 바꾸기 · 피스 아이템 없음, 피스는 모으기만) · 인원에 맞춰 몬스터 일부만 (방송 순서로 자르고 사신은 마지막 — 13마리 전부 옵션) · 라운드 상한 (일부 20 · 전부 30) · 제출 2분 제한 없음 · 승점이 같으면 공동 순위 · 독은 여러 번 겹쳐 놓을 수 있고 독으로 죽이면 독 놓은 사람이 처치 · 얼어 있는 몬스터에는 얼음도 독도 안 먹음 · 라운드가 끝나면 모든 공격이 공개돼 남은 체력을 화면이 기록 합계로 보여 줌 (방송은 노트에 적어 셈) — 방송 글에 없거나 폰 · AI 때문에 우리가 정함";
+  const DIFF = "3~6명 개인전 (방송 11명 · 동맹 · 승점 양도 · 스카우터 · 순서 바꾸기 · 피스 아이템 없음, 피스는 모으기만) · 인원에 맞춰 몬스터 일부만 (방송 순서로 자르고 사신은 마지막 — 13마리 전부 옵션) · 라운드 상한 (일부 20 · 전부 30) · 제출 2분 제한 없음 · 승점이 같으면 공동 순위 · 독은 여러 번 겹쳐 놓을 수 있고 독으로 죽이면 독 놓은 사람이 처치 · 얼어 있는 몬스터에는 얼음도 독도 안 먹음 · 방송 룰 8번 그대로 몬스터 남은 체력 · 남의 전장 · 무기 선택은 끝까지 비공개 (처치 · 막타만 공개) — 화면은 내가 낸 수의 누적(명목 피해)만 적어 줌 · 사신(13번)은 방송 표에 체력 · 전리품이 '??' 이고 대기열에 들어올 때 20 · 피스 2개로 공개돼서 그 값으로 씀 · 승점이 같으면 순서는 방송 룰대로 (첫 라운드 추첨 · 이후 지난 라운드에 먼저 공격한 사람이 뒤로) — 방송 글에 없거나 폰 · AI 때문에 우리가 정함";
   const CSS = `
 .hw-top{display:flex;align-items:center;gap:6px;flex:none;flex-wrap:wrap}
 .hw-rd{font:900 14px var(--round);color:#fde68a;background:rgba(0,0,0,.3);border:1px solid rgba(245,179,1,.35);border-radius:99px;padding:3px 10px;white-space:nowrap}
@@ -25,8 +25,8 @@
 .hw-mon b{font-size:12.5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hw-hp{width:88%;height:9px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden}
 .hw-hp i{display:block;height:100%;background:linear-gradient(90deg,#ef4444,#f59e0b)}
-.hw-mon .hv{font:800 11.5px var(--round);color:#fecaca;font-variant-numeric:tabular-nums}
-.hw-mon .st{min-height:16px;font-size:12px;display:flex;gap:3px;justify-content:center;flex-wrap:wrap}
+.hw-mon .hv{font:800 11.5px var(--round);color:#fecaca;font-variant-numeric:tabular-nums}.hw-mon .hv2{font:700 10.5px var(--round);color:var(--soft)}
+.hw-mon .st{min-height:0;font-size:12px;display:flex;gap:3px;justify-content:center;flex-wrap:wrap}
 .hw-mon .lt{font-size:10.5px;color:var(--soft);white-space:nowrap}
 .hw-q{display:flex;align-items:center;gap:5px;flex:none;font:700 11.5px var(--round);color:var(--soft);overflow:hidden}
 .hw-q span{font-size:17px;opacity:.85}
@@ -59,33 +59,22 @@
   function monHtml(m, f, o = {}) {
     if (!m) return `<div class="hw-mon empty"><span class="no">${f + 1}</span><span class="em">·</span><b>빈 전장</b></div>`;
     const D = MON[m.i], st = [];
-    if (m.ice >= 0) st.push(`<span title="얼음">🧊${o.nm ? esc(o.nm(m.ice)) : ""}</span>`);
-    if (m.poison.length) st.push(`<span title="독">☠️${m.poison.length > 1 ? "×" + m.poison.length : ""}</span>`);
-    if (o.bombs) { const b = o.bombs.filter(x => x.f === f).length; if (b) st.push(`<span title="시한폭탄">💣${b > 1 ? "×" + b : ""}</span>`); }
+    if (m.mi) st.push(`<span title="내가 건 얼음">🧊</span>`);
+    if (m.mp) st.push(`<span title="내가 묻힌 독">☠️${m.mp > 1 ? "×" + m.mp : ""}</span>`);
+    if (o.bombs) { const b = o.bombs.filter(x => x.f === f).length; if (b) st.push(`<span title="내 시한폭탄">💣${b > 1 ? "×" + b : ""}</span>`); }
     const cls = `hw-mon${o.pick ? " pick" : ""}${o.sel ? " sel" : ""}${o.sel2 ? " sel2" : ""}`;
-    return `<div class="${cls}" data-f="${f}"><span class="no">${f + 1}</span><span class="em">${D.em}</span><b>${D.nm}</b><div class="hw-hp"><i style="width:${Math.max(3, Math.round(m.hp / m.max * 100))}%"></i></div><span class="hv">♥ ${m.hp}/${m.max}</span><span class="st">${st.join("")}</span><span class="lt">${D.loot.map(l => (l === "peace" ? "🧩" : WP[l].em)).join("")}</span></div>`;
+    return `<div class="${cls}" data-f="${f}"><span class="no">${f + 1}</span><span class="em">${D.em}</span><b>${D.nm}</b><span class="hv">♥ 최대 ${m.max}</span><span class="hv2">내 공격 ${m.est || 0}</span><span class="st">${st.join("")}</span><span class="lt">${D.loot.map(l => (l === "peace" ? "🧩" : WP[l].em)).join("")}</span></div>`;
   }
   const phase = { pick: "공격 고르기", show: "결과", end: "끝" };
-  function evText(t, nm) {
-    const out = [], k = e => e.k;
-    let dmg = 0, kills = [], extra = [];
-    for (const e of t.ev) {
-      if (k(e) === "dmg") dmg += e.amt;
-      else if (k(e) === "kill") kills.push(`<span class="k">${MON[e.mon].em}${MON[e.mon].nm} 처치 +${e.gain}${e.loot.length ? " " + e.loot.map(LOOT).join("") : ""}</span>${e.by !== t.s ? ` (${esc(nm(e.by))} 독 · 폭탄 · 막타)` : ""}`);
-      else if (k(e) === "block") extra.push("🧊 얼어서 막힘");
-      else if (k(e) === "miss") extra.push("헛수 (빈 전장)");
-      else if (k(e) === "freeze") extra.push("🧊 얼림");
-      else if (k(e) === "poison") extra.push("☠️ 독 묻힘");
-      else if (k(e) === "plant") extra.push(`💣 전장 ${e.f + 1}에 설치 (다음 순서에 폭발)`);
-      else if (k(e) === "boom") extra.push(`💥 시한폭탄 폭발 전장 ${e.f + 1}`);
-    }
-    const head = `<b>${esc(nm(t.s))}</b> ${WP[t.w].em} 전장 ${t.f + 1}${t.f2 != null ? `·${t.f2 + 1}` : ""}`;
-    return `${head}${dmg ? ` <span class="x">피해 ${dmg}</span>` : ""}${extra.length ? ` <span class="x">${extra.join(" · ")}</span>` : ""}${kills.length ? "<br>" + kills.join(" ") : ""}`;
+  function evText(t, nm, me) {
+    const kills = t.ev.filter(e => e.k === "kill").map(e => `<span class="k">${MON[e.mon].em}${MON[e.mon].nm} 처치 +${e.gain}${e.loot.length ? " " + e.loot.map(LOOT).join("") : ""}</span>${e.by !== t.s ? ` (${e.by === me ? "나" : esc(nm(e.by))} 독 · 폭탄 · 막타)` : ""}`);
+    const own = t.w != null ? ` ${WP[t.w].em} 전장 ${t.f + 1}${t.f2 != null ? `·${t.f2 + 1}` : ""}` : "";
+    return `<b>${t.s === me ? "나" : esc(nm(t.s))}</b>${own || ' <span class="x">공격 (비공개)</span>'}${kills.length ? "<br>" + kills.join(" ") : ""}`;
   }
   function showHtml(V, ctx) {
     const nm = i => nameOf(ctx, i);
     if (!V.res) return "";
-    return `<div class="hw-show">${V.res.turns.map(t => `<div class="r${t.ev.some(e => e.k === "kill") ? " kill" : ""}"><span class="p">${t.p + 1}</span><span class="t">${evText(t, nm)}</span></div>`).join("")}</div>`;
+    return `<div class="hw-show">${V.res.turns.map(t => `<div class="r${t.ev.some(e => e.k === "kill") ? " kill" : ""}"><span class="p">${t.p + 1}</span><span class="t">${evText(t, nm, V.seat)}</span></div>`).join("")}</div>`;
   }
   function render(stage, V, ctx) {
     style();
@@ -99,7 +88,7 @@
     h += `<div class="hw-field${tight ? " cp" : ""}">${V.field.map((m, f) => monHtml(m, f, { pick: can && !!m, sel: sel.f === f, sel2: sel.f2 === f, bombs: V.bombs, nm })).join("")}</div>`;
     if (!tight) h += `<div class="hw-q">대기열 ${V.queue.length ? V.queue.map(i => `<span title="${MON[i].nm}">${MON[i].em}</span>`).join("") : "없음"}</div>`;
     let acts = "";
-    if (V.phase === "show") acts = (tight ? "" : `<div class="hw-sc">공격이 모두 공개됐어요 — 위 ♥ 는 기록 합계로 계산한 남은 체력</div>`) + showHtml(V, ctx);
+    if (V.phase === "show") acts = (tight ? "" : `<div class="hw-sc">남의 공격 · 몬스터 남은 체력은 비공개 — 처치와 막타만 공개돼요</div>`) + showHtml(V, ctx);
     else if (V.over) acts = showHtml(V, ctx);
     else if (watch) acts = `<div class="note">${V.needs.length ? V.needs.map(i => esc(nm(i))).join(" · ") + " 고르는 중…" : ""}</div>`;
     else if (V.sub) acts = `<div class="note">${WP[V.sub.w].em} 전장 ${V.sub.f + 1}${V.sub.f2 != null ? `·${V.sub.f2 + 1}` : ""} 를 냈어요 · 다른 사람을 기다려요 (${V.subbed.filter(Boolean).length}/${V.n})</div>`;
@@ -127,21 +116,16 @@
   function coach(V, me, since, names) {
     const nm = i => esc((names && names[i]) || `${i + 1}번`);
     if (V.over) return { opp: "판이 끝났어요.", mine: `내 승점 ${V.score[me]} · ${V.ranks[me] + 1}등`, rec: "한 판 더 해 봐요!", why: "" };
-    const evs = V.log.filter(e => e.i > since && e.k === "turn");
     const lastTurns = V.res ? V.res.turns : [];
-    // 👀 상대 흐름: 지난 라운드에 남이 한 일
-    const pieces = lastTurns.filter(t => t.s !== me).map(t => {
-      const kl = t.ev.filter(e => e.k === "kill");
-      return `${nm(t.s)} ${WP[t.w].em}전장${t.f + 1}${kl.length ? ` → ${kl.map(e => MON[e.mon].nm + " 처치").join(", ")}` : ""}`;
-    });
-    const used = {}; for (const t of lastTurns) if (t.w !== "dagger") used[t.s] = 1;
-    let opp = pieces.length ? pieces.slice(0, 4).join(" · ") : "아직 지난 공격 기록이 없어요 — 첫 라운드예요.";
-    const holders = V.inv.map((o, s) => ({ s, n: K.SPECIAL.filter(w => o[w] > 0).map(w => WP[w].em + (o[w] > 1 ? "×" + o[w] : "")).join("") })).filter(x => x.s !== me && x.n);
-    if (holders.length) opp += ` · 특수 무기: ${holders.map(x => `${nm(x.s)} ${x.n}`).join(" ")}`;
+    // 👀 상대 흐름: 공개된 것 (처치 · 막타 · 얻은 무기)
+    const kl = lastTurns.flatMap(t => t.ev.filter(e => e.k === "kill"));
+    let opp = kl.length ? `지난 라운드 처치: ${kl.map(e => `${e.by === me ? "나" : nm(e.by)}가 ${MON[e.mon].nm} (+${e.gain})`).join(", ")}` : (V.round > 1 ? "지난 라운드엔 처치가 없었어요 — 남의 공격은 비공개예요." : "첫 라운드예요 — 남의 선택 · 몬스터 남은 체력은 비공개, 처치만 공개돼요.");
+    const holders = V.loot.map((l, s) => ({ s, n: l.map(w => WP[w].em).join("") })).filter(x => x.s !== me && x.n);
+    if (holders.length) opp += ` · 얻은 특수 무기 (쓴 것은 몰라요): ${holders.map(x => `${nm(x.s)} ${x.n}`).join(" ")}`;
     // 📊 내 흐름
     const mineInv = V.inv[me], ws = K.SPECIAL.filter(w => mineInv[w] > 0).map(w => `${WP[w].em}${WP[w].nm}${mineInv[w] > 1 ? "×" + mineInv[w] : ""}`);
     const lead = Math.max(...V.score), pos = V.order.indexOf(me) + 1;
-    const mine = `승점 ${V.score[me]} (1위 ${lead}${V.score[me] === lead ? " = 나" : ` · ${lead - V.score[me]}점 차`}) · 공격 순서 ${pos}/${V.n}${pos === V.n ? " (마지막 — 막타를 노려요)" : pos === 1 ? " (맨 먼저 — 남이 막타를 가로채기 쉬워요)" : ""} · 무기 ${ws.length ? ws.join(" ") : "단검뿐"} · 남은 체력: ${V.field.map((m, f) => (m ? `${f + 1}번 ${MON[m.i].nm} ${m.hp}/${m.max}` : `${f + 1}번 비었음`)).join(", ")}`;
+    const mine = `승점 ${V.score[me]} (1위 ${lead}${V.score[me] === lead ? " = 나" : ` · ${lead - V.score[me]}점 차`}) · 공격 순서 ${pos}/${V.n}${pos === V.n ? " (마지막 — 막타를 노려요)" : pos === 1 ? " (맨 먼저 — 남이 막타를 가로채기 쉬워요)" : ""} · 무기 ${ws.length ? ws.join(" ") : "단검뿐"} · 몬스터: ${V.field.map((m, f) => (m ? `${f + 1}번 ${MON[m.i].nm} 최대 ${m.max} (내 공격 ${m.est})` : `${f + 1}번 비었음`)).join(", ")}`;
     let rec = "상대 차례를 기다려요", why = "";
     if (V.needs.includes(me) && V.phase === "pick") {
       const R = K.recommend(V, me), a = R && R.a;
@@ -149,10 +133,9 @@
         const row = R.rows.find(r => r.a.f === a.f && r.a.w === a.w && (r.a.f2 == null ? null : r.a.f2) === (a.f2 == null ? null : a.f2)) || R.rows[0], m = V.field[a.f];
         rec = `전장 ${a.f + 1}${a.f2 != null ? `·${a.f2 + 1}` : ""} ${W(a.w)}`;
         const ex = K.expectBefore(V, me), eh = ex.hp[a.f], alt = R.rows.filter(r => r !== row).slice(0, 1)[0];
-        why = `${MON[m.i].nm}의 남은 체력은 ${m.hp} — 내 앞 ${pos - 1}명이 평균적으로 때리고 나면 약 ${eh == null ? "?" : eh.toFixed(1)} 남을 거예요. 이 수로 내가 마지막 일격을 넣을 확률 ${pc(row.kill)} (기대 ${row.u >= 0 ? "+" : ""}${row.u.toFixed(1)}점)${alt ? ` · 다음 후보 ${W(alt.a.w)} 전장 ${alt.a.f + 1}: ${pc(alt.kill)}` : ""}.${a.w !== "dagger" ? ` 특수 무기는 쓰면 사라지니 막타가 될 때만 써요.` : ""}`;
+        why = `${MON[m.i].nm}의 남은 체력은 안 보여요 — 최대 ${m.max}에서 내 공격 ${m.est}과 지나간 순서 ${m.age}번을 합쳐 지금 약 ${ex.cur[a.f] == null ? "?" : ex.cur[a.f].toFixed(1)}로 짐작하고, 내 앞 ${pos - 1}명이 때리고 나면 약 ${eh == null ? "?" : eh.toFixed(1)} 남을 거예요. 이 수로 내가 마지막 일격을 넣을 확률 ${pc(row.kill)} (기대 ${row.u >= 0 ? "+" : ""}${row.u.toFixed(1)}점)${alt ? ` · 다음 후보 ${W(alt.a.w)} 전장 ${alt.a.f + 1}: ${pc(alt.kill)}` : ""}.${a.w !== "dagger" ? ` 특수 무기는 쓰면 사라지니 막타가 될 때만 써요.` : ""}`;
       }
-    } else if (V.phase === "show") { rec = "결과를 보고 다음 라운드를 준비해요"; why = "공개된 공격 기록으로 몬스터의 남은 체력을 계산해 두면 막타 자리를 읽을 수 있어요."; }
-    void evs;
+    } else if (V.phase === "show") { rec = "결과를 보고 다음 라운드를 준비해요"; why = "몬스터 체력은 숨겨져 있어요 — 처치 기록과 내가 준 피해로 막타 자리를 짐작해 봐요."; }
     return { opp, mine, rec, why };
   }
 
@@ -179,20 +162,20 @@
   function tutorial() {
     style();
     const F = (arr, o) => `<div class="hw-tut"><div class="hw-field">${arr.map((m, f) => monHtml(m, f, o && o(m, f))).join("")}</div></div>`;
-    const mm = (i, hp) => ({ i, hp, max: MON[i].hp, ice: -1, poison: [] });
+    const mm = (i, est) => ({ i, u: i, max: MON[i].hp, est: est || 0, mp: 0, mi: false });
     return [
       { tag: "STEP 1 · 목표", title: "몬스터의 마지막 일격을 노려요", body: "전장에 서 있는 <b>몬스터 3마리</b>를 때려 쓰러뜨려요. 몬스터의 <b>체력 = 처치 승점</b> — <b>마지막 일격</b>을 넣은 사람이 그 승점과 <b>전리품</b>을 가져가요. 몬스터가 모두 쓰러지면 끝, 승점이 가장 높은 사람이 1등!",
         boardHtml: F([mm(0, 5), mm(1, 9), mm(2, 15)]), ms: 6800 },
-      { tag: "STEP 2 · 순서", title: "모두 몰래 정하고 순서대로 적용", body: "승점 <b>5점 + 단검(공격 3)</b>으로 시작해요. 라운드마다 모두가 <b>전장 번호 + 무기 1개</b>를 몰래 내고, <b>승점이 높은 순서</b>대로 차례차례 적용돼요. 남은 체력은 화면에 보이지 않지만, 끝나면 모든 공격이 공개돼 계산할 수 있어요.",
+      { tag: "STEP 2 · 순서", title: "모두 몰래 정하고 순서대로 적용", body: "승점 <b>5점 + 단검(공격 3)</b>으로 시작해요. 라운드마다 모두가 <b>전장 번호 + 무기 1개</b>를 몰래 내고, <b>승점이 높은 순서</b>대로 차례차례 적용돼요. 몬스터의 <b>남은 체력도 남의 선택도 끝까지 비공개</b> — 처치와 막타만 공개돼요.",
         boardHtml: `<div class="hw-tut"><div class="hw-top"><span class="hw-ord"><em>순서</em><span class="o me">1 나</span><span class="o">2 AI1</span><span class="o">3 AI2</span></span></div><small>낸 전장 · 무기는 모두 낸 뒤에야 공개돼요</small></div>`, ms: 7000 },
       { tag: "STEP 3 · 무기", title: "특수 무기는 전리품으로", body: "단검은 늘 돌려받아요. 몬스터를 처치하면 <b>🧨수류탄(6) · ⚔️쌍검(4, 두 전장이면 각 2) · ☠️독(1 + 모든 순서마다 1) · 🧊얼음(3 + 내 다음 순서까지 피해 면역) · 💣시한폭탄(내 다음 라운드에 10)</b> 같은 특수 무기를 얻고, 쓰면 사라져요.",
         boardHtml: `<div class="hw-tut"><div class="hw-ws" style="width:100%">${["dagger"].concat(K.SPECIAL).map(w => `<span class="hw-w"><span class="e">${WP[w].em}</span>${WP[w].nm}<small>${WP[w].dmg}</small></span>`).join("")}</div></div>`, ms: 7600 },
-      { tag: "STEP 4 · 직접", title: "막타 자리를 찾아요", body: "잭오랜턴의 남은 체력은 <b>2</b> — 단검(3)이면 쓰러져요! 앞 순서의 두 사람이 다른 곳을 때릴 것 같아요. 잭오랜턴을 눌러 <b>공격!</b>",
+      { tag: "STEP 4 · 직접", title: "막타 자리를 찾아요", body: "잭오랜턴은 <b>최대 체력 5</b>이고 내가 앞서 단검(3)으로 한 번 때렸어요 (내 공격 3). 남은 체력은 안 보이지만 한 번 더 때리면 쓰러질 수 있어요! 잭오랜턴을 눌러 <b>공격!</b>",
         interactive: { hint: "👆 전장 1 을 누르고 공격!", doneText: "✅ 마지막 일격! 승점 +5 · ☠️독 획득" },
         render(stage, ctrl) {
           let f = null, done = false;
           const draw = () => {
-            stage.innerHTML = `<div class="hw-tut">${F([mm(0, 2), mm(1, 9), mm(2, 15)], (m, i) => ({ pick: !done, sel: f === i }))}<div class="note" style="font-size:12.5px;color:var(--soft)">${done ? "🎃 처치! 승점 5 → 10 · ☠️독 획득" : f == null ? "공격할 전장을 눌러요" : "전장 " + (f + 1)}</div><button class="btn primary" data-a="go" ${f == null || done ? "disabled" : ""} style="width:100%">공격!</button></div>`;
+            stage.innerHTML = `<div class="hw-tut">${F([mm(0, 3), mm(1, 0), mm(2, 0)], (m, i) => ({ pick: !done, sel: f === i }))}<div class="note" style="font-size:12.5px;color:var(--soft)">${done ? "🎃 처치! 승점 5 → 10 · ☠️독 획득" : f == null ? "공격할 전장을 눌러요" : "전장 " + (f + 1)}</div><button class="btn primary" data-a="go" ${f == null || done ? "disabled" : ""} style="width:100%">공격!</button></div>`;
           };
           stage.onclick = e => {
             const m = e.target.closest(".hw-mon.pick"); if (m) { ctrl.sfx("tap"); f = +m.dataset.f; draw(); return; }
@@ -212,9 +195,9 @@
     howto: [
       "방송: 몬스터 체력 = 처치 승점, <b>마지막 일격</b>을 넣은 사람이 승점 + 전리품(특수 무기)을 가져가요 (전장 3칸 + 대기열)",
       "승점 5 · 단검(공격 3)으로 시작 · 라운드마다 <b>전장 번호 + 무기 1개</b>를 몰래 내요",
-      "<b>승점 높은 순서</b>대로 적용 · 몬스터 남은 체력은 라운드가 끝나야 공개된 기록으로 계산해요",
+      "<b>승점 높은 순서</b>대로 적용 (같으면 첫 라운드는 추첨, 이후엔 지난 라운드에 먼저 공격한 사람이 뒤로) · 몬스터 남은 체력 · 남의 선택은 <b>끝까지 비공개</b> — 처치와 마지막 공격자만 공개돼요",
       "무기: 🧨수류탄 6 · ⚔️쌍검 4(두 곳이면 각 2) · ☠️독(모든 순서마다 1) · 🧊얼음(다음 순서까지 면역) · 💣시한폭탄(다음 라운드 10)",
-      "몬스터가 모두 쓰러지면 끝 — 승점 1등이 승리",
+      "몬스터가 모두 쓰러지면 끝 — 승점 1등이 승리 (같으면 공동 1위) · 마지막 몬스터 💀사신은 체력 20 · 피스 2개",
     ],
     sub: V => (V.over ? "끝" : `${V.round}/${V.cap} 라운드 · ${V.phase === "pick" ? "공격 고르기" : "결과"}`),
     chip: (V, i) => ({ t: `${V.score[i]}점${V.pieces[i] ? `🧩${V.pieces[i]}` : ""}`, on: V.needs.includes(i) && !V.over, out: false }),

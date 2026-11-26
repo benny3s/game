@@ -11,8 +11,8 @@
      ② 인원이 적으면 몬스터 일부만 (대기열을 방송 순서로 자르고 사신은 마지막에 꼭 — 옵션으로 13마리 전부).
      ③ 라운드 제출 2분 제한 없음, 라운드 상한 (일부 20 · 전부 30). 승점 같으면 공동 순위.
      ④ 방송 글에 없는 것: 독은 겹쳐 놓을 수 있고 각각 1 피해 · 독으로 죽이면 독 놓은 사람이 처치 · 독은 내 순서에도 틱 · 시한폭탄은 그 순간 그 전장에 서 있는 몬스터가 맞음 · 이미 얼어 있는 몬스터에 얼음은 헛수.
-     ⑤ 라운드가 끝나면 모든 공격(누가 · 어느 전장 · 무슨 무기)과 처치가 공개돼 남은 체력을 기록으로 계산할 수 있음 (방송은 노트에 적어 셈, 우리는 화면이 합계를 대신 셈). 라운드 중 남의 선택은 안 보임.
-   숨은 정보: 이번 라운드 남의 제출 (적용 전까지). 그 밖은 기록으로 모두 알 수 있음. */
+     ⑤ 방송 룰 8번 그대로: 몬스터의 남은 체력 · 각자의 전장 · 무기 선택은 끝까지 비공개. 공개되는 것은 몬스터 처치와 마지막 공격자(승점 · 전리품)뿐. 화면은 내가 낸 수의 명목 피해(내 공격 누적)만 대신 적어 줌.
+   숨은 정보: 몬스터 남은 체력 · 남의 전장 · 무기 선택 · 남의 얼음 · 독 · 시한폭탄 · 남의 무기 개수 (전리품은 처치 때 공개라 '얻은 것'만 보임). 처치 · 막타 · 승점 · 순서 · 대기열은 공개. 끝나면 모두 공개. */
 (function (root, factory) {
   const m = factory();
   if (typeof module === "object" && module.exports) module.exports = m;
@@ -38,7 +38,7 @@
   function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
   const seeded = x => () => { x = (x + 0x6D2B79F5) >>> 0; let t = Math.imul(x ^ (x >>> 15), x | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const clone = o => JSON.parse(JSON.stringify(o));
-  const mk = i => ({ i, hp: MON[i].hp, max: MON[i].hp, ice: -1, poison: [] });
+  const mk = (i, u, en) => ({ i, u: u == null ? 0 : u, en: en || 1, hp: MON[i].hp, max: MON[i].hp, ice: -1, poison: [] });
   // 인원에 맞춘 대기열: 방송 순서로 자르고 사신은 꼭 마지막
   function lineup(n, mode) {
     if (mode === "all") return MON.map((m, i) => i);
@@ -54,15 +54,15 @@
     S.score[by] += m.max;
     const got = [];
     for (const l of D.loot) { if (l === "peace") S.pieces[by]++; else { S.inv[by][l] = (S.inv[by][l] || 0) + 1; } got.push(l); }
-    ev.push({ k: "kill", f, mon: m.i, by, gain: m.max, loot: got });
-    S.field[f] = S.queue.length ? mk(S.queue.shift()) : null;
-    if (S.field[f]) ev.push({ k: "enter", f, mon: S.field[f].i });
+    ev.push({ k: "kill", f, mon: m.i, u: m.u, by, gain: m.max, loot: got });
+    S.field[f] = S.queue.length ? mk(S.queue.shift(), S.uid++, (S.tn || 0) + 1) : null;
+    if (S.field[f]) ev.push({ k: "enter", f, mon: S.field[f].i, u: S.field[f].u });
   }
   function hit(S, f, amt, by, ev, w) {
     const m = S.field[f];
     if (!m) { ev.push({ k: "miss", f, by, w }); return; }
-    if (m.ice >= 0) { ev.push({ k: "block", f, by, w, amt }); return; }
-    m.hp -= amt; ev.push({ k: "dmg", f, by, w, amt });
+    if (m.ice >= 0) { ev.push({ k: "block", f, u: m.u, by, w, amt }); return; }
+    m.hp -= amt; ev.push({ k: "dmg", f, u: m.u, by, w, amt });
     if (m.hp <= 0) kill(S, f, by, ev);
   }
   function runTurn(S, s, a, ev) {
@@ -89,7 +89,7 @@
   function init({ n, seed, cfg }) {
     cfg = cfg || {}; n = Math.max(3, Math.min(6, n | 0 || 4));
     const o = optsOf(cfg), rs = (seed >>> 0) || 1, line = lineup(n, o.mons);
-    const st = { n, rs, cfg: Object.assign({}, cfg), opt: o, cap: capOf(o), field: line.slice(0, FIELD).map(mk), queue: line.slice(FIELD), bombs: [],
+    const st = { n, rs, cfg: Object.assign({}, cfg), opt: o, cap: capOf(o), uid: FIELD, tn: 0, field: line.slice(0, FIELD).map((i, k) => mk(i, k, 1)), queue: line.slice(FIELD), bombs: [],
       inv: Array.from({ length: n }, () => ({})), score: Array(n).fill(5), pieces: Array(n).fill(0), round: 0, phase: "pick", order: [], lastPos: Array(n).fill(0), tieKey: [],
       sub: Array(n).fill(null), res: null, done: false, over: false, end: "", log: [], seq: 0, total: line.reduce((a, i) => a + MON[i].hp, 0) };
     const R = seeded(hash(`ord|${rs}`)); st.tieKey = Array.from({ length: n }, () => R());
@@ -127,10 +127,10 @@
     const turns = [];
     for (let p = 0; p < st.n; p++) {
       const s = st.order[p]; if (st.done) break;
-      const x = st.sub[s], ev = [];
+      const x = st.sub[s], ev = []; st.tn++;
       // 이 순서에 오기 전에 전장 몬스터가 바뀌었어도 번호 그대로 (빈 전장이면 헛수)
       runTurn(st, s, { w: x.w, f: x.f, f2: x.f2 }, ev);
-      const t = { k: "turn", s, p, f: x.f, w: x.w, f2: x.f2, ev };
+      const t = { k: "turn", s, p, ti: st.tn, f: x.f, w: x.w, f2: x.f2, ev };
       turns.push(t); st.log.push(Object.assign({ i: st.seq++ }, clone(t)));
     }
     st.order.forEach((s, p) => { st.lastPos[s] = p; });
@@ -151,27 +151,76 @@
     for (const f of fs) for (const w of ws) { o.push({ t: "atk", f, w }); if (w === "twin") for (const g of fs) if (g > f) o.push({ t: "atk", f, w, f2: g }); }
     return o;
   }
-  // ── 보이는 것 ──
-  function viewField(S) { return S.field.map(m => (m ? { i: m.i, nm: MON[m.i].nm, hp: m.hp, max: m.max, ice: m.ice, poison: m.poison.slice() } : null)); }
+  // ── 보이는 것 (방송 룰 8번: 남은 체력 · 남의 전장 · 무기는 비공개 — 처치와 막타만 공개) ──
+  const pubEv = e => e.k === "kill" || e.k === "enter";
+  const pubTurn = (t, me, full) => (full ? clone(t) : Object.assign({ k: "turn", s: t.s, p: t.p, ti: t.ti, ev: t.ev.filter(pubEv).map(clone) }, t.s === me ? { f: t.f, w: t.w, f2: t.f2 } : {}));
+  const pubLog = (e, me, full) => (e.k === "turn" ? Object.assign({ i: e.i }, pubTurn(e, me, full)) : clone(e));
+  // 내가 낸 수만으로 적어 둔 명목 피해 (얼음 · 헛수는 모르는 채 그대로 더함) · 내 독 · 얼음
+  function mineInfo(st, me) {
+    const info = {}, g = u => info[u] || (info[u] = { est: 0, pz: 0, ice: false });
+    if (me < 0) return info;
+    const turns = st.log.filter(e => e.k === "turn"), killedAt = {}, last = turns.length ? turns[turns.length - 1].ti : 0;
+    for (const t of turns) for (const e of t.ev) if (e.k === "kill") killedAt[e.u] = t.ti;
+    let lastOwn = null; for (const t of turns) if (t.s === me) lastOwn = t;
+    for (const t of turns) {
+      if (t.s !== me) continue;
+      const first = t.w === "poison" ? t.ev.find(e => e.k === "dmg" || e.k === "block" || e.k === "miss") : null;
+      for (const e of t.ev) {
+        if ((e.k !== "dmg" && e.k !== "block") || e.by !== me) continue;
+        if (e.w === "poison") {
+          if (e !== first) continue;
+          const end = killedAt[e.u] == null ? last + 1 : killedAt[e.u];
+          g(e.u).est += 1 + Math.max(0, Math.min(end, last + 1) - t.ti); g(e.u).pz++;
+        } else g(e.u).est += e.amt;
+      }
+    }
+    if (lastOwn && lastOwn.w === "ice") for (const e of lastOwn.ev) if ((e.k === "dmg" || e.k === "block") && e.by === me && e.w === "ice") g(e.u).ice = true;
+    return info;
+  }
+  function viewField(st, me, full, info) {
+    const turns = st.log.filter(e => e.k === "turn");
+    return st.field.map(m => {
+      if (!m) return null;
+      const mi = info[m.u] || { est: 0, pz: 0, ice: false }, age = turns.filter(t => t.ti >= m.en && t.s !== me).length;
+      const o = { i: m.i, u: m.u, nm: MON[m.i].nm, max: m.max, age, est: mi.est, mp: mi.pz, mi: mi.ice };
+      if (full) { o.hp = m.hp; o.ice = m.ice; o.poison = m.poison.slice(); }
+      return o;
+    });
+  }
   function view(st, seat) {
-    const me = typeof seat === "number" && seat >= 0 && seat < st.n ? seat : -1, isAll = seat === "all";
-    const subbed = st.sub.map(x => !!x);
-    const pubObj = { r: st.round, p: st.phase, sc: st.score, f: st.field.map(m => m && [m.i, m.hp, m.ice, m.poison]), q: st.queue, b: st.bombs, o: st.order, sb: subbed, inv: st.inv };
+    const me = typeof seat === "number" && seat >= 0 && seat < st.n ? seat : -1, isAll = seat === "all", full = isAll || st.over;
+    const subbed = st.sub.map(x => !!x), info = mineInfo(st, me);
+    const loot = Array.from({ length: st.n }, () => []);
+    for (const e of st.log) if (e.k === "turn") for (const x of e.ev) if (x.k === "kill") for (const l of x.loot) if (l !== "peace") loot[x.by].push(l);
+    const pubObj = { r: st.round, p: st.phase, sc: st.score, f: st.field.map(m => m && [m.i, m.u]), q: st.queue, o: st.order, sb: subbed, lt: loot, pc: st.pieces, ov: st.over };
     const V = {
       n: st.n, round: st.round, cap: st.cap, phase: st.phase, seat: me, order: st.order.slice(), pos: me >= 0 ? st.order.indexOf(me) : -1, score: st.score.slice(), pieces: st.pieces.slice(),
-      inv: st.inv.map(o => Object.assign({}, o)), field: viewField(st), queue: st.queue.slice(), bombs: st.bombs.map(b => Object.assign({}, b)), total: st.total,
-      sub: me >= 0 && st.sub[me] ? Object.assign({}, st.sub[me]) : null, subbed, res: st.res ? clone(st.res) : null,
-      needs: needs(st), over: st.over, end: st.end, ranks: ranks(st), log: st.log.map(e => clone(e)), pub: hash(JSON.stringify(pubObj)).toString(36),
+      inv: st.inv.map((o, s) => (full || s === me ? Object.assign({}, o) : {})), loot, field: viewField(st, me, full, info), queue: st.queue.slice(), bombs: st.bombs.filter(b => full || b.s === me).map(b => Object.assign({}, b)), total: st.total,
+      sub: me >= 0 && st.sub[me] ? Object.assign({}, st.sub[me]) : null, subbed, res: st.res ? { r: st.res.r, score: st.res.score.slice(), turns: st.res.turns.map(t => pubTurn(t, me, full)) } : null,
+      needs: needs(st), over: st.over, end: st.end, ranks: ranks(st), log: st.log.map(e => pubLog(e, me, full)), pub: hash(JSON.stringify(pubObj)).toString(36),
     };
     if (isAll) V.subs = st.sub.map(x => (x ? Object.assign({}, x) : null));
     return V;
   }
 
-  // ── AI: 보이는 것(공개 기록으로 계산한 체력 · 순서 · 무기)만으로 모의 ──
-  function simOf(V) {
-    return { field: V.field.map(m => (m ? { i: m.i, hp: m.hp, max: m.max, ice: m.ice, poison: m.poison.slice() } : null)), queue: V.queue.slice(), bombs: V.bombs.map(b => Object.assign({}, b)),
-      inv: V.inv.map(o => Object.assign({}, o)), score: V.score.slice(), pieces: V.pieces.slice(), round: V.round, done: false };
+  // ── AI: 내가 본 것만으로 숨은 체력 · 남의 무기를 표본으로 뽑아 모의 (방송처럼 체력은 모름 — 처치 기록 · 내가 준 피해 · 지나간 순서 수로 짐작) ──
+  function sampleHp(m, R) {
+    const base = m.max - Math.min(m.est || 0, m.max - 1), n = m.age || 0;
+    for (let t = 0; t < 14; t++) {
+      let x = 0; for (let k = 0; k < n; k++) if (R() < 0.3) x += R() < 0.85 ? 3 : 6;
+      if (base - x >= 1) return base - x;
+    }
+    return 1 + Math.floor(R() * Math.min(base, 3));
   }
+  function sampleSim(V, me, R) {
+    const field = V.field.map(m => (m ? { i: m.i, u: m.u, hp: m.hp != null ? m.hp : sampleHp(m, R), max: m.max, ice: m.hp != null ? m.ice : (m.mi ? me : -1), poison: m.hp != null ? m.poison.slice() : Array(m.mp || 0).fill(me) } : null));
+    const inv = V.inv.map((o, s) => {
+      if (s === me || Object.keys(o).length) return Object.assign({}, o);
+      const r = {}; for (const l of V.loot[s]) if (R() < 0.6) r[l] = (r[l] || 0) + 1; return r;
+    });
+    return { field, queue: V.queue.slice(), bombs: V.bombs.map(x => Object.assign({}, x)), inv, score: V.score.slice(), pieces: V.pieces.slice(), round: V.round, done: false, uid: 1000, tn: 0 };
+  }
+  const simOf = (V, R) => sampleSim(V, V.seat >= 0 ? V.seat : 0, R || seeded(hash(JSON.stringify([V.round, V.score, V.queue]))));
   const lootVal = D => D.loot.reduce((a, l) => a + (l === "peace" ? 0.3 : l === "grenade" || l === "ice" ? 1.3 : 1.1), 0);
   const WCOST = { poison: 1.0, ice: 1.4, twin: 1.2, grenade: 1.7, bomb: 1.7 };
   // 상대가 라운드 처음 상태만 보고 고를 법한 수 (보이는 것만으로 · 모의용)
@@ -188,17 +237,18 @@
   const PROF = {
     easy: { samples: 0, noise: 0 },
     normal: { samples: 6, noise: 1.6, combo: false },
-    hard: { samples: 24, noise: 0, combo: true },
+    hard: { samples: 30, noise: 0, combo: true },
   };
   const keyV = (V, s) => hash(JSON.stringify([s, V.round, V.score, V.field, V.queue, V.bombs, V.order, V.inv]));
   // 후보 수 → 기대 효용 (모의 표본 평균). 같은 표본으로 모든 후보를 비교
   function evalActs(V, me, P, R) {
-    const cands = []; const mineInv = V.inv[me], base = simOf(V);
-    const fs = alive(base), ws = WORDER.filter(w => w === "dagger" || mineInv[w] > 0);
+    const cands = []; const mineInv = V.inv[me], base0 = sampleSim(V, me, R);
+    const fs = alive(base0), ws = WORDER.filter(w => w === "dagger" || mineInv[w] > 0);
     for (const f of fs) for (const w of ws) { cands.push({ t: "atk", f, w }); if (w === "twin") for (const g of fs) if (g > f) cands.push({ t: "atk", f, w, f2: g }); }
     const U = cands.map(() => 0), K = cands.map(() => 0), S0 = Math.max(1, P.samples);
-    const remHP = base.field.reduce((a, m) => a + (m ? m.hp : 0), 0) + base.queue.reduce((a, i) => a + MON[i].hp, 0), endF = Math.min(1, remHP / 40);
     for (let sm = 0; sm < S0; sm++) {
+      const base = sm === 0 ? base0 : sampleSim(V, me, R);
+      const remHP = base.field.reduce((a, m) => a + (m ? m.hp : 0), 0) + base.queue.reduce((a, i) => a + MON[i].hp, 0), endF = Math.min(1, remHP / 40);
       const acts = V.order.map(s => (s === me ? null : oppAct(base, s, R)));
       for (let c = 0; c < cands.length; c++) {
         const S = clone(base), a = cands[c], before = S.score[me];
@@ -264,20 +314,19 @@
   }
   // 이 순서 앞에서 몬스터가 맞을 피해(상대 모의 평균) — 선생님 글용
   function expectBefore(V, me) {
-    const base = simOf(V), R = seeded(keyV(V, me) ^ 77), N = 12, hp = base.field.map(() => 0), dead = base.field.map(() => 0);
+    const R = seeded(keyV(V, me) ^ 77), N = 12, hp = V.field.map(() => 0), cur = V.field.map(() => 0), dead = V.field.map(() => 0);
     for (let k = 0; k < N; k++) {
-      const S = clone(base);
+      const base = sampleSim(V, me, R), S = clone(base);
       for (let p = 0; p < V.order.length && !S.done; p++) {
         const s = V.order[p]; if (s === me) break;
         const x = oppAct(S, s, R); if (!S.field[x.f]) continue;
         runTurn(S, s, x, []);
       }
-      S.field.forEach((m, f) => { if (base.field[f] && (!m || m.i !== base.field[f].i)) dead[f]++; });
-      S.field.forEach((m, f) => { if (m && base.field[f] && m.i === base.field[f].i) hp[f] += m.hp; else if (base.field[f]) hp[f] += 0; });
+      S.field.forEach((m, f) => { if (base.field[f]) cur[f] += base.field[f].hp; if (base.field[f] && (!m || m.u !== base.field[f].u)) dead[f]++; else if (m && base.field[f]) hp[f] += m.hp; });
     }
-    return { hp: hp.map((x, f) => (base.field[f] ? x / N : null)), dead: dead.map(x => x / N) };
+    return { cur: cur.map((x, f) => (V.field[f] ? x / N : null)), hp: hp.map((x, f) => (V.field[f] ? x / N : null)), dead: dead.map(x => x / N) };
   }
 
-  return { id: "halloween", MON, WP, WORDER, SPECIAL, FIELD, OPTS, PROF, optsOf, lineup, capOf, runTurn, kill, hit, simOf, oppAct, evalActs, expectBefore,
+  return { id: "halloween", MON, WP, WORDER, SPECIAL, FIELD, OPTS, PROF, optsOf, lineup, capOf, runTurn, kill, hit, simOf, oppAct, evalActs, expectBefore, sampleSim, mineInfo,
     init, needs, apply, view, over, ranks, legal, auto, advance, ai, aiWith, recommend, judge, lootVal };
 });
