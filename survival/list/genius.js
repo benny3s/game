@@ -83,9 +83,9 @@
   { id: "gn-howmuch", prog: "genius", season: "S4", seasonName: "그랜드 파이널", title: "하우머치", emoji: "🛒", v: 4,
     short: "손님 5명의 최고가를 넘지 않게 · 가격 맞히기",
     src: "더 지니어스 시즌 4 그랜드 파이널 하우머치 · 11회전 메인 매치 · tvN Joy 「11회전 메인매치 하우머치 룰 영상」 규칙 설명 확인" },
-  { id: "gn-numchess", prog: "genius", season: "S4", seasonName: "그랜드 파이널", title: "숫자장기", emoji: "♟️", v: 2,
+  { id: "gn-numchess", prog: "genius", season: "S4", seasonName: "그랜드 파이널", title: "숫자장기", emoji: "♟️", v: 3,
     short: "숨긴 숫자 말 14개로 하는 장기 · 합이 10 이상이면 큰 수, 미만이면 작은 수 승 · 1:1",
-    src: "더 지니어스 시즌 4 그랜드 파이널 · 12화 결승 1회전 숫자장기 · tvN Joy 「Finals Round 1 Number Janggi Rules Video」 · 디글 클래식 「[더지니어스4] 숫자장기」 클립 둘 · 나무위키 「더 지니어스:그랜드 파이널/12화」 규칙 · 대결 12번 기록 확인" },
+    src: "더 지니어스 시즌 4 그랜드 파이널 · 12화 결승 1회전 숫자장기 · tvN Joy 「Finals Round 1 Number Janggi Rules Video」 · 디글 클래식 「[더지니어스4] 숫자장기」 클립 둘 · 나무위키 「더 지니어스:그랜드 파이널/12화」 · 「숫자장기」 규칙 · 대결 12번 기록 확인" },
   { id: "gn-mysterysign", prog: "genius", season: "S4", seasonName: "그랜드 파이널", title: "미스터리 사인", emoji: "🔮", v: 3,
     short: "두 숫자와 ❓로 된 문제의 숨은 규칙을 힌트로 찾아요 · 버저 먼저 눌러 정답 · 11라운드 1:1",
     src: "더 지니어스 시즌 4 그랜드 파이널 · 12화 결승 2회전 미스터리 사인 · tvN Joy 「결승전 2회전 미스터리사인 룰 영상」 · 디글 클래식 「결승2R 미스터리사인1」 「결승2R 미스터리사인2」 · tvN D ENT 「결승매치 미스터리 사인 1탄 · 2탄」 규칙 설명 확인" }

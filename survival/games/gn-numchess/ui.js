@@ -5,8 +5,8 @@
   const K = window.SVCores["gn-numchess"];
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const { W, H, MINE, KING, LETX } = K;
-  const SRC = "방송: 더 지니어스 그랜드 파이널 (시즌 4) · 12화 결승 1회전 숫자장기 (장동민 vs 김경훈) — tvN 공식 룰 영상 「Finals Round 1 Number Janggi Rules Video」 · 디글 클래식 「[더지니어스4] 숫자장기」 클립 · 나무위키 '더 지니어스: 그랜드 파이널/12화' 확인";
-  const DIFF = "결승 아이템은 각자 +1 · −1 · BLIND 한 벌씩 (방송은 탈락자에게 받은 아이템이라 장동민 BLIND · −1 · 아이템 복사, 김경훈 +1 · 아이템 무효화 — 복사 · 무효화는 없음) · 아이템은 옵션 (기본 켬) · 선은 동전 던지기 대신 무작위 · 60초 제한은 옵션 (기본 끔, 켜면 시간 안에 못 움직이면 패배) · 200수(각 100수)가 넘으면 왕 빼고 남은 말이 많은 쪽 승, 같으면 무승부 (끝없는 판 방지 상한) · 한 수로 두 사람 말이 함께 다 없어지면 움직인 쪽 승 · 되살리기: 끝 줄에 닿은 말은 공개하지 않고 빠지고, 되살린 말은 내 진영 맨 끝 줄 빈칸에 (빈칸이 없거나 잃은 말이 없으면 묻지 않음 · 지뢰도 되살릴 수 있음) · 아이템을 쓸지는 대결마다 아이템이 남은 사람에게 동시에 물음 · 마이너스 표시 자리는 방송 판 그림대로 2·3줄 · 4·5줄 사이 18곳 · 한 기기 두 사람 판은 없음 (말을 숨겨야 해서) · '안 움직인 말 표시'는 옵션 (기본 끔)";
+  const SRC = "방송: 더 지니어스 그랜드 파이널 (시즌 4) · 12화 결승 1회전 숫자장기 (장동민 vs 김경훈) — tvN 공식 룰 영상 「Finals Round 1 Number Janggi Rules Video」 · 디글 클래식 「[더지니어스4] 숫자장기」 클립 · 나무위키 '더 지니어스: 그랜드 파이널/12화' · '숫자장기' 문서 확인";
+  const DIFF = "판은 방송 화면 기준 가로 9 × 세로 6 (두 사람이 좌우로 마주 봄 — 나무위키 '숫자장기' 문서는 가로 6 × 세로 9로 적음, 칸 수 · 진영은 같음) · 결승 아이템은 각자 +1 · −1 · BLIND 한 벌씩 — 방송에서 누가 어떤 아이템을 가졌는지는 확인하지 못해 우리가 정함 (복사 · 무효화 같은 다른 아이템은 없음) · 아이템은 옵션 (기본 켬) · 선은 무작위 (방송에서 선을 정한 방법은 확인하지 못해 우리가 정함) · 대각선은 앞쪽만 (방송 설명 '뒤로 이동 불가'를 뒤 대각선 금지로 해석) · 마이너스 표시 사이 대결도 같은 기준으로 판정 (차이가 10 이상인 건 +1을 쓴 10과 1뿐이라 거의 작은 수 승 — 우리 해석) · 60초 제한은 옵션 (기본 끔, 켜면 시간 안에 못 움직이면 패배) · 200수(각 100수)가 넘으면 왕 빼고 남은 말이 많은 쪽 승, 같으면 무승부 (끝없는 판 방지 상한) · 한 수로 두 사람 말이 함께 다 없어지면 움직인 쪽 승 · 되살리기: 끝 줄에 닿은 말은 공개하지 않고 빠지고, 되살린 말은 내 진영 맨 끝 줄 빈칸에 (빈칸이 없거나 잃은 말이 없으면 묻지 않음 · 지뢰도 되살릴 수 있음 — 우리 해석) · 아이템을 쓸지는 대결마다 아이템이 남은 사람에게 동시에 물음 · 마이너스 표시 자리는 방송 판 그림대로 2·3줄 · 4·5줄 사이 18곳 · 한 기기 두 사람 판은 없음 (말을 숨겨야 해서) · '안 움직인 말 표시'는 옵션 (기본 끔)";
   const CSS = `
 .nc-st{flex:none;min-height:38px;display:grid;place-items:center;text-align:center;font-size:12.5px;line-height:1.35;color:var(--soft);padding:0 2px}
 .nc-st b{color:#fde68a}
@@ -368,7 +368,7 @@
         const kk = a.lay.indexOf(KING), ms = a.lay.map((v, k) => (v === MINE ? k : -1)).filter(k => k >= 0);
         rec = `추천 배치: 👑 ${CN(K.slotCell(me, kk))} · 💣 ${ms.map(k => CN(K.slotCell(me, k))).join(" · ")} · 10 ${CN(K.slotCell(me, a.lay.indexOf(10)))} · 9 ${CN(K.slotCell(me, a.lay.indexOf(9)))}`;
         const near = ms.filter(k => Math.abs(((k / 3) | 0) - ((kk / 3) | 0)) + Math.abs((k % 3) - (kk % 3)) === 1).length;
-        why = `지뢰는 움직이지 않아서 왕 둘레 ${near}칸을 막으면 상대 말이 왕에 닿을 길이 없어요. 9 · 10 은 큰 수끼리 싸움(합 10 이상)에 강하고, 1 은 작은 수끼리(합 10 미만)에서 이겨요.`;
+        why = `지뢰는 움직이지 않아서 왕 둘레 ${near}칸을 막으면 상대 말이 왕에 닿을 길이 없어요. 9 · 10은 큰 수끼리 싸움(합 10 이상)에 강하고, 1은 작은 수끼리(합 10 미만)에서 이겨요.`;
       }
       return { opp, mine, rec, why };
     }
@@ -414,7 +414,7 @@
       const A = V.pcs[F.a];
       const rows = A.s === me ? F.pairs.map(q => { const o0 = K.duelOdds(A.v, 0, D[q.b], q.t), o1 = K.duelOdds(A.v, mods[A.id] || 0, D[q.b], q.t); return `${CN(V.pcs[q.b].c)} ${vTxt(V.pcs[q.b].v)}: 이길 확률 ${pct(o0.win)}${mods[A.id] ? ` → ${pct(o1.win)}` : ""}`; })
         : ids.map(id => { const q = F.pairs.find(x => x.b === id), dm = K.mover(D[A.id]), o0 = K.duelOdds(V.pcs[id].v, 0, dm, q.t), o1 = K.duelOdds(V.pcs[id].v, mods[id] || 0, dm, q.t); return `내 ${vTxt(V.pcs[id].v)} 이길 확률 ${pct(o0.win)}${mods[id] ? ` → ${pct(o1.win)}` : ""}`; });
-      why = `${rows.join(" · ")}${use.some(u => u.k === "b") ? " · BLIND 는 살아남을 강한 말의 정체를 계속 숨겨요" : ""}${!use.length ? " · 아이템은 한 번뿐 — 판이 크게 갈리는 대결에 아껴요" : ""}`;
+      why = `${rows.join(" · ")}${use.some(u => u.k === "b") ? " · BLIND는 살아남을 강한 말의 정체를 계속 숨겨요" : ""}${!use.length ? " · 아이템은 한 번뿐 — 판이 크게 갈리는 대결에 아껴요" : ""}`;
     } else if (V.phase === "revive" && a) {
       if (a.skip) { rec = "되살리지 않기"; why = "잃은 말이 끝 줄에 닿은 말보다 약해요 — 그대로 두는 편이 나아요."; }
       else { const p = V.pcs[a.id]; rec = `${vTxt(p.v)}${eul(vWord(p.v))} ${CN(a.to)}에 되살리기`; why = `잃은 말 중 가장 쓸모 있는 말 (${p.v <= 10 ? `합 대결 이길 확률 ${pct(sumRate(p.v))}` : "지뢰 — 왕 둘레를 다시 막아요"}) · 되살린 말은 숫자가 공개돼요.`; }
@@ -427,7 +427,7 @@
     const my = actText(myA, Vb), best = actText(bestA, Vb);
     if (!Vb || !myA || !bestA) return { sev: 0, why: "", my, best };
     const canon = a => JSON.stringify(a && a.t === "item" ? { t: "item", use: (a.use || []).map(u => u.k + u.id).sort() } : a);
-    if (canon(myA) === canon(bestA)) return { sev: 0, why: "고급 AI 와 같은 수", my, best };
+    if (canon(myA) === canon(bestA)) return { sev: 0, why: "고급 AI와 같은 수", my, best };
     if (myA.t === "timeout") return { sev: 85, why: "시간 안에 못 움직여 졌어요", my, best };
     if (Vb.phase === "play" && myA.t === "mv" && bestA.t === "mv") {
       const rows = K.evalMoves(Vb, seat), f = a => rows.find(r => r.a.from === a.from && r.a.to === a.to);
@@ -484,7 +484,7 @@
       { tag: "STEP 3 · 진행", title: "번갈아 한 칸씩", body: "말 하나를 <b>양옆 · 앞 대각선 1칸</b>, 또는 <b>앞으로 1~2칸</b> (뛰어넘기 X). 뒤로는 못 가고 💣 지뢰는 못 움직여요.",
         boardHtml: tb(boardHtml(MOVE, { persp: 0, region: [1, 7, 0, 4], sel: K.at(3, 2), dst: mvDst })), ms: 6000 },
       { tag: "STEP 4 · 직접", title: "대결: 합이 10 이상이면 큰 수", body: "움직인 뒤 상대 말과 <b>앞뒤 · 양옆</b>으로 닿으면 대결! 두 수의 합이 <b>10 이상이면 큰 수</b>, <b>10 미만이면 작은 수</b>가 이겨요. 빨간 선을 사이에 두면 합 대신 <b>차이</b>로. 내 <b>7</b>로 상대 <b>4</b>를 잡는 칸을 눌러요.",
-        interactive: { hint: "👆 4 를 잡는 칸", doneText: "✅ 7 + 4 = 11 → 10 이상이라 큰 수 7 승!" },
+        interactive: { hint: "👆 4를 잡는 칸", doneText: "✅ 7 + 4 = 11 → 10 이상이라 큰 수 7 승!" },
         render(stage, ctrl) {
           let done = false, msg = "초록 점 = 갈 수 있는 칸";
           const V0 = () => mkV(T0);
@@ -500,7 +500,7 @@
             const res = nb.map(p => { const t2 = K.isMinus(c, p.c) ? "minus" : "sum", r = K.duel(7, 7, p.v, p.v, t2), k = t2 === "minus" ? Math.abs(7 - p.v) : 7 + p.v; return { p, t2, r, k }; });
             const ft = new Set([c].concat(nb.map(p => p.c)));
             if (res.length === 1 && res[0].p.v === 4 && !res[0].r[0]) { done = true; msg = `🎉 7 + 4 = <b>11</b> → 10 이상이라 <b>큰 수 7</b> 승! 상대 4 제거`; V.pcs = V.pcs.filter(p => p !== res[0].p); V.pcs[0].c = c; ctrl.sfx("win"); draw(ft); ctrl.complete(); return; }
-            msg = res.map(x => `${x.t2 === "minus" ? `⊖ 차 ${x.k}` : `합 ${x.k}`} (7 vs ${x.p.v}) → ${x.r[0] && x.r[1] ? "둘 다 제거" : x.r[0] ? "7 제거" : `${x.p.v} 제거`}`).join(" · ") + " — 7 이 살아서 4 만 잡는 칸은?";
+            msg = res.map(x => `${x.t2 === "minus" ? `⊖ 차 ${x.k}` : `합 ${x.k}`} (7 vs ${x.p.v}) → ${x.r[0] && x.r[1] ? "둘 다 제거" : x.r[0] ? "7 제거" : `${x.p.v} 제거`}`).join(" · ") + " — 7이 살아서 4만 잡는 칸은?";
             ctrl.sfx("tap"); V = V0(); draw(ft);
           };
           draw();
@@ -523,10 +523,10 @@
     src: SRC, diff: DIFF,
     howto: [
       "🎯 목표: 상대 <b>👑 왕</b>을 잡거나 · 왕 빼고 상대 말을 모두 잡거나 · 내 왕이 상대 진영 <b>맨 끝 줄</b>에 닿거나 · 상대가 못 움직이면 승리 (결승 1회전)",
-      "준비물: 가로 9 × 세로 6 판 (<b>마이너스 표시</b> 18개) · 각자 말 14개 — 숫자 <b>1~10</b> · <b>💣 지뢰 3</b> · <b>👑 왕 1</b>, 내 진영(3줄 × 6칸)에 몰래 놓고 뒤집어 둠",
+      "준비물: 가로 9 × 세로 6 판 (<b>마이너스 표시</b> 18개) · 각자 말 14개 — 숫자 <b>1~10</b> · <b>💣 지뢰 3</b> · <b>👑 왕 1</b>, 내 진영(3줄 × 6칸)에 몰래 놓고 뒤집어 둠 (뒷면은 모두 같고 앞면 숫자는 나만 봄)",
       "진행: 번갈아 말 하나를 <b>양옆 · 앞 대각선 1칸</b>, <b>앞으로 1~2칸</b> (뒤로 · 뛰어넘기 X · 지뢰는 못 움직임). 움직인 뒤 상대 말과 앞뒤 · 양옆으로 닿으면 <b>대결</b> — 두 수의 합이 <b>10 이상이면 큰 수</b>, <b>10 미만이면 작은 수</b> 승 · 같은 수는 둘 다 제거 · 마이너스 표시를 사이에 두면 합 대신 <b>차이</b>로 · 여럿과 닿으면 동시에",
       "승패: ① 상대가 말을 못 움직임 ② 상대 왕을 잡음 ③ 왕 빼고 상대 말을 다 잡음 ④ 내 왕이 상대 진영 맨 끝 줄에 닿음",
-      "특수: 💣 지뢰와 닿으면 둘 다 제거 · 👑 왕은 닿는 순간 잡힘 (왕끼리는 그대로) · 대결한 말은 공개 · 상대 진영 맨 끝 줄에 닿은 말 대신 잃은 말 하나를 숫자 공개로 되살림 · 결승 아이템 <b>+1 · −1 · BLIND</b>(상대는 결과만 봄)는 대결 전에 씀 · 방송의 60초 제한은 옵션 · <b>200수</b>가 넘으면 남은 말 수로 (끝없는 판 방지 상한)",
+      "특수: 💣 지뢰와 닿으면 둘 다 제거 · 👑 왕은 닿는 순간 잡힘 (왕끼리는 그대로) · 대결한 말은 공개 · 상대 진영 맨 끝 줄에 닿은 말 대신 잃은 말 하나를 숫자 공개로 되살릴 수 있음 (선택 — 안 해도 됨) · 결승 아이템 <b>+1 · −1 · BLIND</b>(상대는 결과만 봄)는 대결 전에 씀 · 방송의 60초 제한은 옵션 · <b>200수</b>가 넘으면 남은 말 수로 (끝없는 판 방지 상한)",
       SRC, "※ 방송과 다른 점: " + DIFF,
     ],
     sub: V => (V.over ? "끝" : V.phase === "setup" ? "몰래 배치" : V.phase === "item" ? "⚔ 대결 아이템" : V.phase === "revive" ? "↺ 되살리기" : `${V.ply}수 · 말 ${V.score[0]} : ${V.score[1]}`),
