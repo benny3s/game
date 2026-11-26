@@ -17,7 +17,10 @@
      ② 입찰 동점은 추첨 (방송은 투표룸에 먼저 들어간 사람) · 규칙 카드 코인 동점은 먼저 낸 규칙 카드
      ③ 규칙 카드는 코인 1개 이상과 함께 · 라운드에 한 장 (안 쓰면 그 라운드 끝에 사라짐) · 놓인 규칙 카드는 공개 때까지 안 보임
      ④ 남의 코인 수는 판이 끝날 때까지 비공개 · 동점은 모든 등수에서 남은 코인으로 가르고 그래도 같으면 공동
-     ⑤ 슬롯 카드는 뒷면(누구 카드인지 · 몇 번째인지만 보임), 공개된 숫자로 남의 남은 카드를 셀 수 있어요 */
+     ⑤ 슬롯 카드는 뒷면(누구 카드인지 · 몇 번째인지만 보임), 공개된 숫자로 남의 남은 카드를 셀 수 있어요
+     ⑥ 그 라운드 슬롯 표는 1차 제출이 시작되면 모두에게 공개 (방송은 제출하러 방에 들어가 확인 — 입찰 때는 모름)
+   · 순서 입찰에 낸 코인은 진 사람 것도 사라짐 (방송 코인 기록이 그렇게 맞음)
+   · 방송 구조: 1·2위 파이널 직행, 나머지 6명은 2차 게임 메모리 카운트로 2명 더, 못 간 4명은 바로 탈락 — 우리는 커트라인 한 게임 */
 (function (root, factory) {
   const m = factory();
   if (typeof module === "object" && module.exports) module.exports = m;
@@ -234,7 +237,9 @@
     const hist = st.hist.map(h => ({ r: h.r, gain: h.gain.slice(), ord: h.ord.slice(), win: h.win, slots: h.slots.map(x => ({ ...x, rule: x.rule ? { ...x.rule } : null, cards: x.cards.map(c => ({ ...c })) })) }));
     const pubObj = { r: st.round, p: st.phase, b: board.map(x => x.map(c => [c.p, open ? c.v : 0])), bd: st.bids.map(b => b != null), w: st.win, o: st.ord, t: st.ti, sc: st.score, h: st.hist.length, ov: st.over, u: st.used };
     return {
-      n: st.n, R: st.R, round: st.round, phase: st.phase, over: st.over, defs: st.defs.map(d => ({ ...d })),
+      n: st.n, R: st.R, round: st.round, phase: st.phase, over: st.over,
+      // 그 라운드 슬롯 표는 1차 제출이 시작될 때 공개 (방송: 게임판 구성은 미리 알리지 않고 1차 숫자 카드 제출 때 확인) — 입찰 · 순서 정하기 동안은 null
+      defs: all || (st.phase !== "bid" && st.phase !== "order") ? st.defs.map(d => ({ ...d })) : null,
       board, placed, left, turn, ti: st.ti, sec: st.phase === "place" ? (st.ti < st.n ? 1 : 2) : 0, need: st.phase === "place" ? cardsNow(st) : 0,
       bidDone: st.bids.map(b => b != null), myBid: me >= 0 ? st.bids[me] : null, win: st.win, ord: st.ord.slice(),
       hand: me >= 0 ? st.hand[me].slice() : null, coins: st.coins.map((c, i) => (all || i === me || st.over ? c : null)),

@@ -27,6 +27,7 @@
 .ct-lb b{font:900 17px var(--round);color:#fff}
 .ct-lb small{font:700 10px var(--round);color:var(--soft);white-space:nowrap}
 .ct-lb small.hot{color:#fde68a}
+.ct-hid{font-size:11px;color:var(--soft);opacity:.75}
 .ct-cells{display:flex;gap:3px;flex-wrap:nowrap;min-width:0}
 .ct-c{--oc:#64748b;position:relative;display:grid;place-items:center;width:30px;height:36px;flex:none;border-radius:7px;background:#f8fafc;color:#0f172a;border:2px solid var(--oc);border-top-width:5px;font:900 16px/1 var(--round)}
 .ct-c i{position:absolute;top:-1px;left:0;right:0;text-align:center;font:800 8px/1 var(--round);font-style:normal;color:#334155;opacity:.85;overflow:hidden;white-space:nowrap}
@@ -120,6 +121,10 @@
   // 슬롯 판 (화면 · 1분 규칙 공용) — o: { only, lab, pend, rule, tgt }
   function boardHtml(V, ctx, o) {
     const me = ctx.me, open = V.phase === "show" || V.over, res = open ? V.res : null;
+    if (!V.defs) {                                       // 입찰 · 순서 정하기: 이번 라운드 표는 아직 비공개 (1차 제출 때 공개)
+      const last = V.hist && V.hist.length ? V.hist[V.hist.length - 1] : null;
+      return `<div class="ct-board">${[0, 1, 2, 3].map(s => `<div class="ct-row"><span class="ct-lb"><b>${SL[s]}</b><small>?장·?</small></span><span class="ct-hid">${last ? `지난 라운드 ${last.slots[s].max}장·${last.slots[s].lim}` : ""}</span></div>`).join("")}<div class="ct-note sm">🔒 이번 라운드 슬롯 표(최대 카드 수 · LIMIT)는 1차 제출이 시작될 때 공개돼요</div></div>`;
+    }
     return `<div class="ct-board">${(o.only || [0, 1, 2, 3]).map(s => {
       const def = V.defs[s], placed = V.board[s], R = res ? res.slots[s] : null, pend = o.pend ? o.pend.filter(c => c.s === s) : [];
       const full = placed.length + pend.length >= def.max;
@@ -190,7 +195,7 @@
     else if (me < 0) acts = `<div class="ct-note">구경 중이에요 · 뒷면 카드는 라운드가 끝나야 공개돼요</div>`;
     else if (ph === "bid" && actor) {
       const b = Math.max(0, Math.min(coins, SEL.bid));
-      acts = `<div class="ct-note sm">가장 많이 낸 사람이 <b>1차 제출 순서</b>를 정해요 · 낸 코인은 사라지고 액수는 비공개</div><div class="ct-step"><button class="btn" data-a="bm" ${b > 0 ? "" : "disabled"}>−</button><output>🪙 ${b}</output><button class="btn" data-a="bp" ${b < coins ? "" : "disabled"}>+</button></div><div class="ct-two one"><button class="btn primary" data-a="bid">${b ? `코인 ${b}개 입찰` : "입찰 안 함 (0개)"}</button></div>`;
+      acts = `<div class="ct-note sm">가장 많이 낸 사람이 <b>1차 제출 순서</b>를 정해요 · 낸 코인은 져도 사라지고 액수는 비공개</div><div class="ct-step"><button class="btn" data-a="bm" ${b > 0 ? "" : "disabled"}>−</button><output>🪙 ${b}</output><button class="btn" data-a="bp" ${b < coins ? "" : "disabled"}>+</button></div><div class="ct-two one"><button class="btn primary" data-a="bid">${b ? `코인 ${b}개 입찰` : "입찰 안 함 (0개)"}</button></div>`;
     } else if (ph === "bid") acts = `<div class="ct-note">다른 사람이 입찰하는 중… (${V.bidDone.filter(Boolean).length}/${V.n})</div>`;
     else if (ph === "order" && actor) {
       const left = Array.from({ length: V.n }, (_, i) => i).filter(i => !SEL.ord.includes(i));
@@ -290,7 +295,7 @@
     if (V.phase === "bid") {
       const a = K.recommend(V, me).a;
       rec = a.c ? `코인 ${a.c}개 입찰` : "입찰하지 않아요 (0개)";
-      why = `순서 결정권은 1차 제출 순서를 정하는 권리인데, AI 끼리 2만 판 남짓 둬 보면 자리에 따른 차이는 라운드당 1점 안팎이에요. 코인은 규칙 카드(슬롯마다 코인 많은 사람 것만 적용)와 동점 가르기에 쓰여서 아껴 둬요 — 지금 코인 ${V.coins[me]}개.`;
+      why = `순서 결정권은 1차 제출 순서를 정하는 권리인데, AI 끼리 2만 판 남짓 둬 보면 자리에 따른 차이는 라운드당 1점 안팎이에요. 코인은 규칙 카드(슬롯마다 코인 많은 사람 것만 적용)와 동점 가르기에 쓰여서 아껴 둬요 — 지금 코인 ${V.coins[me]}개. 낸 코인은 져도 사라지고, 이번 라운드 슬롯 표는 1차 제출 때 공개돼요.`;
       return { opp, mine, rec, why };
     }
     if (V.phase === "order") {
@@ -345,14 +350,14 @@
     const slotRes = (cards, def) => { const R = K.resolveSlot(cards, null, def); return { cards: cards.map((c, i) => ({ ...c, val: R.val[i], reg: R.reg[i], gone: !!(R.gone && R.gone[i]) })), sum: R.sum, lim: def.lim, effLim: R.lim, max: def.max, effMax: R.max, low: R.low, rule: null }; };
     const one = (def, cards, open, lab) => boardHtml(fakeV([def], [cards], open ? { slots: [slotRes(cards, def)] } : null), ctx0, { only: [0], lab: [lab] });
     const ctx0 = { me: 0, seats: [{ name: "나" }, { name: "악어" }, { name: "진호" }, { name: "민아" }] };
-    const R1 = K.slotsFor(8, 1);
+    const EX = [{ max: 6, lim: 18 }, { max: 5, lim: 16 }, { max: 5, lim: 13 }, { max: 4, lim: 11 }];   // 예시 표 (방송 표는 라운드마다 1차 제출 때 공개)
     const ptsHtml = `<div class="ct-pts">${[1, 2, 3, 4, 5, 6].map(v => `<span>${v} → <b>${PTS[v]}점</b></span>`).join("")}</div>`;
     return [
       { tag: "STEP 1 · 목표", title: "슬롯에 카드를 등록해 점수를 모아요", body: "<b>3라운드</b> 동안 슬롯 A~D 에 숫자 카드를 놓아 <b>등록</b>되면 점수를 얻어요. 3라운드 점수 합이 가장 높은 사람이 이겨요 (방송: 8명 중 <b>1·2위가 파이널 직행</b>).",
-        boardHtml: `<div class="ct-tut">${boardHtml(fakeV(R1, [[], [], [], []]), ctx0, {})}<small>1라운드 슬롯 (8명) — 최대 카드 수 · LIMIT(등록된 숫자 합의 상한)</small></div>`, ms: 5600 },
-      { tag: "STEP 2 · 준비물", title: "숫자 카드 1~6 두 벌 + 코인 20개", body: "각자 색으로 나뉜 숫자 카드 <b>1~6 두 벌(12장)</b>과 <b>코인 20개</b>를 받아요. 라운드마다 슬롯의 <b>최대 카드 수</b>와 <b>LIMIT</b> 이 바뀌어요.",
+        boardHtml: `<div class="ct-tut">${boardHtml(fakeV(EX, [[], [], [], []]), ctx0, {})}<small>예시 표 — 최대 카드 수 · LIMIT(등록된 숫자 합의 상한). 실제 판에서는 라운드마다 바뀌고 1차 제출 때 공개돼요</small></div>`, ms: 5600 },
+      { tag: "STEP 2 · 준비물", title: "숫자 카드 1~6 두 벌 + 코인 20개", body: "각자 색으로 나뉜 숫자 카드 <b>1~6 두 벌(12장)</b>과 <b>코인 20개</b>를 받아요. 라운드마다 슬롯의 <b>최대 카드 수</b>와 <b>LIMIT</b> 이 바뀌고, 그 표는 <b>1차 제출이 시작될 때</b> 공개돼요.",
         boardHtml: `<div class="ct-tut"><div class="ct-hand" style="width:100%;max-width:330px">${[1, 2, 3, 4, 5, 6].map(v => `<span class="ct-h">${v}<small>×2 · ${PTS[v]}점</small></span>`).join("")}</div><small>🪙 코인 20 · 📜 규칙 카드는 라운드마다 1장</small></div>`, ms: 5200 },
-      { tag: "STEP 3 · 진행", title: "입찰 → 1차 1장 → 2차 2장 → 공개", body: "① 코인을 몰래 내 <b>순서 결정권</b>을 입찰해요 (최다가 순서를 정함, 아무도 안 내면 추첨, 낸 코인은 사라짐). ② <b>규칙 카드</b>를 1장씩 받아요. ③ <b>1차</b>: 순서대로 카드 1장을 뒷면으로. ④ <b>2차</b>: 역순으로 2장. ⑤ 공개하면 슬롯마다 <b>높은 숫자부터 등록</b>, 같은 숫자는 먼저 놓은 카드 먼저, <b>LIMIT 을 넘기게 되는 카드는 버리고</b> 다음 낮은 카드를 봐요.",
+      { tag: "STEP 3 · 진행", title: "입찰 → 1차 1장 → 2차 2장 → 공개", body: "① 코인을 몰래 내 <b>순서 결정권</b>을 입찰해요 (최다가 순서를 정함, 아무도 안 내면 추첨, 낸 코인은 진 사람 것도 사라짐). ② <b>규칙 카드</b>를 1장씩 받아요. ③ <b>1차</b>: 순서대로 카드 1장을 뒷면으로. ④ <b>2차</b>: 역순으로 2장. ⑤ 공개하면 슬롯마다 <b>높은 숫자부터 등록</b>, 같은 숫자는 먼저 놓은 카드 먼저, <b>LIMIT 을 넘기게 되는 카드는 버리고</b> 다음 낮은 카드를 봐요.",
         boardHtml: `<div class="ct-tut">${one({ max: 5, lim: 12 }, [{ p: 1, v: 6 }, { p: 2, v: 5 }, { p: 0, v: 4 }, { p: 3, v: 1 }], true, "A")}<small>A (LIMIT 12): 6 → 5 = 11, 4 는 15 가 돼 버림, 1 → 12 등록</small></div>`, ms: 9000 },
       { tag: "STEP 4 · 직접 해 봐요", title: "어떤 숫자를 넣어야 점수가 가장 클까요?", body: "B 슬롯은 <b>LIMIT 13</b>, 이미 <b>6</b> 과 <b>5</b> 가 놓였어요. 점수는 1→1 · 2→4 · 3→5 · 4→6 · 5→3 · 6→2점이에요. 내 카드 중 <b>등록되면서 점수가 가장 큰</b> 숫자를 눌러 봐요.",
         interactive: { hint: "👆 숫자를 눌러 결과를 봐요", doneText: "✅ 2 를 넣어 4점! (6 · 5 · 2 = 13)" },
@@ -385,7 +390,7 @@
   }
 
   const SRC = "방송: 피의 게임 시즌3 · 커트라인 (11~12일차 파이널 인 1차)";
-  const DIFF = "방송과 다른 점: 3~8명(방송 8명) — 8명보다 적으면 슬롯의 최대 카드 수 · LIMIT 을 인원 ÷ 8 배로 줄이고 올림해요 · 입찰 동점은 추첨(방송은 투표룸에 먼저 들어간 사람), 규칙 카드 코인 동점은 먼저 낸 쪽 · 규칙 카드는 코인 1개 이상과 함께 라운드에 한 장, 안 쓰면 사라지고 놓인 규칙 카드는 공개 때까지 안 보여요 · 남의 코인 수는 끝날 때까지 비공개 · 동점은 모든 등수에서 남은 코인으로 가르고 그래도 같으면 공동";
+  const DIFF = "방송과 다른 점: 3~8명(방송 8명) — 8명보다 적으면 슬롯의 최대 카드 수 · LIMIT 을 인원 ÷ 8 배로 줄이고 올림해요 · 그 라운드 슬롯 표는 1차 제출이 시작되면 모두에게 공개(방송은 제출하러 방에 들어가 확인) · 방송의 2차 게임(메모리 카운트) · 4명 즉시 탈락 없이 커트라인 순위로만 끝 · 입찰 동점은 추첨(방송은 투표룸에 먼저 들어간 사람), 규칙 카드 코인 동점은 먼저 낸 쪽 · 규칙 카드는 코인 1개 이상과 함께 라운드에 한 장, 안 쓰면 사라지고 놓인 규칙 카드는 공개 때까지 안 보여요 · 남의 코인 수는 끝날 때까지 비공개 · 동점은 모든 등수에서 남은 코인으로 가르고 그래도 같으면 공동";
   window.SVUI = window.SVUI || {};
   window.SVUI.cutline = {
     actText: (a, V, names) => !a ? "—" : a.t === "bid" ? (a.c ? `순서 결정권 ${a.c}코인 입찰` : "입찰 안 함") : a.t === "order" ? `순서: ${a.ord.map(i => (names && names[i]) || `${i + 1}번`).join(" → ")}` : a.t === "place" ? placeTxt(a) : "행동",   // 🎞️ 복기 행동 글
@@ -393,9 +398,9 @@
     opts: [],
     howto: [
       "목표: 3라운드 동안 슬롯 A~D 에 숫자 카드를 <b>등록</b>해 점수 합이 가장 높은 사람이 이겨요 (방송: 8명 중 1·2위 파이널 직행)",
-      "준비물: 숫자 카드 1~6 두 벌(12장) · 코인 20개 · 슬롯 A~D (라운드마다 최대 카드 수와 LIMIT — 1R A 8장/24 · B 7/21 · C 6/18 · D 5/15)",
-      "진행: ① 순서 결정권 입찰(코인 비공개, 최다가 순서를 정함 · 아무도 안 내면 추첨) ② 규칙 카드 1장씩 ③ 1차: 순서대로 1장 ④ 2차: 역순으로 2장 — 모두 뒷면 ⑤ 공개: 슬롯마다 <b>높은 숫자부터 등록</b>, LIMIT 을 넘기게 되는 카드는 버리고 다음 카드",
-      "승패: 등록된 카드 <b>1→1 · 2→4 · 3→5 · 4→6 · 5→3 · 6→2점</b> · 3라운드 합이 높은 순 (동점은 남은 코인)",
+      "준비물: 숫자 카드 1~6 두 벌(12장) · 코인 20개 · 슬롯 A~D (라운드마다 최대 카드 수와 LIMIT 이 바뀌고, 그 라운드 표는 1차 제출이 시작될 때 공개)",
+      "진행: ① 순서 결정권 입찰(코인 비공개, 최다가 순서를 정함 · 아무도 안 내면 추첨 · 낸 코인은 진 사람 것도 사라짐) ② 규칙 카드 1장씩 ③ 1차: 순서대로 1장 ④ 2차: 역순으로 2장 — 모두 뒷면 ⑤ 공개: 슬롯마다 <b>높은 숫자부터 등록</b>, LIMIT 을 넘기게 되는 카드는 버리고 다음 카드",
+      "승패: 등록된 카드 <b>1→1 · 2→4 · 3→5 · 4→6 · 5→3 · 6→2점</b> · 3라운드 합이 높은 순 (동점은 남은 코인) — 방송은 1·2위 파이널 직행, 나머지 6명은 2차 게임 메모리 카운트로 2명 더, 못 간 4명은 바로 탈락",
       "특수: 규칙 카드는 코인과 함께 원하는 슬롯에 (여럿이면 코인 최다만) — A LIMIT −3 · B LIMIT +3 · C 최대 카드 −1 · D 낮은 숫자부터 · E 처음 낸 6→1 · F 처음 낸 카드 버림 · G 처음 낸 6 버림 · H 낸 사람 첫 카드 먼저",
       SRC,
       "※ " + DIFF,

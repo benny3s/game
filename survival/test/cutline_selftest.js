@@ -236,5 +236,15 @@ const T0 = Date.now();
   ok(play(42) !== play(43), '다른 씨앗 = 다른 판');
 }
 
+// 9) 슬롯 표 공개 시점: 입찰 · 순서 정하기 동안은 그 라운드 표를 모름 (방송: 1차 숫자 카드 제출 때 확인) — 'all' 만 봄
+{
+  const st = C.init({ n: 5, seed: 61 });
+  ok(st.phase === 'bid' && C.view(st, 0).defs === null && C.view(st, -1).defs === null && C.view(st, 'all').defs.length === 4, '입찰 때 슬롯 표 비공개');
+  for (let s = 0; s < 5; s++) C.apply(st, s, { t: 'bid', c: s === 2 ? 3 : 0 });
+  ok(st.phase === 'order' && C.view(st, 2).defs === null, '순서 정하기 때도 비공개');
+  C.apply(st, 2, { t: 'order', ord: [0, 1, 2, 3, 4] });
+  const V = C.view(st, 4); ok(st.phase === 'place' && V.defs && V.defs.length === 4 && V.defs[0].max === st.defs[0].max, '1차 제출이 시작되면 모두 봄');
+  ok(st.coins[2] === 17 && st.coins[0] === 20, '입찰 코인: 낸 만큼 빠짐');
+}
 console.log(`cutline selftest: 통과 ${pass} · 실패 ${fail} (${((Date.now() - T0) / 1000).toFixed(1)}초)`);
 process.exit(fail ? 1 : 0);
