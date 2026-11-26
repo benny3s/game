@@ -276,7 +276,7 @@
       if (V.bell < 0) { const nx = (me + 1) % V.n; if (V.known[nx].length) why += ` 다음 차례 ${nm(nx)}의 아는 카드 ${josa(V.known[nx].map(cname).join("·"), "과", "와")} 겹치는 색 · 숫자는 앞면으로 넘기지 않게 따졌어요.`; }
       return { opp, mine, rec, why };
     }
-    if (a.t === "four") return { opp, mine, rec, why: `같은 숫자 ${H.four} 4장! 선언하면 조합 비교 없이 상대 ${V.n === 4 ? "팀 두 사람" : "모두"} 목숨 −1 이에요.` };
+    if (a.t === "four") return { opp, mine, rec, why: `같은 숫자 ${H.four} 4장! 선언하면 조합 비교 없이 상대 ${V.n === 4 ? "팀 두 사람" : "모두"} 목숨 −1이에요.` };
     const E = H.E, T = H.T;
     if (a.t === "bell") {
       why = `남 손패를 ${K.S_HARD}번 뽑아 벨 뒤 한 번씩 바꾼 결과를 보면 — 내가 가장 낮을 확률 ${pct(E.pLow)} · 상대가 가장 낮을 확률 ${pct(E.pOpp)}, 목숨 득실 ${sgn(E.U)} (문턱 ${f1(H.th)} 넘음). 지금 합 ${E.mine}.`;

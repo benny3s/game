@@ -72,7 +72,11 @@
 .hl-cards .hl-n{width:34px;height:42px}
 .hl-chip{font:800 12px var(--round);border-radius:99px;padding:2px 9px;color:#fde68a;background:rgba(0,0,0,.3);border:1px solid rgba(245,179,1,.35)}
 .hl-chip.neg{color:#fecaca;border-color:rgba(248,113,113,.5)}
-.hl-chip.x{opacity:.45;text-decoration:line-through}`;
+.hl-chip.x{opacity:.45;text-decoration:line-through}
+.sv-coachfit .hl-top{padding:3px 8px;gap:8px}.sv-coachfit .hl-sc{width:38px;height:36px;font-size:17px;border-width:2px}.sv-coachfit .hl-sc small{display:none}.sv-coachfit .hl-sc b{margin-top:0}.sv-coachfit .hl-info .r2{display:none}
+.sv-coachfit .hl-seats{gap:2px}.sv-coachfit .hl-row{min-height:0;padding:1px 8px}.sv-coachfit .hl-row .hl-mc{width:24px;height:21px;font-size:12px;border-width:1.5px}
+.sv-coachfit .hl-me{padding:3px 8px;gap:3px}.sv-coachfit .hl-me .hd{font-size:11.5px}.sv-coachfit .hl-nums{grid-template-columns:repeat(10,minmax(0,1fr));gap:2px}.sv-coachfit .hl-n{height:32px;font-size:15px;border-radius:6px}
+.sv-coachfit .hl-msg{font-size:12px;line-height:1.25}.sv-coachfit .hl-acts{gap:3px}.sv-coachfit .hl-acts .note{font-size:11.5px}.sv-coachfit .hl-two .btn{padding:7px 4px}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
   let NAMES = [], SEL = { key: "", n: -1 };
@@ -156,7 +160,7 @@
       } else if (ph === "play") acts = `<div class="note">다른 사람이 내는 중… (${V.played.filter(Boolean).length}/4)</div>`;
       else if (ph === "reveal" && actor) {
         const sp = hd.sub.s === "R" ? "리버스" : "노멀";
-        acts = `<div class="note">내가 낸 카드는 ${hd.sub.n} + ${sp} 예요 · 공개하거나${V.canQuit ? " 포기할 수 있어요" : " (이번엔 꼭 공개해야 해요)"}</div><div class="hl-two${V.canQuit ? "" : " one"}"><button class="btn primary" data-a="show">🔓 ${hd.sub.n} 공개하기</button>${V.canQuit ? `<button class="btn" data-a="quit">🙈 포기하기</button>` : ""}</div>`;
+        acts = `<div class="note">내가 낸 카드는 ${hd.sub.n} + ${sp}${sp === "노멀" ? "이에요" : "예요"} · 공개하거나${V.canQuit ? " 포기할 수 있어요" : " (이번엔 꼭 공개해야 해요)"}</div><div class="hl-two${V.canQuit ? "" : " one"}"><button class="btn primary" data-a="show">🔓 ${hd.sub.n} 공개하기</button>${V.canQuit ? `<button class="btn" data-a="quit">🙈 포기하기</button>` : ""}</div>`;
       } else if (ph === "reveal") acts = `<div class="note">${esc(gn(V.turn))} 공개할지 정하는 중…</div>`;
       else if (ph === "pass" && actor) {
         const po = V.passOpts || [];
@@ -199,7 +203,7 @@
     const pileSum = sum(V.pile), sub = hd.sub, R = seeded(V.round * 313 + sum(hd.nums) * 7 + (sub ? sub.n * 5 : 0) + (V.cur + 20) * 11 + me * 3 + V.hist.length);
     // 👀 상대 흐름: 지난 라운드 · 포기 · 리버스 눈치
     const last = V.hist[V.hist.length - 1], bits = [];
-    if (last) bits.push(`지난 라운드(${last.r}R)는 ${last.taker >= 0 ? `${nm(last.taker)}${ja(nm(last.taker),"이")} ${fmt(last.total)}${ja(fmt(last.total), "을")} 가져갔고` : "가져간 사람이 없어 이월됐고"} ${dirTxt(last.dir)}이었어요`);
+    if (last) bits.push(`지난 라운드(${last.r}R)는 ${last.taker >= 0 ? `${last.taker === me ? "내가" : nm(last.taker) + ja(nm(last.taker),"이")} ${fmt(last.total)}${ja(fmt(last.total), "을")} 가져갔고` : "가져간 사람이 없어 이월됐고"} ${dirTxt(last.dir)}이었어요`);
     if (V.lastQuit >= 0 && V.lastQuit !== me && V.round > 1) bits.push(`${nm(V.lastQuit)}${ja(nm(V.lastQuit),"은")} 지난 라운드에 포기해서 이번엔 꼭 공개해요`);
     if (V.phase === "play") {
       const post = H.revPost(V, me), top = [0, 1, 2, 3].filter(j => j !== me).sort((a, b) => post[b] - post[a])[0];
@@ -215,7 +219,7 @@
       const RC = H.recommend(V, me), b = RC.L.find(x => x.n === RC.a.n && x.s === RC.a.s) || RC.L[0], sp = b.s === "R" ? "리버스" : "노멀";
       rec = `${b.n}${ja(b.n,"을")} ${sp}로 내요`;
       const meaning = `숫자 ${b.n}${ja(b.n,"은")} 1~10 중 ${b.n >= 6 ? "높은" : "낮은"} 편(뒷면 ${b.n <= 5 ? "파랑" : "노랑"})이에요`;
-      const money = pileSum > 0 ? `더미가 ${fmt(pileSum)} 이라 이기면 점수를 얻어요 — 내가 혼자 가장 우위일 확률은 약 ${pct(b.p)}` : pileSum < 0 ? `더미가 ${fmt(pileSum)} 이라 이기면 마이너스를 떠안아요 — 이길 확률이 낮은 카드(약 ${pct(b.p)})가 이득이에요` : `더미 합이 0 이라 이겨도 점수 변화가 없어요 — 이길 확률 약 ${pct(b.p)}`;
+      const money = pileSum > 0 ? `더미가 ${fmt(pileSum)}${ja(fmt(pileSum),"이") === "이" ? "이라" : "라"} 이기면 점수를 얻어요 — 내가 혼자 가장 우위일 확률은 약 ${pct(b.p)}` : pileSum < 0 ? `더미가 ${fmt(pileSum)}${ja(fmt(pileSum),"이") === "이" ? "이라" : "라"} 이기면 마이너스를 떠안아요 — 이길 확률이 낮은 카드(약 ${pct(b.p)})가 이득이에요` : `더미 합이 0이라 이겨도 점수 변화가 없어요 — 이길 확률 약 ${pct(b.p)}`;
       const rv = b.s === "R" ? "리버스는 한 번뿐이라 방향을 뒤집어 유리해지는 이번 라운드에 써요" : hd.rev ? `리버스는 아껴 둬요 (남은 라운드 ${V.left + 1})` : "리버스를 이미 써서 노멀로 내요";
       why = `${meaning}. ${money}. 같은 숫자를 여럿이 내면 그 숫자는 건너뛰는 점도 계산에 넣었어요. ${rv}.`;
     } else if (V.phase === "play") { rec = "다른 사람이 내는 중이에요"; why = `내가 낸 ${sub ? sub.n : ""}${ja(sub ? sub.n : "","은")} 공개 차례가 올 때까지 비밀이에요.`; }

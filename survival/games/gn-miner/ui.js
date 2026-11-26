@@ -159,7 +159,7 @@
       { tag: "STEP 5 · 정산", title: "M이 S 이상이면 모두 받아요", body: "① <b>M ≥ S</b>: 제시자는 제시한 승점을 받고, 남은 (M−S)를 광부 3명이 똑같이 나눠요. ② <b>폭탄 3개</b>: 광부는 승점을 못 받고 제시자는 제시한 승점을 그대로 받아요. ③ <b>M &lt; S</b>: 제시자는 전원 0점, 광부 3명이 M을 똑같이 나누고, <b>가장 높게 낸 사람은 그 승점만큼 감점</b>되어 가장 낮게 낸 사람이 가져가요.",
         boardHtml: `<div class="mn-tut"><div class="mn-info">① M 76, S 50 → 제시자 각자 제시한 승점 · 광부 각 (76−50)÷3 = <b>+8</b> (남는 2는 버려요)</div><div class="mn-info">② 폭탄 3개 → 광부 0 · 제시자는 제시한 그대로 (예: 1 · 48 · 10 · 25 · 1 · 50)</div><div class="mn-info">③ M 76, S 109 (1 · 8 · 10 · 25 · 50 · 15) → 제시자 0 · 광부 각 +25 · 최고(50) −50, 최저(1) +50</div></div>`, ms: 11000 },
       { tag: "STEP 6 · 직접", title: "광부 한 사람은 몇 점을 받을까요?", body: "광부가 <b>M = 30점</b>을 캤고 제시자 6명의 합은 <b>S = 18점</b>이에요. 폭탄은 2개뿐이에요. 광부 한 사람이 받는 점수는?",
-        interactive: { hint: "👆 광부 한 사람의 점수를 눌러요", doneText: "✅ M ≥ S 라서 남은 (30 − 18) = 12 점을 광부 3명이 나눠 한 사람당 4점이에요!" },
+        interactive: { hint: "👆 광부 한 사람의 점수를 눌러요", doneText: "✅ M ≥ S라서 남은 (30 − 18) = 12 점을 광부 3명이 나눠 한 사람당 4점이에요!" },
         render(stage, ctrl) {
           stage.innerHTML = `<div class="mn-tut">${tr(["g", "g", "g", "g", "s", "c", "d", "b", "b"])}<div class="mn-opt">${["4", "6", "10", "0"].map(x => `<button data-w="${x}">${x}</button>`).join("")}</div><div class="mn-info" id="mn-tm">M 30 · S 18 → 한 사람은?</div></div>`;
           stage.onclick = e => {

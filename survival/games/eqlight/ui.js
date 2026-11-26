@@ -182,7 +182,7 @@ button.eql-c{cursor:pointer}
       { tag: "STEP 2 · 직접", title: "성립하는 수식을 골라요", body: "계산 순서는 <b>^ → × ÷ → + −</b> 예요. 아래 셋 중 <b>실제로 성립하는</b> 수식을 눌러 보세요.",
         interactive: { hint: "👆 성립하는 수식을 눌러요", doneText: "✅ 12 + 12 = 24 — 성립해요!" },
         render(stage, ctrl) {
-          const opts = [["12+3×4=60", "× 를 먼저 해서 12+12=24 예요 (60이 아니에요)"], ["12+3×4=24", ""], ["12+3×4=25", "24 이고 25가 아니에요"]];
+          const opts = [["12+3×4=60", "× 를 먼저 해서 12+12=24예요 (60이 아니에요)"], ["12+3×4=24", ""], ["12+3×4=25", "24이고 25가 아니에요"]];
           const draw = msg => { stage.innerHTML = `<div class="eql-tut"><div class="opts">${opts.map(([s], i) => `<button class="opt" data-w="${i}">${s}</button>`).join("")}</div><small>${msg || "하나만 맞아요"}</small></div>`; };
           stage.onclick = e => {
             const b = e.target.closest("[data-w]"); if (!b) return; ctrl.sfx("tap");

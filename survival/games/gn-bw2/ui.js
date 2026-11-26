@@ -242,7 +242,7 @@
       { tag: "STEP 3 · 표시등", title: "남은 포인트는 5단계 표시등으로만", body: "남은 포인트는 <b>5단계 표시등</b>으로만 공개돼요. <b>20포인트</b>씩 줄어들 때마다 한 칸씩 꺼지고, 포인트를 <b>입력한 순간</b> 적용돼서 선이 칸을 낮추면 후가 정하기 <b>전에</b> 보여요. 마지막 한 칸은 0 이어도 <b>안 꺼져요</b>.",
         boardHtml: `<div class="bw-tut">${[[5, "80~99"], [4, "60~79"], [3, "40~59"], [2, "20~39"], [1, "0~19 (마지막 칸은 안 꺼져요)"]].map(([l, r]) => `<div class="bw-lampr">${lampsHtml(l, null)}<span>${r}</span></div>`).join("")}</div>`, ms: 6600 },
       { tag: "STEP 4 · 직접", title: "표시등을 한 칸 꺼 봐요", body: "99포인트에서 <b>표시등이 한 칸 꺼지려면</b> 최소 몇 포인트를 써야 할까요? (80 아래로 내려가야 해요) 눌러 봐요!",
-        interactive: { hint: "👆 한 칸이 꺼지는 가장 작은 포인트를 눌러요", doneText: "✅ 99 − 20 = 79 → 60~79 칸이라 한 칸이 꺼져요! (19를 쓰면 80 이라 안 꺼져요)" },
+        interactive: { hint: "👆 한 칸이 꺼지는 가장 작은 포인트를 눌러요", doneText: "✅ 99 − 20 = 79 → 60~79 칸이라 한 칸이 꺼져요! (19를 쓰면 80이라 안 꺼져요)" },
         render(stage, ctrl) {
           let done = false;
           const draw = (msg, picked, good) => { stage.innerHTML = `<div class="bw-tut">${lampsHtml(5, null)}<div class="bw-qs">${[10, 19, 20, 21, 30].map(v => `<button type="button" data-v="${v}" class="${picked === v ? (good ? "good" : "bad") : ""}">${v}</button>`).join("")}</div><small>${msg}</small></div>`; };

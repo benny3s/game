@@ -316,7 +316,7 @@
     } else if (V.phase === "buzz") {
       const need = left > 0 ? Math.ceil((-df + 1) / left) : 0;
       rec = df > 0 && left <= 2 ? "확실한 줄만 버저 — 지키는 쪽이 유리해요." : df < 0 && left <= 2 ? "따라잡아야 해요 — 거의 확실하면 과감히 버저!" : "세 칸이 다 확실하면 버저, 아니면 넘기기.";
-      why = `오답은 −1 이라 맞을 확률 p가 50%를 넘어야 버저가 이득이에요 (기대 2p−1점: 70% 면 ${sgn(K.buzzEV(0.7))} · 40% 면 ${sgn(K.buzzEV(0.4))}).`;
+      why = `오답은 −1이라 맞을 확률 p가 50%를 넘어야 버저가 이득이에요 (기대 2p−1점: 70% 면 ${sgn(K.buzzEV(0.7))} · 40% 면 ${sgn(K.buzzEV(0.4))}).`;
       if (df < 0 && left > 0) why += ` 지금 ${-df}점 뒤져 남은 ${left}라운드에 라운드당 약 ${need}개를 더 맞혀야 해요.`;
       else if (df > 0) why += ` ${df}점 앞서 있어요 — 오답 하나가 상대 정답 하나와 같아요.`;
     } else if (V.phase === "call") {

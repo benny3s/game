@@ -364,7 +364,7 @@
       }
       if (ph === "place" && V.give && myA.t === "place" && (myA.up === 0 || myA.up === 1)) {
         const ev2 = C.placeEval(V, seat), k = myA.up, o = 1 - k, loss = Math.max(0, ev2[o] - ev2[k]) * (V.pot + 2);
-        const why = `앞면 ${V.give[k]}${ja(V.give[k],"로")} 놓으면 기대 승률 ~${pcr(ev2[k])}%` + (ev2[o] - ev2[k] > 0.005 ? ` / 앞면 ${V.give[o]} 면 ~${pcr(ev2[o])}% (후가 유리한 쪽을 고른다고 봄)` : " (다른 쪽과 거의 같아요)");
+        const why = `앞면 ${V.give[k]}${ja(V.give[k],"로")} 놓으면 기대 승률 ~${pcr(ev2[k])}%` + (ev2[o] - ev2[k] > 0.005 ? ` / 앞면 ${V.give[o]}${ja(V.give[o],"이") === "이" ? "이면" : "면"} ~${pcr(ev2[o])}% (후가 유리한 쪽을 고른다고 봄)` : " (다른 쪽과 거의 같아요)");
         return fin(loss * REV_K, why);
       }
       if (ph === "take" && V.up != null && myA.t === "take" && (myA.d === "up" || myA.d === "down")) {

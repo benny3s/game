@@ -188,7 +188,7 @@
       const rr = rng(((info && info.seed) | 0) + (V.hand | 0) * 7 + seat * 131 + (V.deckN | 0)), pct = x => Math.round(x * 100) + "%";
       if (V.phase === "hit" && (myA.t === "hit" || myA.t === "stay")) {
         const p = H.hitPlan(V, seat, "hard", rr), mine = myA.t === "hit" ? p.hit : p.stay, best = Math.max(p.hit, p.stay);
-        return { sev: Math.min(100, Math.round((best - mine) * 400)), why: `합 ${p.cur}/${V.L} · HIT 하면 이길 확률 ${pct(p.hit)} · STAY 면 ${pct(p.stay)} · 뽑으면 한계를 넘을 위험 ${pct(p.bustRisk)}` };
+        return { sev: Math.min(100, Math.round((best - mine) * 400)), why: `합 ${p.cur}/${V.L} · HIT 하면 이길 확률 ${pct(p.hit)} · STAY면 ${pct(p.stay)} · 뽑으면 한계를 넘을 위험 ${pct(p.bustRisk)}` };
       }
       if ((V.phase === "bet1" || V.phase === "bet2") && ["check", "call", "raise", "fold"].includes(myA.t)) {
         const p = H.betPlan(V, seat, "hard", rr), ev = p.p * p.potAfter - p.toCall;

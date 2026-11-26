@@ -337,7 +337,7 @@
     }
     if (V.phase !== "call") return null;
     const pBest = sure.length ? 1 : rc.best.p, bestC = sure.length ? sure[0] : rc.best.c, bestNew = bestC.filter(i => !V.rev[i]).length;
-    if (myA.t === "timeout") return { sev: Math.round(pBest * 100), why: `시간 안에 호명하지 못했어요 — 공개된 칸 기준 ${callTxt(bestC)} 이면 정답 확률 약 ${pcs(pBest)}였어요`, best: callTxt(bestC) };
+    if (myA.t === "timeout") return { sev: Math.round(pBest * 100), why: `시간 안에 호명하지 못했어요 — 공개된 칸 기준 ${callTxt(bestC)}${/[LMNR]$/.test(callTxt(bestC)) ? "이면" : "면"} 정답 확률 약 ${pcs(pBest)}였어요`, best: callTxt(bestC) };
     if (myA.t !== "call" || !G.validCall(myA.c)) return null;
     const known = rc.known, pMine = G.callProb(known, V.season, T, myA.c), mineNew = myA.c.filter(i => !V.rev[i]).length;
     if (myA.c.join() === bestC.join()) return null;

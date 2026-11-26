@@ -469,7 +469,7 @@ button.cc-card{cursor:pointer;-webkit-tap-highlight-color:transparent}
       const exM = Q.explain(Vb, seat, myA), exB = Q.explain(Vb, seat, (bi || top).a);
       let why;
       if (diff < 12) why = `내 수의 읽은 점수는 ${fmt(mine.v)}, 가장 좋은 수는 ${fmt(top.v)} — 차이가 작아서 둘 다 괜찮은 수예요 (말 1개 = 100점).`;
-      else why = `몇 수 앞까지 읽은 점수로 내 수는 ${fmt(mine.v)}, 가장 좋은 수는 ${fmt(top.v)} 예요 (말 1개 = 100점). 내 수: ${whyText(exM)}. 추천 수: ${whyText(exB)}.`;
+      else why = `몇 수 앞까지 읽은 점수로 내 수는 ${fmt(mine.v)}, 가장 좋은 수는 ${fmt(top.v)}${ja(fmt(top.v),"이") === "이" ? "이에요" : "예요"} (말 1개 = 100점). 내 수: ${whyText(exM)}. 추천 수: ${whyText(exB)}.`;
       return { sev, why, my: actText(myA, Vb), best: actText((bi || top).a, Vb) };
     } catch (e) { return null; }
   }

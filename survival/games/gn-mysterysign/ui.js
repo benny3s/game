@@ -308,7 +308,7 @@
       { tag: "STEP 2 · 힌트", title: "0을 뺀 숫자를 하나씩 내면 힌트", body: "두 사람이 <b>0을 제외한 숫자</b>를 하나씩 내요. 힌트는 문제와 <b>같은 규칙</b>에 <b>선 플레이어의 숫자는 앞, 후 플레이어의 숫자는 뒤</b>에 넣은 답이에요. 예를 들어 규칙이 <b>'두 수를 각각 제곱해서 더한 값'</b>이고 선이 9, 후가 11을 냈다면 9² + 11² = <b>202</b>가 첫 힌트예요.",
         boardHtml: `<div class="ms-tut">${tq(3, 5)}${th([[9, 11, 202]])}<small>이 힌트로 규칙을 찾으면 3² + 5² = ? 를 구할 수 있어요</small></div>`, ms: 7600 },
       { tag: "STEP 3 · 직접 해 보기", title: "힌트에서 규칙을 찾아 정답을!", body: "힌트 <b>9 ❓ 11 = 202</b>에서 규칙을 찾았다면 문제 <b>3 ❓ 5</b>의 정답은 무엇일까요?",
-        interactive: { hint: "👆 정답을 눌러 쓰고 '보내기'를 눌러요", doneText: "✅ 맞았어요! 3² + 5² = 34 예요 — 이렇게 힌트에서 규칙을 찾아요" },
+        interactive: { hint: "👆 정답을 눌러 쓰고 '보내기'를 눌러요", doneText: "✅ 맞았어요! 3² + 5² = 34예요 — 이렇게 힌트에서 규칙을 찾아요" },
         render(stage, ctrl) {
           let buf = "", solved = false, msg = "힌트 9 ❓ 11 = 202를 보고 규칙을 떠올려 봐요";
           const draw = () => { stage.innerHTML = `<div class="ms-tut">${tq(3, 5)}${th([[9, 11, 202]])}<div class="ms-buf${buf ? "" : " empty"}"><small>정답</small>${buf || "숫자를 눌러요"}</div>${padHtml(true, /^-?\d+$/.test(buf))}<small>${msg}</small></div>`; };
@@ -361,9 +361,9 @@
     }
     if (V.phase === "buzz" && myA.t === "buzz") {
       const pressed = +myA.ms < NO;
-      if (!nC) return pressed ? { sev: 35, why: "보이는 힌트에 맞는 규칙이 하나도 안 떠오르는데 눌렀어요 — 틀리면 −1 이에요" } : null;
+      if (!nC) return pressed ? { sev: 35, why: "보이는 힌트에 맞는 규칙이 하나도 안 떠오르는데 눌렀어요 — 틀리면 −1이에요" } : null;
       if (pressed) return I.conf < 0.5 ? { sev: 45, why: `답이 갈리는데(가장 많은 답 ${I.best.ans}도 후보 ${I.best.ids.length}/${I.total}가지 = ${pcs(I.conf)}) 눌렀어요 — 틀리면 −1` } : { sev: 0, why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지가 ${I.best.ans}${ja(I.best.ans,"을")} 내요 (${pcs(I.conf)})` };
-      if (I.sure) return { sev: 75, why: `후보 규칙 ${nC}가지가 모두 같은 답 ${I.best.ans}${ja(I.best.ans,"을")} 냈는데 안 눌렀어요 — 눌렀다면 정답 확률 100%로 +1 이에요`, best: `버저 → ${I.best.ans}` };
+      if (I.sure) return { sev: 75, why: `후보 규칙 ${nC}가지가 모두 같은 답 ${I.best.ans}${ja(I.best.ans,"을")} 냈는데 안 눌렀어요 — 눌렀다면 정답 확률 100%로 +1이에요`, best: `버저 → ${I.best.ans}` };
       return { sev: 0, why: `답이 ${I.groups.length}종류로 갈려서(최대 ${pcs(I.conf)}) 넘긴 건 좋은 판단이에요` };
     }
     if ((V.phase === "ans" || V.phase === "ans2") && (myA.t === "ans" || myA.t === "timeout" || myA.t === "pass")) {
@@ -375,7 +375,7 @@
         return { sev: I.sure ? 85 : Math.min(70, Math.round((I.conf - (g ? g.ids.length / I.total : 0)) * 100)), why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지가 ${I.best.ans}${ja(I.best.ans,"을")} 내요 (${pcs(I.conf)}) · 내가 쓴 ${n}${ja(n,"은")} ${g ? `${g.ids.length}가지뿐 (${pcs(g.ids.length / I.total)})` : "어느 후보에서도 안 나와요"}`, best: `정답 ${I.best.ans}` };
       }
       if (myA.t === "timeout") return { sev: 60, why: `시간 안에 답을 못 썼어요 — 후보 기준 가장 유력한 답은 ${I.best ? `${I.best.ans} (${pcs(I.conf)})` : "없었어요"}`, best: I.best ? `정답 ${I.best.ans}` : undefined };
-      if (I.best && I.sure) return { sev: 65, why: `후보 규칙이 모두 ${I.best.ans}${ja(I.best.ans,"을")} 내는데 넘겼어요 — 썼다면 +1 이에요`, best: `정답 ${I.best.ans}` };
+      if (I.best && I.sure) return { sev: 65, why: `후보 규칙이 모두 ${I.best.ans}${ja(I.best.ans,"을")} 내는데 넘겼어요 — 썼다면 +1이에요`, best: `정답 ${I.best.ans}` };
     }
     return null;
   }

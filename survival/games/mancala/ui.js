@@ -322,7 +322,7 @@ button.mc-cell{cursor:pointer}
     const c5 = blank(); c5[5] = [1, 0]; c5[ANG] = [2, 3]; c5[6] = [3]; c5[1] = [0, 2]; c5[10] = [0, 1]; c5[DEV] = [1, 1]; c5[12] = [0, 3]; c5[3] = [2]; c5[9] = [2, 3];
     const SC5 = [[5, 5, 1], [6, 2, 4], [3, 3, 3], [8, 1, 2]];
     return [
-      { tag: "STEP 1 · 목표", title: "세 색을 고르게", body: "빨강 · 파랑 · 초록 점수를 모아요. <b>최종 점수 = 가장 적은 색 − (가장 많은 색 − 가장 적은 색)</b>. 13 · 11 · 20 이면 11 − (20 − 11) = <b>2점</b>. 한 색만 많으면 오히려 손해예요!",
+      { tag: "STEP 1 · 목표", title: "세 색을 고르게", body: "빨강 · 파랑 · 초록 점수를 모아요. <b>최종 점수 = 가장 적은 색 − (가장 많은 색 − 가장 적은 색)</b>. 13 · 11 · 20이면 11 − (20 − 11) = <b>2점</b>. 한 색만 많으면 오히려 손해예요!",
         boardHtml: tb(`<div class="mc-board" style="grid-template-rows:auto"><div class="mc-mid" style="grid-row:1;grid-column:1 / span 3"><div class="mc-hd"><span></span><span>이름</span><b>빨</b><b>파</b><b>초</b><b>최종</b></div><div class="mc-sr me">${dot(0, 0)}<span>나</span><b>13</b><b>11</b><b>20</b><b class="f">2</b></div><div class="mc-sr">${dot(1, 0)}<span>가</span><b>15</b><b>15</b><b>15</b><b class="f">15</b></div><div class="mc-sr">${dot(2, 0)}<span>다</span><b>28</b><b>3</b><b>9</b><b class="f">-22</b></div></div></div>`), ms: 7000 },
       { tag: "STEP 2 · 준비물", title: "14칸 고리 · 말 4개", body: "게임판은 <b>빨강 · 파랑 · 초록</b> 접시가 번갈아 놓인 고리 — 맨 위 <b>😈악마칸</b>, 맨 아래 <b>😇천사칸</b>. 각자 말 4개를 순서대로 1개씩 놓아요 (<b>한 칸에 2개까지</b>).",
         boardHtml: tb(boardHtml(V0, 0, names, null, false, { noLast: true })), ms: 6400 },

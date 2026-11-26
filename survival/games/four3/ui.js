@@ -329,7 +329,7 @@
               if (w.length === 1 && w[0] === 0) { done = true; ctrl.sfx("win"); msg = `🎉 <b>A1 · B2 · C3</b> 대각선 3목! (C3 ${V.bd[10].length}층)`; draw(); ctrl.complete(); return; }
               msg = `${CN(sel)}에 놓았지만 3목이 아니에요 — 다시!`; V = { bd: S0.bd.map(x => x.slice()), top: S0.top.slice() }; sel = -1; ctrl.sfx("tap"); draw(); return;
             }
-            if (t.dataset.c != null) { sel = +t.dataset.c; msg = sel === 10 ? "새 말 1개면 충분해요 — <b>＋1</b>" : `${CN(sel)}… 3목이 되는 칸은 C3 예요`; ctrl.sfx("tap"); draw(); }
+            if (t.dataset.c != null) { sel = +t.dataset.c; msg = sel === 10 ? "새 말 1개면 충분해요 — <b>＋1</b>" : `${CN(sel)}… 3목이 되는 칸은 C3이에요`; ctrl.sfx("tap"); draw(); }
           };
           draw();
         } },

@@ -174,7 +174,7 @@
     let b = c + 1; while (b < sh.length && sh[b] == null) b++;
     const l = a >= 0 ? `왼쪽 이웃 ${sh[a]}` : "왼쪽은 시트 끝", r = b < sh.length ? `오른쪽 이웃 ${sh[b]}` : "오른쪽은 시트 끝";
     const fit = (a < 0 || sh[a] <= v) && (b >= sh.length || v <= sh[b]);
-    return `${c + 1}번째 칸은 ${l} · ${r} 이라 ${v}${ja(v,"이")} ${fit ? "오름차순을 끊지 않고 들어가요" : "들어가면 오름차순이 끊겨요"}`;
+    return `${c + 1}번째 칸은 ${l} · ${r}${ja(r,"이") === "이" ? "이라" : "라"} ${v}${ja(v,"이")} ${fit ? "오름차순을 끊지 않고 들어가요" : "들어가면 오름차순이 끊겨요"}`;
   }
   function coach(V, me, since, names) {
     const nm = i => (names && names[i]) || (i === 0 ? "1번" : "2번");

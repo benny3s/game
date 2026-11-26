@@ -398,7 +398,7 @@
           out = { sev: rvSev(pts), why: `${head} → ${lTxt}. 합 ${T} 낙찰이면 한도보다 ${Math.max(0, Math.round(over))}블록(≈${fmt(Math.round(pts * 10) / 10)}점) ${over > 0 ? "비싸요" : "— 한도 안이에요"}` };
         } else {
           const surplus = L - (top + 1), pts = surplus > 0 ? (0.5 * surplus) / price : 0;
-          out = { sev: rvSev(pts), why: `${head} → ${lTxt} 인데 지금 최고 ${top}. 합 ${top + 1} 만 내도 ${surplus > 0 ? `이득 약 ${fmt(Math.round((surplus / price) * 10) / 10)}점이 남는 카드예요` : "남지 않아 패스도 괜찮아요"}` };
+          out = { sev: rvSev(pts), why: `${head} → ${lTxt}인데 지금 최고 ${top}. 합 ${top + 1} 만 내도 ${surplus > 0 ? `이득 약 ${fmt(Math.round((surplus / price) * 10) / 10)}점이 남는 카드예요` : "남지 않아 패스도 괜찮아요"}` };
         }
       }
       const ok = x => typeof x === "string" && !/undefined|NaN|null|Infinity/.test(x);

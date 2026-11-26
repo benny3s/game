@@ -179,7 +179,7 @@
   };
   const shortAct = a => (a.t === "fold" ? "폴드" : a.t === "call" ? "콜" : `레이즈 ${a.to | 0}칩`);
   const okAct = a => !!a && (a.t === "fold" || a.t === "call" || (a.t === "raise" && Number.isFinite(+a.to)));
-  // sev = (고급 AI 수의 기대 칩 − 내 수의 기대 칩) ÷ (시작 칩의 15%) × 100 → 시작 칩 15 면 손해 약 1.4칩부터 60 (📒), 20 이면 1.8칩
+  // sev = (고급 AI 수의 기대 칩 − 내 수의 기대 칩) ÷ (시작 칩의 15%) × 100 → 시작 칩 15면 손해 약 1.4칩부터 60 (📒), 20이면 1.8칩
   const review = (V, seat, myA, bestA, info) => {
     if (!V || V.phase !== "bet" || !(seat === 0 || seat === 1) || !okAct(myA) || !okAct(bestA)) return null;
     const key = a => (a.t === "raise" ? `raise ${a.to | 0}` : a.t);

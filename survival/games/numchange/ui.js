@@ -186,7 +186,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
     if (V.submitted[me]) return { opp, mine, rec: "블록을 냈어요. 상대를 기다려요.", why: `${KEY}는 점이 핵심이에요. 공개된 뒤 오간 블록으로 내 손도 바뀌어요.` };
     const ch = N.chances(V, me), b = ch.best;
     if (!b) return { opp, mine, rec: "낼 수 있는 블록이 없어요.", why: `${KEY}는 점이 핵심이에요.` };
-    let rec = `가장 좋아 보이는 선택은 ${b.a} + ${b.b} = ${b.a + b.b} 예요 (이길 확률 ${pc(b.pWin)}% · 비길 ${pc(b.pTie)}% · 질 ${pc(b.pLose)}%).`;
+    let rec = `가장 좋아 보이는 선택은 ${b.a} + ${b.b} = ${b.a + b.b}${ja(b.a + b.b,"이") === "이" ? "이에요" : "예요"} (이길 확률 ${pc(b.pWin)}% · 비길 ${pc(b.pTie)}% · 질 ${pc(b.pLose)}%).`;
     const hi = ch.acts.find(x => x.a + x.b > b.a + b.b && x.pWin - b.pWin >= 0.15);
     if (hi) rec += ` 더 확실히 이기려면 ${hi.a} + ${hi.b} (${pc(hi.pWin)}%)도 있지만 큰 블록 ${hi.a}${ja(hi.a,"을")} 상대에게 넘겨요.`;
     let ex = `${KEY}는 점이 핵심이에요 (대신 상대의 큰 블록이 내게 와요).`;

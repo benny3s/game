@@ -224,7 +224,7 @@
     const loss = J.best - J.my;
     const sev = loss >= 2 ? 80 : loss >= 1 ? (J.my < 0 ? 70 : 45) : 5;
     let why;
-    if (J.my < 0 && myA.t === "say") why = Vb.found && Vb.found.some(x => x.k === myA.k) ? "이미 나온 답이라 −1 — 찾은 답 목록을 먼저 봐요" : `값이 ${K.valTxt(K.evalK(Vb.cells, myA.k))} 라서 오답 −1 — ${bestA.t === "say" ? `${best}${ja(best, "이")} 정답` : "모르면 넘기는 게 0점"}`;
+    if (J.my < 0 && myA.t === "say") why = Vb.found && Vb.found.some(x => x.k === myA.k) ? "이미 나온 답이라 −1 — 찾은 답 목록을 먼저 봐요" : `값이 ${K.valTxt(K.evalK(Vb.cells, myA.k))}${ja(K.valTxt(K.evalK(Vb.cells, myA.k)),"이") === "이" ? "이라서" : "라서"} 오답 −1 — ${bestA.t === "say" ? `${best}${ja(best, "이")} 정답` : "모르면 넘기는 게 0점"}`;
     else if (J.my === 0 && J.best > 0) why = `남은 정답이 ${J.left}개 있었어요 — ${best}`;
     else why = "좋은 수예요";
     return { sev, why, my, best };
@@ -272,7 +272,7 @@
             if (d.x === "clear") { k = ""; ctrl.sfx("tap"); msg = "A 칸부터 눌러요"; draw(); return; }
             if (d.x === "say") {
               const v = K.evalK(B1.cells, k);
-              if (!(v && v[1] === 1 && v[0] === 10)) { ctrl.sfx("tap"); msg = `${K.valTxt(v)} 라서 오답이에요 (실제 게임이면 −1). 지우고 다시!`; k = ""; draw(); return; }
+              if (!(v && v[1] === 1 && v[0] === 10)) { ctrl.sfx("tap"); msg = `${K.valTxt(v)}${ja(K.valTxt(v),"이") === "이" ? "이라서" : "라서"} 오답이에요 (실제 게임이면 −1). 지우고 다시!`; k = ""; draw(); return; }
               done = true; ctrl.sfx("win"); msg = "🏆 <b>ACH = 7 + 9 ÷ 3 = 10</b> → 정답 +1점!"; draw(); ctrl.complete();
             }
           };
