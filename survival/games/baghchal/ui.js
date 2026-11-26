@@ -144,7 +144,7 @@ span.bc-p{cursor:default}
       return head;
     }
     const b = r.b, g = V.B[b].goat, t = V.B[b].tiger;
-    const why = r.why === "cap" ? `판 ${BN[b]}에서 ${nm(t)}의 호랑이가 염소 ${K.WINCAP}마리를 잡았어요` : `판 ${BN[b]}에서 ${nm(g)}의 염소가 호랑이 4마리를 모두 가뒀어요`;
+    const why = r.why === "cap" ? `판 ${BN[b]}에서 ${me === t ? "내" : nm(t) + "의"} 호랑이가 염소 ${K.WINCAP}마리를 잡았어요` : `판 ${BN[b]}에서 ${me === g ? "내" : nm(g) + "의"} 염소가 호랑이 4마리를 모두 가뒀어요`;
     return `${me < 0 ? "🏆" : me === r.w ? "🏆" : "😵"} ${nm(r.w)} 승 — ${why}`;
   }
 

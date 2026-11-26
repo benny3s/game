@@ -363,7 +363,8 @@
       const mineTurn = V.caller === me, T = V.target;
       const last = L && !L.tmo ? ` 방금 ${nm(L.s)}${eun(nm(L.s))} ${callTxt(L.c, known)} → ${L.valid ? `${L.v.join(" ")} = ${L.val}` : "식이 안 됐어요"}.` : L && L.tmo ? ` 방금 ${nm(L.s)}${eun(nm(L.s))} 시간 안에 못 불렀어요.` : "";
       const buzzLog = (V.log || []).slice().reverse().find(e => e.k === "buzz" && e.r === V.round);
-      const first = buzzLog && V.calls === 0 ? ` 버저는 ${nm(buzzLog.w)}${iga(nm(buzzLog.w))} ${buzzLog.forced ? "딜러가 정해서" : `먼저 눌렀어요(${sec(buzzLog.ms[buzzLog.w])} · 상대 ${sec(buzzLog.ms[1 - buzzLog.w])})`}.` : "";
+      const bzWho = buzzLog ? (buzzLog.w === me ? "내가" : nm(buzzLog.w) + iga(nm(buzzLog.w))) : "";
+      const first = buzzLog && V.calls === 0 ? (buzzLog.forced ? ` 둘 다 버저를 안 눌러서 딜러가 정했어요 — ${bzWho} 호명해요.` : ` 버저는 ${bzWho} 먼저 눌렀어요(${sec(buzzLog.ms[buzzLog.w])} · 상대 ${sec(buzzLog.ms[1 - buzzLog.w])}).`) : "";
       const opp1 = mineTurn ? `${who}${eun(who)} 호명을 기다리는 중이에요.${first}${last}` : `${who}${iga(who)} 호명하는 중이에요 — ${V.calls}번째 기회예요.${first}${last}`;
       const rc = recommend(V), nSure = rc.sure.length;
       const mine = `${scoreTxt} · 공개된 칸 ${nRev}/16 · 이번 라운드 호명 ${V.calls}번째 (24번째 호명까지 못 맞히면 무효)`;

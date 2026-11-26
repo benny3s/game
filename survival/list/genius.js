@@ -66,7 +66,7 @@
   { id: "gn-betbw", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "베팅! 흑과 백", emoji: "⚫", v: 2,
     short: "타일 순서와 칩 30개를 몰래 걸어 두고 맞출지 포기할지 고르는 1:1 데스매치",
     src: "더 지니어스 시즌 3 11화 · 11회전 데스매치 (오현민 vs 최연승) · 디글 클래식 「데스매치 첫 판에 가넷 12개를 베팅하는 오현민의 미친 전략」 · 「[#더지니어스3] 베팅! 흑과백」 · 디글 「베팅! 흑과백 플레이」 규칙 설명 확인" },
-  { id: "gn-samenum", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "같은 숫자 찾기", emoji: "🔢", v: 5,
+  { id: "gn-samenum", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "같은 숫자 찾기", emoji: "🔢", v: 6,
     short: "외운 판으로 타깃넘버를 만들어요 · 버저 먼저 누르고 알파벳 3칸 호명 · 1:1 데스매치",
     src: "더 지니어스 시즌 3 결승 2라운드 · 시즌 4 그랜드 파이널 4화 데스매치 (같은 숫자 찾기)" },
   { id: "gn-betrps", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "베팅 가위바위보", emoji: "✌️", v: 5,
