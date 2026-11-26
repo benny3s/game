@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 초이스 홀덤 — 화면 (1:1 · 카드 놓기/고르기 · 베팅 · 공개 · 1분 규칙 · AI 선생님) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const C = window.SVCores.choicehold;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -358,7 +364,7 @@
       }
       if (ph === "place" && V.give && myA.t === "place" && (myA.up === 0 || myA.up === 1)) {
         const ev2 = C.placeEval(V, seat), k = myA.up, o = 1 - k, loss = Math.max(0, ev2[o] - ev2[k]) * (V.pot + 2);
-        const why = `앞면 ${V.give[k]} 로 놓으면 기대 승률 ~${pcr(ev2[k])}%` + (ev2[o] - ev2[k] > 0.005 ? ` / 앞면 ${V.give[o]} 면 ~${pcr(ev2[o])}% (후가 유리한 쪽을 고른다고 봄)` : " (다른 쪽과 거의 같아요)");
+        const why = `앞면 ${V.give[k]}${ja(V.give[k],"로")} 놓으면 기대 승률 ~${pcr(ev2[k])}%` + (ev2[o] - ev2[k] > 0.005 ? ` / 앞면 ${V.give[o]} 면 ~${pcr(ev2[o])}% (후가 유리한 쪽을 고른다고 봄)` : " (다른 쪽과 거의 같아요)");
         return fin(loss * REV_K, why);
       }
       if (ph === "take" && V.up != null && myA.t === "take" && (myA.d === "up" || myA.d === "down")) {

@@ -201,7 +201,7 @@
     if (info && info.same) sev = Math.min(sev, 20);                                            // 고급 AI 도 가끔 두는 수
     if (myA.t === bestA.t && (myA.t === "raise" || myA.t === "double") && m.side === b.side) sev = Math.min(sev, 30);   // 베팅 크기만 다른 것은 판단 차이
     sev = Math.max(0, Math.min(100, Math.round(sev)));
-    const tail = gap >= 0.15 ? ` — 기대 칩 ${gap.toFixed(1)} 차이 (시작 칩의 ${Math.round(100 * gap / (V.start || 30))}%)` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 상대 반응까지 봐요)" : " — 거의 같아요";
+    const tail = gap >= 0.15 ? ` — 기대 칩 ${gap.toFixed(1)} 차이 (시작 칩의 ${Math.round(100 * gap / (V.start || 30))}%)` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI는 상대 반응까지 봐요)" : " — 거의 같아요";
     return { sev, why: `고급 AI 수 (${actText(bestA, V, info && info.names)}): ${stat(b)} / 내 수 (${actText(myA, V, info && info.names)}): ${stat(m)}${tail}` };
   }
 

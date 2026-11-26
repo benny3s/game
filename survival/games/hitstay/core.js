@@ -348,7 +348,7 @@
     } else if (V.phase === "hit" && myTurn) {
       const p = hitPlan(V, me, "hard", coachRng(V, me)), doHit = ai(V, me, "hard", coachRng(V, me)).t === "hit";
       rec = doHit ? "HIT (한 장 더)" : "STAY";
-      why = `지금 STAY 로 이길 확률 ${pc(p.stay)} · 한 장 더 받으면 ${pc(p.hit)} (넘길 위험 ${pc(p.bustRisk)}). ${doHit ? "한계에 더 가까워질 수 있어서 받는 게 나아요." : "넘길 위험이 이득보다 커요."}`;
+      why = `지금 STAY로 이길 확률 ${pc(p.stay)} · 한 장 더 받으면 ${pc(p.hit)} (넘길 위험 ${pc(p.bustRisk)}). ${doHit ? "한계에 더 가까워질 수 있어서 받는 게 나아요." : "넘길 위험이 이득보다 커요."}`;
     } else if (V.phase === "show") { rec = "결과를 보고 다음 라운드를 준비해요"; if (V.res && !V.res.fold) why = `한계 ${V.L} · 승자 ${V.res.win.map(nm).join(", ")}`; }
     return { opp, mine, rec, why };
   }

@@ -378,7 +378,7 @@
     const cnt = f => V.hist.filter(f).length;
     if ((me !== 0 && me !== 1) || V.seat !== me) {   // 구경꾼(자리 없는 view): 보이는 기록만
       const asks = cnt(e => e.q), rings = cnt(e => e.rang), gs = cnt(e => e.g !== undefined);
-      return { opp: `지금까지 질문 ${asks}번 · 정답 시도 ${gs}번`, mine: `탐지기가 울린 횟수 ${rings}번 · 행동 ${V.count} / ${V.limit}`, rec: "구경 중이에요", why: `답이 늘 거짓이라 예 / 아니오 질문 ${cnt(e => e.q && isYN(e.q))}번은 모두 '답의 반대'가 사실이에요. 패스워드는 0000~9999 의 10,000가지예요.` };
+      return { opp: `지금까지 질문 ${asks}번 · 정답 시도 ${gs}번`, mine: `탐지기가 울린 횟수 ${rings}번 · 행동 ${V.count} / ${V.limit}`, rec: "구경 중이에요", why: `답이 늘 거짓이라 예 / 아니오 질문 ${cnt(e => e.q && isYN(e.q))}번은 모두 '답의 반대'가 사실이에요. 패스워드는 0000~9999의 10,000가지예요.` };
     }
     const opp = 1 - me, nm = (names && names[opp]) || "상대";
     const myAsks = cnt(e => e.q && e.by === me), oppAsks = cnt(e => e.q && e.by === opp), myG = cnt(e => e.g !== undefined && e.by === me), oppG = cnt(e => e.g !== undefined && e.by === opp);

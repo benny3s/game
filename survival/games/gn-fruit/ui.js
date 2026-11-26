@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 과일가게 — 화면 (내 과일 · 희망가 · 아이템(교체 / 비밀) · 공개된 판매가 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const G = window.SVCores["gn-fruit"], F = G.FRUITS;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -78,8 +84,8 @@
     } else if (mine && V.phase === "swap") {
       const mineF = V.own[me], other = [0, 1, 2].filter(f => !mineF.includes(f))[0];
       if (V.item) {
-        h += `<div class="fr-info hint">🔄 <b>교체</b>: 희망가를 내기 전에 내 과일 하나를 ${fn(other)}(으)로 바꿔요 — 모두에게 공개되고 끝까지 유지돼요. 아이템은 교체 · 비밀 중 <b>한 번</b>만 써요.</div>`;
-        h += `<div class="fr-sw">${mineF.map(f => `<button data-sw="${f}">${fn(f)} → ${fn(other)} 로 교체하기</button>`).join("")}<button data-sw="no">교체 안 하고 희망가 정하기</button></div>`;
+        h += `<div class="fr-info hint">🔄 <b>교체</b>: 희망가를 내기 전에 내 과일 하나를 ${fn(other)}${ja(fn(other),"로")} 바꿔요 — 모두에게 공개되고 끝까지 유지돼요. 아이템은 교체 · 비밀 중 <b>한 번</b>만 써요.</div>`;
+        h += `<div class="fr-sw">${mineF.map(f => `<button data-sw="${f}">${fn(f)} → ${fn(other)}${ja(fn(other),"로")} 교체하기</button>`).join("")}<button data-sw="no">교체 안 하고 희망가 정하기</button></div>`;
       } else {
         h += `<div class="fr-info hint">🔄 아이템을 이미 썼어요 — 이번 라운드는 교체할 수 없어요.</div>`;
         h += `<div class="fr-sw"><button data-sw="no">계속해서 희망가 정하기</button></div>`;
@@ -142,7 +148,7 @@
     const mySec = Number.isInteger(myA.secret) && myA.secret >= 0 ? myA.secret : -1, bSec = Number.isInteger(bestA.secret) && bestA.secret >= 0 ? bestA.secret : -1;
     let sx = 0, sxt = "";
     if (mySec >= 0 && (left === 1 || !(myA.p[mySec] < G.PMAX))) { sx = 14; sxt = left === 1 ? "마지막 라운드에 비밀을 쓰면 숨겨서 지킬 다음 라운드가 0번이에요" : `깎지 않은 ${jp(mySec, "을", "를")} 숨기면 가릴 게 없어요 (아이템은 한 번뿐)`; }
-    else if (left > 1 && mySec < 0 && bSec >= 0 && V.own[seat].some(f => myA.p[f] < G.PMAX)) { sx = 10; sxt = `값을 깎았는데 비밀을 안 썼어요 — 고급 AI 는 깎은 ${jp(bSec, "을", "를")} 🔒 로 숨겨 남은 ${left - 1}라운드의 보복을 줄여요`; }
+    else if (left > 1 && mySec < 0 && bSec >= 0 && V.own[seat].some(f => myA.p[f] < G.PMAX)) { sx = 10; sxt = `값을 깎았는데 비밀을 안 썼어요 — 고급 AI는 깎은 ${jp(bSec, "을", "를")} 🔒 로 숨겨 남은 ${left - 1}라운드의 보복을 줄여요`; }
     if (!parts.length && !sx) return null;
     parts.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
     const sev = Math.max(0, Math.min(100, Math.round(100 * loss / 14 + sx)));
@@ -179,7 +185,7 @@
     name: "과일가게", emoji: "🍎", short: "과일마다 가장 싼 값을 낸 사람이 독식해요 · 4라운드 수입 대결", min: 3, max: 6, defN: 6, board: false,
     show: "더 지니어스 · 시즌 3 · 과일가게", season: "시즌 3 블랙가넷",
     opts: [],
-    diff: "방송은 13명이 과일 6종(사과 · 포도 · 참외 · 감귤은 4명씩, 딸기 · 수박은 5명씩)에서 2개씩 받지만 우리는 사람 수에 맞춰 과일 3종만 쓰고 각자 한 과일을 빼고 두 과일을 팔아요 (6명이면 과일마다 4명) · 희망가를 딜러에게 전하는 절차와 방송의 큰 연합 · 협상은 AI 가 대신해요 · 방송은 총 수입 4만 원 이상이면 가넷 1개, 5만 원 이상이면 2개를 주지만 우리는 가넷이 없어 수입 순위만 가려요 · 방송은 최하위가 여럿이면 그중 한 명이 탈락후보가 되지만 우리는 최하위를 모두 탈락후보로 보고, 전원 수입이 같으면 무승부 (방송의 연장 라운드는 뺐어요)",
+    diff: "방송은 13명이 과일 6종(사과 · 포도 · 참외 · 감귤은 4명씩, 딸기 · 수박은 5명씩)에서 2개씩 받지만 우리는 사람 수에 맞춰 과일 3종만 쓰고 각자 한 과일을 빼고 두 과일을 팔아요 (6명이면 과일마다 4명) · 희망가를 딜러에게 전하는 절차와 방송의 큰 연합 · 협상은 AI가 대신해요 · 방송은 총 수입 4만 원 이상이면 가넷 1개, 5만 원 이상이면 2개를 주지만 우리는 가넷이 없어 수입 순위만 가려요 · 방송은 최하위가 여럿이면 그중 한 명이 탈락후보가 되지만 우리는 최하위를 모두 탈락후보로 보고, 전원 수입이 같으면 무승부 (방송의 연장 라운드는 뺐어요)",
     howto: [
       "<b>4라운드</b> 동안 <b>가장 높은 수입</b>을 올린 사람이 우승 · 가장 낮은 수입(최하위)은 탈락후보 — 각자 서로 다른 <b>과일 2개</b>의 판매권 (누가 뭘 파는지는 모두 공개)",
       "라운드마다 내 과일의 <b>희망가(1천 원 단위 · 1천~5천 원)</b>를 비밀로 동시에 내요 — 최종 판매가 = 같은 과일 판매자들 중 <b>최저가</b>",

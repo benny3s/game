@@ -308,12 +308,12 @@
     }
     const cur = V.cur, rest = V.bagN, p = rest ? V.left.b / rest : 0, pct = Math.round(p * 100);
     if (cur !== me) {
-      const isMiner = V.miners.includes(me), wait = isMiner ? ` 같은 조 광부로서 M ≥ S(평균 ${Sx}점)가 되면 (M−S)÷3 을 받아요.` : V.mineBid !== null ? ` 내 제시 ${V.mineBid}점은 M ≥ S(평균 ${Sx}점)일 때만 받아요 — 지금 채굴 ${V.M}점은 그 ${Math.round(100 * V.M / Math.max(1, Sx))}%예요.` : "";
+      const isMiner = V.miners.includes(me), wait = isMiner ? ` 같은 조 광부로서 M ≥ S(평균 ${Sx}점)가 되면 (M−S)÷3을 받아요.` : V.mineBid !== null ? ` 내 제시 ${V.mineBid}점은 M ≥ S(평균 ${Sx}점)일 때만 받아요 — 지금 채굴 ${V.M}점은 그 ${Math.round(100 * V.M / Math.max(1, Sx))}%예요.` : "";
       return { opp, mine, rec: "기다려요", why: `${who(cur)} 차례예요 · 지금까지 ${V.drawn.length}개 · 채굴 ${V.M}점 · 폭탄 ${V.B}/3개 · 다음에 폭탄이 나올 확률 약 ${pct}%.${wait}` };
     }
     const a = actMine(V, me, "hard", sampler(V.turn * 71 + V.drawn.length * 13 + me + 9));
     const exp = meanS(V);
-    return { opp, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: `${a.t === "draw" ? "하나 더 꺼내요" : "스톱"}${a.dDraw !== undefined ? ` (꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점)` : ""}`, why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S 를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3 을 받지만 폭탄이 3개면 0점이에요. 다음에 폭탄이 나올 확률은 약 ${pct}% (남은 ${V.left.b}/${rest}).${a.dDraw !== undefined ? ` 계산: 꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점.` : ""}` };
+    return { opp, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: `${a.t === "draw" ? "하나 더 꺼내요" : "스톱"}${a.dDraw !== undefined ? ` (꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점)` : ""}`, why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3을 받지만 폭탄이 3개면 0점이에요. 다음에 폭탄이 나올 확률은 약 ${pct}% (남은 ${V.left.b}/${rest}).${a.dDraw !== undefined ? ` 계산: 꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점.` : ""}` };
   }
 
   return { id: "gn-miner", N, TURNS, BMIN, BMAX, TEAM, BAG, VAL, NAME, EM, BAGN, init, needs, apply, view, over, ranks, legal, auto, advance, tally, leftOf, settle, share, compareBids, compareMine, minerDraw, simMine, sampleBids, evalBids, actBid, actMine, ai, coach, meanS, allBids, sampler, hash, CANDS };

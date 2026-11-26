@@ -2,6 +2,12 @@
    시계는 UI 만 가져요: 버저 시각(ms)은 힌트가 열린 순간부터 재서 행동에 실어 보내고({t:"buzz", ms}), 1분이 지나면 넘기기({t:"buzz", ms:99999}), 답 쓰기 제한이 끝나면 {t:"timeout"} 을 보내요. */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const G = window.SVCores["gn-mysterysign"];
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const NO = G.NO_BUZZ, WIN = G.WINDOW, LOCK = 650, ANS_LIMIT = 40000;
@@ -162,7 +168,7 @@
   }
   function sendBuf() {
     const V = S.V, c = S.ctx; if (!V || !c || !c.canAct) return;
-    if (V.phase === "pick") { const n = G.normNum(S.buf); if (!n) { c.toast && c.toast("0 을 뺀 1 ~ 9999999 의 숫자를 써요"); return; } S.buf = ""; clearTimers(); c.sfx("pop"); c.act({ t: "num", n }); return; }
+    if (V.phase === "pick") { const n = G.normNum(S.buf); if (!n) { c.toast && c.toast("0을 뺀 1 ~ 9999999의 숫자를 써요"); return; } S.buf = ""; clearTimers(); c.sfx("pop"); c.act({ t: "num", n }); return; }
     if (V.phase === "ans" || V.phase === "ans2") { const n = G.normAns(S.buf); if (n === null) { c.toast && c.toast("정답을 숫자로 써요"); return; } S.buf = ""; clearTimers(); c.sfx("pop"); c.act({ t: "ans", n }); }
   }
 
@@ -231,7 +237,7 @@
       if (watch) st = `<span>✏️ ${subj(isBack ? 1 - V.front : V.front)} 힌트 숫자를 고르는 중…</span>`;
       else if (myTurn) {
         const pn = V.pend ? (V.pend.n === null || (local && sec1 && V.ri.secret[V.pend.s]) ? "비공개(시크릿)" : V.pend.n) : null;
-        st = isBack ? `<span>✏️ 선 ${subj(V.front)} 낸 숫자는 <b>${esc(pn)}</b> — 내 숫자는 <b>뒤</b>에 들어가요</span>` : `<span>✏️ 내가 <b>선</b> — 내 숫자가 <b>앞</b>에 들어가요 <small>(0 은 빼고 1~9999999)</small></span>`;
+        st = isBack ? `<span>✏️ 선 ${subj(V.front)} 낸 숫자는 <b>${esc(pn)}</b> — 내 숫자는 <b>뒤</b>에 들어가요</span>` : `<span>✏️ 내가 <b>선</b> — 내 숫자가 <b>앞</b>에 들어가요 <small>(0은 빼고 1~9999999)</small></span>`;
         actH = `<div class="ms-buf${S.buf ? "" : " empty"}"><small>${isBack ? "뒤" : "앞"}</small>${S.buf ? esc(S.buf) : "숫자를 눌러요"}</div>${padHtml(false, !!G.normNum(S.buf))}`;
       } else st = `<span>✏️ ${isBack ? "내 숫자가 앞에 이미 들어갔어요 — 상대가 뒤 숫자를 고르는 중…" : "선 상대가 숫자를 고르는 중… (내 숫자는 뒤에 들어가요)"}</span>`;
     } else if (V.phase === "buzz") {
@@ -299,12 +305,12 @@
     return [
       { tag: "STEP 1 · 문제", title: "두 숫자와 미스터리 사인 ❓", body: "결승 두 번째 게임이에요. <b>11라운드</b> 동안 라운드마다 <b>두 개의 숫자와 미스터리 사인</b>으로 된 문제가 열려요. 두 분은 <b>숨은 규칙</b>을 찾아내서 문제의 정답을 맞혀요.",
         boardHtml: `<div class="ms-tut">${tq(22, 7)}<small>숨은 규칙은 ❓ 자리에 들어가는 계산이에요</small></div>`, ms: 6400 },
-      { tag: "STEP 2 · 힌트", title: "0을 뺀 숫자를 하나씩 내면 힌트", body: "두 사람이 <b>0을 제외한 숫자</b>를 하나씩 내요. 힌트는 문제와 <b>같은 규칙</b>에 <b>선 플레이어의 숫자는 앞, 후 플레이어의 숫자는 뒤</b>에 넣은 답이에요. 예를 들어 규칙이 <b>'두 수를 각각 제곱해서 더한 값'</b>이고 선이 9, 후가 11을 냈다면 9² + 11² = <b>202</b> 가 첫 힌트예요.",
+      { tag: "STEP 2 · 힌트", title: "0을 뺀 숫자를 하나씩 내면 힌트", body: "두 사람이 <b>0을 제외한 숫자</b>를 하나씩 내요. 힌트는 문제와 <b>같은 규칙</b>에 <b>선 플레이어의 숫자는 앞, 후 플레이어의 숫자는 뒤</b>에 넣은 답이에요. 예를 들어 규칙이 <b>'두 수를 각각 제곱해서 더한 값'</b>이고 선이 9, 후가 11을 냈다면 9² + 11² = <b>202</b>가 첫 힌트예요.",
         boardHtml: `<div class="ms-tut">${tq(3, 5)}${th([[9, 11, 202]])}<small>이 힌트로 규칙을 찾으면 3² + 5² = ? 를 구할 수 있어요</small></div>`, ms: 7600 },
-      { tag: "STEP 3 · 직접 해 보기", title: "힌트에서 규칙을 찾아 정답을!", body: "힌트 <b>9 ❓ 11 = 202</b> 에서 규칙을 찾았다면 문제 <b>3 ❓ 5</b> 의 정답은 무엇일까요?",
+      { tag: "STEP 3 · 직접 해 보기", title: "힌트에서 규칙을 찾아 정답을!", body: "힌트 <b>9 ❓ 11 = 202</b>에서 규칙을 찾았다면 문제 <b>3 ❓ 5</b>의 정답은 무엇일까요?",
         interactive: { hint: "👆 정답을 눌러 쓰고 '보내기'를 눌러요", doneText: "✅ 맞았어요! 3² + 5² = 34 예요 — 이렇게 힌트에서 규칙을 찾아요" },
         render(stage, ctrl) {
-          let buf = "", solved = false, msg = "힌트 9 ❓ 11 = 202 를 보고 규칙을 떠올려 봐요";
+          let buf = "", solved = false, msg = "힌트 9 ❓ 11 = 202를 보고 규칙을 떠올려 봐요";
           const draw = () => { stage.innerHTML = `<div class="ms-tut">${tq(3, 5)}${th([[9, 11, 202]])}<div class="ms-buf${buf ? "" : " empty"}"><small>정답</small>${buf || "숫자를 눌러요"}</div>${padHtml(true, /^-?\d+$/.test(buf))}<small>${msg}</small></div>`; };
           draw();
           stage.onclick = e => {
@@ -313,7 +319,7 @@
             if (k === "back") buf = buf.slice(0, -1); else if (k === "neg") buf = buf.startsWith("-") ? buf.slice(1) : "-" + buf; else if (k && buf.replace("-", "").length < 8) buf += k;
             else if (a === "send") {
               if (buf === "34") { solved = true; msg = "3² + 5² = 9 + 25 = 34 ✔"; draw(); ctrl.sfx("win"); ctrl.complete(); return; }
-              msg = `${buf} 는 아니에요 — 9² + 11² = 202 처럼 각각 제곱해서 더해 봐요, 다시!`; buf = "";
+              msg = `${buf}${ja(buf,"은")} 아니에요 — 9² + 11² = 202 처럼 각각 제곱해서 더해 봐요, 다시!`; buf = "";
             }
             ctrl.sfx("tap"); draw();
           };
@@ -356,20 +362,20 @@
     if (V.phase === "buzz" && myA.t === "buzz") {
       const pressed = +myA.ms < NO;
       if (!nC) return pressed ? { sev: 35, why: "보이는 힌트에 맞는 규칙이 하나도 안 떠오르는데 눌렀어요 — 틀리면 −1 이에요" } : null;
-      if (pressed) return I.conf < 0.5 ? { sev: 45, why: `답이 갈리는데(가장 많은 답 ${I.best.ans} 도 후보 ${I.best.ids.length}/${I.total}가지 = ${pcs(I.conf)}) 눌렀어요 — 틀리면 −1` } : { sev: 0, why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지가 ${I.best.ans} 를 내요 (${pcs(I.conf)})` };
-      if (I.sure) return { sev: 75, why: `후보 규칙 ${nC}가지가 모두 같은 답 ${I.best.ans} 를 냈는데 안 눌렀어요 — 눌렀다면 정답 확률 100% 로 +1 이에요`, best: `버저 → ${I.best.ans}` };
+      if (pressed) return I.conf < 0.5 ? { sev: 45, why: `답이 갈리는데(가장 많은 답 ${I.best.ans}도 후보 ${I.best.ids.length}/${I.total}가지 = ${pcs(I.conf)}) 눌렀어요 — 틀리면 −1` } : { sev: 0, why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지가 ${I.best.ans}${ja(I.best.ans,"을")} 내요 (${pcs(I.conf)})` };
+      if (I.sure) return { sev: 75, why: `후보 규칙 ${nC}가지가 모두 같은 답 ${I.best.ans}${ja(I.best.ans,"을")} 냈는데 안 눌렀어요 — 눌렀다면 정답 확률 100%로 +1 이에요`, best: `버저 → ${I.best.ans}` };
       return { sev: 0, why: `답이 ${I.groups.length}종류로 갈려서(최대 ${pcs(I.conf)}) 넘긴 건 좋은 판단이에요` };
     }
     if ((V.phase === "ans" || V.phase === "ans2") && (myA.t === "ans" || myA.t === "timeout" || myA.t === "pass")) {
       if (!nC) return null;
       if (myA.t === "ans") {
         const n = G.normAns(myA.n); if (n === null || !I.best) return null;
-        if (n === I.best.ans) return { sev: 0, why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지(${pcs(I.conf)})가 ${n} 를 내요` };
+        if (n === I.best.ans) return { sev: 0, why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지(${pcs(I.conf)})가 ${n}${ja(n,"을")} 내요` };
         const g = I.groups.find(x => x.ans === n);
-        return { sev: I.sure ? 85 : Math.min(70, Math.round((I.conf - (g ? g.ids.length / I.total : 0)) * 100)), why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지가 ${I.best.ans} 를 내요 (${pcs(I.conf)}) · 내가 쓴 ${n} 는 ${g ? `${g.ids.length}가지뿐 (${pcs(g.ids.length / I.total)})` : "어느 후보에서도 안 나와요"}`, best: `정답 ${I.best.ans}` };
+        return { sev: I.sure ? 85 : Math.min(70, Math.round((I.conf - (g ? g.ids.length / I.total : 0)) * 100)), why: `후보 규칙 ${I.total}가지 중 ${I.best.ids.length}가지가 ${I.best.ans}${ja(I.best.ans,"을")} 내요 (${pcs(I.conf)}) · 내가 쓴 ${n}${ja(n,"은")} ${g ? `${g.ids.length}가지뿐 (${pcs(g.ids.length / I.total)})` : "어느 후보에서도 안 나와요"}`, best: `정답 ${I.best.ans}` };
       }
       if (myA.t === "timeout") return { sev: 60, why: `시간 안에 답을 못 썼어요 — 후보 기준 가장 유력한 답은 ${I.best ? `${I.best.ans} (${pcs(I.conf)})` : "없었어요"}`, best: I.best ? `정답 ${I.best.ans}` : undefined };
-      if (I.best && I.sure) return { sev: 65, why: `후보 규칙이 모두 ${I.best.ans} 를 내는데 넘겼어요 — 썼다면 +1 이에요`, best: `정답 ${I.best.ans}` };
+      if (I.best && I.sure) return { sev: 65, why: `후보 규칙이 모두 ${I.best.ans}${ja(I.best.ans,"을")} 내는데 넘겼어요 — 썼다면 +1 이에요`, best: `정답 ${I.best.ans}` };
     }
     return null;
   }

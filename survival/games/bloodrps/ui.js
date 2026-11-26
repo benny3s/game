@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 배틀 가위바위보 — 화면 (카드 고르기 · 동시 공개 · 지난 라운드 · AI 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const B = window.SVCores.bloodrps;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const EM = ["✌️", "✊", "🖐️"], RPS = B.RPS, SPN = B.SPN, SPE = { V: "🏆", C: "🔄", B: "" };
@@ -144,7 +150,7 @@
         <div class="br-spb">${["V", "C", "B"].map(s => `<button type="button" class="br-sb${sel.s === s ? " on" : ""}" data-s="${s}" ${s === "B" || S[s] ? "" : "disabled"} aria-label="${SPN[s]}"><b>${s === "B" ? "▫️ 빈 카드" : SPE[s] + " " + SPN[s]}</b><small>${s === "V" ? "무조건 이겨요" : s === "C" ? "서로 카드를 바꿔요" : "그냥 가위바위보"}</small></button>`).join("")}</div>
         <button class="btn primary big" data-a="submit" ${sel.r == null ? "disabled" : ""}>${sel.r == null ? "가위바위보 카드를 먼저 골라요" : `🔒 ${EM[sel.r]} ${RPS[sel.r]}${sel.s === "B" ? "" : " + " + SPN[sel.s]} 내기`}</button></div>`;
     } else if (!show && !spec && V.mine) {
-      h += `<div class="br-note">🔒 카드를 냈어요 · <b>${esc(nm(O))}</b> 이(가) 낼 때까지 기다려요…</div>`;
+      h += `<div class="br-note">🔒 카드를 냈어요 · <b>${esc(nm(O))}</b>${ja(esc(nm(O)),"이")} 낼 때까지 기다려요…</div>`;
     } else if (!show) {
       h += `<div class="br-note">${spec ? (V.subs ? "두 사람이 동시에 카드를 숨겨 내요 — 구경 중이라 둘 다 보여요" : "두 사람이 동시에 카드를 숨겨 내요 — 다 내면 같이 열어요") : "잠시만요…"}</div>`;
     } else if (V.over) {
@@ -191,7 +197,7 @@
     const as = ch.acts.slice().sort((a, b) => b.ev - a.ev), b0 = as[0], b1 = as[1];
     const name = a => `${EM[a.r]} ${RPS[a.r]}${a.s === "B" ? "" : " + " + SPN[a.s]}`;
     let rec = `${name(b0)} (끝까지 이길 가능성 약 ${pc(b0.ev)}%, 이번 라운드 기대 ${b0.pts.toFixed(1)}점)이 가장 좋아 보여요.`;
-    if (b1 && b0.ev - b1.ev < 0.03) rec += ` ${name(b1)} 도 거의 같아요 — 상대가 읽지 못하게 섞어 내도 좋아요.`;
+    if (b1 && b0.ev - b1.ev < 0.03) rec += ` ${name(b1)}도 거의 같아요 — 상대가 읽지 못하게 섞어 내도 좋아요.`;
     if (left === 1 && (V.sp[me].V || V.sp[me].C)) rec += " 마지막이라 안 쓴 특수 카드는 지금 써야 점수가 돼요.";
     let ex;
     if (left === 1) ex = "마지막 라운드예요. 남겨 둔 빅토리 · 체인지는 점수로 바꿀 마지막 기회라 아껴 두면 낭비예요.";

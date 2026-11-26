@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 그라데이션 — 화면 (큐브 7개 넣기 · 어두운→밝은 통 7개 · 선/후공 · 숫자 공개 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const G = window.SVCores.gradation;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const SUM = a => a.reduce((x, y) => x + y, 0);
@@ -137,7 +143,7 @@
     if (m.forced) msg = `⏱ 대결이 너무 길어져서 마쳐요 — 대결 승수 · 득점이 가장 많은 <b>${nm(m.winner)}</b>${josa(m.winner, "이", "가")} 결승 진출! (1등)`;
     else if (m.over) msg = `🏆 <b>${nm(m.winner)}</b>${josa(m.winner, "이", "가")} 2연승 — 결승 진출! (1등)`;
     else if (m.rematch) msg = "🤝 똑같이 비겼어요 — 같은 두 사람이 큐브를 다시 넣고 재대결해요";
-    else msg = `<b>${nm(m.winner)}</b> 승! 이어서 쉬고 있던 <b>${nm(V.sit)}</b> 와 대결해요 (첫 선은 ${nm(m.winner)})`;
+    else msg = `<b>${nm(m.winner)}</b> 승! 이어서 쉬고 있던 <b>${nm(V.sit)}</b>${ja(nm(V.sit),"와")} 대결해요 (첫 선은 ${nm(m.winner)})`;
     return `<div class="gr-show"><div class="vs"><span class="${m.winner === m.a ? "w" : m.winner >= 0 ? "l" : ""}">${m.pa}</span><em>:</em><span class="${m.winner === m.b ? "w" : m.winner >= 0 ? "l" : ""}">${m.pb}</span></div><div class="who">${nm(m.a)} vs ${nm(m.b)} — 대결 ${m.m}</div><small>${msg}</small></div>`;
   }
 
@@ -166,7 +172,7 @@
       const lead = V.lead, foll = V.foll;
       if (inDuel && ctx.canAct) {
         acts = me === lead ? `<div class="note">내가 선이에요 — 낼 통을 눌러요. 상대는 통의 <b>색(자리)</b>만 보고 숫자는 몰라요</div>`
-          : `<div class="note">${nm(lead)} 가 <b>${V.sub[lead] + 1}번째</b> 통(색)을 냈어요 — 이길 수 있는 가장 작은 통을 눌러요</div>`;
+          : `<div class="note">${nm(lead)}${ja(nm(lead), "이")} <b>${V.sub[lead] + 1}번째</b> 통(색)을 냈어요 — 이길 수 있는 가장 작은 통을 눌러요</div>`;
       } else if (inDuel) acts = `<div class="note">${me === lead ? nm(foll) + " 가 고르는 중…" : nm(lead) + " 가 먼저 내요…"}</div>`;
       else acts = `<div class="note">${V.needs.length ? V.needs.map(nm).join(" · ") + " 가 고르는 중…" : ""}</div>`;
     }
@@ -199,9 +205,9 @@
     style();
     const row = (arr, cls = "") => `<div class="gr-bs" style="width:100%">${arr.map((t, k) => bucket(k, t, cls)).join("")}</div>`;
     return [
-      { tag: "STEP 1 · 큐브와 통", title: "큐브 7개를 어두운 통부터 놓아요", body: "숫자 큐브는 <b>0~9 가 각각 2개</b>씩. 그중 <b>7개</b>를 골라 통 7개에 하나씩 넣어요. 통은 <b>왼쪽(어두움)에서 오른쪽(밝음)</b>으로 갈수록 큰 수예요 — 합은 <b>30 이하</b>!",
+      { tag: "STEP 1 · 큐브와 통", title: "큐브 7개를 어두운 통부터 놓아요", body: "숫자 큐브는 <b>0~9가 각각 2개</b>씩. 그중 <b>7개</b>를 골라 통 7개에 하나씩 넣어요. 통은 <b>왼쪽(어두움)에서 오른쪽(밝음)</b>으로 갈수록 큰 수예요 — 합은 <b>30 이하</b>!",
         boardHtml: `<div class="gr-tut">${row([0, 1, 2, 3, 5, 8, 9])}${dirHtml}<small>합 28 · 상대에게는 숫자가 안 보이고 색만 보여요</small></div>`, ms: 6200 },
-      { tag: "STEP 2 · 직접", title: "큐브 7개를 합 30 안쪽으로 골라 봐요", body: "숫자 버튼을 눌러 큐브를 담아요. 9 를 많이 넣고 싶어도 합 30 이 넘으면 못 담아요. <b>7개</b>를 채워 보세요.",
+      { tag: "STEP 2 · 직접", title: "큐브 7개를 합 30 안쪽으로 골라 봐요", body: "숫자 버튼을 눌러 큐브를 담아요. 9를 많이 넣고 싶어도 합 30이 넘으면 못 담아요. <b>7개</b>를 채워 보세요.",
         interactive: { hint: "👆 숫자를 눌러 7개를 채워요 (담은 큐브를 누르면 빼요)", doneText: "✅ 7개 완성! 합이 30 이하라서 쓸 수 있어요" },
         render(stage, ctrl) {
           const cubes = [];
@@ -219,7 +225,7 @@
       { tag: "STEP 3 · 라운드", title: "통 하나씩 내고 큰 쪽이 1점", body: "선 플레이어가 통을 하나 내면 <b>색(자리)만</b> 보여요. 상대가 통을 내면 둘이 동시에 <b>숫자 공개</b>! 큰 쪽이 1점, 같으면 무승부 (점수 없음). 이긴 사람이 다음 라운드 선이에요.",
         boardHtml: `<div class="gr-tut"><div class="gr-show" style="width:100%"><div class="vs"><span class="w">7</span><em>&gt;</em><span class="l">4</span></div><div class="who">선이 1점 — 선을 지켜요</div></div><small>무승부면 점수도 선도 그대로</small></div>`, ms: 6200 },
       { tag: "STEP 4 · 직접", title: "이길 수 있는 가장 작은 통으로 이겨요", body: "상대가 중간 색(4번째) 통을 냈어요. 중간 색이면 숫자는 <b>4~5 쯤</b>! 내 남은 통 <b>[1 · 3 · 6 · 9]</b> 중, 이길 수 있는 <b>가장 작은 통</b>을 눌러 보세요 (큰 통은 아껴요).",
-        interactive: { hint: "👆 6 이 들어 있는 통을 눌러 보세요", doneText: "✅ 6 으로 이기고 9 는 아꼈어요!" },
+        interactive: { hint: "👆 6이 들어 있는 통을 눌러 보세요", doneText: "✅ 6으로 이기고 9는 아꼈어요!" },
         render(stage, ctrl) {
           const mine = [1, 3, 6, 9], pos = [1, 3, 5, 6];
           const draw = msg => {
@@ -228,14 +234,14 @@
           stage.onclick = e => {
             const b = e.target.closest("[data-v]"); if (!b) return;
             const v = +b.dataset.v; ctrl.sfx("tap");
-            if (v === 6) { draw("상대 5 vs 내 6 → 이겼어요! 9 는 다음 라운드를 위해 남겼어요"); ctrl.complete(); }
-            else if (v === 9) draw("9 도 이기지만 너무 아까워요 — 더 작은 통으로 이길 수 있어요");
-            else draw(`${v} 은 상대 숫자(4~5 쯤)보다 작아서 져요`);
+            if (v === 6) { draw("상대 5 vs 내 6 → 이겼어요! 9는 다음 라운드를 위해 남겼어요"); ctrl.complete(); }
+            else if (v === 9) draw("9도 이기지만 너무 아까워요 — 더 작은 통으로 이길 수 있어요");
+            else draw(`${v}${ja(v,"은")} 상대 숫자(4~5 쯤)보다 작아서 져요`);
           };
           draw();
         } },
       { tag: "STEP 5 · 대결", title: "7라운드 뒤 점수 높은 쪽이 승", body: "통 7개를 한 번씩 다 쓰면 한 대결이 끝나요. 점수가 같으면 큐브를 다시 넣어 <b>재대결</b>! 이긴 사람은 <b>쉬고 있던 사람</b>과 바로 다시 겨뤄요.",
-        boardHtml: `<div class="gr-tut"><div class="row"><b>A 4 : 3 B</b><span>→</span><b>A vs C</b></div><small>B 는 쉬어요</small></div>`, ms: 5600 },
+        boardHtml: `<div class="gr-tut"><div class="row"><b>A 4 : 3 B</b><span>→</span><b>A vs C</b></div><small>B는 쉬어요</small></div>`, ms: 5600 },
       { tag: "STEP 6 · 결승", title: "연속 두 대결을 이기면 1등", body: "대결에서 <b>연달아 두 번</b> 이긴 사람이 결승 진출 = 1등이에요. 한 번 이기고 다음 대결에서 지면 처음부터! 막히면 <b>🧑‍🏫 AI 선생님</b>이 큐브 배치와 낼 통을 알려 줘요.",
         boardHtml: `<div class="gr-tut"><span style="font-size:42px">🏆</span><small>2연승 = 1등 · 나머지 둘은 공동 2등</small></div>`, ms: 5400 },
     ];

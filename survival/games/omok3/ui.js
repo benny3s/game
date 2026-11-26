@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 3층 오목 — 화면 (육각 격자 판 85칸 · 놓기 / 이동(올라타기) · 오목 · 3층 5개 · 이웃 3층 3개 · 3판 2선승 · 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.omok3;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const NP = K.NP, PTS = K.PTS, LBL = K.LBL, NB = K.NB;
@@ -12,9 +18,9 @@
   const ga = w => { const j = jong(w); return j < 0 ? "이(가)" : j ? "이" : "가"; };
   const lastNum = lb => +String(lb).match(/(\d+)$/)[1];
   const FINAL = { 1: 1, 2: 0, 3: 1, 4: 0, 5: 0, 6: 1, 7: 1, 8: 1, 9: 0, 10: 1 };       // 읽는 소리에 받침이 있나
-  const eun = lb => `${lb} ${FINAL[lastNum(lb)] ? "은" : "는"}`;
-  const eul = lb => `${lb} ${FINAL[lastNum(lb)] ? "을" : "를"}`;
-  const ro = lb => { const n = lastNum(lb); return `${lb} ${FINAL[n] && ![1, 7, 8].includes(n) ? "으로" : "로"}`; };
+  const eun = lb => `${lb}${FINAL[lastNum(lb)] ? "은" : "는"}`;
+  const eul = lb => `${lb}${FINAL[lastNum(lb)] ? "을" : "를"}`;
+  const ro = lb => { const n = lastNum(lb); return `${lb}${FINAL[n] && ![1, 7, 8].includes(n) ? "으로" : "로"}`; };
 
   // 판 그리기 좌표 (칸 간격 1 = 100 단위): 가로 = 8.66 + 여백, 세로 = 9 + 여백
   const WT = 10.06, HT = 10.4;
@@ -209,7 +215,7 @@ span.o3-p{cursor:default}
   function actText(a, V) {
     if (!a) return "";
     if (a.t === "order") return a.first ? "먼저(선공) 하기" : "나중(후공) 하기";
-    if (a.t === "place") return `${L(a.to)} 에 돌 놓기`;
+    if (a.t === "place") return `${L(a.to)}에 돌 놓기`;
     const fl = V && V.stk && V.stk[a.to] ? V.stk[a.to].length + 1 : 0;
     return `${L(a.from)} 돌을 ${ro(L(a.to))} 옮기기${fl >= 2 ? ` (${fl}층으로 올라타기)` : ""}`;
   }
@@ -218,7 +224,7 @@ span.o3-p{cursor:default}
     if (t.includes("lose")) out.push("이 수로 내 돌이 빠지면서 밑에 깔려 있던 상대 돌이 드러나, 상대가 바로 이겨요");
     if (t.includes("win")) out.push(`${KIND[r.kind] || "승리 조건"} 완성으로 이 판을 이겨요`);
     if (t.includes("block")) out.push(`상대가 다음에 이길 칸(${list(r.oppBefore)})을 막아요`);
-    else if (t.includes("halfBlock")) out.push(`상대가 이길 칸 중 일부만 막아요 — ${list(r.oppAfter)} 이(가) 남아요`);
+    else if (t.includes("halfBlock")) out.push(`상대가 이길 칸 중 일부만 막아요 — ${list(r.oppAfter)}${ja(list(r.oppAfter),"이")} 남아요`);
     else if (t.includes("noBlock")) out.push(`상대가 이길 칸(${list(r.oppBefore)})이 그대로 남아요 — 막는 것보다 이 수가 낫다고 읽었어요`);
     if (t.includes("cover")) out.push("상대 돌 위에 올라가서 그 돌이 만든 줄을 끊고, 내 돌이 맨 위에 보여요");
     if (t.includes("climb")) out.push(`${r.floor}층으로 올라가요 — 높은 돌은 같은 높이 이상의 돌만 올라올 수 있어서 안전해요`);
@@ -239,7 +245,7 @@ span.o3-p{cursor:default}
     const p = [];
     if (!evs.length) p.push(V.ply === 0 && V.round === 1 && V.phase !== "play" ? "아직 놓인 돌이 거의 없어요." : "내 지난 차례 뒤 상대가 둔 수는 없어요.");
     else {
-      const parts = evs.slice(-3).map(e => e.k === "setup" ? `${L(e.to)} 에 기본 배치` : e.k === "pl" ? `${L(e.to)} 에 놓음` : `${L(e.from)} → ${L(e.to)}${e.fl >= 2 ? ` (${e.fl}층${e.cov === me ? " · 내 돌을 덮음" : ""})` : ""}`);
+      const parts = evs.slice(-3).map(e => e.k === "setup" ? `${L(e.to)}에 기본 배치` : e.k === "pl" ? `${L(e.to)}에 놓음` : `${L(e.from)} → ${L(e.to)}${e.fl >= 2 ? ` (${e.fl}층${e.cov === me ? " · 내 돌을 덮음" : ""})` : ""}`);
       p.push(`상대: ${parts.join(" · ")}${evs.length > 3 ? ` (그 전 ${evs.length - 3}번 더)` : ""}.`);
     }
     const A = K.analyze(V, me), ss = A.st;
@@ -273,8 +279,8 @@ span.o3-p{cursor:default}
     const W = J.WINV - 200, loss = Math.max(0, Math.round(J.best - J.my));
     const ex = a => K.explain(Vb, seat, a), em = ex(myA), eb = ex(bestA), has = (e, t) => e.tags.includes(t);
     let sev, why;
-    if (J.best >= W && J.my < W) { sev = 100; why = `고급 AI 의 수(${actText(bestA, Vb)})면 몇 수 안에 이 판을 이기는 길이 있었어요`; }
-    else if (J.my <= -W && J.best > -W) { sev = 100; why = `이 수 뒤엔 상대가 몇 수 안에 이기는 길이 생겨요 — ${actText(bestA, Vb)} 로 버틸 수 있었어요`; }
+    if (J.best >= W && J.my < W) { sev = 100; why = `고급 AI의 수(${actText(bestA, Vb)})면 몇 수 안에 이 판을 이기는 길이 있었어요`; }
+    else if (J.my <= -W && J.best > -W) { sev = 100; why = `이 수 뒤엔 상대가 몇 수 안에 이기는 길이 생겨요 — ${actText(bestA, Vb)}${ja(actText(bestA, Vb),"로")} 버틸 수 있었어요`; }
     else {
       sev = loss >= 300 ? 90 : loss >= 150 ? 75 : loss >= 80 ? 60 : loss >= 40 ? 40 : loss > 8 ? 20 : 5;
       const r = [];

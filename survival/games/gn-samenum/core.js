@@ -15,6 +15,12 @@
   else (root.SVCores = root.SVCores || {})["gn-samenum"] = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const LET = "ALIEYOUMSTNRHDGK".split("");
   const NUMS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
   const OPS = { 3: ["+", "−", "×", "÷"], 4: ["+", "×", "÷", "√"] };
@@ -371,7 +377,7 @@
     const T = V.target;
     if (L) {
       const who2 = nm(L.s);
-      const op = L.tmo ? `${who2}${iga(who2)} 시간 안에 호명하지 못해 기회가 넘어가요.` : `${who2}${iga(who2)} ${callTxt(L.c, known)} 를 불러 ${L.valid ? `${L.v.join(" ")} = ${L.val}` : `${L.v.join(" · ")} (숫자 → 기호 → 숫자가 아니라 식이 안 돼요)`} → ${L.hit ? "정답!" : `타깃 ${T}${eun(T)} 아니에요.`}`;
+      const op = L.tmo ? `${who2}${iga(who2)} 시간 안에 호명하지 못해 기회가 넘어가요.` : `${who2}${iga(who2)} ${callTxt(L.c, known)}${ja(callTxt(L.c, known),"을")} 불러 ${L.valid ? `${L.v.join(" ")} = ${L.val}` : `${L.v.join(" · ")} (숫자 → 기호 → 숫자가 아니라 식이 안 돼요)`} → ${L.hit ? "정답!" : `타깃 ${T}${eun(T)} 아니에요.`}`;
       const next = L.hit ? "다음 라운드에서 새 타깃이 나와요." : L.void ? "호명이 24번을 넘어 이번 라운드는 무효예요." : `${nm(1 - L.s)}에게 기회가 넘어가요.`;
       return { opp: op, mine: `${scoreTxt} · 공개된 칸 ${nRev}/16`, rec: next, why: L.hit ? `${nm(L.s)}${eun(nm(L.s))} 이제 ${S[L.s]}/${goal}점이에요.` : `이제 공개된 칸이 ${nRev}개라 정답을 찾을 확률이 올라가요 — 공개된 칸에서 타깃 ${T}${eul(T)} 만드는 식을 찾아 두세요.` };
     }

@@ -127,12 +127,12 @@
     style();
     const row = (a, b) => `<div class="hs-tut"><div class="hs-row hs-big">${a.map(c => cardHtml(c)).join("")}</div>${b || ""}</div>`;
     return [
-      { tag: "STEP 1 · 카드", title: "숫자 카드의 합을 한계에 맞춰요", body: "카드는 <b>7 · 6 · 5 · 4 · 3 · 2 · 1 · −1</b> (큰 수일수록 적고, −1 은 합을 깎아 줘요). 라운드마다 <b>한계 숫자(5~12)</b>가 정해지고, 카드 합이 한계에 <b>가까울수록</b> 이겨요.",
+      { tag: "STEP 1 · 카드", title: "숫자 카드의 합을 한계에 맞춰요", body: "카드는 <b>7 · 6 · 5 · 4 · 3 · 2 · 1 · −1</b> (큰 수일수록 적고, −1은 합을 깎아 줘요). 라운드마다 <b>한계 숫자(5~12)</b>가 정해지고, 카드 합이 한계에 <b>가까울수록</b> 이겨요.",
         boardHtml: row([7, 5, 3, 1, -1], `<span class="hs-lim">한계 9</span>`), ms: 5400 },
       { tag: "STEP 2 · 받기", title: "3장 받고 1장만 보여 줘요", body: "기본 베팅 1칩을 내고 카드 <b>3장</b>을 받아요. 그중 <b>1장만 공개</b>하고 나머지 2장은 나만 봐요. 그리고 1차 베팅 (콜 · 레이즈 · 폴드).",
         boardHtml: `<div class="hs-tut"><div class="hs-row hs-big"><span class="hs-c top">4</span>${cardHtml(3, " hid")}${cardHtml(2, " hid")}</div><small>🔒 숨긴 카드는 나만 · 공개한 카드는 모두에게 보여요</small></div>`, ms: 5400 },
-      { tag: "STEP 3 · HIT", title: "직접 해 봐요: 9 에 딱 맞추기", body: "한계 <b>9</b>, 내 카드 3장 <b>4 + 2 + 1 = 7</b>. <b>HIT</b>(한 장 더)로 9 를 맞춰 보세요. 넘으면 <b>bust</b> — 그 라운드 최하위예요!",
-        interactive: { hint: "👆 HIT 을 눌러 보세요 (두 번 누르면 넘어요)", doneText: "✅ 7 + 2 = 9, 한계에 딱 맞았어요!" },
+      { tag: "STEP 3 · HIT", title: "직접 해 봐요: 9에 딱 맞추기", body: "한계 <b>9</b>, 내 카드 3장 <b>4 + 2 + 1 = 7</b>. <b>HIT</b>(한 장 더)로 9를 맞춰 보세요. 넘으면 <b>bust</b> — 그 라운드 최하위예요!",
+        interactive: { hint: "👆 HIT를 눌러 보세요 (두 번 누르면 넘어요)", doneText: "✅ 7 + 2 = 9, 한계에 딱 맞았어요!" },
         render(stage, ctrl) {
           const deck = [2, 5]; let sum = 7, k = 0, msg = "";
           const draw = () => {
@@ -143,14 +143,14 @@
             const b = e.target.closest("[data-a]"); if (!b) return;
             ctrl.sfx("tap");
             if (b.dataset.a === "hit") { if (k < deck.length) { sum += deck[k++]; } msg = sum > 9 ? "💥 넘었어요! STAY 하면 처음으로 돌아가요" : ""; }
-            else { if (sum > 9) { sum = 7; k = 0; msg = ""; } else msg = "7 은 9 에 2 모자라요 — 한 번 HIT 해 볼까요?"; }
+            else { if (sum > 9) { sum = 7; k = 0; msg = ""; } else msg = "7은 9에 2 모자라요 — 한 번 HIT 해 볼까요?"; }
             draw();
           };
           draw();
         } },
       { tag: "STEP 4 · 승부", title: "가까운 쪽이 판돈을 가져가요", body: "모두 STAY 하면 2차 베팅 뒤 카드를 공개해요. 합이 한계에 <b>가장 가까운 사람</b>이 판돈 전부! 같으면 <b>카드가 더 많은 쪽</b>이 이기고, 그래도 같으면 판돈을 나눠요.",
         boardHtml: `<div class="hs-tut"><div class="hs-row"><b>🏆 9 (3장)</b><span>vs</span><b>8 (3장)</b></div><small>한계 9 · 넘긴 사람은 무조건 지는 쪽</small></div>`, ms: 5600 },
-      { tag: "STEP 5 · 끝", title: "칩이 0 이 되면 탈락", body: "칩 30개로 시작해서 <b>먼저 0 이 된 사람부터 탈락</b>, 한 명 남을 때까지 계속해요. 10라운드마다 기본 베팅이 1칩씩 늘어요. 막히면 <b>🧑‍🏫 AI 선생님</b>이 HIT 해도 되는지 알려 줘요.",
+      { tag: "STEP 5 · 끝", title: "칩이 0이 되면 탈락", body: "칩 30개로 시작해서 <b>먼저 0이 된 사람부터 탈락</b>, 한 명 남을 때까지 계속해요. 10라운드마다 기본 베팅이 1칩씩 늘어요. 막히면 <b>🧑‍🏫 AI 선생님</b>이 HIT 해도 되는지 알려 줘요.",
         boardHtml: `<div class="hs-tut"><span style="font-size:42px">🏆</span></div>`, ms: 5000 },
     ];
   }
@@ -163,7 +163,7 @@
       "카드 3장을 받고 <b>1장만 공개</b> · 2장은 나만 봐요 (공개는 모두 고른 뒤 한꺼번에)",
       "<b>한계 숫자(5~12)</b>에 합이 가까울수록 승 — 넘기면(bust) 최하위",
       "베팅 뒤 <b>HIT</b>(한 장 더, 모두에게 공개) 또는 <b>STAY</b>, 다시 베팅",
-      "칩이 0 이 되면 탈락 · 마지막 한 명이 1등",
+      "칩이 0이 되면 탈락 · 마지막 한 명이 1등",
     ],
     note: "방송과 다른 점: 피스 · 상금 없이 2~6명, 베팅에서 아무도 안 걸었으면 체크 가능, STAY 한 사람은 다시 HIT 못 함.",
     sub: V => (V.over ? "끝" : `${V.hand}라운드 · 한계 ${V.L} · ${PH[V.phase] || ""}`),

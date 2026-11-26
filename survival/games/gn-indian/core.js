@@ -255,7 +255,7 @@
       const df = V.chips[me] - V.chips[opp];
       return { opp: `승부가 끝났어요 — ${nm(opp)}의 칩 ${V.chips[opp]}.`, mine: `내 칩 ${V.chips[me]} : 상대 ${V.chips[opp]} (${df >= 0 ? "+" : "−"}${Math.abs(df)} · ${V.round}판 진행, 시작 칩 ${V.start})`,
         rec: df > 0 ? "이겼어요! 한 판 더?" : df === 0 ? "비겼어요 — 다시 겨뤄 봐요" : "아쉬워요 — 남은 카드를 세며 다시!",
-        why: S.n ? `마지막 ${S.n}판 기록: 내가 이긴 판 ${S.w} · 상대가 이긴 판 ${S.l} · 무승부 ${S.d} · 폴드는 나 ${S.foldMe}번 / 상대 ${S.foldOpp}번${S.penMe ? ` · 내가 10 을 들고 폴드한 판 ${S.penMe}번` : ""}.` : "기록된 판이 없어요." };
+        why: S.n ? `마지막 ${S.n}판 기록: 내가 이긴 판 ${S.w} · 상대가 이긴 판 ${S.l} · 무승부 ${S.d} · 폴드는 나 ${S.foldMe}번 / 상대 ${S.foldOpp}번${S.penMe ? ` · 내가 10을 들고 폴드한 판 ${S.penMe}번` : ""}.` : "기록된 판이 없어요." };
     }
     if (V.phase !== "bet") {
       const r = V.res, cnt = Array(11).fill(2); for (const c of V.used) cnt[c]--;

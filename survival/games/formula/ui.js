@@ -261,7 +261,7 @@
     style();
     const k = (v, c) => `<span class="fx-c k${c}">${v}</span>`;
     return [
-      { tag: "STEP 1 · 카드", title: "숫자 카드 + 기호 카드", body: "숫자 0~10 이 <b>금 · 은 · 동 · 흑</b> 네 색으로 있어요. 모두 <b>+ − ÷</b> 기호를 한 장씩 갖고 시작해요. 가끔 <b>√</b> 나 <b>×</b> 카드가 와요.",
+      { tag: "STEP 1 · 카드", title: "숫자 카드 + 기호 카드", body: "숫자 0~10이 <b>금 · 은 · 동 · 흑</b> 네 색으로 있어요. 모두 <b>+ − ÷</b> 기호를 한 장씩 갖고 시작해요. 가끔 <b>√</b> 나 <b>×</b> 카드가 와요.",
         boardHtml: `<div class="fx-tut"><div class="fx-row fx-big">${k(10, 0)}${k(7, 1)}${k(3, 2)}${k(0, 3)}<span class="fx-c sym">√</span><span class="fx-c sym">×</span></div><div class="fx-row">${opHtml("+")}${opHtml("-")}${opHtml("/")}</div></div>`, ms: 5200 },
       { tag: "STEP 2 · 받기", title: "숨긴 1장 + 공개 3장", body: "처음에 <b>숨긴 숫자 1장</b>(나만 봄)과 <b>공개 2장</b>을 받고 1차 베팅 → 공개 1장을 더 받아요. √ 나 × 가 오면 숫자를 한 장 더 받아요.",
         boardHtml: `<div class="fx-tut"><div class="fx-row fx-big"><span class="fx-c k0 hid">8</span>${k(4, 1)}${k(10, 2)}<span class="fx-c back">?</span></div><small>🔒 숨긴 카드는 나만 · 나머지는 모두에게 보여요</small></div>`, ms: 5200 },

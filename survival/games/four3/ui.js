@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 4인 3목 — 화면 (4×4 판 · 쌓인 말 · 새 말 놓기 / 옮기기 · 선생님 · 1분 규칙 · 복기) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.four3;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const COLS = K.COLS, DOT = ["🔴", "🟡", "🟢", "🔵"], CN = K.cellName;
@@ -261,11 +267,11 @@
     if (!Vb || !myA || !bestA || Vb.phase !== "play") return { sev: 0, why: "", my, best };
     const P = K.PROF.hard, em = K.evalAct(Vb, seat, myA, P), eb = K.evalAct(Vb, seat, bestA, P);
     const nx = K.nextsOf(Vb, seat)[0];
-    if (eb.tag === "win" && em.tag !== "win") return { sev: 92, why: `${best} 하면 바로 3목이었어요 — 라운드 승리 · 피스 +3 을 놓침`, my, best };
+    if (eb.tag === "win" && em.tag !== "win") return { sev: 92, why: `${best} 하면 바로 3목이었어요 — 라운드 승리 · 피스 +3을 놓침`, my, best };
     if (em.tag === "give") return { sev: 88, why: `내 말을 옮겨 ${colName(em.who)}의 3목이 드러났어요 (${colName(em.who)} 피스 +3)`, my, best };
-    if (em.tag === "multi" && eb.tag !== "multi") return { sev: 60, why: `동시 3목이 되어 아무도 피스를 못 받았어요 — 고급 AI 는 ${best}`, my, best };
+    if (em.tag === "multi" && eb.tag !== "multi") return { sev: 60, why: `동시 3목이 되어 아무도 피스를 못 받았어요 — 고급 AI는 ${best}`, my, best };
     if ((em.danger || []).includes(nx) && !(eb.danger || []).includes(nx)) {
-      return { sev: 78, why: `이 수 뒤 다음 차례 ${colName(nx)}에게 바로 3목 길이 생겨요 — 고급 AI 는 ${best} 로 막아요`, my, best };
+      return { sev: 78, why: `이 수 뒤 다음 차례 ${colName(nx)}에게 바로 3목 길이 생겨요 — 고급 AI는 ${best}${ja(best,"로")} 막아요`, my, best };
     }
     // 굴려 본 이길 확률로 비교
     const R = K.recommend(Vb, seat), rows = R && R.cand || [];
@@ -273,7 +279,7 @@
     const rm = f(myA), rb = f(bestA) || R;
     if (rb && rb.pw != null) {
       const pm = rm && rm.pw != null ? rm.pw : null;
-      if (pm == null) return { sev: 30, why: `고급 AI 가 본 후보 10개 밖의 수 — 고급 AI 의 ${best} 는 이길 확률 약 ${Math.round(rb.pw * 100)}%`, my, best };
+      if (pm == null) return { sev: 30, why: `고급 AI가 본 후보 10개 밖의 수 — 고급 AI의 ${best}${ja(best,"은")} 이길 확률 약 ${Math.round(rb.pw * 100)}%`, my, best };
       const d = (rb.pw - 0.45 * rb.pl) - (pm - 0.45 * rm.pl);
       return { sev: Math.max(0, Math.min(55, Math.round(d * 120))), why: `굴려 보니 이길 확률 내 수 ${Math.round(pm * 100)}% · 고급 AI 수 ${Math.round(rb.pw * 100)}% (남이 이길 확률 ${Math.round(rm.pl * 100)}% · ${Math.round(rb.pl * 100)}%)`, my, best };
     }
@@ -303,7 +309,7 @@
         boardHtml: tb(ord([0, 1, 2, 3], 0) + boardHtml(mk([]), {})), ms: 5200 },
       { tag: "STEP 3 · 진행", title: "놓기 또는 옮기기", body: "내 차례엔 하나만: <b>새 말 놓기</b> = 한 칸에 새 말 1~3개 (한 칸은 <b>3층</b>까지, 남의 말 위도 됨) · <b>말 옮기기</b> = 맨 위에 있는 내 말 1개를 <b>이웃 8칸</b>으로.",
         boardHtml: tb(boardHtml(mk([[5, [1, 1, 0]], [6, [2]], [9, [0]], [10, [3]]]), { last: { t: "move", from: 9, to: 10 } })), ms: 6400 },
-      { tag: "STEP 4 · 직접", title: "덮어서 3목", body: "나는 <b>빨강</b>. A1 · B2 가 내 말 — <b>C3</b> 의 노랑 위에 새 말을 놓으면 대각선 3목!",
+      { tag: "STEP 4 · 직접", title: "덮어서 3목", body: "나는 <b>빨강</b>. A1 · B2가 내 말 — <b>C3</b>의 노랑 위에 새 말을 놓으면 대각선 3목!",
         interactive: { hint: "👆 C3 → ＋1", doneText: "✅ 3목! 노랑 말은 내 말 밑에 깔려 못 움직여요" },
         render(stage, ctrl) {
           let V = { bd: S0.bd.map(x => x.slice()), top: S0.top.slice() }, sel = -1, done = false, msg = "C3 칸을 골라요";

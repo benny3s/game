@@ -244,21 +244,21 @@
     style();
     const mini = (arr, cols, bets, nowI) => `<div class="bw-board">${arr.map((x, j) => `<div class="bw-col${j === nowI ? " now" : ""}"><i class="bw-ix">${j + 1}</i>${tile(x === null ? null : x, cols[j])}<b class="bw-n">${bets[j]}</b></div>`).join("")}</div>`;
     return [
-      { tag: "STEP 1 · 준비", title: "가림막 · 타일 10개 · 칩 30개", body: "<b>가운데 가림막</b>이 놓인 채 시작해요. 두 사람은 각자 <b>숫자 타일 10개</b>(0~9)와 <b>칩 30개</b>를 받아요. 짝수 0 · 2 · 4 · 6 · 8 은 <b>흑</b>, 홀수 1 · 3 · 5 · 7 · 9 는 <b>백</b> 타일이에요 (높은 숫자가 이겨요).",
+      { tag: "STEP 1 · 준비", title: "가림막 · 타일 10개 · 칩 30개", body: "<b>가운데 가림막</b>이 놓인 채 시작해요. 두 사람은 각자 <b>숫자 타일 10개</b>(0~9)와 <b>칩 30개</b>를 받아요. 짝수 0 · 2 · 4 · 6 · 8은 <b>흑</b>, 홀수 1 · 3 · 5 · 7 · 9는 <b>백</b> 타일이에요 (높은 숫자가 이겨요).",
         boardHtml: `<div class="bw-tut"><div class="bw-row">${[0, 2, 4, 6, 8].map(x => tile(x, 0, "lg")).join("")}</div><div class="bw-row">${[1, 3, 5, 7, 9].map(x => tile(x, 1, "lg")).join("")}</div><div class="bw-pill">🪙 칩 30개</div></div>`, ms: 6200 },
       { tag: "STEP 2 · 순서와 베팅", title: "대결 순서를 정하고 칩 30개를 나눠 걸어요", body: "시작하면 <b>타일 10개의 대결 순서</b>를 미리 정해 뒷면으로 놓고, 칩 <b>30개를 10개 타일에 나눠 베팅</b>해요. 타일마다 <b>1칩 이상</b>, 30개를 <b>모두</b> 걸어야 하고 승부가 시작되면 <b>바꾸거나 더 걸 수 없어요</b>. (방송의 오현민: 12 · 4 · 4 · 4 · 나머지 6개는 1칩씩)",
         boardHtml: `<div class="bw-tut">${mini([null, null, null, null, null, null, null, null, null, null], [1, 0, 1, 0, 0, 1, 0, 1, 0, 1], [12, 4, 4, 4, 1, 1, 1, 1, 1, 1], -1)}<div class="bw-pill">12 + 4 + 4 + 4 + 1×6 = 30칩</div></div>`, ms: 6800 },
       { tag: "STEP 3 · 승부", title: "가림막을 치우면 색과 칩 수만 보여요", body: "가림막이 치워지면 서로의 타일 <b>색(흑/백)</b>과 타일마다 걸린 <b>칩 수</b>만 보여요 — <b>숫자는 비밀</b>이에요. 첫 번째 타일부터 차례로 승부해요. 건 칩이 <b>같으면 바로 오픈</b>, <b>다르면 적게 건 쪽</b>이 <b>추가 베팅</b> 또는 <b>포기</b>를 골라요.",
         boardHtml: `<div class="bw-tut"><div class="bw-board" style="grid-template-columns:repeat(2,58px);justify-content:center"><div class="bw-col now"><i class="bw-ix">1</i>${tile(null, 1)}<b class="bw-n">12</b><span class="bw-mid">vs</span><b class="bw-n lo">1</b>${tile(3, 1)}</div><div class="bw-col"><i class="bw-ix">2</i>${tile(null, 0)}<b class="bw-n">4</b><span class="bw-mid">vs</span><b class="bw-n">4</b>${tile(4, 0)}</div></div><div class="bw-info">위 = 상대 (색 · 칩만) / 아래 = 나 (숫자까지)</div></div>`, ms: 6600 },
       { tag: "STEP 4 · 직접", title: "적게 건 쪽이 고르는 갈림길", body: "첫 번째 타일에서 상대는 <b>12칩</b>, 나는 <b>1칩</b>을 걸었어요. 내 타일은 <b>백 3</b>, 상대 타일은 <b>흑</b> (0 · 2 · 4 · 6 · 8 중 하나). <b>추가 베팅</b>이 이득일까요, <b>포기</b>가 나을까요? 눌러 봐요!",
-        interactive: { hint: "👆 고르고 눌러 봐요 (포기가 정답이에요)", doneText: "✅ 포기! 3 은 흑 0 · 2 만 이겨서 40% — 맞추면 기대 −2.4칩, 포기하면 −1칩만 잃어요" },
+        interactive: { hint: "👆 고르고 눌러 봐요 (포기가 정답이에요)", doneText: "✅ 포기! 3은 흑 0 · 2 만 이겨서 40% — 맞추면 기대 −2.4칩, 포기하면 −1칩만 잃어요" },
         render(stage, ctrl) {
           stage.innerHTML = `<div class="bw-tut"><div class="bw-board" style="grid-template-columns:58px;justify-content:center"><div class="bw-col now"><i class="bw-ix">1</i>${tile(null, 0)}<b class="bw-n">12</b><span class="bw-mid">vs</span><b class="bw-n lo">1</b>${tile(3, 1)}</div></div><div class="bw-info" id="bwmsg">11칩을 더 걸어야 맞출 수 있어요</div><div class="bw-acts"><div class="bw-two"><button type="button" class="btn" data-t="m">💰 추가 베팅 +11</button><button type="button" class="btn primary" data-t="f">🏳️ 포기</button></div></div></div>`;
           stage.onclick = e => {
             const b = e.target.closest("[data-t]"); if (!b) return;
             const msg = stage.querySelector("#bwmsg");
             if (b.dataset.t === "f") { ctrl.sfx("win"); b.classList.add("sel"); ctrl.complete(); }
-            else { ctrl.sfx("tap"); if (msg) msg.innerHTML = "3 이 이기는 건 상대 0 · 2 뿐이에요 (5개 중 2개 = 40%) — 지면 12칩을 잃어요. 다시 골라 봐요!"; }
+            else { ctrl.sfx("tap"); if (msg) msg.innerHTML = "3이 이기는 건 상대 0 · 2 뿐이에요 (5개 중 2개 = 40%) — 지면 12칩을 잃어요. 다시 골라 봐요!"; }
           };
         } },
       { tag: "STEP 5 · 정산과 끝", title: "높은 숫자가 칩을 가져가요 · 칩이 많은 쪽 승", body: "<b>추가 베팅</b>으로 칩을 같게 맞추면 두 타일을 <b>오픈</b>해 <b>높은 숫자</b>가 걸린 칩을 모두 가져가요. 보태는 칩은 <b>손에 딴 칩</b>부터, 없으면 <b>내 다른 타일의 칩</b>을 빼서 써요 (타일마다 1칩은 남아야 해요). <b>포기</b>하면 숫자는 열리지 않고 걸린 칩은 상대 몫! 10개 타일이 모두 끝났을 때 <b>칩이 더 많은 쪽</b>(60칩 중 31칩 이상)이 이겨요 — 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
@@ -288,7 +288,7 @@
     if (V.phase === "setup") {
       if (myA.t !== "setup" || bestA.t !== "setup" || !G.isPerm(myA.order) || !G.okBets(myA.bets) || !G.isPerm(bestA.order) || !G.okBets(bestA.bets)) return null;
       const m = G.setupInfo(myA.order, myA.bets), b = G.setupInfo(bestA.order, bestA.bets);
-      return { sev: 0, why: `내 배치: 9·8·7 에 ${m.top3}칩 · 약한 숫자(0~5) 6곳에 ${m.weak6}칩 · 1칩만 건 타일 ${m.ones}개 / 고급 AI 배치: 9·8·7 에 ${b.top3}칩 · 0~5 에 ${b.weak6}칩 · 1칩 타일 ${b.ones}개 — 배치는 정답이 없어요 (센 타일에 몰수록 상대가 포기하기 쉽지만 읽혀요)` };
+      return { sev: 0, why: `내 배치: 9·8·7에 ${m.top3}칩 · 약한 숫자(0~5) 6곳에 ${m.weak6}칩 · 1칩만 건 타일 ${m.ones}개 / 고급 AI 배치: 9·8·7에 ${b.top3}칩 · 0~5에 ${b.weak6}칩 · 1칩 타일 ${b.ones}개 — 배치는 정답이 없어요 (센 타일에 몰수록 상대가 포기하기 쉽지만 읽혀요)` };
     }
     if (V.phase !== "decide" || !V.needs || !V.needs.includes(seat) || myA.t !== "fold" && myA.t !== "match" || bestA.t !== "fold" && bestA.t !== "match") return null;
     if (myA.t === bestA.t && (myA.t === "fold" || sameTake(myA.take, bestA.take))) return null;
@@ -302,7 +302,7 @@
     const col = CN[V.p[1 - seat].col[V.pos]];
     const base = `내 타일 ${m.x} · 상대 ${col}색 후보 기준 이길 확률 ${pc(m.pw)} · 비길 ${pc(m.pt)} · 질 ${pc(m.pl)}`;
     const ev = e => e.kind === "fold" ? `포기 ${sg(e.ev)}칩` : `추가 베팅 ${sg(e.ev)}칩 (이기면 +${e.h} · 지면 −${e.h}${e.cost ? ` · 다른 타일에서 가져온 칩 효과 ${sg(-e.cost)}` : ""})`;
-    const tail = gap >= 0.15 ? ` — 기대 칩 ${gap.toFixed(1)} 차이` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 상대 배치 습관도 추정해요)" : " — 거의 같아요";
+    const tail = gap >= 0.15 ? ` — 기대 칩 ${gap.toFixed(1)} 차이` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI는 상대 배치 습관도 추정해요)" : " — 거의 같아요";
     return { sev, why: `${base}. 고급 AI 수 (${actText(bestA, V)}): ${ev(b)} / 내 수 (${actText(myA, V)}): ${ev(m)}${tail}` };
   }
 
@@ -313,7 +313,7 @@
     opts: [
       { k: "aid", label: "기억 도우미", items: [[1, "켬 (상대 남은 숫자 후보)"], [0, "끔 (방송)"]], def: 1 },
     ],
-    diff: "AI 와 둬요 — 방송은 사람 둘이 가림막을 사이에 두고 칩을 손으로 옮기고 \"추가 베팅하시겠습니까?\" 에 말로 답했는데, 여기서는 화면에서 순서 · 칩을 정하고 [추가 베팅 / 포기] 단추와 가져올 타일 고르기로 대신해요 (한 기기 두 사람 모드는 순서 · 베팅이 비밀이라 없어요) · 같은 숫자일 때 각자 건 칩을 돌려받는 것은 나무위키 기준이고 영상으로는 확인하지 못했어요 · 30 : 30 동점은 방송 규칙에 없어 무승부로 둬요 · 추가 베팅 칩을 손의 칩부터 쓰는 것은 딜러 낭독(\"보유한 칩이 없다면 다른 타일에서\")을 그대로 따른 해석이에요 · 기억 도우미(켬)는 상대 타일에서 아직 안 열린 숫자 후보를 적어 줘요 (방송은 외워야 함)",
+    diff: "AI와 둬요 — 방송은 사람 둘이 가림막을 사이에 두고 칩을 손으로 옮기고 \"추가 베팅하시겠습니까?\" 에 말로 답했는데, 여기서는 화면에서 순서 · 칩을 정하고 [추가 베팅 / 포기] 단추와 가져올 타일 고르기로 대신해요 (한 기기 두 사람 모드는 순서 · 베팅이 비밀이라 없어요) · 같은 숫자일 때 각자 건 칩을 돌려받는 것은 나무위키 기준이고 영상으로는 확인하지 못했어요 · 30 : 30 동점은 방송 규칙에 없어 무승부로 둬요 · 추가 베팅 칩을 손의 칩부터 쓰는 것은 딜러 낭독(\"보유한 칩이 없다면 다른 타일에서\")을 그대로 따른 해석이에요 · 기억 도우미(켬)는 상대 타일에서 아직 안 열린 숫자 후보를 적어 줘요 (방송은 외워야 함)",
     howto: [
       "<b>1:1 데스매치</b> — 가운데 <b>가림막</b>이 놓인 채 시작해요. 각자 <b>숫자 타일 10개</b>(0~9 · 짝수 0·2·4·6·8 = <b>흑</b>, 홀수 1·3·5·7·9 = <b>백</b>)와 <b>칩 30개</b>를 받아요",
       "타일 10개의 <b>대결 순서</b>를 미리 정해 뒷면으로 놓고, 칩 <b>30개를 10개 타일에 나눠 베팅</b> — 타일마다 <b>1칩 이상</b>, 30개 <b>모두</b> · 승부가 시작되면 <b>바꾸거나 더 걸 수 없어요</b>",

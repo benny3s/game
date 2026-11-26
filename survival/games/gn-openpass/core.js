@@ -439,7 +439,7 @@
     }
     if (V.phase === "buy") {
       const a = actBuy(V, "hard", sampler(hardSeed(V, me))), dn = V.buyDone.filter(Boolean).length, vr = evalBuy(a.p, 21, 400).v, v0 = a.p.some(Boolean) ? evalBuy([0, 0, 0], 21, 400).v : vr;
-      return { opp: `다른 ${V.n - 1}명도 모두 가넷 ${V.gar}개로 팩을 정하는 중이에요 (지금 ${dn}/${V.n}명 정했고, 구입은 모두 정한 뒤 공개돼요). 순서: ` + V.order.map(who).join(" → "), mine: `가넷 ${V.gar}개 · 팩 가격 검정 1 · 빨강 2 · 파랑 3 · 기본 카드 20장 (숫자 10장 · 기호 10장)`, rec: packTxt(a.p), why: `파랑 팩에는 7·8·9 가 세 장씩과 × 3장, 10 도 들어 있어요. 큰 숫자와 ×(곱셈)가 많을수록 수식이 크게 자라요. 검정 팩은 작은 숫자 위주라 가넷이 남을 때만 사요. 끝까지 해 봤을 때 대표 값(자릿수 평균)은 이 구입이면 약 ${lgShow(vr)}${a.p.some(Boolean) ? ` · 안 사면 약 ${lgShow(v0)}` : ""}${iyo(a.p.some(Boolean) ? lgShow(v0) : lgShow(vr))}.` };
+      return { opp: `다른 ${V.n - 1}명도 모두 가넷 ${V.gar}개로 팩을 정하는 중이에요 (지금 ${dn}/${V.n}명 정했고, 구입은 모두 정한 뒤 공개돼요). 순서: ` + V.order.map(who).join(" → "), mine: `가넷 ${V.gar}개 · 팩 가격 검정 1 · 빨강 2 · 파랑 3 · 기본 카드 20장 (숫자 10장 · 기호 10장)`, rec: packTxt(a.p), why: `파랑 팩에는 7·8·9가 세 장씩과 × 3장, 10도 들어 있어요. 큰 숫자와 ×(곱셈)가 많을수록 수식이 크게 자라요. 검정 팩은 작은 숫자 위주라 가넷이 남을 때만 사요. 끝까지 해 봤을 때 대표 값(자릿수 평균)은 이 구입이면 약 ${lgShow(vr)}${a.p.some(Boolean) ? ` · 안 사면 약 ${lgShow(v0)}` : ""}${iyo(a.p.some(Boolean) ? lgShow(v0) : lgShow(vr))}.` };
     }
     if (V.phase === "submit") {
       const dn = V.subDone.filter(Boolean).length;
@@ -460,7 +460,7 @@
     if (V.passes[me] >= MAXPASS) return { opp, mine: mineTxt, rec: "오픈 (패스를 다 썼어요)", why: `패스를 ${MAXPASS}장 다 써서 남은 카드 ${DECK - p}장은 자동으로 열려요.` };
     const ev = evalPlay(V, me, p * 131 + V.passes[me] * 17 + me + 11, 500);
     const front = V.boards[me][0];   // 새 카드는 맨 왼쪽에 놓여요 (첫 카드는 등호 옆 1번 칸)
-    const tip = front === undefined ? "첫 카드는 등호 옆 맨 오른쪽 칸에 놓여요 — 큰 숫자가 좋아요 (기호가 먼저 나오면 끝 기호라 무효예요)." : typeof front === "number" ? "맨 왼쪽 숫자 왼쪽에는 기호(특히 ×)가 필요해요 — 숫자가 또 나오면 새 숫자만 남고 앞 숫자는 버려져요." : "맨 왼쪽 기호 왼쪽에는 숫자가 필요해요 — 기호가 또 나오면 새 기호만 남고, 마지막 칸의 기호는 앞에 0 이 붙어요.";
+    const tip = front === undefined ? "첫 카드는 등호 옆 맨 오른쪽 칸에 놓여요 — 큰 숫자가 좋아요 (기호가 먼저 나오면 끝 기호라 무효예요)." : typeof front === "number" ? "맨 왼쪽 숫자 왼쪽에는 기호(특히 ×)가 필요해요 — 숫자가 또 나오면 새 숫자만 남고 앞 숫자는 버려져요." : "맨 왼쪽 기호 왼쪽에는 숫자가 필요해요 — 기호가 또 나오면 새 기호만 남고, 마지막 칸의 기호는 앞에 0이 붙어요.";
     if (!ev) return { opp, mine: mineTxt, rec: "오픈", why: `${BACK_NAME[col]} 뒷면 카드예요. ${tip}` };
     const rec = ai(V, me, "hard").t === "open" ? "오픈" : "패스";   // 💡 = 고급 AI 의 수
     const close = (ev.open >= ev.pass) !== (rec === "오픈") ? " (두 수의 차이가 아주 작아요)" : "";

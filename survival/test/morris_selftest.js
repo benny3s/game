@@ -299,7 +299,7 @@ function play(t0, t1, seed, bo = 3) {
   ok(maxMs < 1500, `선생님 글 한 번 1.5초 안 (${maxMs}ms)`);
   console.log(`· 선생님 글 ${n}번 · 최대 ${maxMs}ms`);
   // 복기 고리: actText · review (sev 0~100 · 숫자 근거)
-  ok(U.actText(pl(4)) === 'd6 에 말 놓기' && U.actText(mv(4, 7)) === 'd6 말을 d5로 옮기기' && U.actText(rm(15)) === 'c3 의 상대 말 빼기' && U.actText(mv(1, 6)) === 'd7 말을 c5로 옮기기', '행동 글 (조사 포함)');
+  ok(U.actText(pl(4)) === 'd6에 말 놓기' && U.actText(mv(4, 7)) === 'd6 말을 d5로 옮기기' && U.actText(rm(15)) === 'c3의 상대 말 빼기' && U.actText(mv(1, 6)) === 'd7 말을 c5로 옮기기', '행동 글 (조사 포함)');
   {
     const sc = scene({ b: [4, 13], w: [21, 22], hand: [6, 6], turn: 0 }), V = C.view(sc, 0);
     const rv = U.review(V, 0, pl(0), pl(23), { k: 0 });

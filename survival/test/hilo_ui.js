@@ -38,9 +38,9 @@ const nok = (c, m) => { if (!c) { bad++; console.error('FAIL:', m); } };
         nok(c1.opp && c1.mine && c1.rec && !/undefined|NaN|null/.test(JSON.stringify(c1)), '선생님 글 이상 ' + JSON.stringify(c1));
         if (need.includes(s)) {   // 💡 추천 = 고급 AI 의 수 (같은 고정 난수)
           const V0 = core.view(st, s), ha = core.ai(V0, s, 'hard', core.recRnd(V0, s)); recN++;
-          if (st.phase === 'play') nok(c1.rec === `${ha.n} 을(를) ${ha.s === 'R' ? '리버스' : '노멀'}로 내요`, `추천 ≠ 고급 AI (play) ${c1.rec} vs ${JSON.stringify(ha)}`);
+          if (st.phase === 'play') nok(new RegExp(`^${ha.n}[을를] ${ha.s === 'R' ? '리버스' : '노멀'}로 내요$`).test(c1.rec), `추천 ≠ 고급 AI (play) ${c1.rec} vs ${JSON.stringify(ha)}`);
           else if (st.phase === 'reveal') nok(c1.rec === (ha.t === 'quit' ? '포기해요' : '공개해요'), `추천 ≠ 고급 AI (reveal) ${c1.rec} vs ${ha.t}`);
-          else if (st.phase === 'pass' && ha.to >= 0) nok(new RegExp(`^${names[ha.to] || (ha.to + 1) + '번'} `).test(c1.rec), `추천 ≠ 고급 AI (pass) ${c1.rec} vs ${ha.to}`);
+          else if (st.phase === 'pass' && ha.to >= 0) nok(new RegExp(`^${names[ha.to] || (ha.to + 1) + '번'}`).test(c1.rec), `추천 ≠ 고급 AI (pass) ${c1.rec} vs ${ha.to}`);
         }
         if (need.includes(s)) { nok(c1.why, `차례인데 이유가 비었음 (${st.phase})`); phases.add(st.phase); }
         n++;

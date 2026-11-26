@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 수식 피라미드 — 화면 (피라미드 10칸 · 3칸 골라 정답 선언 · 찾은 답 · 라운드 끝 정답 공개 · 선생님 · 복기 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.eqpyramid;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const L = K.L;
@@ -218,7 +224,7 @@
     const loss = J.best - J.my;
     const sev = loss >= 2 ? 80 : loss >= 1 ? (J.my < 0 ? 70 : 45) : 5;
     let why;
-    if (J.my < 0 && myA.t === "say") why = Vb.found && Vb.found.some(x => x.k === myA.k) ? "이미 나온 답이라 −1 — 찾은 답 목록을 먼저 봐요" : `값이 ${K.valTxt(K.evalK(Vb.cells, myA.k))} 라서 오답 −1 — ${bestA.t === "say" ? `${best} 가 정답` : "모르면 넘기는 게 0점"}`;
+    if (J.my < 0 && myA.t === "say") why = Vb.found && Vb.found.some(x => x.k === myA.k) ? "이미 나온 답이라 −1 — 찾은 답 목록을 먼저 봐요" : `값이 ${K.valTxt(K.evalK(Vb.cells, myA.k))} 라서 오답 −1 — ${bestA.t === "say" ? `${best}${ja(best, "이")} 정답` : "모르면 넘기는 게 0점"}`;
     else if (J.my === 0 && J.best > 0) why = `남은 정답이 ${J.left}개 있었어요 — ${best}`;
     else why = "좋은 수예요";
     return { sev, why, my, best };
@@ -244,7 +250,7 @@
         boardHtml: tb(pyrHtml(B1.cells, "", false, ["A", "B", "C", "D"])), ms: 6000 },
       { tag: "STEP 3 · 계산", title: "첫 칸은 숫자만", body: "고른 순서대로 이어 써요. <b>첫 칸의 부호는 무시</b>하고, 계산은 <b>곱셈 · 나눗셈 먼저</b>. 예) B · J · D = 5 × 3 − 5 = <b>10</b>.",
         boardHtml: tb(pyrHtml(B1.cells, "BJD", false, null) + `<div class="ep-ex">5 × 3 − 5 <span class="q">= 10</span></div>`), ms: 7200 },
-      { tag: "STEP 4 · 점수", title: "틀리면 −1", body: "맞히면 <b>+1</b>. 값이 다르거나 <b>이미 나온 답</b>을 또 말하면 <b>−1</b>. 순서가 다르면 다른 답 — J · B · D 는 3 ÷ 5 − 5 라 오답이에요.",
+      { tag: "STEP 4 · 점수", title: "틀리면 −1", body: "맞히면 <b>+1</b>. 값이 다르거나 <b>이미 나온 답</b>을 또 말하면 <b>−1</b>. 순서가 다르면 다른 답 — J · B · D는 3 ÷ 5 − 5 라 오답이에요.",
         boardHtml: tb(`<div class="ep-list"><span class="ep-k ok">BJD <small>나 +1</small></span><span class="ep-k x">JBD <small>가 −1</small></span><span class="ep-k x">BJD <small>가 중복 −1</small></span></div>`), ms: 6600 },
       { tag: "STEP 5 · 직접", title: "7 + 9 ÷ 3", body: "타깃 <b>10</b>. A(×7)를 첫 칸으로 쓰면 그냥 7. 다음 C(+9), H(÷3) — 나눗셈이 먼저라 7 + 3 = 10! <b>A → C → H</b> 순서로 누르고 선언해요.",
         interactive: { hint: "👆 A → C → H → 정답 선언", doneText: "✅ ACH = 7 + 9 ÷ 3 = 10 → +1점" },

@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 바그찰 — 화면 (판 두 개 · 지금 둘 판을 크게, 다른 판은 작게 · 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.baghchal;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const NP = K.NP, RC = K.RC, LBL = K.LBL, BN = K.BN;
@@ -138,7 +144,7 @@ span.bc-p{cursor:default}
       return head;
     }
     const b = r.b, g = V.B[b].goat, t = V.B[b].tiger;
-    const why = r.why === "cap" ? `판 ${BN[b]} 에서 ${nm(t)}의 호랑이가 염소 ${K.WINCAP}마리를 잡았어요` : `판 ${BN[b]} 에서 ${nm(g)}의 염소가 호랑이 4마리를 모두 가뒀어요`;
+    const why = r.why === "cap" ? `판 ${BN[b]}에서 ${nm(t)}의 호랑이가 염소 ${K.WINCAP}마리를 잡았어요` : `판 ${BN[b]}에서 ${nm(g)}의 염소가 호랑이 4마리를 모두 가뒀어요`;
     return `${me < 0 ? "🏆" : me === r.w ? "🏆" : "😵"} ${nm(r.w)} 승 — ${why}`;
   }
 
@@ -198,7 +204,7 @@ span.bc-p{cursor:default}
     // 아래 안내
     let info, ic = "";
     if (over) { info = endLine(V, me, ctx); ic = V.res.w < 0 ? " end mid" : me >= 0 && me !== V.res.w ? " end bad" : " end"; }
-    else if (can && vb !== actB) info = `판 ${BN[vb]} 를 보는 중 — 지금 둘 판은 <b>판 ${BN[actB]}</b> (위에서 눌러 돌아가요)`;
+    else if (can && vb !== actB) info = `판 ${BN[vb]}${ja(BN[vb],"을")} 보는 중 — 지금 둘 판은 <b>판 ${BN[actB]}</b> (위에서 눌러 돌아가요)`;
     else if (can && k.role === "g") {
       if (bd.h > 0) info = `<b>빈 점</b>(금색 점선)에 🐐 염소를 놓아요 · 놓을 염소 ${bd.h}마리`;
       else if (S.from >= 0) info = `옮길 <b>빈 점</b>(초록 점선)을 눌러요 · 그 염소를 다시 누르면 취소`;
@@ -206,8 +212,8 @@ span.bc-p{cursor:default}
     } else if (can) {
       info = S.from >= 0 ? `<b>초록</b> = 한 칸 · <b>빨강</b> = 염소를 뛰어넘어 잡기 · 다시 누르면 취소` : `움직일 <b>🐯 호랑이</b>를 눌러요 — 한 칸, 또는 옆 염소를 뛰어넘어 잡기`;
     } else {
-      info = `${esc(nmK)}${ga(nmK)} 판 ${BN[k.b]} 에서 ${ICON[k.role]} ${ROLE[k.role]} 수를 고르는 중…`;
-      if (me >= 0 && vb !== actB) info = `판 ${BN[vb]} 를 보는 중 · ${info}`;
+      info = `${esc(nmK)}${ga(nmK)} 판 ${BN[k.b]}에서 ${ICON[k.role]} ${ROLE[k.role]} 수를 고르는 중…`;
+      if (me >= 0 && vb !== actB) info = `판 ${BN[vb]}${ja(BN[vb],"을")} 보는 중 · ${info}`;
     }
     h += `<div class="bc-info${ic}"><span>${info}</span></div>`;
     stage.innerHTML = h;
@@ -242,7 +248,7 @@ span.bc-p{cursor:default}
   function actText(a, V) {
     if (!a) return "";
     const b = a.b !== undefined ? a.b : V && V.cur ? V.cur.b : -1, pre = b >= 0 ? `판 ${BN[b]} ` : "";
-    if (a.t === "place") return `${pre}🐐 ${L(a.to)} 에 염소 놓기`;
+    if (a.t === "place") return `${pre}🐐 ${L(a.to)}에 염소 놓기`;
     // 역할은 판 내용으로 (수 앞 · 뒤 어느 쪽 보기여도 맞게) — 이웃이 아닌 곳으로 가는 수는 호랑이 잡기뿐
     const jump = !K.ADJ[a.from].includes(a.to);
     const pc = V && V.B && b >= 0 ? (V.B[b].c[a.from] || V.B[b].c[a.to]) : 0;
@@ -281,7 +287,7 @@ span.bc-p{cursor:default}
     const p = [];
     if (!evs.length) p.push(V.step === 0 ? "아직 아무도 두지 않았어요." : "내 지난 차례 뒤 상대가 둔 수는 없어요.");
     else {
-      const parts = evs.slice(-3).map(e => e.k === "pl" ? `판 ${BN[e.b]} 🐐 ${L(e.to)} 에 놓음` : e.k === "gm" ? `판 ${BN[e.b]} 🐐 ${L(e.from)} → ${L(e.to)}` : `판 ${BN[e.b]} 🐯 ${L(e.from)} → ${L(e.to)}${e.cap >= 0 ? ` (내 ${L(e.cap)} 염소 잡음!)` : ""}`);
+      const parts = evs.slice(-3).map(e => e.k === "pl" ? `판 ${BN[e.b]} 🐐 ${L(e.to)}에 놓음` : e.k === "gm" ? `판 ${BN[e.b]} 🐐 ${L(e.from)} → ${L(e.to)}` : `판 ${BN[e.b]} 🐯 ${L(e.from)} → ${L(e.to)}${e.cap >= 0 ? ` (내 ${L(e.cap)} 염소 잡음!)` : ""}`);
       p.push(`상대: ${parts.join(" · ")}${evs.length > 3 ? ` (그 전 ${evs.length - 3}번 더)` : ""}.`);
     }
     if (!V.over) {
@@ -313,8 +319,8 @@ span.bc-p{cursor:default}
     const W = J.WINV - 50, loss = Math.max(0, Math.round(J.best - J.my));
     const k = Vb.cur, em = K.explain(Vb, k, myA), eb = K.explain(Vb, k, bestA), has = (e, t) => e.tags.includes(t);
     let sev, why;
-    if (J.best >= W && J.my < W) { sev = 100; why = `고급 AI 의 수(${best})면 몇 수 안에 이 판을 이기는 길이 있었어요`; }
-    else if (J.my <= -W && J.best > -W) { sev = 100; why = `이 수 뒤엔 상대가 몇 수 안에 이 판을 이기는 길이 생겨요 — ${best} 로 버틸 수 있었어요`; }
+    if (J.best >= W && J.my < W) { sev = 100; why = `고급 AI의 수(${best})면 몇 수 안에 이 판을 이기는 길이 있었어요`; }
+    else if (J.my <= -W && J.best > -W) { sev = 100; why = `이 수 뒤엔 상대가 몇 수 안에 이 판을 이기는 길이 생겨요 — ${best}${ja(best,"로")} 버틸 수 있었어요`; }
     else {
       sev = loss >= 300 ? 90 : loss >= 150 ? 75 : loss >= 90 ? 60 : loss >= 45 ? 40 : loss > 10 ? 20 : 5;
       const r = [];
@@ -374,7 +380,7 @@ span.bc-p{cursor:default}
             const i = +b.dataset.c;
             if (step === 0) {
               if (i !== 12) { ctrl.sfx("tap"); msg = "가운데(c3)의 <b>🐯 호랑이</b>를 눌러요"; draw(); return; }
-              step = 1; ctrl.sfx("tap"); msg = "빨간 점선 = 염소를 뛰어넘어 잡는 자리 — 예: 맨 위 <b>c5</b> 로 뛰어 봐요"; draw(); return;
+              step = 1; ctrl.sfx("tap"); msg = "빨간 점선 = 염소를 뛰어넘어 잡는 자리 — 예: 맨 위 <b>c5</b>로 뛰어 봐요"; draw(); return;
             }
             if (i === 2 || i === 10 || i === 20 || i === 22) { const ov = (12 + i) / 2; c[12] = 0; c[ov] = 0; c[i] = 2; step = 2; ctrl.sfx("win"); msg = `🏆 <b>${L(ov)} 염소를 잡았어요!</b> 뛰어넘은 염소가 판에서 빠져요`; draw(); ctrl.complete(); return; }
             ctrl.sfx("tap"); msg = [6, 8, 13, 18].includes(i) ? "초록은 그냥 한 칸이에요 — 잡으려면 <b>빨간 점선</b>!" : "빨간 점선 빈 점을 눌러요"; draw();

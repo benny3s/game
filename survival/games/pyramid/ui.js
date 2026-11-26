@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 피라미드 넘버 — 화면 (피라미드 · 수식 만들기 · 정답/불가능 선언 · AI 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const M = window.SVCores.pyramid;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -203,8 +209,8 @@
       else st = spec ? `👀 <b>${esc(nm(V.hold))}</b>${sf(nm(V.hold), "이", "가")} ${V.step === 0 ? "먼저" : "넘긴 뒤 이어서"} 풀어요` : `⏳ ${iga(nm(V.hold), false)} ${V.step === 0 ? "먼저" : "이어서"} 푸는 중이에요 — 나도 미리 식을 만들어 둬요`;
     } else if (ph === "raise") {
       const who = lo ? lab(lo.s) : "", sc = lo ? `<b>${lo.f}층(${lo.v})</b>` : "";
-      if (canIn) st = `🔁 ${iga(nm(V.lead), V.lead === me)} ${sc} 을 만들었어요 — <b>${V.floor + 1}층 이상</b>만 이길 수 있어요 · 틀려도 감점 없음 <span class="cd">${fmt(30)}</span>`;
-      else st = spec ? `👀 ${esc(who)} ${sc} 완성 — <b>${esc(nm(V.chal))}</b>${sf(nm(V.chal), "이", "가")} 더 높은 층에 도전 중` : `⏳ 내가 ${sc} 을 만들었어요 — ${iga(nm(V.chal), false)} 더 높은 층에 도전 중이에요`;
+      if (canIn) st = `🔁 ${iga(nm(V.lead), V.lead === me)} ${sc}${ja(sc,"을")} 만들었어요 — <b>${V.floor + 1}층 이상</b>만 이길 수 있어요 · 틀려도 감점 없음 <span class="cd">${fmt(30)}</span>`;
+      else st = spec ? `👀 ${esc(who)} ${sc} 완성 — <b>${esc(nm(V.chal))}</b>${sf(nm(V.chal), "이", "가")} 더 높은 층에 도전 중` : `⏳ 내가 ${sc}${ja(sc,"을")} 만들었어요 — ${iga(nm(V.chal), false)} 더 높은 층에 도전 중이에요`;
     } else if (ph === "imp") {
       const d = V.decl;
       if (canIn) st = `🤔 ${iga(nm(d), false)} <b>불가능</b>이라 했어요 — 목표 하나만 만들면 선언한 쪽 −3점, 나는 그 층 점수! <span class="cd">${fmt(60)}</span>`;
@@ -320,7 +326,7 @@
   // 목표를 알려 주되 식은 숨기는 한 줄 + 한 번 더 단추 (CC.full 에 전체 식)
   function staged(V, me, t, tail) {
     const c = ccFor(V, me); c.full = `<b>${esc(M.infix(t.rpn, V.ops))} = ${t.v}</b>`;
-    return { head: `${t.f}층 <b>${t.v}</b> 를 만들어요 — 식에는 <b>${esc(opsOf(t))}</b> 가 들어가요.`, btn: c.open ? c.full : `<button type="button" class="py-hbtn" data-pyhint>💡 한 번 더 — 전체 식 보기</button>`, tail };
+    return { head: `${t.f}층 <b>${t.v}</b>${ja(t.v,"을")} 만들어요 — 식에는 <b>${esc(opsOf(t))}</b>${ja(opsOf(t), "이")} 들어가요.`, btn: c.open ? c.full : `<button type="button" class="py-hbtn" data-pyhint>💡 한 번 더 — 전체 식 보기</button>`, tail };
   }
   function coach(V, me, since, names) {
     if (typeof document !== "undefined") style();
@@ -348,8 +354,8 @@
         opp: V.step === 0 ? `${ot} 지금 기다려요. 내가 넘기거나 틀리면 ${oi} 같은 선택(선언 · 넘기기 · 불가능)을 해요.` : `${oi} 먼저 넘겼어요 — 쉽게 보이는 목표가 없었다는 뜻이에요.`,
         mine: `${base}. ${stat}.`,
         ...(t ? (() => { const S = staged(V, me, t); return { rec: S.head, why: `${S.btn} ${t.f === 4 ? "4층은 상대가 도전할 더 높은 층이 없어 바로 4점으로 끝나요." : `${t.f}층을 먼저 선언하면 상대는 ${t.f + 1}층 이상을 찾아야 해서 내 ${t.f}점이 지켜질 확률이 높아요. 상대(고급 기준)가 이 중 하나라도 찾을 확률은 ${pct(P.q)}예요.`}` }; })()
-          : H.a && H.a.t === "imp" ? { rec: P.n ? `🤔 <b>불가능 선언</b> — 고급 AI 는 이 숫자로 만들 수 있는 목표 ${P.n}개가 모두 어렵다고 보고 불가능을 선언해요 (상대가 찾을 확률 ${pct(P.q)}).` : `🤔 <b>불가능 선언</b>이 맞아요 — 목표 14개를 모두 따져 봐도 하나도 못 만들어요.`, why: P.n ? `맞으면 +5점, 틀리면 −3점이에요. 만들 수 있는 목표가 있어서 위험한 선택이에요.` : `불가능이 맞으면 +5점이에요 (상대가 찾을 확률 0%). 틀리면 −3점이니 14개를 다 따져 본 뒤에만 선언해요.` }
-          : { rec: P.n ? `🙋 <b>넘기기</b> — 고급 AI 는 만들 수 있는 목표 ${P.n}개가 모두 어려워 넘겨요 (불가능 선언은 상대가 찾을 확률 ${pct(P.q)}라 위험해요).` : `🙋 <b>넘기기</b>.`, why: "넘기면 상대가 같은 선택을 해요. 둘 다 넘기면 점수 없이 끝나요." }),
+          : H.a && H.a.t === "imp" ? { rec: P.n ? `🤔 <b>불가능 선언</b> — 고급 AI는 이 숫자로 만들 수 있는 목표 ${P.n}개가 모두 어렵다고 보고 불가능을 선언해요 (상대가 찾을 확률 ${pct(P.q)}).` : `🤔 <b>불가능 선언</b>이 맞아요 — 목표 14개를 모두 따져 봐도 하나도 못 만들어요.`, why: P.n ? `맞으면 +5점, 틀리면 −3점이에요. 만들 수 있는 목표가 있어서 위험한 선택이에요.` : `불가능이 맞으면 +5점이에요 (상대가 찾을 확률 0%). 틀리면 −3점이니 14개를 다 따져 본 뒤에만 선언해요.` }
+          : { rec: P.n ? `🙋 <b>넘기기</b> — 고급 AI는 만들 수 있는 목표 ${P.n}개가 모두 어려워 넘겨요 (불가능 선언은 상대가 찾을 확률 ${pct(P.q)}라 위험해요).` : `🙋 <b>넘기기</b>.`, why: "넘기면 상대가 같은 선택을 해요. 둘 다 넘기면 점수 없이 끝나요." }),
       }; }
       return {
         opp: `${oi} 먼저 푸는 중이에요${V.step ? " (내가 넘긴 뒤 이어서)" : ""}. 나도 미리 식을 만들어 둘 수 있어요.`,
@@ -361,9 +367,9 @@
     if (V.phase === "raise") {
       const up = P.tab.filter(t => t.f > V.floor), lo = lastOk(V), HR = hardMove(V, me, P.tab);
       if (mine) return {
-        opp: `${oi} ${lo ? `${lo.f}층 ${lo.v}` : "목표"} 를 만들었어요 — 내가 더 높은 층을 못 만들면 ${oi} ${V.floor}점을 가져가요.`,
+        opp: `${oi} ${lo ? `${lo.f}층 ${lo.v}` : "목표"}${ja(lo ? lo.v : "목표", "을")} 만들었어요 — 내가 더 높은 층을 못 만들면 ${oi} ${V.floor}점을 가져가요.`,
         mine: `${base}. ${V.floor}층보다 높은 목표 중 만들 수 있는 것은 ${up.length}개${up.length ? ` (${[4, 3, 2].filter(f => up.some(t => t.f === f)).map(f => `${f}층 ${up.filter(t => t.f === f).length}개`).join(" · ")})` : ""}.`,
-        rec: HR.t ? (() => { const S = staged(V, me, HR.t); return `${S.head.replace("를 만들어요", "로 도전해요")}`; })() : `🙋 <b>포기</b> — 고급 AI 는 ${V.floor + 1}층 이상을 찾지 못해 포기해요${up.length ? ` (실제로는 ${up.length}개 있지만 어려운 식이에요)` : ""}.`,
+        rec: HR.t ? (() => { const S = staged(V, me, HR.t); return `${S.head.replace("를 만들어요", "로 도전해요")}`; })() : `🙋 <b>포기</b> — 고급 AI는 ${V.floor + 1}층 이상을 찾지 못해 포기해요${up.length ? ` (실제로는 ${up.length}개 있지만 어려운 식이에요)` : ""}.`,
         why: HR.t ? `${staged(V, me, HR.t).btn} 성공하면 내가 ${HR.t.f}점으로 앞서고 ${oi} 다시 도전해야 해요. 틀려도 감점은 없어요 (${V.wrongMax}번까지).` : "도전 중 틀려도 감점은 없지만 못 만드는 목표는 시간만 써요. 포기하면 상대가 지금 층 점수만 가져가요.",
       };
       return {
@@ -384,7 +390,7 @@
     return {
       opp: `${oi} 불가능을 선언했어요 — 내가 하나라도 만들면 ${oi} −3점이에요.`,
       mine: `${base}. ${stat}.`,
-      rec: HI.t ? staged(V, me, HI.t).head.replace("를 만들어요", "를 선언해요") + ` (선언한 쪽 −3 · 나 +${HI.t.f})` : `🙋 <b>포기</b>해요 — ${P.n ? "고급 AI 는 이 목표들을 찾지 못해요" : "만들 수 있는 목표가 없어요"} (상대 +5점).`,
+      rec: HI.t ? staged(V, me, HI.t).head.replace("를 만들어요", "를 선언해요") + ` (선언한 쪽 −3 · 나 +${HI.t.f})` : `🙋 <b>포기</b>해요 — ${P.n ? "고급 AI는 이 목표들을 찾지 못해요" : "만들 수 있는 목표가 없어요"} (상대 +5점).`,
       why: HI.t ? `${staged(V, me, HI.t).btn} 낮은 층이라도 하나만 만들면 ${HI.t.f + 3}점 차이로 이겨요.` : "정말 만들 수 없으면 +5점을 내줄 수밖에 없어요.",
     };
   }
@@ -418,15 +424,15 @@
     if (my.bad) { sev = 0; why = "규칙에 맞지 않는 식이에요."; }
     else if (my.k === "ans" && my.f === 0) {
       sev = ph === "open" ? 85 : 25;
-      why = my.low ? `${my.f0}층 ${my.v} = ${my.e} 는 이미 나온 ${Vb.floor}층 이하라 도전이 안 돼요 (감점 없음). ${stat}.` : ph === "open" ? `오답 −1점: ${my.e} = ${my.s} 는 피라미드에 없어요. ${stat}${top ? ` — 예: ${ex(top)}` : ""}.` : `도전 중 틀린 시도예요 (감점 없음, ${Vb.wrongMax}번까지). ${stat}.`;
+      why = my.low ? `${my.f0}층 ${my.v} = ${my.e}${ja(my.e,"은")} 이미 나온 ${Vb.floor}층 이하라 도전이 안 돼요 (감점 없음). ${stat}.` : ph === "open" ? `오답 −1점: ${my.e} = ${my.s}${ja(my.s,"은")} 피라미드에 없어요. ${stat}${top ? ` — 예: ${ex(top)}` : ""}.` : `도전 중 틀린 시도예요 (감점 없음, ${Vb.wrongMax}번까지). ${stat}.`;
     } else if (my.k === "imp") {
       if (P.n > 0) { sev = 92; why = `불가능이 아니었어요: ${stat} (예 ${ex(top)}). 상대가 찾으면 −3점에 상대 +${top.f}점이에요. 고급 상대가 찾을 확률 ${pct(P.q)}.`; }
     } else if (my.k === "pass") {
       if (bs.k === "ans" && bs.f > (ph === "raise" ? Vb.floor : 0)) {
-        sev = Math.min(88, 22 + 16 * bs.f); why = `${ph === "open" ? "넘겼지만" : ph === "imp" ? "포기했지만" : "포기했지만"} ${bs.f}층 ${bs.v} = ${bs.e} 을 만들 수 있었어요. ${stat}.${ph === "imp" ? ` 만들었다면 상대 −3 · 나 +${bs.f}.` : ""}`;
+        sev = Math.min(88, 22 + 16 * bs.f); why = `${ph === "open" ? "넘겼지만" : ph === "imp" ? "포기했지만" : "포기했지만"} ${bs.f}층 ${bs.v} = ${bs.e}${ja(bs.e,"을")} 만들 수 있었어요. ${stat}.${ph === "imp" ? ` 만들었다면 상대 −3 · 나 +${bs.f}.` : ""}`;
       } else if (bs.k === "imp" && P.n === 0) { sev = 58; why = `불가능 선언으로 +5점을 얻을 수 있었어요: ${stat}. 상대가 찾을 방법이 없어요.`; }
     } else if (my.k === "ans" && bs.k === "ans" && my.f < bs.f) {
-      sev = Math.min(88, 22 + 18 * (bs.f - my.f)); why = `${my.f}층 ${my.v} 에서 멈췄어요 — ${bs.f}층 ${bs.v} = ${bs.e} 까지 만들 수 있었어요. ${stat}. 낮은 층을 먼저 선언하면 상대가 더 높은 층을 찾을 기회가 생겨요(고급 상대 ${pct(P.q)}).`;
+      sev = Math.min(88, 22 + 18 * (bs.f - my.f)); why = `${my.f}층 ${my.v}에서 멈췄어요 — ${bs.f}층 ${bs.v} = ${bs.e} 까지 만들 수 있었어요. ${stat}. 낮은 층을 먼저 선언하면 상대가 더 높은 층을 찾을 기회가 생겨요(고급 상대 ${pct(P.q)}).`;
     } else if (my.k === "ans" && bs.k !== "ans") { sev = 0; }
     return { sev, why, my: mine, best };
   }
@@ -441,9 +447,9 @@
     return [
       { tag: "STEP 1 · 목표", title: "숫자 3개로 피라미드의 목표를 만들어요", body: "라운드마다 <b>연산용 숫자 3개</b>와, 피라미드로 놓인 <b>목표 숫자 14개</b>가 나와요 (4층 2개 · 3층 3개 · 2층 4개 · 1층 5개). 숫자 3개를 <b>모두 한 번씩</b> 써서 목표 중 하나를 만들면 돼요.",
         boardHtml: demo(), ms: 6500 },
-      { tag: "STEP 2 · 수식", title: "+ − × ÷ 와 제곱 · 세제곱 · 루트", body: "쓸 수 있는 기호는 <b>+ − × ÷</b> 와 <b>² ³ √</b> (식 전체에서 한 번, 루트는 제곱수만). 예: 3 · 5 · 8 로 <b>8 × (5 − 3) = 16</b> — 1층 목표 16을 만들어요.",
+      { tag: "STEP 2 · 수식", title: "+ − × ÷ 와 제곱 · 세제곱 · 루트", body: "쓸 수 있는 기호는 <b>+ − × ÷</b> 와 <b>² ³ √</b> (식 전체에서 한 번, 루트는 제곱수만). 예: 3 · 5 · 8로 <b>8 × (5 − 3) = 16</b> — 1층 목표 16을 만들어요.",
         boardHtml: demo({ hit: 16 }, `<div class="row"><span class="big">8 × (5 − 3) = 16</span></div><small>숫자를 눌러 식을 만드는 방법은 다음 단계에서 해 봐요</small>`), ms: 6500 },
-      { tag: "STEP 3 · 직접", title: "3 · 5 · 8 로 16 을 만들어 보세요", body: "숫자(조각)를 누르고 → 기호를 누르고 → 다른 숫자를 누르면 하나로 합쳐져요. 숫자 3개가 모두 하나로 합쳐졌을 때 <b>16</b> 이 되게 해 보세요 (예: 8 × (5 − 3), 3 + 5 + 8).",
+      { tag: "STEP 3 · 직접", title: "3 · 5 · 8로 16을 만들어 보세요", body: "숫자(조각)를 누르고 → 기호를 누르고 → 다른 숫자를 누르면 하나로 합쳐져요. 숫자 3개가 모두 하나로 합쳐졌을 때 <b>16</b>이 되게 해 보세요 (예: 8 × (5 − 3), 3 + 5 + 8).",
         interactive: { hint: "👆 숫자 → 기호 → 숫자 순서로 눌러요 (목표 16)", doneText: "✅ 16! 이렇게 식을 만들어요" },
         render(stage, ctrl) {
           TB = bNew("tut", TV.ops); let done = false, msg = "";
@@ -457,7 +463,7 @@
             msg = err || ""; ctrl.sfx("tap");
             const v = bVal(TB);
             if (v && v[1] === 1 && v[0] === 16) { done = true; msg = `🏆 정답! ${exprOf(TB.chips[0].rpn, TB.ops)} = 16`; ctrl.sfx("win"); draw(); ctrl.complete(); return; }
-            if (v) msg = `= ${fstr(v)} — 16 이 아니에요. ↩ 되돌리거나 다시 해 봐요`;
+            if (v) msg = `= ${fstr(v)} — 16이 아니에요. ↩ 되돌리거나 다시 해 봐요`;
             draw();
           };
           draw();
@@ -472,7 +478,7 @@
   }
 
   const SRC = "방송: 피의 게임 시즌X · 피라미드 넘버 (9일차 파이널 1라운드 · 10화) · 확인한 자료: 나무위키 '피의 게임X' 일차 표 · 웨이브 공식 하이라이트 영상";
-  const DIFF = "방송과 다른 점: 방송은 둘이 동시에 푸는 순발력 싸움이지만 우리는 라운드마다 먼저 차례를 번갈아 줘요 (선언 · 넘기기 · 불가능, 둘 다 넘기면 점수 없이 끝) · 화면 시계(30초 · 1분)가 끝나면 포기를 대신 눌러 줘요 · 쓸 수 있는 기호는 영상에서 다 확인하지 못해 + − × ÷ 와 제곱 · 세제곱 · 루트(식 전체에서 한 번)로 정했어요 · 목표는 1~60, 연산용 숫자는 1~9 중 서로 다른 3개 · 도전 중 틀린 시도는 4번까지만 받고 넘어가요(끝없는 판을 막으려 우리가 넣은 상한) · 화면에서는 목표에 없는 값은 선언 단추가 잠겨 오답 −1점이 나오지 않아요(AI 와 규칙은 방송과 같음)";
+  const DIFF = "방송과 다른 점: 방송은 둘이 동시에 푸는 순발력 싸움이지만 우리는 라운드마다 먼저 차례를 번갈아 줘요 (선언 · 넘기기 · 불가능, 둘 다 넘기면 점수 없이 끝) · 화면 시계(30초 · 1분)가 끝나면 포기를 대신 눌러 줘요 · 쓸 수 있는 기호는 영상에서 다 확인하지 못해 + − × ÷ 와 제곱 · 세제곱 · 루트(식 전체에서 한 번)로 정했어요 · 목표는 1~60, 연산용 숫자는 1~9 중 서로 다른 3개 · 도전 중 틀린 시도는 4번까지만 받고 넘어가요(끝없는 판을 막으려 우리가 넣은 상한) · 화면에서는 목표에 없는 값은 선언 단추가 잠겨 오답 −1점이 나오지 않아요(AI와 규칙은 방송과 같음)";
   window.SVUI = window.SVUI || {};
   window.SVUI.pyramid = {
     actText, review,

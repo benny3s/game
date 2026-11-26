@@ -118,7 +118,7 @@
         const sel = selFor(V, ctx), keep = V.rounds - V.round, have = V.coins.filter(Boolean).length;
         const val = [...sel.set].reduce((a, k) => a + A.COINS[k], 0), left = have - sel.set.size;
         const bad = !sel.set.size ? "코인을 골라요" : left < keep ? `나머지 ${keep}라운드용으로 ${keep}개는 남겨야 해요` : "";
-        acts = `<div class="ab-bidsum"><span>${SH[myPick]} 에 입찰</span><span class="v">${val}원 · ${sel.set.size}개 ${bad ? `<span class="bad">${bad}</span>` : ""}</span></div>
+        acts = `<div class="ab-bidsum"><span>${SH[myPick]}에 입찰</span><span class="v">${val}원 · ${sel.set.size}개 ${bad ? `<span class="bad">${bad}</span>` : ""}</span></div>
           <div class="ab-coins">${A.COINS.map((v, k) => `<button type="button" class="ab-coin${V.coins[k] ? "" : " gone"}${sel.set.has(k) ? " sel" : ""}" data-k="${k}" ${V.coins[k] ? "" : "disabled"}>${v}</button>`).join("")}</div>
           <button class="btn primary big" data-a="bid" ${bad ? "disabled" : ""}>✔ 입찰 확정</button>
           <div class="note">쓴 코인은 이기든 지든 사라져요 · 남은 코인 개수가 마지막 동점 가림에 쓰여요</div>`;
@@ -147,7 +147,7 @@
     } else if (me >= 0 && V.mine.length) {
       const m = V.mine[V.mine.length - 1];
       const t = m.won === true ? (m.cnt > 1 ? `이겼어요 — 타일 최소 1개, 동률이 아니었다면 ${m.cnt}개를 받았을 거예요` : "이겼어요 — 타일 1개를 받았어요") : m.won === false ? "졌어요 — 이 도형 타일은 못 받아요" : "시크릿이라 이겼는지는 몰라요 — 마지막에 공개돼요";
-      rows += `<div class="r me"><span>🙋</span><b>나: ${SH[m.sh]} 에 ${m.v}원</b><i></i><span class="e">${t}</span></div>`;
+      rows += `<div class="r me"><span>🙋</span><b>나: ${SH[m.sh]}에 ${m.v}원</b><i></i><span class="e">${t}</span></div>`;
     }
     return `<div class="ab-show">${rows}</div>`;
   }
@@ -212,7 +212,7 @@
         const p = A.bidPlan(V, seat, "hard", r0), vm = A.bidValue(myA.c), vb = A.bidValue(bestA.c);
         const contested = p.cntNow > 1 && p.useful > 0;
         const sev = contested ? (vm < vb ? Math.min(100, (vb - vm) * 14) : Math.min(60, (vm - vb) * 6)) : (vm > vb ? Math.min(100, (vm - vb) * 12) : 0);
-        return { sev: Math.round(sev), why: contested ? `${SN[p.sh]}에 ${p.cntNow}명 — 타일 ${p.cntNow}개가 걸렸어요. 고급 AI 는 ${vb}원, 내 입찰 ${vm}원 (남은 코인 ${p.val}원 · ${p.roundsLeft}라운드)` : `이 도형엔 나 혼자(또는 더 필요 없음)라 ${vb}원이면 충분해요. 내 입찰 ${vm}원 (남은 코인 ${p.val}원)` };
+        return { sev: Math.round(sev), why: contested ? `${SN[p.sh]}에 ${p.cntNow}명 — 타일 ${p.cntNow}개가 걸렸어요. 고급 AI는 ${vb}원, 내 입찰 ${vm}원 (남은 코인 ${p.val}원 · ${p.roundsLeft}라운드)` : `이 도형엔 나 혼자(또는 더 필요 없음)라 ${vb}원이면 충분해요. 내 입찰 ${vm}원 (남은 코인 ${p.val}원)` };
       }
       return null;
     },

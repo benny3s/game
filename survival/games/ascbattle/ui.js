@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 배틀 오름차순 — 화면 (두 시트 · 뽑은 카드 두 장 · 한 장 가지고 한 장 넘기기 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const B = window.SVCores.ascbattle;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -88,9 +94,9 @@
   function logText(V, ctx) {
     const e = V.log[V.log.length - 1]; if (!e) return "";
     const nm = esc(ga(nameOf(ctx, e.s), e.s === ctx.me));
-    if (e.k === "deal") return `${nm} 카드 ${e.a} · ${e.b} 을(를) 뽑았어요`;
-    if (e.k === "keep") return `${nm} ${e.v} 을(를) 적고 ${e.gift} 을(를) 넘겼어요`;
-    if (e.k === "put") return `${nm} ${e.v} 을(를) 적었어요`;
+    if (e.k === "deal") return `${nm} 카드 ${e.a} · ${e.b}${ja(e.b,"을")} 뽑았어요`;
+    if (e.k === "keep") return `${nm} ${e.v}${ja(e.v,"을")} 적고 ${e.gift}${ja(e.gift,"을")} 넘겼어요`;
+    if (e.k === "put") return `${nm} ${e.v}${ja(e.v,"을")} 적었어요`;
     if (e.k === "end") return "모든 칸이 찼어요";
     return "";
   }
@@ -123,7 +129,7 @@
         c0 = card(0, "", keepAct ? "가지기" : "", false, keepAct); c1 = card(1, "", keepAct ? "가지기" : "", false, keepAct);
       } else {
         const kp = V.kept, gf = 1 - kp, cs = [null, null], tg = [null, null];
-        lbl = putAct ? `🎁 ${esc(gname(V.drawer))} 넘겨 준 ${V.gift} · 내 시트 빈칸에 적어요` : `🎁 ${esc(gname(V.drawer))} 넘긴 ${V.gift} 을(를) ${esc(gname(1 - V.drawer))} 적는 중이에요`;
+        lbl = putAct ? `🎁 ${esc(gname(V.drawer))} 넘겨 준 ${V.gift} · 내 시트 빈칸에 적어요` : `🎁 ${esc(gname(V.drawer))} 넘긴 ${V.gift}${ja(V.gift,"을")} ${esc(gname(1 - V.drawer))} 적는 중이에요`;
         cs[kp] = "dim"; cs[gf] = "gift"; tg[kp] = `${gname(V.drawer)} 가짐`; tg[gf] = putAct ? "내가 적을 카드" : "넘어간 카드";
         c0 = card(0, cs[0], esc(tg[0]), gf === 0, false); c1 = card(1, cs[1], esc(tg[1]), gf === 1, false);
       }
@@ -131,9 +137,9 @@
       const pickMine = keepAct || putAct;
       const ghost = keepAct ? (SEL.k >= 0 ? P[SEL.k] : 0) : putAct ? V.gift : 0;
       if (keepAct) {
-        acts = `<div class="note">${SEL.k < 0 ? "가질 카드를 먼저 눌러요 · 남은 한 장은 상대가 적어요" : SEL.c < 0 ? `${P[SEL.k]} 을(를) 적을 내 빈칸을 눌러요` : `${P[SEL.k]} 을(를) ${SEL.c + 1}번째 칸에 적고, ${P[1 - SEL.k]} 은(는) 상대에게 넘길까요?`}</div><button class="btn primary big" data-a="ok" ${SEL.k >= 0 && SEL.c >= 0 ? "" : "disabled"}>✔ 이대로 정하기</button>`;
+        acts = `<div class="note">${SEL.k < 0 ? "가질 카드를 먼저 눌러요 · 남은 한 장은 상대가 적어요" : SEL.c < 0 ? `${P[SEL.k]}${ja(P[SEL.k],"을")} 적을 내 빈칸을 눌러요` : `${P[SEL.k]}${ja(P[SEL.k],"을")} ${SEL.c + 1}번째 칸에 적고, ${P[1 - SEL.k]}${ja(P[1 - SEL.k],"은")} 상대에게 넘길까요?`}</div><button class="btn primary big" data-a="ok" ${SEL.k >= 0 && SEL.c >= 0 ? "" : "disabled"}>✔ 이대로 정하기</button>`;
       } else if (putAct) {
-        acts = `<div class="note">${SEL.c < 0 ? `넘어온 ${V.gift} 을(를) 적을 내 빈칸을 눌러요` : `${SEL.c + 1}번째 칸에 ${V.gift} 을(를) 적을까요?`}</div><button class="btn primary big" data-a="ok" ${SEL.c >= 0 ? "" : "disabled"}>✔ 여기에 적기</button>`;
+        acts = `<div class="note">${SEL.c < 0 ? `넘어온 ${V.gift}${ja(V.gift,"을")} 적을 내 빈칸을 눌러요` : `${SEL.c + 1}번째 칸에 ${V.gift}${ja(V.gift,"을")} 적을까요?`}</div><button class="btn primary big" data-a="ok" ${SEL.c >= 0 ? "" : "disabled"}>✔ 여기에 적기</button>`;
       } else if (me < 0) acts = `<div class="note">구경 중이에요 · 두 시트는 모두 공개예요</div>`;
       else acts = `<div class="note">${esc(gname(V.phase === "keep" ? V.drawer : 1 - V.drawer))} ${V.phase === "keep" ? "가질 카드를 고르는 중…" : "넘어간 카드를 적는 중…"}</div>`;
       h += shBlock(bot, pickMine, pickMine ? SEL.c : -1, ghost);
@@ -168,7 +174,7 @@
     let b = c + 1; while (b < sh.length && sh[b] == null) b++;
     const l = a >= 0 ? `왼쪽 이웃 ${sh[a]}` : "왼쪽은 시트 끝", r = b < sh.length ? `오른쪽 이웃 ${sh[b]}` : "오른쪽은 시트 끝";
     const fit = (a < 0 || sh[a] <= v) && (b >= sh.length || v <= sh[b]);
-    return `${c + 1}번째 칸은 ${l} · ${r} 이라 ${v} 이(가) ${fit ? "오름차순을 끊지 않고 들어가요" : "들어가면 오름차순이 끊겨요"}`;
+    return `${c + 1}번째 칸은 ${l} · ${r} 이라 ${v}${ja(v,"이")} ${fit ? "오름차순을 끊지 않고 들어가요" : "들어가면 오름차순이 끊겨요"}`;
   }
   function coach(V, me, since, names) {
     const nm = i => (names && names[i]) || (i === 0 ? "1번" : "2번");
@@ -180,7 +186,7 @@
     const o = 1 - me, sum = V.sheets.flat().reduce((a, x) => a + (x || 0), 0);
     const r = seeded(V.turn * 977 + V.pair[0] * 31 + V.pair[1] * 7 + V.gift * 3 + sum + me);
     const ev = V.log.filter(e => e.i > since && e.s === o && (e.k === "keep" || e.k === "put")).slice(-2);
-    let opp = ev.length ? ev.map(e => (e.k === "keep" ? `${ga(nm(o), false)} ${e.v} 을(를) ${e.c + 1}번째 칸에 적고 ${e.gift} 을(를) 넘겼어요` : `${ga(nm(o), false)} 넘어간 ${e.v} 을(를) ${e.c + 1}번째 칸에 적었어요`)).join(" → ") + " — " : "";
+    let opp = ev.length ? ev.map(e => (e.k === "keep" ? `${ga(nm(o), false)} ${e.v}${ja(e.v,"을")} ${e.c + 1}번째 칸에 적고 ${e.gift}${ja(e.gift,"을")} 넘겼어요` : `${ga(nm(o), false)} 넘어간 ${e.v}${ja(e.v,"을")} ${e.c + 1}번째 칸에 적었어요`)).join(" → ") + " — " : "";
     opp += `상대 시트는 이어진 ${V.runs[o]}칸${V.runs[o] > 1 ? ` (${rangeTxt({ len: V.runs[o], from: V.froms[o] })})` : ""} · 빈칸 ${V.sheets[o].filter(x => x == null).length}개 · 잘 채우면 최대 ${potential(V.sheets[o])}칸까지예요`;
     const wp = B.winProb(V, me, 30, r);
     const mine = `내 시트는 이어진 ${V.runs[me]}칸${V.runs[me] > 1 ? ` (${rangeTxt({ len: V.runs[me], from: V.froms[me] })})` : ""} · 빈칸 ${V.sheets[me].filter(x => x == null).length}개 · 최대 ${potential(V.sheets[me])}칸까지 · 지금 형세로 이길 확률은 약 ${pct(wp)}`;
@@ -188,16 +194,16 @@
     if (V.needs.includes(me) && V.phase === "keep") {
       const L = B.evalKeep(V, me, 40, r, 3), b = L[0], kv = V.pair[b.k], gv = V.pair[1 - b.k];
       const oc = B.costs(V.sheets[o], gv), mn = Math.min(...oc), ob = B.bestCell(V.sheets[o], gv);
-      rec = `${kv} 을(를) ${b.c + 1}번째 칸에 적고, ${gv} 은(는) 상대에게`;
-      const give = mn >= 8 ? `상대 시트에는 ${gv} 이(가) 오름차순으로 들어갈 칸이 없어서 상대가 곤란해져요` : mn < 1 ? `상대는 ${gv} 을(를) ${ob + 1}번째 칸에 딱 맞게 적을 수 있어요(상대에게 도움이 돼요)` : `상대는 ${gv} 을(를) ${ob + 1}번째 칸 근처에 무난히 적을 수 있어요`;
+      rec = `${kv}${ja(kv,"을")} ${b.c + 1}번째 칸에 적고, ${gv}${ja(gv,"은")} 상대에게`;
+      const give = mn >= 8 ? `상대 시트에는 ${gv}${ja(gv,"이")} 오름차순으로 들어갈 칸이 없어서 상대가 곤란해져요` : mn < 1 ? `상대는 ${gv}${ja(gv,"을")} ${ob + 1}번째 칸에 딱 맞게 적을 수 있어요(상대에게 도움이 돼요)` : `상대는 ${gv}${ja(gv,"을")} ${ob + 1}번째 칸 근처에 무난히 적을 수 있어요`;
       const alt = L.find(x => x.k !== b.k);
-      why = `${nbText(V.sheets[me], b.c, kv)}. 넘기는 카드도 중요해요: ${give}. 이렇게 하면 이길 확률이 약 ${pct(b.p)}${alt ? ` (반대로 ${V.pair[alt.k]} 을(를) 가지면 약 ${pct(alt.p)})` : ""}예요.`;
+      why = `${nbText(V.sheets[me], b.c, kv)}. 넘기는 카드도 중요해요: ${give}. 이렇게 하면 이길 확률이 약 ${pct(b.p)}${alt ? ` (반대로 ${V.pair[alt.k]}${ja(V.pair[alt.k],"을")} 가지면 약 ${pct(alt.p)})` : ""}예요.`;
     } else if (V.needs.includes(me) && V.phase === "put") {
       const L = B.evalPut(V, me, 40, r), b = L[0], alt = L[1];
-      rec = `${V.gift} 을(를) ${b.c + 1}번째 칸에`;
+      rec = `${V.gift}${ja(V.gift,"을")} ${b.c + 1}번째 칸에`;
       why = `${nbText(V.sheets[me], b.c, V.gift)}. 이 칸이면 이길 확률이 약 ${pct(b.p)}${alt ? ` (다음으로 좋은 ${alt.c + 1}번째 칸은 약 ${pct(alt.p)})` : ""}예요. 넘어온 카드는 고를 수 없어서 어디에 적을지가 전부예요.`;
     } else if (V.phase === "keep") { rec = `${ga(nm(V.drawer), false)} 가질 카드를 고르는 중이에요`; why = `뽑은 카드는 ${V.pair[0]} · ${V.pair[1]}. 한 장은 상대가 가지고 남은 한 장이 나에게 넘어와요 — 내 시트에 어울리는 쪽이 오기를 기대해요.`; }
-    else { rec = `${ga(nm(o), false)} 넘어간 ${V.gift} 을(를) 적는 중이에요`; why = "내가 넘긴 카드가 상대 시트에서 오름차순을 끊는지 지켜봐요."; }
+    else { rec = `${ga(nm(o), false)} 넘어간 ${V.gift}${ja(V.gift,"을")} 적는 중이에요`; why = "내가 넘긴 카드가 상대 시트에서 오름차순을 끊는지 지켜봐요."; }
     return { opp, mine, rec, why };
   }
 
@@ -224,16 +230,16 @@
         if (!m || !b) return none;
         const g = V.gift, gj = josa(g, "을", "를"), nm = nbInfo(sh, m.c, g), nb = nbInfo(sh, b.c, g);
         const my = `넘어온 ${g}${gj} ${m.c + 1}번째 칸에`, best = `넘어온 ${g}${gj} ${b.c + 1}번째 칸에`;
-        if (m.c === b.c) return { sev: 0, why: `고급 AI 와 같은 칸이에요 — ${nm.full}, 이길 확률 약 ${pc(m.p)}%`, my, best };
+        if (m.c === b.c) return { sev: 0, why: `고급 AI와 같은 칸이에요 — ${nm.full}, 이길 확률 약 ${pc(m.p)}%`, my, best };
         let sev = sevOf(b.p - m.p); if (info && info.same) sev = Math.min(sev, 15);
-        return { sev, my, best, why: `${g}${gj} ${nm.full}에 두면 이길 확률 약 ${pc(m.p)}%, 고급 AI 의 ${nb.short}이면 약 ${pc(b.p)}%예요${tail(b.p - m.p)}` };
+        return { sev, my, best, why: `${g}${gj} ${nm.full}에 두면 이길 확률 약 ${pc(m.p)}%, 고급 AI의 ${nb.short}이면 약 ${pc(b.p)}%예요${tail(b.p - m.p)}` };
       }
       if (V.phase === "keep" && myA.t === "keep" && bestA.t === "keep") {
         const L = B.evalKeep(V, seat, S, r, B.N), m = L.find(x => x.k === myA.k && x.c === myA.c), b = L.find(x => x.k === bestA.k && x.c === bestA.c);
         if (!m || !b) return none;
         const kv = V.pair[m.k], gv = V.pair[1 - m.k], bk = V.pair[b.k], bg = V.pair[1 - b.k], nm = nbInfo(sh, m.c, kv), nb = nbInfo(sh, b.c, bk);
         const my = `${kv}${josa(kv, "을", "를")} 내 ${m.c + 1}번 칸에 적고 ${gv}${josa(gv, "은", "는")} 상대에게`, best = `${bk}${josa(bk, "을", "를")} 내 ${b.c + 1}번 칸에 적고 ${bg}${josa(bg, "은", "는")} 상대에게`;
-        if (kv === bk && m.c === b.c) return { sev: 0, why: `고급 AI 와 같은 수예요 (같은 숫자 · 같은 칸) — ${nm.full}, 이길 확률 약 ${pc(m.p)}%`, my, best };
+        if (kv === bk && m.c === b.c) return { sev: 0, why: `고급 AI와 같은 수예요 (같은 숫자 · 같은 칸) — ${nm.full}, 이길 확률 약 ${pc(m.p)}%`, my, best };
         const ob = B.bestCell(V.sheets[o], gv), oc = B.costs(V.sheets[o], gv)[ob];
         const give = oc < 1 && b.p - m.p >= 0.04 ? ` · 넘긴 ${gv}${josa(gv, "은", "는")} 상대 ${ob + 1}번째 칸에 딱 맞아요` : "";
         let sev = sevOf(b.p - m.p); if (info && info.same) sev = Math.min(sev, 15);
@@ -249,7 +255,7 @@
     const mini = (sh, run) => `<div class="ab-sheet">${cells(sh, { run })}</div>`;
     const pairTut = (a, b, ta, tb, ca, cb) => `<div class="ab-cards"><div class="ab-cw"><span class="ab-card${ca ? " " + ca : ""}">${a}</span><span class="tag">${ta || ""}</span></div><div class="ab-cw"><span class="ab-card${cb ? " " + cb : ""}">${b}</span><span class="tag${tb && /넘어/.test(tb) ? " hot" : ""}">${tb || ""}</span></div></div>`;
     return [
-      { tag: "STEP 1 · 목표", title: "1:1 로 숫자를 오름차순으로 길게 이어요", body: "8칸 시트에 1~10 숫자를 적어요. 왼쪽에서 오른쪽으로 <b>점점 커지는(같아도 OK) 칸</b>이 더 길게 이어진 사람이 이겨요.",
+      { tag: "STEP 1 · 목표", title: "1:1로 숫자를 오름차순으로 길게 이어요", body: "8칸 시트에 1~10 숫자를 적어요. 왼쪽에서 오른쪽으로 <b>점점 커지는(같아도 OK) 칸</b>이 더 길게 이어진 사람이 이겨요.",
         boardHtml: `<div class="ab-tut">${mini([1, 2, 2, 5, 6, 3, 9, 4], { from: 0, len: 5 })}<small>노란 칸 5개가 이어져요 → 이 시트는 5점</small></div>`, ms: 5000 },
       { tag: "STEP 2 · 준비", title: "한 명이 카드 두 장을 뽑아요", body: "차례가 오면 숫자 카드 <b>두 장을 무작위로 뽑아요</b>. 어떤 숫자인지는 <b>상대에게도 공개</b>돼요 (우리 판은 1~10 무작위).",
         boardHtml: `<div class="ab-tut">${pairTut(3, 8, "", "")}<small>뽑은 카드 3 · 8 — 둘 다 보여요</small></div>`, ms: 5000 },
@@ -268,10 +274,10 @@
           stage.onclick = e => {
             if (done) return;
             const kc = e.target.closest("[data-k]");
-            if (kc) { k = +kc.dataset.k; ctrl.sfx("tap"); msg = `${P[k]} 을(를) 적을 빈칸을 눌러요`; draw(); return; }
+            if (kc) { k = +kc.dataset.k; ctrl.sfx("tap"); msg = `${P[k]}${ja(P[k],"을")} 적을 빈칸을 눌러요`; draw(); return; }
             const b = e.target.closest("[data-c]"); if (!b || k < 0) return;
             const c = +b.dataset.c, t = sh.slice(); t[c] = P[k];
-            if (t.filter(x => x != null).some((x, i, a) => i && x < a[i - 1])) { msg = `💥 ${P[k]} 이(가) ${c + 1}번째 칸에 들어가면 끊겨요 — 다시 골라요!`; k = -1; ctrl.sfx("tap"); draw(); return; }
+            if (t.filter(x => x != null).some((x, i, a) => i && x < a[i - 1])) { msg = `💥 ${P[k]}${ja(P[k],"이")} ${c + 1}번째 칸에 들어가면 끊겨요 — 다시 골라요!`; k = -1; ctrl.sfx("tap"); draw(); return; }
             sh = t; done = true; ctrl.sfx("tap"); msg = ""; draw();
           };
           draw();
@@ -289,13 +295,13 @@
   window.SVUI.ascbattle = {
     actText: (a, V) => {                                                                                                                        // 🎞️ 복기 행동 글
       if (!a) return "—";
-      if (a.t === "keep") return V && V.pair ? `${V.pair[a.k]} 을(를) 내 ${a.c + 1}번 칸에 적고 ${V.pair[1 - a.k]} 은(는) 상대에게` : `고른 카드를 내 ${a.c + 1}번 칸에 적음`;
+      if (a.t === "keep") return V && V.pair ? `${V.pair[a.k]}${ja(V.pair[a.k],"을")} 내 ${a.c + 1}번 칸에 적고 ${V.pair[1 - a.k]}${ja(V.pair[1 - a.k],"은")} 상대에게` : `고른 카드를 내 ${a.c + 1}번 칸에 적음`;
       return a.t === "put" ? `넘어온 ${V && V.gift ? V.gift + " 을(를) " : "카드를 "}내 ${a.c + 1}번 칸에 적음` : "행동";
     },
     name: "배틀 오름차순", emoji: "⚔️", short: "둘이 겨뤄 오름차순을 더 길게 이어요", min: 2, max: 2, defN: 2, board: true,
     opts: [],
     howto: [
-      "1:1 로 8칸 시트에 숫자를 적어 <b>왼쪽에서 오른쪽으로 커지는 칸</b>을 더 길게 이어요 (같은 숫자도 이어짐)",
+      "1:1로 8칸 시트에 숫자를 적어 <b>왼쪽에서 오른쪽으로 커지는 칸</b>을 더 길게 이어요 (같은 숫자도 이어짐)",
       "차례가 된 사람이 카드 <b>두 장을 무작위로</b> 뽑아요 (숫자는 상대에게도 공개)",
       "뽑은 사람이 <b>한 장</b>을 골라 내 시트 원하는 칸에 적고, <b>남은 한 장은 상대에게 넘어가</b> 상대가 자기 시트 원하는 칸에 적어요 → 8번 되풀이",
       "시트가 다 차면 이어진 칸 수가 더 많은 쪽이 승리 · 같으면 공동 1등 · 시트가 모두 공개라 한 기기로도 할 수 있어요",

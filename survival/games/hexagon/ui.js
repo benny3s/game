@@ -316,7 +316,7 @@
     } else if (V.phase === "buzz") {
       const need = left > 0 ? Math.ceil((-df + 1) / left) : 0;
       rec = df > 0 && left <= 2 ? "확실한 줄만 버저 — 지키는 쪽이 유리해요." : df < 0 && left <= 2 ? "따라잡아야 해요 — 거의 확실하면 과감히 버저!" : "세 칸이 다 확실하면 버저, 아니면 넘기기.";
-      why = `오답은 −1 이라 맞을 확률 p 가 50% 를 넘어야 버저가 이득이에요 (기대 2p−1점: 70% 면 ${sgn(K.buzzEV(0.7))} · 40% 면 ${sgn(K.buzzEV(0.4))}).`;
+      why = `오답은 −1 이라 맞을 확률 p가 50%를 넘어야 버저가 이득이에요 (기대 2p−1점: 70% 면 ${sgn(K.buzzEV(0.7))} · 40% 면 ${sgn(K.buzzEV(0.4))}).`;
       if (df < 0 && left > 0) why += ` 지금 ${-df}점 뒤져 남은 ${left}라운드에 라운드당 약 ${need}개를 더 맞혀야 해요.`;
       else if (df > 0) why += ` ${df}점 앞서 있어요 — 오답 하나가 상대 정답 하나와 같아요.`;
     } else if (V.phase === "call") {
@@ -352,10 +352,10 @@
     if (myA.t === "timeout") return { sev: 65, why: `${(Vb.opt || {}).limit || 10}초 안에 못 불러 −1${ex ? ` · 정답 예: ${ex}` : ""}`, my, best };
     if (myA.t === "buzz" && bestA && bestA.t === "buzz") {
       const iP = myA.ms < NO, bP = bestA.ms < NO, hs = K.knownLines(Vb, K.PROF.hard, seat).sure, hk = hs.length ? hs[0] : -1;
-      if (!iP && bP) return { sev: answers.length ? 40 : 20, why: `고급 AI 는 ${hk >= 0 ? lineTxt(hk) + `(${LINE_SUM(pool, hk)}) 줄` : "합이 맞는 줄"}을 외워 두고 ${secs(bestA.ms)}에 눌렀어요 — 맞히면 +1`, my, best };
-      if (iP && !bP) return { sev: 25, why: `고급 AI 는 세 칸이 다 확실한 줄이 없어 넘겼어요 — 맞을 확률이 50% 아래면 버저는 손해 (기대 2p−1점)`, my, best };
-      if (iP && bP && myA.ms > bestA.ms + 1500) return { sev: 15, why: `둘 다 누를 장면 — 고급 AI 는 ${secs(bestA.ms)}, 나는 ${secs(myA.ms)}`, my, best };
-      return { sev: 5, why: "고급 AI 와 같은 판단이에요", my, best };
+      if (!iP && bP) return { sev: answers.length ? 40 : 20, why: `고급 AI는 ${hk >= 0 ? lineTxt(hk) + `(${LINE_SUM(pool, hk)}) 줄` : "합이 맞는 줄"}을 외워 두고 ${secs(bestA.ms)}에 눌렀어요 — 맞히면 +1`, my, best };
+      if (iP && !bP) return { sev: 25, why: `고급 AI는 세 칸이 다 확실한 줄이 없어 넘겼어요 — 맞을 확률이 50% 아래면 버저는 손해 (기대 2p−1점)`, my, best };
+      if (iP && bP && myA.ms > bestA.ms + 1500) return { sev: 15, why: `둘 다 누를 장면 — 고급 AI는 ${secs(bestA.ms)}, 나는 ${secs(myA.ms)}`, my, best };
+      return { sev: 5, why: "고급 AI와 같은 판단이에요", my, best };
     }
     return { sev: 0, why: "같은 수가 아니어도 틀린 것은 아니에요", my, best };
   }
@@ -402,7 +402,7 @@
             const line = K.LINE_OF.get(sel.join(","));
             const s = sel.reduce((a, x) => a + demo[x], 0);
             if (line === undefined) { msg = `${sel.map(x => LET[x]).join("")}${eunL(LET[sel[2]])} 일렬이 아니에요 — 다시!`; sel = []; draw(); return; }
-            if (s !== 9) { msg = `${sel.map(x => demo[x]).join("+")} = ${s} — 9 가 아니에요 (실제 게임이면 −1). 다시!`; sel = []; draw(); return; }
+            if (s !== 9) { msg = `${sel.map(x => demo[x]).join("+")} = ${s} — 9가 아니에요 (실제 게임이면 −1). 다시!`; sel = []; draw(); return; }
             done = true; got = sel.slice(); ctrl.sfx("win"); msg = `🎉 <b>${sel.map(x => LET[x]).join("")}</b> = ${sel.map(x => demo[x]).join("+")} = 9 정답!`; draw(); ctrl.complete();
           };
           draw();

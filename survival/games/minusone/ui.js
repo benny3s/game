@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 하나 빼기 — 화면 (3~8명 · 2장 내기 → 공개 → 몰래 1장 쓰기 · 정산 · 1분 규칙 · AI 선생님 · 복기) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.minusone;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -153,7 +159,7 @@
       cls += " st";
       const why = X.why === "marks" ? " (같은 점수 → 표식이 많아서)" : X.why === "recent" ? " (점수 · 표식 같음 → 더 최근에 이겨서)" : X.why === "lot" ? " (모두 같아서 추첨)" : "";
       if (X.fin) { const w0 = X.why0 === "marks" ? ` · 1 · 2등은 같은 점수 → 표식으로` : X.why0 === "recent" ? ` · 1 · 2등은 더 최근에 이긴 쪽이 먼저` : X.why0 === "lot" ? ` · 1 · 2등은 추첨` : ""; t = `🏁 마지막 정산 — ${X.surv.map(nm).join(" · ")} 생존, ${nm(X.elim)} 탈락`; d = `${X.rows.map(x => `${nm(x.s)} ${x.t}`).join(" · ")}${why}${w0}`; }
-      else { t = `✅ 정산 — ${nm(X.surv[0])} 생존 (${sum(X.surv[0])})`; d = `${R.w >= 0 ? `이번 라운드 ${nm(R.w)} ${R.c} 승리 · ` : ""}남은 사람 승점은 0 으로, 표식은 그대로${why}`; }
+      else { t = `✅ 정산 — ${nm(X.surv[0])} 생존 (${sum(X.surv[0])})`; d = `${R.w >= 0 ? `이번 라운드 ${nm(R.w)} ${R.c} 승리 · ` : ""}남은 사람 승점은 0으로, 표식은 그대로${why}`; }
     } else if (R.reset) d += " · 카드 8장이 다시 돌아와요";
     return `<div class="${cls}"><div class="t">${t}</div><div class="d">${d}</div></div>`;
   }
@@ -258,7 +264,7 @@
     if (V.phase === "pick") {
       const cnt = {}; for (const s of others) for (const c of V.sub[s] || []) cnt[c] = (cnt[c] || 0) + 1;
       const hot = Object.keys(cnt).map(Number).filter(c => cnt[c] >= 2).sort((a, b) => a - b);
-      opp = `공개된 2장: ${others.map(s => `${nm(s)} ${(V.sub[s] || []).join("·")}`).join(" · ")}.${hot.length ? ` ${hot.slice(0, 3).map(c => `${c} 은(는) ${cnt[c]}명이 들고 있어 겹치기 쉬워요`).join(" · ")}.` : ""}`;
+      opp = `공개된 2장: ${others.map(s => `${nm(s)} ${(V.sub[s] || []).join("·")}`).join(" · ")}.${hot.length ? ` ${hot.slice(0, 3).map(c => `${c}${ja(c,"은")} ${cnt[c]}명이 들고 있어 겹치기 쉬워요`).join(" · ")}.` : ""}`;
     } else {
       const h = V.hist[V.hist.length - 1];
       if (!h) opp = "첫 라운드예요 — 아직 아무도 낸 적이 없어요.";
@@ -290,7 +296,7 @@
         } else {
           const c = d.a.c, o = (V.sub[me] || []).find(z => z !== c);
           out.rec = `${J(c, "ul")} 쓰기`;
-          out.why = `${c} 이(가) 이길 확률 약 ${pct(ch[c] || 0)} (이기면 +${c}점 ★) · ${o} 은(는) ${pct(ch[o] || 0)} · 굴려 보면 ${sv(best)}${alt ? ` (${o} 쓰면 ${pct(alt.surv)})` : ""}.`;
+          out.why = `${c}${ja(c,"이")} 이길 확률 약 ${pct(ch[c] || 0)} (이기면 +${c}점 ★) · ${o}${ja(o,"은")} ${pct(ch[o] || 0)} · 굴려 보면 ${sv(best)}${alt ? ` (${o} 쓰면 ${pct(alt.surv)})` : ""}.`;
         }
         out.why = out.why.replace(/(\d) 이\(가\)/g, (m, dg) => `${dg}${josa(dg, "ga")}`).replace(/(\d) 은\(는\)/g, (m, dg) => `${dg}${josa(dg, "un")}`);
       }
@@ -304,7 +310,7 @@
   function review(Vb, seat, myA, bestA) {
     if (!Vb || (Vb.phase !== "sub" && Vb.phase !== "pick") || !myA || !bestA) return { sev: 0, why: "" };
     const same = JSON.stringify(myA) === JSON.stringify(bestA) || (myA.t === "sub" && bestA.t === "sub" && myA.c.slice().sort().join() === bestA.c.slice().sort().join());
-    if (same) return { sev: 0, why: "고급 AI 와 같은 선택이에요.", my: actText(myA, Vb), best: actText(bestA, Vb) };
+    if (same) return { sev: 0, why: "고급 AI와 같은 선택이에요.", my: actText(myA, Vb), best: actText(bestA, Vb) };
     const Jd = K.judge(Vb, seat, myA, bestA);
     if (!Jd || !Jd.my || !Jd.best) return { sev: 0, why: "견줄 수 없는 장면이에요." };
     const loss = Math.max(0, (Jd.best.v - Jd.my.v) * 100), dSurv = Math.max(0, (Jd.best.surv - Jd.my.surv) * 100);
@@ -327,9 +333,9 @@
       { tag: "STEP 2 · 진행", title: "2장 내고 → 공개 → 몰래 1장 쓰기", body: "라운드마다 <b>2장</b>을 왼쪽 · 오른쪽에 내요. 모두 내면 2장씩 <b>공개</b>! 그다음 둘 중 <b>쓸 카드 1장</b>을 몰래 골라요 (하나 빼기).",
         boardHtml: `<div class="m1-tut"><div class="row"><span class="tag">나</span>${card(2, " sel", "왼쪽")}${card(5, " sel", "오른쪽")}</div><div class="row"><span class="tag">AI1</span>${card(1)}${card(4)}<span class="tag">AI2</span>${card(1)}${card(3)}</div><small>남의 2장을 보고 내 쪽을 정해요</small></div>`, ms: 6200 },
       { tag: "STEP 3 · 승리", title: "겹친 숫자는 빼고, 가장 낮은 숫자", body: "쓴 카드 중 <b>같은 숫자끼리는 빠지고</b>, 남은 것 중 <b>가장 낮은 숫자</b>를 쓴 사람이 이겨요. 이기면 그 <b>숫자만큼 승점</b> + <b>승리의 표식 ★</b> 1개.",
-        boardHtml: `<div class="m1-tut"><div class="row">${card(1, " x")}${card(1, " x")}${card(3, " used")}${card(6)}</div><small>1 · 1 은 겹쳐서 빠지고 → 3 이 승리 (+3점 ★)</small></div>`, ms: 6200 },
+        boardHtml: `<div class="m1-tut"><div class="row">${card(1, " x")}${card(1, " x")}${card(3, " used")}${card(6)}</div><small>1 · 1은 겹쳐서 빠지고 → 3이 승리 (+3점 ★)</small></div>`, ms: 6200 },
       { tag: "STEP 4 · 직접", title: "어떤 카드를 쓸까요?", body: "AI들이 쓴 카드는 <b>1 · 1 · 4</b>예요. 내 2장은 <b>2</b>와 <b>6</b>. 이기는 카드를 눌러 보세요!",
-        interactive: { hint: "👆 이기는 카드를 눌러요", doneText: "✅ 1 · 1 이 겹쳐 빠지니 2 가 가장 낮아요!" },
+        interactive: { hint: "👆 이기는 카드를 눌러요", doneText: "✅ 1 · 1이 겹쳐 빠지니 2가 가장 낮아요!" },
         render(stage, ctrl) {
           let msg = "";
           const draw = () => {
@@ -338,14 +344,14 @@
           };
           stage.onclick = e => {
             const b = e.target.closest("[data-v]"); if (!b) return;
-            if (+b.dataset.v === 2) { ctrl.sfx("win"); msg = "2 로 승리! +2점 ★"; draw(); ctrl.complete(); }
-            else { ctrl.sfx("tap"); msg = "6 을 쓰면 4 가 더 낮아서 AI가 이겨요. 1 · 1 은 겹쳐서 빠진다는 걸 기억!"; draw(); }
+            if (+b.dataset.v === 2) { ctrl.sfx("win"); msg = "2로 승리! +2점 ★"; draw(); ctrl.complete(); }
+            else { ctrl.sfx("tap"); msg = "6을 쓰면 4가 더 낮아서 AI가 이겨요. 1 · 1은 겹쳐서 빠진다는 걸 기억!"; draw(); }
           };
           draw();
         } },
       { tag: "STEP 5 · 카드", title: "쓴 카드는 사라지고, 안 쓴 카드는 한 번 쉬어요", body: "쓴 카드는 버려요. 내고 안 쓴 카드는 <b>바로 다음 라운드에만</b> 못 내요 (쉼). <b>6 · 12라운드가 끝나면</b> 카드 8장이 다시 돌아와요.",
-        boardHtml: `<div class="m1-tut"><div class="row">${card(2, " x", "씀")}${card(5, " h", "쉼")}${card(1)}${card(3)}</div><small>2 를 쓰고 5 를 남기면 → 다음 라운드엔 1 · 3 · 4 · 6 · 7 · 8 중에서</small></div>`, ms: 6400 },
-      { tag: "STEP 6 · 정산", title: "표식 1개 = 1점 더해서 1등이 생존", body: "정산 때 <b>승점 + 표식 수</b>가 가장 높은 1명이 생존해요. 같으면 <b>표식 많은 쪽</b> → 그래도 같으면 <b>더 최근에 이긴 쪽</b>. 남은 사람 승점은 0 으로 돌아가고 <b>표식은 남아요</b>. 3명이 남으면 6라운드 뒤 2명 생존! 막히면 <b>🧑‍🏫 AI 선생님</b>이 이길 확률을 알려 줘요.",
+        boardHtml: `<div class="m1-tut"><div class="row">${card(2, " x", "씀")}${card(5, " h", "쉼")}${card(1)}${card(3)}</div><small>2를 쓰고 5를 남기면 → 다음 라운드엔 1 · 3 · 4 · 6 · 7 · 8 중에서</small></div>`, ms: 6400 },
+      { tag: "STEP 6 · 정산", title: "표식 1개 = 1점 더해서 1등이 생존", body: "정산 때 <b>승점 + 표식 수</b>가 가장 높은 1명이 생존해요. 같으면 <b>표식 많은 쪽</b> → 그래도 같으면 <b>더 최근에 이긴 쪽</b>. 남은 사람 승점은 0으로 돌아가고 <b>표식은 남아요</b>. 3명이 남으면 6라운드 뒤 2명 생존! 막히면 <b>🧑‍🏫 AI 선생님</b>이 이길 확률을 알려 줘요.",
         boardHtml: `<div class="m1-tut"><span style="font-size:40px">✅</span><small>낮은 숫자는 잘 이기지만 점수가 작고, 높은 숫자는 드물게 이기지만 점수가 커요</small></div>`, ms: 6800 },
     ];
   }
@@ -362,8 +368,8 @@
       "준비물: 사람마다 숫자 카드 1~8 각 1장 (8장)",
       "진행: 라운드마다 2장을 왼쪽 · 오른쪽 칸에 냄 → 모두 내면 2장씩 공개 → 둘 중 쓸 카드 1장을 몰래 고름 (하나 빼기)",
       "승리: 쓴 카드 중 같은 숫자끼리는 빼고, 가장 낮은 숫자를 쓴 사람이 이 라운드 승리 → 그 숫자만큼 승점 + 승리의 표식 1개",
-      "카드: 쓴 카드는 버리고, 안 쓴 카드는 바로 다음 라운드에만 못 냄. <b>6라운드마다</b>(6 · 12 · 18…) 8장이 다시 돌아옴 — 7명이면 방송처럼 6 · 12 (마지막 18 은 판이 끝남), 인원이 달라 판이 더 길면 그 뒤에도 6라운드마다",
-      "정산: 3 · 6 · 9 · 12 · 18라운드 끝 (7명 기준). 승점 + 표식 수가 가장 높은 1명 생존 → 같으면 표식 많은 쪽 → 그래도 같으면 더 최근에 이긴 쪽. 남은 사람 승점은 0 으로, 표식은 그대로",
+      "카드: 쓴 카드는 버리고, 안 쓴 카드는 바로 다음 라운드에만 못 냄. <b>6라운드마다</b>(6 · 12 · 18…) 8장이 다시 돌아옴 — 7명이면 방송처럼 6 · 12 (마지막 18은 판이 끝남), 인원이 달라 판이 더 길면 그 뒤에도 6라운드마다",
+      "정산: 3 · 6 · 9 · 12 · 18라운드 끝 (7명 기준). 승점 + 표식 수가 가장 높은 1명 생존 → 같으면 표식 많은 쪽 → 그래도 같으면 더 최근에 이긴 쪽. 남은 사람 승점은 0으로, 표식은 그대로",
       "마지막: 3명이 남으면 6라운드를 더 하고 상위 2명 생존, 1명 탈락",
       SRC, DIFF,
     ],

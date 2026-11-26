@@ -201,7 +201,7 @@
       if (!m) return null;
       const inBest = !!(bestA.swaps && bestA.swaps.some(s => s && s.from === myA.from && s.to === myA.to));
       const sev = inBest || m.ev >= -0.05 ? 0 : Math.min(100, Math.round(100 * -m.ev / SC));
-      return { sev, why: `교환하면 별자리 진행 점수 ${m.from.toFixed(1)} → ${m.to.toFixed(1)} (${sgnT(m.ev)})${inBest ? " · 고급 AI 도 같은 교환을 해요" : m.ev > 0.05 ? "" : " · 이 교환은 점수를 올리지 못해요"}` };
+      return { sev, why: `교환하면 별자리 진행 점수 ${m.from.toFixed(1)} → ${m.to.toFixed(1)} (${sgnT(m.ev)})${inBest ? " · 고급 AI도 같은 교환을 해요" : m.ev > 0.05 ? "" : " · 이 교환은 점수를 올리지 못해요"}` };
     }
     if (myA.t !== bestA.t) return null;
     const nt = a => (Array.isArray(a.take) && V.white && a.take.length === 5 ? [...a.take, 0] : a.take);   // 흰 별 판에서 5칸으로 온 수는 흰 별 0
@@ -214,7 +214,7 @@
     sev = Math.max(0, Math.min(100, Math.round(sev)));
     const stat = e => (e.kind === "card" ? `겹칠 확률 ${pcT(e.col)} · 기대 점수 ${sgnT(e.ev)}${e.swapGain ? ` (교환 ${sgnT(e.swapGain)} 포함)` : ""}`
       : `별자리 진행 ${sgnT(e.prog)}${e.wn ? ` (흰 별 ${e.wn}개 포함)` : ""}${e.pen ? ` · 폭탄 벌점 −${e.pen.toFixed(1)} (폭탄 ${e.b1}개)` : ""} → 합계 ${sgnT(e.ev)}`);
-    const tail = gap >= 0.15 ? ` — 기대 점수 ${gap.toFixed(1)} 차이` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 상대 카드 추정까지 봐요)" : " — 거의 같아요";
+    const tail = gap >= 0.15 ? ` — 기대 점수 ${gap.toFixed(1)} 차이` : gap <= -0.15 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI는 상대 카드 추정까지 봐요)" : " — 거의 같아요";
     return { sev, why: `고급 AI 수 (${actText(bestA, V, info && info.names)}): ${stat(b)} / 내 수 (${actText(myA, V, info && info.names)}): ${stat(m)}${tail}` };
   }
 

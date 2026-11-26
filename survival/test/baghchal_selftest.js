@@ -235,7 +235,7 @@ const stepAt = (st, s) => C.slot(st, s);
   const rv2 = U.review(Vb, 0, best, best);
   ok(rv2.sev <= 5, '같은 수면 낮음');
   ok(U.actText({ t: 'move', from: 12, to: 2, b: 0 }, C.view(scene({ A: { g: [7] }, X: 0, step: 2 }), 1)).includes('잡기'), '잡기 글');
-  ok(U.actText({ t: 'place', to: 12 }, null) === '🐐 c3 에 염소 놓기', '판 없이도 글');
+  ok(U.actText({ t: 'place', to: 12 }, null) === '🐐 c3에 염소 놓기', '판 없이도 글');
   ok(U.actText({ t: 'move', from: 12, to: 2 }, null).includes('잡기'), '판 없이도 잡기 글');
   // 수를 둔 뒤의 보기로 불러도 역할이 맞음 (판 B 염소 수 → 다음 차례는 판 A 호랑이)
   const sa = scene({ A: { g: [6], h: 15 }, B: { g: [7, 13], h: 0 }, X: 0, step: 5 }); const ga = { t: 'move', from: 13, to: 18, b: 1 };

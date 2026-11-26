@@ -70,7 +70,7 @@
     if (!needs(st).includes(seat)) return { ok: false, err: "지금은 차례가 아니에요" };
     if (st.phase === "setup") {
       if (a.t !== "setup") return { ok: false, err: "순서와 칩을 정해요" };
-      if (!isPerm(a.order)) return { ok: false, err: "타일 0~9 를 한 번씩 놓아요" };
+      if (!isPerm(a.order)) return { ok: false, err: "타일 0~9를 한 번씩 놓아요" };
       if (!okBets(a.bets)) return { ok: false, err: `칩 ${CH}개를 10곳에 나눠 걸어요 (곳마다 1칩 이상 · 모두 써요)` };
       st.order[seat] = a.order.slice(); st.init[seat] = a.bets.slice(); st.cur[seat] = a.bets.slice(); st.rdy[seat] = true;
       push(st, { k: "ready", s: seat });
@@ -325,7 +325,7 @@
         opp: `${who}도 지금 가림막 뒤에서 타일 순서와 칩을 정하는 중이에요. 서로 상대 숫자는 모르고, 가림막이 치워지면 상대 타일의 색(흑/백)과 걸린 칩 수만 보여요.`,
         mine: `타일 10개 (흑 0·2·4·6·8 / 백 1·3·5·7·9) · 칩 30개 — 곳마다 1칩 이상, 모두 걸어야 해요. 총 60칩 중 31칩 이상이면 이겨요.${dn ? " 배치를 확정했어요." : ""}`,
         rec: "센 타일(9·8·7)에 칩을 몰고 약한 타일은 1칩씩",
-        why: "숫자 9 는 상대 타일이 9 가 아니면(90%) 이기고, 7 은 70%, 2 는 20%예요. 약한 타일 6곳에 1칩씩 걸면 다 져도 6칩만 잃고 나머지 24칩을 센 타일에 걸 수 있어요 — 단, 칩 수가 상대에게 보여서 센 타일이 들켜요.",
+        why: "숫자 9는 상대 타일이 9가 아니면(90%) 이기고, 7은 70%, 2는 20%예요. 약한 타일 6곳에 1칩씩 걸면 다 져도 6칩만 잃고 나머지 24칩을 센 타일에 걸 수 있어요 — 단, 칩 수가 상대에게 보여서 센 타일이 들켜요.",
       };
     }
     const L = V.last, hist = V.res, myW = hist.filter(R => R.w === me).length, myF = hist.filter(R => R.act === "fold" && R.low === me).length, opF = hist.filter(R => R.act === "fold" && R.low === o).length;

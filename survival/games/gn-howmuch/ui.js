@@ -187,7 +187,7 @@
       const pm = pubOn ? val(myA.pub) : 0, pb = pubOn ? val(bestA.pub) : 0;
       const d = Math.max(0, vb - vm) + 0.5 * Math.max(0, pb - pm);
       const sev = Math.max(0, Math.min(100, Math.round(90 * d * (0.5 + 0.25 * V.pts))));
-      const priv = `내 질문 ${gn(myA.guest)} ${kt(myA.kind)} 최고가(M)의 불확실성을 약 ${pc(vm)} 줄이고, 고급 AI 의 ${gn(bestA.guest)} ${kt(bestA.kind)} 약 ${pc(vb)} 줄여요 (그 손님이 최고가를 냈을 확률 약 ${pc(iv.pMax[bestA.guest])})`;
+      const priv = `내 질문 ${gn(myA.guest)} ${kt(myA.kind)} 최고가(M)의 불확실성을 약 ${pc(vm)} 줄이고, 고급 AI의 ${gn(bestA.guest)} ${kt(bestA.kind)} 약 ${pc(vb)} 줄여요 (그 손님이 최고가를 냈을 확률 약 ${pc(iv.pMax[bestA.guest])})`;
       const pubT = pubOn && (myA.pub.guest !== bestA.pub.guest || myA.pub.kind !== bestA.pub.kind) ? ` · 공개 질문은 내 ${gn(myA.pub.guest)} ${kn(myA.pub.kind)} 약 ${pc(pm)} vs 고급 AI ${gn(bestA.pub.guest)} ${kn(bestA.pub.kind)} 약 ${pc(pb)}` : "";
       return { sev, why: `${vm >= vb && pm >= pb ? "내 질문도 비슷하게 좋아요 — " : ""}${priv}${pubT}` };
     }

@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 넘버 체인지 — 화면 (블록 고르기 · 히든 찬스 · 블록 교환 · 상대 손 짐작 · AI 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const N = window.SVCores.numchange;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -83,7 +89,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
 
   function exchHtml(R, A, O, spec, nm) {
     const lab = i => (spec ? nm(i) : i === A ? "나" : nm(i));
-    if (!R.h[0] && !R.h[1]) return `큰 블록을 바꿨어요 · ${esc(lab(A))}의 <b>${R.give[A]}</b> → ${esc(lab(O))}, ${esc(lab(O))}의 <b>${R.give[O]}</b> → ${esc(lab(A))} · 작은 블록 ${R.drop[A]} · ${R.drop[O]} 은(는) 딜러가 가져가요`;
+    if (!R.h[0] && !R.h[1]) return `큰 블록을 바꿨어요 · ${esc(lab(A))}의 <b>${R.give[A]}</b> → ${esc(lab(O))}, ${esc(lab(O))}의 <b>${R.give[O]}</b> → ${esc(lab(A))} · 작은 블록 ${R.drop[A]} · ${R.drop[O]}${ja(R.drop[O],"은")} 딜러가 가져가요`;
     const who = [0, 1].filter(s => R.h[s]).map(s => lab(s)).join(" · ");
     return `🎭 ${esc(who)}의 히든 찬스 — 합과 낸 블록은 비공개예요 · ` + (R.give[A] != null ? `내가 준 블록 <b>${R.give[A]}</b> · 받은 블록 <b>${R.give[O]}</b>` : "블록이 오갔어요");
   }
@@ -133,7 +139,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
         <button type="button" class="nc-hid${sel.h ? " on" : ""}" data-a="hid" ${V.hid[me] ? "disabled" : ""}>${V.hid[me] ? "🎭 히든 찬스는 이미 썼어요" : sel.h ? "🎭 히든 찬스 켜짐 (누르면 꺼요)" : "🎭 히든 찬스 쓰기 (한 번뿐)"}</button>
         ${sel.h ? `<div class="nc-hint">합 · 낸 블록이 상대에게 안 보여요. 대신 상대가 낸 두 블록 중 하나를 무작위로 받아요.</div>` : ""}
         <button class="btn primary big" data-a="submit" ${two ? "" : "disabled"}>${two ? `🔒 ${sel.p[0].v} + ${sel.p[1].v} = ${sel.p[0].v + sel.p[1].v} 내기${sel.h ? " (히든)" : ""}` : "블록 두 개를 골라요"}</button></div>`;
-    } else if (!show && !spec && V.mine) h += `<div class="nc-note">🔒 블록을 냈어요 · <b>${esc(nm(O))}</b> 이(가) 낼 때까지 기다려요…</div>`;
+    } else if (!show && !spec && V.mine) h += `<div class="nc-note">🔒 블록을 냈어요 · <b>${esc(nm(O))}</b>${ja(esc(nm(O)),"이")} 낼 때까지 기다려요…</div>`;
     else if (!show) h += `<div class="nc-note">${spec ? "두 사람이 동시에 블록 두 개를 숨겨 내요" : "잠시만요…"}</div>`;
     else if (V.over) h += `<div class="nc-note">게임이 끝났어요 · <b>${V.score[A]} : ${V.score[O]}</b></div>`;
     else h += `<div class="nc-note">잠시 뒤 다음 라운드가 시작돼요…</div>`;
@@ -168,7 +174,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
     const O = V.opp;
     const sc = `점수 나 ${V.score[me]} : ${V.score[o]} ${on} (${V.winAt}점 먼저 · ${V.over ? "끝" : rl})`;
     if (V.over) return { opp: `${on}의 블록은 ${O ? O.n : V.sizes[o]}개 남았어요.`, mine: `${sc}.`, rec: "게임이 끝났어요. 결과를 확인해요.", why: `${KEY}는 점이 이 게임의 핵심이에요. 다음 판엔 큰 블록을 언제 쓸지 생각해 봐요.` };
-    let opp = `${on}은(는) 블록 ${O.n}개를 갖고 있어요. `;
+    let opp = `${on}${ja(on,"은")} 블록 ${O.n}개를 갖고 있어요. `;
     if (O.worlds.length === 1) opp += `손이 다 보여요: ${handTxt(O.worlds[0])}. `;
     else opp += `히든 찬스 때문에 정확히는 몰라요 (확실한 블록 ${O.sure.reduce((a, b) => a + b, 0)}개 + 가능한 손 ${O.worlds.length}가지). `;
     const dist = N.oppDist(V), sums = dist.map(d => d.P[0] + d.P[1]);
@@ -182,7 +188,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
     if (!b) return { opp, mine, rec: "낼 수 있는 블록이 없어요.", why: `${KEY}는 점이 핵심이에요.` };
     let rec = `가장 좋아 보이는 선택은 ${b.a} + ${b.b} = ${b.a + b.b} 예요 (이길 확률 ${pc(b.pWin)}% · 비길 ${pc(b.pTie)}% · 질 ${pc(b.pLose)}%).`;
     const hi = ch.acts.find(x => x.a + x.b > b.a + b.b && x.pWin - b.pWin >= 0.15);
-    if (hi) rec += ` 더 확실히 이기려면 ${hi.a} + ${hi.b} (${pc(hi.pWin)}%)도 있지만 큰 블록 ${hi.a} 을(를) 상대에게 넘겨요.`;
+    if (hi) rec += ` 더 확실히 이기려면 ${hi.a} + ${hi.b} (${pc(hi.pWin)}%)도 있지만 큰 블록 ${hi.a}${ja(hi.a,"을")} 상대에게 넘겨요.`;
     let ex = `${KEY}는 점이 핵심이에요 (대신 상대의 큰 블록이 내게 와요).`;
     if (V.score[me] >= V.winAt - 1) ex += " 한 점만 더 얻으면 이겨요 — 이번 라운드는 꼭 이길 합을 만들어요.";
     else if (V.score[o] >= V.winAt - 1) ex += " 상대가 한 점만 더 얻으면 이겨요 — 이번에 지면 안 돼요.";
@@ -240,7 +246,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
       if (!N.pairsOf(V.hand).some(p => p[0] === PM[0] && p[1] === PM[1]) || !N.pairsOf(V.hand).some(p => p[0] === PB[0] && p[1] === PB[1])) return none;
       const my = `블록 ${PM[0]} · ${PM[1]}${hM ? " (히든 찬스)" : ""}`, best = `블록 ${PB[0]} · ${PB[1]}${hB ? " (히든 찬스)" : ""}`;
       const ch = N.chances(V, seat), rd = P => { const x = ch.acts.find(y => y.a === P[0] && y.b === P[1]); return x ? Math.round(x.pWin * 100) : 0; };
-      if (PM[0] === PB[0] && PM[1] === PB[1] && hM === hB) return { sev: 0, why: `고급 AI 와 같은 블록이에요 (${blkTxt(PM, hM)}) — 이번 라운드 이길 확률 ${rd(PM)}%`, my, best };
+      if (PM[0] === PB[0] && PM[1] === PB[1] && hM === hB) return { sev: 0, why: `고급 AI와 같은 블록이에요 (${blkTxt(PM, hM)}) — 이번 라운드 이길 확률 ${rd(PM)}%`, my, best };
       const base = ((((info && info.seed | 0) ^ Math.imul(V.round + 1, 7919) ^ Math.imul(V.score[0] * 8 + V.score[1] + 1, 104729) ^ Math.imul(V.sizes[0] + seat + 5, 31) ^ V.hand.reduce((s, x, i) => s + x * (i + 3) * 101, 0)) >>> 0) * 31) >>> 0;
       const SM = oppSamples(V, 400, base);
       const val = (P, h) => {
@@ -285,7 +291,7 @@ button.nc-b.sel{transform:translateY(-7px);box-shadow:0 0 0 3px #fff,0 8px 12px 
           draw();
         } },
       { tag: "STEP 4 · 교환", title: "큰 블록은 서로 바꾸고, 작은 블록은 사라져요", body: "라운드가 끝나면 낸 두 블록 중 <b>큰 블록끼리 서로 맞바꾸고</b>, 작은 블록은 <b>딜러가 가져가요</b>. 그래서 블록이 매 라운드 1개씩 줄어 14 → 2개가 돼요. <b>큰 합을 내면 큰 블록이 상대에게 넘어가요!</b>",
-        boardHtml: `<div class="nc-tut"><div class="row"><div class="nc-slot"><div class="bl">${blk(7)}${blk(3)}</div><small>나</small></div><span class="nc-vs">⇄</span><div class="nc-slot"><div class="bl">${blk(6)}${blk(2)}</div><small>상대</small></div></div><small>7 ↔ 6 서로 바뀜 · 작은 블록 3 · 2 는 딜러에게</small></div>`, ms: 6200 },
+        boardHtml: `<div class="nc-tut"><div class="row"><div class="nc-slot"><div class="bl">${blk(7)}${blk(3)}</div><small>나</small></div><span class="nc-vs">⇄</span><div class="nc-slot"><div class="bl">${blk(6)}${blk(2)}</div><small>상대</small></div></div><small>7 ↔ 6 서로 바뀜 · 작은 블록 3 · 2는 딜러에게</small></div>`, ms: 6200 },
       { tag: "STEP 5 · 히든 찬스", title: "한 번만, 합을 숨겨요", body: "게임 중 <b>한 번</b> 히든 찬스를 쓸 수 있어요. 쓰면 그 라운드의 <b>내 합 · 낸 블록이 상대에게 안 보이고</b> 승패만 알려져요. 대신 상대는 자기가 낸 블록 <b>중 하나를 무작위로</b> 나와 바꿔요.",
         boardHtml: `<div class="nc-tut"><div class="row"><div class="nc-slot"><div class="bl">${qblk()}${qblk()}</div><div class="sm">🎭 합 비공개</div></div></div><small>상대에게는 승패만 보여요</small></div>`, ms: 5600 },
       { tag: "STEP 6 · 끝", title: "7점 먼저 · 12라운드", body: "<b>7점을 먼저</b> 얻으면 바로 이겨요. 12라운드가 끝나면 점수가 높은 쪽이 이기고, 같으면 남은 블록 2개로 <b>연장 1판</b>이에요. 막히면 <b>🧑‍🏫 AI 선생님</b>이 상대 손 짐작과 이길 확률을 알려 줘요.",

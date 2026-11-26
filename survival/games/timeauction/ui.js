@@ -273,7 +273,7 @@
   // ── 복기 고리: 같은 씨앗으로 두 수를 끝까지 굴려 '순위 점수'(100 = 모두를 앞섬) 차이 ──
   function review(Vb, seat, myA, bestA) {
     if (!Vb || Vb.phase !== "bid" || !myA || !bestA || myA.t !== "bid" || bestA.t !== "bid") return { sev: 0, why: "" };
-    if (myA.d === bestA.d) return { sev: 0, why: "고급 AI 와 같은 선택이에요.", my: actText(myA), best: actText(bestA) };
+    if (myA.d === bestA.d) return { sev: 0, why: "고급 AI와 같은 선택이에요.", my: actText(myA), best: actText(bestA) };
     const Jd = K.judge(Vb, seat, myA, bestA);
     if (!Jd || !Jd.my || !Jd.best) return { sev: 0, why: "견줄 수 없는 장면이에요." };
     const loss = (Jd.best.v - Jd.my.v) * 100;
@@ -293,7 +293,7 @@
       { tag: "STEP 2 · 진행", title: "꾹 누르고 → 5초 → 시간이 줄어요", body: "경매가 시작되면 모두 버튼을 <b>누른 채</b> 기다려요. <b>5초 카운트다운</b> 안에 떼면 이번 경매는 <b>포기</b> (시간 안 듦). 5초가 지나면 쥐고 있는 사람 모두 <b>시간이 줄어요</b>.",
         boardHtml: `<div class="ta-tut"><div class="row">${btn("5…4…3")}${btn("12.3초", " on")}</div><small>원할 때 손을 떼면 그만큼 쓴 거예요</small></div>`, ms: 6400 },
       { tag: "STEP 3 · 낙찰", title: "가장 오래 쥔 사람이 낙찰", body: "<b>마지막까지 쥔 사람</b>이 낙찰 → 표식 ★. 하지만 <b>진 사람도 쓴 시간은 사라져요</b>. 누가 참가했는지 · 남의 남은 시간은 <b>비밀</b> — 공개되는 건 낙찰자와 경매 시간뿐.",
-        boardHtml: `<div class="ta-tut"><div class="row"><span class="tag">AI1 20.0초</span><span class="tag">AI2 35.4초 🏆</span><span class="tag">나 포기</span></div><small>AI1 은 20초를 잃고, AI2 는 35.4초를 쓰고 표식 ★</small></div>`, ms: 6600 },
+        boardHtml: `<div class="ta-tut"><div class="row"><span class="tag">AI1 20.0초</span><span class="tag">AI2 35.4초 🏆</span><span class="tag">나 포기</span></div><small>AI1은 20초를 잃고, AI2는 35.4초를 쓰고 표식 ★</small></div>`, ms: 6600 },
       { tag: "STEP 4 · 직접", title: "이번 표식은 누구 것?", body: "세 사람이 쥔 시간이 <b>AI1 12.0초 · AI2 30.5초 · AI3 30.5초</b>예요. 표식은 누가 가져갈까요?",
         interactive: { hint: "👆 답을 눌러요", doneText: "✅ 가장 오래 쥔 사람이 0.1초까지 같으면 유찰 — 아무도 못 가져요 (시간은 다 사라져요)" },
         render(stage, ctrl) {
@@ -305,11 +305,11 @@
           stage.onclick = e => {
             const b = e.target.closest("[data-v]"); if (!b) return;
             if (b.dataset.v === "n") { ctrl.sfx("win"); msg = "정답! 30.5초 둘이 같아서 유찰"; draw(); ctrl.complete(); }
-            else { ctrl.sfx("tap"); msg = b.dataset.v === "1" ? "AI1 은 가장 짧게 쥐었어요." : "AI2 와 AI3 이 0.1초까지 같아요 — 그럼 어떻게 될까요?"; draw(); }
+            else { ctrl.sfx("tap"); msg = b.dataset.v === "1" ? "AI1은 가장 짧게 쥐었어요." : "AI2와 AI3이 0.1초까지 같아요 — 그럼 어떻게 될까요?"; draw(); }
           };
           draw();
         } },
-      { tag: "STEP 5 · 다 쓰면", title: "남은 시간을 다 쓰면 버튼이 풀려요", body: "남은 시간보다 오래 쥘 수 없어요. 0 이 되면 남은 경매는 모두 <b>포기</b>예요 (탈락은 아님). 내 남은 시간은 화면에 보여 드려요 (방송은 기억해야 했어요).",
+      { tag: "STEP 5 · 다 쓰면", title: "남은 시간을 다 쓰면 버튼이 풀려요", body: "남은 시간보다 오래 쥘 수 없어요. 0이 되면 남은 경매는 모두 <b>포기</b>예요 (탈락은 아님). 내 남은 시간은 화면에 보여 드려요 (방송은 기억해야 했어요).",
         boardHtml: `<div class="ta-tut"><div class="row"><span class="tag">⏱ 0.0초</span>${btn("—")}</div></div>`, ms: 6000 },
       { tag: "STEP 6 · 끝", title: "표식 → 남은 시간으로 순위", body: "19번이 끝나면 <b>표식 가장 많은 사람</b>이 피스 🧩 (같으면 남은 시간이 많은 쪽). <b>표식 가장 적은 사람 탈락</b> (같으면 남은 시간이 적은 쪽). 막히면 <b>🧑‍🏫 AI 선생님</b>!",
         boardHtml: `<div class="ta-tut"><span style="font-size:40px">🧩</span><small>표식을 너무 비싸게 사면 마지막에 남은 시간 싸움에서 밀려요</small></div>`, ms: 6400 },

@@ -384,13 +384,13 @@
     const lg = V.grabs && V.grabs.length ? V.grabs[V.grabs.length - 1] : null, need = 3 - V.B;
     const oppM = lg ? `이번 조 광산: 방금 ${who(lg.s)}가 ${lg.xs.length}개를 한 번에 꺼냈어요 (${grabTxt(lg.xs)}) · 지금까지 ${V.drawn.length}개 · 채굴 ${V.M}점 · 폭탄 ${V.B}/3개` : opp;
     if (cur !== me) {
-      const isMiner = V.miners.includes(me), wait = isMiner ? ` 같은 조 광부로서 M ≥ S(평균 ${Sx}점)가 되면 (M−S)÷3 을 받아요.` : V.mineBid !== null ? ` 내 제시 ${V.mineBid}점은 M ≥ S(평균 ${Sx}점)일 때만 받아요 — 지금 채굴 ${V.M}점은 그 ${Math.round(100 * V.M / Math.max(1, Sx))}%예요.` : "";
+      const isMiner = V.miners.includes(me), wait = isMiner ? ` 같은 조 광부로서 M ≥ S(평균 ${Sx}점)가 되면 (M−S)÷3을 받아요.` : V.mineBid !== null ? ` 내 제시 ${V.mineBid}점은 M ≥ S(평균 ${Sx}점)일 때만 받아요 — 지금 채굴 ${V.M}점은 그 ${Math.round(100 * V.M / Math.max(1, Sx))}%예요.` : "";
       return { opp: oppM, mine, rec: "기다려요", why: `${who(cur)} 차례예요 · 광부는 자기 차례에 한 번에 여러 개를 꺼내거나 스톱해요 · 광산에 남은 ${rest}개 중 폭탄 ${V.left.b}개 (한 개 꺼낼 때 약 ${pct}%).${wait}` };
     }
     const a = actMineB(V, me, "hard", sampler(V.turn * 71 + V.drawn.length * 13 + me + 9)), exp = meanS(V);
     const pb5 = Math.round(100 * pBust(rest, V.left.b, Math.min(5, rest), need)), pb10 = Math.round(100 * pBust(rest, V.left.b, Math.min(10, rest), need));
     const sg = x => `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}`, recTxt = a.t === "draw" ? `${a.n}개 꺼내요 (득실 평균 ${sg(a.dBest)}점 · 스톱하면 ${sg(a.dStop)}점)` : `스톱 (득실 평균 ${sg(a.dStop)}점 · 꺼내면 최대 ${sg(Math.max(...a.means.slice(1)))}점)`;
-    return { opp: oppM, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: recTxt, why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S 를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3 을 받지만 폭탄이 3개 이상이면 0점이에요. 한 번에 꺼낸 것 안에서도 폭탄을 세요 — 광산에 남은 ${rest}개 중 폭탄 ${V.left.b}개라서 5개를 꺼내면 폭탄이 ${need}개 이상 나올 확률 약 ${pb5}% · 10개면 약 ${pb10}%예요. 득실 = 내 몫 − 제시자 평균 몫이에요 (폭탄이 터지거나 M ≥ S 면 제시자 6명이 제시한 점수를 가져가니 그것도 손해로 쳐요).` };
+    return { opp: oppM, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: recTxt, why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3을 받지만 폭탄이 3개 이상이면 0점이에요. 한 번에 꺼낸 것 안에서도 폭탄을 세요 — 광산에 남은 ${rest}개 중 폭탄 ${V.left.b}개라서 5개를 꺼내면 폭탄이 ${need}개 이상 나올 확률 약 ${pb5}% · 10개면 약 ${pb10}%예요. 득실 = 내 몫 − 제시자 평균 몫이에요 (폭탄이 터지거나 M ≥ S 면 제시자 6명이 제시한 점수를 가져가니 그것도 손해로 쳐요).` };
   }
   const nm = (names, i) => (names && names[i]) || `${i + 1}번`;
   const teamTxt = (V, g, who) => V.groups[g].map(who).join("·");
@@ -417,12 +417,12 @@
     const cur = V.cur, rest = V.bagN, p = rest ? V.left.b / rest : 0, pct = Math.round(p * 100);
     if (V.ver === "b") return coachMineB(V, me, who, opp, mine, Sx, cur, rest, pct);
     if (cur !== me) {
-      const isMiner = V.miners.includes(me), wait = isMiner ? ` 같은 조 광부로서 M ≥ S(평균 ${Sx}점)가 되면 (M−S)÷3 을 받아요.` : V.mineBid !== null ? ` 내 제시 ${V.mineBid}점은 M ≥ S(평균 ${Sx}점)일 때만 받아요 — 지금 채굴 ${V.M}점은 그 ${Math.round(100 * V.M / Math.max(1, Sx))}%예요.` : "";
+      const isMiner = V.miners.includes(me), wait = isMiner ? ` 같은 조 광부로서 M ≥ S(평균 ${Sx}점)가 되면 (M−S)÷3을 받아요.` : V.mineBid !== null ? ` 내 제시 ${V.mineBid}점은 M ≥ S(평균 ${Sx}점)일 때만 받아요 — 지금 채굴 ${V.M}점은 그 ${Math.round(100 * V.M / Math.max(1, Sx))}%예요.` : "";
       return { opp, mine, rec: "기다려요", why: `${who(cur)} 차례예요 · 지금까지 ${V.drawn.length}개 · 채굴 ${V.M}점 · 폭탄 ${V.B}/3개 · 다음에 폭탄이 나올 확률 약 ${pct}%.${wait}` };
     }
     const a = actMine(V, me, "hard", sampler(V.turn * 71 + V.drawn.length * 13 + me + 9));
     const exp = meanS(V);
-    return { opp, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: `${a.t === "draw" ? "하나 더 꺼내요" : "스톱"}${a.dDraw !== undefined ? ` (꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점)` : ""}`, why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S 를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3 을 받지만 폭탄이 3개면 0점이에요. 다음에 폭탄이 나올 확률은 약 ${pct}% (남은 ${V.left.b}/${rest}).${a.dDraw !== undefined ? ` 계산: 꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점.` : ""}` };
+    return { opp, mine: `${mine} · 지금 채굴 ${V.M}점 · 폭탄 ${V.B}개`, rec: `${a.t === "draw" ? "하나 더 꺼내요" : "스톱"}${a.dDraw !== undefined ? ` (꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점)` : ""}`, why: `제시 합(S)은 평균 ${Math.round(exp)}점쯤으로 보여요. 채굴 점수가 S를 넘으면 (M−S)÷3 만, 못 넘으면 M÷3을 받지만 폭탄이 3개면 0점이에요. 다음에 폭탄이 나올 확률은 약 ${pct}% (남은 ${V.left.b}/${rest}).${a.dDraw !== undefined ? ` 계산: 꺼내면 평균 ${a.dDraw.toFixed(1)}점 · 스톱하면 ${a.dStop.toFixed(1)}점.` : ""}` };
   }
 
   return { id: "gn-miner", N, TURNS, BMIN, BMAX, TEAM, BAG, VAL, NAME, EM, BAGN, GRABS, init, needs, apply, view, over, ranks, legal, auto, advance, tally, leftOf, settle, share, compareBids, compareMine, compareMineB, minerDraw, simMine, simMineB, planK, pBust, evalMineB, sampleBids, evalBids, actBid, actMine, actMineB, ai, coach, meanS, allBids, sampler, hash, CANDS };

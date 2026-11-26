@@ -197,7 +197,7 @@
       : e.kind === "bet" ? `베팅하면 상대가 이길 확률 ${pcT(e.p)}${e.noChips ? " (내 칩이 없어 걸 수 없음)" : ""} · 기대 칩 ${sgnT(e.ev)}`
       : e.kind === "hand" ? `이길 확률 ${pcT(e.p)} · 비길 확률 ${pcT(e.pd)} · 기대 칩 ${sgnT(e.ev)}`
       : `맞힐 확률 ${pcT(e.p)} → 기대 칩 ${sgnT(e.ev)}`;
-    const tail = gap >= 0.1 ? ` — 기대 칩 ${gap.toFixed(1)} 차이` : gap <= -0.1 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI 는 앞섬 · 뒤짐도 봐요)" : " — 거의 같아요";
+    const tail = gap >= 0.1 ? ` — 기대 칩 ${gap.toFixed(1)} 차이` : gap <= -0.1 ? " — 이 계산으로는 내 수가 더 높아요 (고급 AI는 앞섬 · 뒤짐도 봐요)" : " — 거의 같아요";
     return { sev, why: `고급 AI 수 (${actText(bestA, V, info && info.names)}): ${stat(b)} / 내 수 (${actText(myA, V, info && info.names)}): ${stat(m)}${tail}` };
   }
 

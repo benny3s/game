@@ -16,6 +16,12 @@
   else (root.SVCores = root.SVCores || {}).wallgo = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const R = 7;
   const DR = [-1, 0, 1, 0], DC = [0, 1, 0, -1];                 // 0 위 · 1 오른쪽 · 2 아래 · 3 왼쪽
   const DN = ["위", "오른쪽", "아래", "왼쪽"];
@@ -365,14 +371,14 @@
     const nowOpp = Math.max(0, ...oth.map(s => cnt[s]));
     if (g.t === "place") {
       const S2 = fromView(V); S2.pieces.push({ o: me, k: g.k, r: g.r, c: g.c, fx: false });
-      return { opp, mine, rec: `${KOK[g.k]}을 ${coord(g.r, g.c)} 에`, why: `여기에 놓으면 ${line(snap(S2))}예요 — 말 둘레로 먼저 닿는 칸이 가장 많고 상대와 덜 겹치는 자리예요. 한쪽 귀퉁이에만 몰리면 협공당하기 쉬워요.` };
+      return { opp, mine, rec: `${KOK[g.k]}을 ${coord(g.r, g.c)}에`, why: `여기에 놓으면 ${line(snap(S2))}예요 — 말 둘레로 먼저 닿는 칸이 가장 많고 상대와 덜 겹치는 자리예요. 한쪽 귀퉁이에만 몰리면 협공당하기 쉬워요.` };
     }
     const S = fromView(V);
     if (g.t === "move") {
       const P = S.pieces[g.p], mv = allMoves(S, me).find(m => m.p === g.p && JSON.stringify(m.dirs) === JSON.stringify(g.dirs) && m.brk === g.brk);
       const T = cloneS(S); doMove(T, mv); const w = bestWall(T, me);
       if (w) { const Q = T.pieces[T.moved]; setWall(T, Q.r, Q.c, w.d, true); }
-      return { opp, mine, rec: `${coord(P.r, P.c)} 의 ${KOK[P.k]}을 ${coord(mv.to[0], mv.to[1])} 로${mv.brk !== null ? " (벽 부수기)" : ""}`, why: `${w ? `이동한 뒤 ${DN[w.d]}쪽에 벽을 세우면` : "이렇게 하면"} ${line(snap(T))}예요 (지금은 나 ${cnt[me]}칸 · 상대 ${nowOpp}칸).${mv.brk !== null ? " 벽 부수기는 한 번뿐이라 정말 이득일 때만 써요." : ""}` };
+      return { opp, mine, rec: `${coord(P.r, P.c)}의 ${KOK[P.k]}을 ${coord(mv.to[0], mv.to[1])}${ja(coord(mv.to[0], mv.to[1]), "로")}${mv.brk !== null ? " (벽 부수기)" : ""}`, why: `${w ? `이동한 뒤 ${DN[w.d]}쪽에 벽을 세우면` : "이렇게 하면"} ${line(snap(T))}예요 (지금은 나 ${cnt[me]}칸 · 상대 ${nowOpp}칸).${mv.brk !== null ? " 벽 부수기는 한 번뿐이라 정말 이득일 때만 써요." : ""}` };
     }
     const T2 = cloneS(S), P2 = T2.pieces[T2.moved]; setWall(T2, P2.r, P2.c, g.d, true);
     return { opp, mine, rec: `${DN[g.d]}쪽에 벽`, why: `이 면에 벽을 세우면 ${line(snap(T2))}예요 (지금은 나 ${cnt[me]}칸 · 상대 ${nowOpp}칸) — 내가 먼저 닿는 영역은 지키고 상대가 파고들 길은 막아요. 구역을 가르면 말이 있는 구역의 칸 수 합으로 끝나니 늘 세어 봐요.` };

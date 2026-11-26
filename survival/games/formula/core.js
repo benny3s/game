@@ -468,12 +468,12 @@
         rec = t === "fold" ? "폴드" : t === "call" ? `콜 (${p.toCall}칩)` : t === "check" ? "체크" : `레이즈 → ${A.to}칩까지`;
         const share = Math.round(p.eq * 100);
         if (t === "fold") why = `콜에 ${p.toCall}칩인데 이 판돈에서 기대 몫이 ${share}% 쯤이라 손해가 커요 — 상대가 센 쪽을 노리는 것 같아요.`;
-        else if (t === "raise") why = p.a.t === "raise" ? `내 쪽이 앞서요 (기대 몫 ${share}%). 판돈을 키우면 따라오는 상대에게서 더 받아요.` : `기대 몫 ${share}% 로 앞선 건 아니지만 살짝 올려 상대를 떠봐요 (허세 — 가끔 섞어야 읽히지 않아요).`;
+        else if (t === "raise") why = p.a.t === "raise" ? `내 쪽이 앞서요 (기대 몫 ${share}%). 판돈을 키우면 따라오는 상대에게서 더 받아요.` : `기대 몫 ${share}%로 앞선 건 아니지만 살짝 올려 상대를 떠봐요 (허세 — 가끔 섞어야 읽히지 않아요).`;
         else if (t === "call") why = `${p.toCall}칩으로 판돈 ${V.pot + p.toCall}칩을 노려요 — 기대 몫 ${share}% 면 따라갈 만해요.`;
         else why = `걸 만큼 앞서지는 않아요 (기대 몫 ${share}%). 공짜로 다음 카드를 봐요.`;
       } else rec = "상대 베팅을 기다려요 — 누가 레이즈하는지 보세요";
     } else if (V.phase === "build") {
-      if (myTurn && b) { rec = `하이 식 ${eqText(b.H.e)} = ${fmt(b.H.v)} · 로우 식 ${eqText(b.L.e)} = ${fmt(b.L.v)}`; why = "곱셈 · 나눗셈이 먼저 계산돼요. 큰 수끼리 곱하고 빼거나, 같은 수로 나눠 1 을 만들면 좋아요."; }
+      if (myTurn && b) { rec = `하이 식 ${eqText(b.H.e)} = ${fmt(b.H.v)} · 로우 식 ${eqText(b.L.e)} = ${fmt(b.L.v)}`; why = "곱셈 · 나눗셈이 먼저 계산돼요. 큰 수끼리 곱하고 빼거나, 같은 수로 나눠 1을 만들면 좋아요."; }
       else rec = "다른 사람이 식을 만드는 중이에요";
     } else if (V.phase === "declare") {
       if (myTurn) {

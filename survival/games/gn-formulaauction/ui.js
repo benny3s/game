@@ -2,6 +2,12 @@
    시계는 UI 만 가져요: 창마다 제한 시간(옵션)이 끝나면 {t:"pass"} 를 보내요. 한 창에서 고른 것은 모두가 고른 뒤에 밝혀져요 */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const G = window.SVCores["gn-formulaauction"];
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -153,9 +159,9 @@
     const bn = burnChips(V, ctx, me, watch);
     if (!L) return `<span>…</span>`;
     const tt = L.tile ? `${L.tile[0] || ""}${L.tile[0] && L.tile[1] ? " " : ""}${L.tile[1] || ""}` : "";
-    if (L.k === "win") return `<div class="fa-res ok">🎉 ${L.lot}회 ${who(L.s)} 큐브 ${L.c} 로 낙찰 — 「${esc(tt)}」<small>낸 큐브는 모두 버려져요 ${bn}</small></div>`;
-    if (L.k === "void") return `<div class="fa-res no">🚫 ${L.lot}회 낙찰방해! 같은 큐브 ${L.c} 가 나와서 경매가 무효예요<small>타일도 큐브도 버려져요 ${bn}</small></div>`;
-    if (L.k === "gwin") return `<div class="fa-res ok">🏅 ${who(L.s)} 가넷 ${L.g}개로 절대큐브 11 을 얻었어요<small>졌던 사람의 가넷은 그대로 돌려줘요</small></div>`;
+    if (L.k === "win") return `<div class="fa-res ok">🎉 ${L.lot}회 ${who(L.s)} 큐브 ${L.c}${ja(L.c,"로")} 낙찰 — 「${esc(tt)}」<small>낸 큐브는 모두 버려져요 ${bn}</small></div>`;
+    if (L.k === "void") return `<div class="fa-res no">🚫 ${L.lot}회 낙찰방해! 같은 큐브 ${L.c}${ja(L.c, "이")} 나와서 경매가 무효예요<small>타일도 큐브도 버려져요 ${bn}</small></div>`;
+    if (L.k === "gwin") return `<div class="fa-res ok">🏅 ${who(L.s)} 가넷 ${L.g}개로 절대큐브 11을 얻었어요<small>졌던 사람의 가넷은 그대로 돌려줘요</small></div>`;
     if (L.k === "gnone") return `<div class="fa-res no">아무도 가넷을 부르지 않아 절대큐브가 사라졌어요</div>`;
     return `<div class="fa-res no">${L.lot}회 입찰한 사람이 없어 타일이 버려졌어요</div>`;
   }
@@ -175,14 +181,14 @@
     let st = "", actH = "";
     if (V.over) {
       const w = V.winner;
-      if (V.endBy === "ten") st = `<div class="fa-res ok">🏆 ${who(w)} 10 을 완성했어요! <b>${esc(V.fin[w].expr)} = 10</b><small>나머지는 공동 최하위예요</small></div>`;
-      else { const f = V.fin, best = V.ranks.map((r, i) => (r === 0 ? i : -1)).filter(i => i >= 0); st = `<div class="fa-res ${best.includes(me) && !watch ? "ok" : "no"}">24회가 끝났어요 — 10 에 가장 가까운 수식<br>${best.map(i => `${!watch && i === me ? "나" : esc(nameOf(ctx, i))}${f[i] ? ` ${esc(f[i].expr)} = ${esc(G.fmtV(f[i].v))}` : " (수식 없음)"}`).join(" · ")}<small>차이가 같으면 높은 숫자가 우세해요</small></div>`; }
+      if (V.endBy === "ten") st = `<div class="fa-res ok">🏆 ${who(w)} 10을 완성했어요! <b>${esc(V.fin[w].expr)} = 10</b><small>나머지는 공동 최하위예요</small></div>`;
+      else { const f = V.fin, best = V.ranks.map((r, i) => (r === 0 ? i : -1)).filter(i => i >= 0); st = `<div class="fa-res ${best.includes(me) && !watch ? "ok" : "no"}">24회가 끝났어요 — 10에 가장 가까운 수식<br>${best.map(i => `${!watch && i === me ? "나" : esc(nameOf(ctx, i))}${f[i] ? ` ${esc(f[i].expr)} = ${esc(G.fmtV(f[i].v))}` : " (수식 없음)"}`).join(" · ")}<small>차이가 같으면 높은 숫자가 우세해요</small></div>`; }
     } else if (V.phase === "show") st = resultHtml(V, ctx, me, watch);
     else if (mineTurn) {
       const need = g ? `가넷 ${(V.hi ? V.hi.g : 0) + 1}개 이상` : V.hi ? `큐브 ${V.hi.c} 이상 · 같으면 방해` : "큐브 아무거나";
-      st = `<span>${V.mine ? "" : `✋ <b>${g ? "가넷으로 절대큐브 11 을 사요" : V.hi ? "받아칠까요?" : "입찰할까요?"}</b> ${need}`}${!g && V.burn.length ? ` ${burnChips(V, ctx, me, watch)}` : ""}</span>`;
+      st = `<span>${V.mine ? "" : `✋ <b>${g ? "가넷으로 절대큐브 11을 사요" : V.hi ? "받아칠까요?" : "입찰할까요?"}</b> ${need}`}${!g && V.burn.length ? ` ${burnChips(V, ctx, me, watch)}` : ""}</span>`;
     } else if (V.mine) {
-      st = `<span>✅ ${V.mine.t === "pass" ? "이번 창은 넘겼어요" : g ? `가넷 ${V.mine.g}개를 걸었어요` : `큐브 ${V.mine.c} 를 냈어요`} — 모두 고를 때까지 기다려요 ${burnChips(V, ctx, me, watch)}</span>`;
+      st = `<span>✅ ${V.mine.t === "pass" ? "이번 창은 넘겼어요" : g ? `가넷 ${V.mine.g}개를 걸었어요` : `큐브 ${V.mine.c}${ja(V.mine.c,"을")} 냈어요`} — 모두 고를 때까지 기다려요 ${burnChips(V, ctx, me, watch)}</span>`;
     } else if (watch) st = `<span>👀 ${V.needs.map(i => esc(nameOf(ctx, i))).join(" · ") || "…"} ${V.needs.length ? "고르는 중" : ""} ${burnChips(V, ctx, me, watch)}</span>`;
     else if (V.hi && V.hi.s === me) st = `<span>내가 서 있어요 — 다른 사람이 받아치는지 기다려요 ${burnChips(V, ctx, me, watch)}</span>`;
     else st = `<span>${g ? "가넷을 걸 수 없어요" : "낼 수 있는 큐브가 없어요"} — 기다려요 ${burnChips(V, ctx, me, watch)}</span>`;
@@ -203,7 +209,7 @@
       mine = `<div class="fa-me"><div class="hd"><div class="tl">${tileChips(V.nums[me], V.ops[me], false)}</div></div><div class="fm">${esc(fm)}${V.over ? "" : ` <small>· ${esc(step)}</small>`}</div>${tray}</div>`;
       if (mineTurn && !V.mine) {
         const lim = cfg.limit | 0, sel = S.sel, valid = g ? true : sel > 0, gvv = S.gv || ((V.hi ? V.hi.g : 0) + 1);
-        const goTxt = g ? `가넷 ${gvv}개 걸기` : sel ? (V.hi && sel === V.hi.c ? `큐브 ${sel} 로 막기` : `큐브 ${sel} 내기`) : "큐브를 골라요";
+        const goTxt = g ? `가넷 ${gvv}개 걸기` : sel ? (V.hi && sel === V.hi.c ? `큐브 ${sel}${ja(sel,"로")} 막기` : `큐브 ${sel} 내기`) : "큐브를 골라요";
         actH = `${lim ? `<div class="fa-bar" data-bar="${(ctx.fast ? 3000 : lim * 1000)}"><i></i></div>` : ""}<div class="fa-act"><button type="button" class="fa-pass" data-a="pass">넘기기</button><button type="button" class="fa-go${V.hi && sel === V.hi.c ? "" : " blue"}" data-a="go"${valid ? "" : " disabled"}>${goTxt}</button></div>`;
       }
     }
@@ -228,7 +234,7 @@
   const result = (V, me) => {
     const H = V.hist || [], won = me >= 0 ? H.filter(h => h.k === "win" && h.s === me).length : 0, voids = H.filter(h => h.k === "void").length, none = H.filter(h => h.k === "none").length;
     const w = V.winner, f = V.fin && w >= 0 ? V.fin[w] : null;
-    return `<b>${V.lot}회</b>까지 · ${V.endBy === "ten" && f ? `우승 수식 ${esc(f.expr)} = 10` : "24회까지 아무도 10 을 못 만들었어요"}${me >= 0 ? ` · 내가 낙찰한 경매 ${won}번` : ""} · 낙찰방해 ${voids}번 · 입찰 없음 ${none}번<br>내 큐브 ${me >= 0 ? V.cubes[me].length : "-"}장 남음`;
+    return `<b>${V.lot}회</b>까지 · ${V.endBy === "ten" && f ? `우승 수식 ${esc(f.expr)} = 10` : "24회까지 아무도 10을 못 만들었어요"}${me >= 0 ? ` · 내가 낙찰한 경매 ${won}번` : ""} · 낙찰방해 ${voids}번 · 입찰 없음 ${none}번<br>내 큐브 ${me >= 0 ? V.cubes[me].length : "-"}장 남음`;
   };
 
   // ── 1분 규칙 ──
@@ -239,10 +245,10 @@
     return [
       { tag: "STEP 1 · 준비", title: "숫자큐브 10개로 24번의 경매에 나서요", body: "모두 <b>숫자큐브 1~10</b> 10개를 받아요 (방송은 5명). 경매에는 <b>숫자 타일</b>과 <b>기호 타일</b>(+ − × ÷)이 순서표대로 나오고, 큐브가 입찰에 쓰는 돈이에요. 타일을 사 모아 <b>답이 10 인 수식</b>을 가장 먼저 만들면 우승!",
         boardHtml: `<div class="fa-tut">${cubeRow([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])}<div class="fa-tl" style="width:200px"><i class="fa-t n">1</i><i class="fa-t o">×</i><small>이런 타일이 24번 나와요</small></div></div>`, ms: 7000 },
-      { tag: "STEP 2 · 입찰", title: "높은 큐브가 낙찰 — 낸 큐브는 모두 사라져요", body: "타일이 공개되면 큐브 한 장을 내서 입찰해요. <b>더 높은 큐브가 안 나오면 낙찰</b>! 한 경매에 여러 번 낼 수 있지만 <b>낸 큐브는 이긴 사람 것도 전부 버려져요</b>. 아래 예: 성규가 1 → 3 → 5, 김경란이 2 → 4 를 냈고 성규 낙찰 — 큐브 5장이 사라졌어요.",
+      { tag: "STEP 2 · 입찰", title: "높은 큐브가 낙찰 — 낸 큐브는 모두 사라져요", body: "타일이 공개되면 큐브 한 장을 내서 입찰해요. <b>더 높은 큐브가 안 나오면 낙찰</b>! 한 경매에 여러 번 낼 수 있지만 <b>낸 큐브는 이긴 사람 것도 전부 버려져요</b>. 아래 예: 성규가 1 → 3 → 5, 김경란이 2 → 4를 냈고 성규 낙찰 — 큐브 5장이 사라졌어요.",
         boardHtml: `<div class="fa-tut"><div class="fa-tl" style="width:150px"><i class="fa-t n">3</i></div><div class="row"><small>성규</small>${cubeRow([1, 3, 5], { 1: "x", 3: "x", 5: "w" })}</div><div class="row"><small>김경란</small>${cubeRow([2, 4], { 2: "x", 4: "x" })}</div><small>높은 큐브를 한 번에 내면 적게 써요</small></div>`, ms: 7000 },
-      { tag: "STEP 3 · 낙찰방해", title: "같은 큐브가 나오면 경매가 무효예요", body: "<b>같은 큐브</b>가 나오면 그 경매는 <b>무효</b>예요(낙찰방해) — 큐브도 타일도 모두 버려져요. 상대가 꼭 필요한 타일을 사려고 큐브 5 를 냈어요. <b>막으려면 같은 큐브 5 </b>를 눌러 보세요!",
-        interactive: { hint: "👆 상대가 큐브 5 를 냈어요 — 같은 큐브를 눌러 막아 봐요", doneText: "✅ 같은 큐브 5 가 나와 경매가 무효가 됐어요 — 상대가 낸 5 도 버려져요" },
+      { tag: "STEP 3 · 낙찰방해", title: "같은 큐브가 나오면 경매가 무효예요", body: "<b>같은 큐브</b>가 나오면 그 경매는 <b>무효</b>예요(낙찰방해) — 큐브도 타일도 모두 버려져요. 상대가 꼭 필요한 타일을 사려고 큐브 5를 냈어요. <b>막으려면 같은 큐브 5 </b>를 눌러 보세요!",
+        interactive: { hint: "👆 상대가 큐브 5를 냈어요 — 같은 큐브를 눌러 막아 봐요", doneText: "✅ 같은 큐브 5가 나와 경매가 무효가 됐어요 — 상대가 낸 5도 버려져요" },
         render(stage, ctrl) {
           let done = false;
           const draw = msg => { stage.innerHTML = `<div class="fa-tut"><div class="fa-tl" style="width:160px"><i class="fa-t n">10</i><i class="fa-t o">÷</i></div><div class="fa-hi on" style="width:150px"><small>서 있는 입찰</small><b>큐브 5</b><em>상대</em></div><div class="fa-tray">${[5, 6, 7, 8, 9, 10].map(c => `<button type="button" class="fa-cb${c === 5 ? " blk" : ""}" data-c="${c}">${c}</button>`).join("")}</div><small>${msg}</small></div>`; };
@@ -251,13 +257,13 @@
             const b = e.target.closest("[data-c]"); if (!b || done) return;
             const c = +b.dataset.c; ctrl.sfx("tap");
             if (c === 5) { done = true; draw("같은 큐브! 낙찰방해로 경매가 무효예요 🚫"); ctrl.sfx("win"); ctrl.complete(); }
-            else draw(c > 5 ? `큐브 ${c} 는 상대보다 높아서 내가 낙찰해요 (큐브 ${c} 와 상대의 5 모두 버려져요) — 막으려면 같은 5 를 눌러요` : "5 보다 낮은 큐브는 낼 수 없어요");
+            else draw(c > 5 ? `큐브 ${c}${ja(c,"은")} 상대보다 높아서 내가 낙찰해요 (큐브 ${c}${ja(c,"와")} 상대의 5 모두 버려져요) — 막으려면 같은 5를 눌러요` : "5 보다 낮은 큐브는 낼 수 없어요");
           };
         } },
-      { tag: "STEP 4 · 특별경매", title: "13회는 가넷으로 사는 절대큐브 11", body: "13회는 <b>가넷</b>으로 응찰해 <b>숫자큐브 11</b>(절대큐브)을 사요. 11 은 <b>어떤 경매에서든 이겨요</b>. <b>가넷 개수를 더 높게 불러</b> 가며 겨루고(같은 개수를 부르면 <b>추첨</b>), <b>낙찰받지 못한 사람의 가넷은 돌려받아요</b>.",
+      { tag: "STEP 4 · 특별경매", title: "13회는 가넷으로 사는 절대큐브 11", body: "13회는 <b>가넷</b>으로 응찰해 <b>숫자큐브 11</b>(절대큐브)을 사요. 11은 <b>어떤 경매에서든 이겨요</b>. <b>가넷 개수를 더 높게 불러</b> 가며 겨루고(같은 개수를 부르면 <b>추첨</b>), <b>낙찰받지 못한 사람의 가넷은 돌려받아요</b>.",
         boardHtml: `<div class="fa-tut"><div class="fa-tl sp" style="width:190px"><i class="fa-t abs">11</i><small>특별경매<br>절대큐브</small></div><div class="fa-gs"><button type="button" tabindex="-1">−</button><b>8개</b><button type="button" tabindex="-1">+</button></div><small>시작 가넷은 사람마다 달라요 (7 · 14 · 15 · 11 · 7개)</small></div>`, ms: 7000 },
-      { tag: "STEP 5 · 수식", title: "타일을 모두 써서 답이 10 인 수식을 만들어요", body: "가진 타일을 <b>숫자 → 기호 → 숫자</b> 순서로 놓아요 (곱셈 · 나눗셈이 먼저). 타일을 <b>모두</b> 써서 답이 <b>10</b> 이면 그 자리에서 우승이에요. 아래 타일 <b>1 · 10 · ÷</b> 로 10 을 만들어 보세요 (성규의 우승 수식이에요)!",
-        interactive: { hint: "👆 타일을 눌러 순서대로 놓아요 (숫자 → 기호 → 숫자)", doneText: "✅ 10 ÷ 1 = 10 — 타일을 모두 써서 10 이 됐어요!" },
+      { tag: "STEP 5 · 수식", title: "타일을 모두 써서 답이 10 인 수식을 만들어요", body: "가진 타일을 <b>숫자 → 기호 → 숫자</b> 순서로 놓아요 (곱셈 · 나눗셈이 먼저). 타일을 <b>모두</b> 써서 답이 <b>10</b> 이면 그 자리에서 우승이에요. 아래 타일 <b>1 · 10 · ÷</b> 로 10을 만들어 보세요 (성규의 우승 수식이에요)!",
+        interactive: { hint: "👆 타일을 눌러 순서대로 놓아요 (숫자 → 기호 → 숫자)", doneText: "✅ 10 ÷ 1 = 10 — 타일을 모두 써서 10이 됐어요!" },
         render(stage, ctrl) {
           const T = [{ k: "n", v: 1 }, { k: "n", v: 10 }, { k: "o", v: "÷" }];
           let seq = [], done = false;
@@ -273,10 +279,10 @@
             if (!ok) { seq = []; draw("숫자 → 기호 → 숫자 순서로 놓아요, 다시!"); return; }
             const v = G.evalSeq([T[seq[0]].v, T[seq[2]].v], [T[seq[1]].v]);
             if (v[1] === 1 && v[0] === 10) { done = true; draw(`${T[seq[0]].v} ${T[seq[1]].v} ${T[seq[2]].v} = 10 ✔`); ctrl.sfx("win"); ctrl.complete(); }
-            else { const t = `${T[seq[0]].v} ${T[seq[1]].v} ${T[seq[2]].v} = ${G.fmt(v)} — 10 이 아니에요, 다시!`; seq = []; draw(t); }
+            else { const t = `${T[seq[0]].v} ${T[seq[1]].v} ${T[seq[2]].v} = ${G.fmt(v)} — 10이 아니에요, 다시!`; seq = []; draw(t); }
           };
         } },
-      { tag: "STEP 6 · 끝", title: "먼저 10 · 아니면 24회에 가장 가까운 수식", body: "누가 <b>먼저 10</b> 을 완성하면 그 자리에서 게임 끝! 24회까지 아무도 못 만들면 <b>10 에 가장 가까운 수식</b>이 우승이고, 차이가 같으면 <b>높은 숫자</b>가 우세해요 (9 와 11 이면 11). 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
+      { tag: "STEP 6 · 끝", title: "먼저 10 · 아니면 24회에 가장 가까운 수식", body: "누가 <b>먼저 10</b>을 완성하면 그 자리에서 게임 끝! 24회까지 아무도 못 만들면 <b>10에 가장 가까운 수식</b>이 우승이고, 차이가 같으면 <b>높은 숫자</b>가 우세해요 (9와 11 이면 11). 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
         boardHtml: `<div class="fa-tut"><span style="font-size:42px">🏆</span><small>10 완성 → 즉시 우승 · 못 만든 사람은 공동 최하위</small></div>`, ms: 6400 },
     ];
   }
@@ -292,7 +298,7 @@
     const d = best.u - mine.u; if (d <= 0.02) return { sev: 0, why: `이 창에선 좋은 수예요 — ${mine.why}` };
     const sev = Math.max(0, Math.min(100, Math.round(d * 100)));
     const me = G.actTxt(myA), bb = G.actTxt(best.a);
-    return { sev, why: `${V.lot}회: ${me} (${mine.why}) → 고급 AI 는 ${bb} (${best.why}) — 값 차이 ${d.toFixed(2)} (큐브 1칸 = 0.03)`, best: bb };
+    return { sev, why: `${V.lot}회: ${me} (${mine.why}) → 고급 AI는 ${bb} (${best.why}) — 값 차이 ${d.toFixed(2)} (큐브 1칸 = 0.03)`, best: bb };
   }
   // 자동 시험 · 시험 틀의 내 차례 수: 보통 AI 의 수
   function qa(V, me, rnd) { return V.needs.includes(me) ? G.ai(V, me, "normal", rnd) : null; }
@@ -304,7 +310,7 @@
     opts: [
       { k: "limit", label: "창 제한 시간", items: [[10, "10초"], [5, "5초 (방송)"], [0, "없음"]], def: 10 },
     ],
-    diff: "방송은 타일이 공개되면 5초 안에 손을 들어 큐브를 내는 실시간 경쟁이에요. 우리 판은 5초 반응을 '창'으로 바꿨어요 — 창마다 모두가 (넘기기 · 큐브 한 장) 을 동시에 고르고, 같은 창에서 낸 큐브 중 가장 큰 것이 이겨요 (가장 큰 큐브가 둘 이상이거나 서 있는 입찰과 같으면 낙찰방해로 무효). 낸 큐브가 모두 버려지는 것 · 낙찰방해 · 13회 절대큐브는 방송 그대로 · 창 제한 시간은 옵션(기본 10초, 방송 5초, 없음) · 가넷은 13회에서만 쓰고 같은 가넷을 부르면 추첨이에요 · 같은 큐브가 모두 무효는 아니에요 — 서 있는 입찰과 같거나 같은 창의 가장 큰 큐브끼리 겹칠 때만 낙찰방해예요 (낮은 큐브끼리 겹치는 건 상관없어요) · 24회까지 아무도 10 을 못 만들면 10 에 가까운 순서로 순위를 매겨요 (방송은 우승 · 탈락후보만 가려요) · 타일 배열 검사는 9만 가지까지만 살펴요 (SEARCH_CAP, 방송엔 없는 우리 판 상한) · 방송의 협상 · 가넷 주고받기 · 작전타임(6 · 12 · 18회 후 10분)은 한 기기 · AI 로 안 돼서 뺐어요 · 방송은 5명, 우리 판은 3~5명 (AI 는 방송 출연자 성격이 아니에요) · 우승해도 가넷을 받는 보상은 계산하지 않아요 · 문서(나무위키) 기준 · 영상 미확인: 입찰이 없으면 타일이 버려져요 · 타일을 모두 써야 10 으로 쳐요 · 숫자를 붙여 두 자리 수는 못 만들어요 · 곱셈 · 나눗셈 먼저, 소수 · 분수로 떨어지는 답도 그대로 계산해요 (방송 영상에서 확인한 완성 수식은 모두 정수예요)",
+    diff: "방송은 타일이 공개되면 5초 안에 손을 들어 큐브를 내는 실시간 경쟁이에요. 우리 판은 5초 반응을 '창'으로 바꿨어요 — 창마다 모두가 (넘기기 · 큐브 한 장)을 동시에 고르고, 같은 창에서 낸 큐브 중 가장 큰 것이 이겨요 (가장 큰 큐브가 둘 이상이거나 서 있는 입찰과 같으면 낙찰방해로 무효). 낸 큐브가 모두 버려지는 것 · 낙찰방해 · 13회 절대큐브는 방송 그대로 · 창 제한 시간은 옵션(기본 10초, 방송 5초, 없음) · 가넷은 13회에서만 쓰고 같은 가넷을 부르면 추첨이에요 · 같은 큐브가 모두 무효는 아니에요 — 서 있는 입찰과 같거나 같은 창의 가장 큰 큐브끼리 겹칠 때만 낙찰방해예요 (낮은 큐브끼리 겹치는 건 상관없어요) · 24회까지 아무도 10을 못 만들면 10에 가까운 순서로 순위를 매겨요 (방송은 우승 · 탈락후보만 가려요) · 타일 배열 검사는 9만 가지까지만 살펴요 (SEARCH_CAP, 방송엔 없는 우리 판 상한) · 방송의 협상 · 가넷 주고받기 · 작전타임(6 · 12 · 18회 후 10분)은 한 기기 · AI로 안 돼서 뺐어요 · 방송은 5명, 우리 판은 3~5명 (AI는 방송 출연자 성격이 아니에요) · 우승해도 가넷을 받는 보상은 계산하지 않아요 · 문서(나무위키) 기준 · 영상 미확인: 입찰이 없으면 타일이 버려져요 · 타일을 모두 써야 10으로 쳐요 · 숫자를 붙여 두 자리 수는 못 만들어요 · 곱셈 · 나눗셈 먼저, 소수 · 분수로 떨어지는 답도 그대로 계산해요 (방송 영상에서 확인한 완성 수식은 모두 정수예요)",
     howto: [
       "모두 <b>숫자큐브 1~10</b> 10개를 받아요 (13회에 이기면 <b>절대큐브 11</b> 하나 더)",
       "<b>24번의 경매</b> — 숫자 · 기호 타일이 순서표대로 나와요 (14~22회는 숫자 + 기호 묶음)",
@@ -312,8 +318,8 @@
       "<b>서 있는 입찰과 같은 큐브</b>가 나오거나, 같은 창에서 <b>가장 큰 큐브가 둘 이상</b>이면 그 경매는 <b>무효</b>(낙찰방해) — 큐브도 타일도 버려져요",
       "<b>13회 특별경매</b>: 가넷으로 응찰해 <b>절대큐브 11</b> (어떤 경매든 이겨요) · 못 이긴 사람의 가넷은 돌려받아요 · 같은 가넷을 부르면 추첨",
       "가진 타일을 <b>모두</b> 써서 숫자 → 기호 → 숫자 … 로 놓은 식이 <b>10</b> 이면 즉시 우승 (곱셈 · 나눗셈 먼저)",
-      "먼저 10 을 만들면 그 사람만 우승 · 나머지는 공동 최하위",
-      "24회까지 아무도 못 만들면 <b>10 에 가까운 순서</b>로 순위가 매겨져요 — 가장 가까운 수식이 우승, 가장 먼 수식이 탈락후보 (차이가 같으면 높은 숫자)",
+      "먼저 10을 만들면 그 사람만 우승 · 나머지는 공동 최하위",
+      "24회까지 아무도 못 만들면 <b>10에 가까운 순서</b>로 순위가 매겨져요 — 가장 가까운 수식이 우승, 가장 먼 수식이 탈락후보 (차이가 같으면 높은 숫자)",
       "<b>특수</b> — 가진 타일로 놓을 수 있는 배열이 9만 가지를 넘으면 앞쪽 9만 가지만 살펴요 (계산이 끝없이 걸리지 않게 한 우리 판 상한, 방송엔 없어요)",
     ],
     sub: V => (V.over ? "끝" : `${V.lot} / ${V.nlot}회 · ${V.special ? "특별경매" : `타일 ${V.tile.n || ""}${V.tile.n && V.tile.o ? " " : ""}${V.tile.o || ""}`}`),

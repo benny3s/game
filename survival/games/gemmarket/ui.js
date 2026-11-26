@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 보석 암시장 — 화면 (구매자 칸 · 휴지통 · 사람 카드 교환 · 정산표 · 마니또 곱셈 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const G = window.SVCores.gemmarket;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CARDS = G.CARDS, KN = G.KN;
@@ -143,7 +149,7 @@
     else if (V.phase === "swap") {
       if (myTurn) {
         const can = sel.to >= 0;
-        acts = `<div class="row2"><button class="btn primary big" data-a="swap" ${can ? "" : "disabled"}>${can ? `↔ ${esc(toLabel(sel.to, ctx))} 와 교환` : "바꿀 곳을 눌러요"}</button><button class="btn big${sel.peek ? " primary" : ""}" data-a="peek" ${V.peeked ? "disabled" : ""}>${V.peeked ? "👁 이미 봤어요" : sel.peek ? "👁 볼 칸을 눌러요" : "👁 몰래 보기"}</button></div>
+        acts = `<div class="row2"><button class="btn primary big" data-a="swap" ${can ? "" : "disabled"}>${can ? `↔ ${esc(toLabel(sel.to, ctx))}${ja(esc(toLabel(sel.to, ctx)),"와")} 교환` : "바꿀 곳을 눌러요"}</button><button class="btn big${sel.peek ? " primary" : ""}" data-a="peek" ${V.peeked ? "disabled" : ""}>${V.peeked ? "👁 이미 봤어요" : sel.peek ? "👁 볼 칸을 눌러요" : "👁 몰래 보기"}</button></div>
           <div class="note">${sel.peek ? "구매자 칸이나 휴지통을 누르면 그 카드를 볼 수 있어요" : `교환은 꼭 해야 해요 · 사람 카드는 모르는 채로 바꿔요${V.peeked ? "" : " · 몰래 보기는 게임 중 한 번"}`}</div>`;
       } else acts = `<div class="note">${watch ? "AI 들이 교환하는 중…" : turnSeat >= 0 ? `${esc(nameOf(ctx, turnSeat))} 차례예요…` : ""}</div>`;
     }
@@ -170,7 +176,7 @@
       const g = R.gains[i], cum = V.score[i];
       return `<div class="r${i === me ? " me" : ""}"><b>${esc(emo(ctx, i))} ${esc(i === me ? "나" : nameOf(ctx, i))}</b><span>${EMO[CARDS[R.hands[i]].k]}${num(R.hands[i])}</span><span class="g${R.bonus[i] ? "" : ""}">${R.bonus[i] ? `+${R.bonus[i]}` : ""}</span><span class="g${g < 0 ? " neg" : ""}">${g >= 0 ? "+" : ""}${g} <small style="color:var(--soft)">(${cum})</small></span></div>`;
     }).join("");
-    rows += `<div class="hd" style="color:var(--soft);font-weight:600">버린 카드: ${R.out.length ? R.out.map(c => EMO[CARDS[c].k] + num(c)).join(" ") : "없음"} · 괄호는 지금까지 합 · +3 은 내 폭탄을 가져간 사람이 있어서 받은 점수</div>`;
+    rows += `<div class="hd" style="color:var(--soft);font-weight:600">버린 카드: ${R.out.length ? R.out.map(c => EMO[CARDS[c].k] + num(c)).join(" ") : "없음"} · 괄호는 지금까지 합 · +3은 내 폭탄을 가져간 사람이 있어서 받은 점수</div>`;
     return `<div class="gm-show">${rows}</div>`;
   }
   function result(V) {
@@ -188,7 +194,7 @@
         boardHtml: `<div class="gm-tut"><div class="gm-board">${faceHtml(0)}${faceHtml(3)}${faceHtml(5)}${faceHtml(11)}</div><small>다이아 · 금 · 은 · 폭탄 (동은 1~2점)</small></div>`, ms: 5600 },
       { tag: "STEP 2 · 교환", title: "내 카드를 바꿔요 — 꼭 해야 해요", body: "내 차례에 내 카드를 <b>다른 사람 카드 · 구매자 칸 카드 · 휴지통 카드</b> 중 하나와 맞바꿔요. 순서는 선부터 <b>한 바퀴 정순, 한 바퀴 역순</b> — 선은 첫 교환과 마지막 교환을 둘 다 해요.",
         boardHtml: `<div class="gm-tut"><div class="gm-prog" style="width:100%">${Array.from({ length: 8 }, (_, k) => `<i class="${k < 3 ? "done" : k === 3 ? "now" : ""}"></i>`).join("")}</div><b>1 → 2 → 3 → 4 → 4 → 3 → 2 → 1</b><small>4명일 때 교환 순서 (선 = 1번)</small></div>`, ms: 5600 },
-      { tag: "STEP 3 · 직접", title: "점수 계산해 보기", body: "라운드가 끝나면 내 카드와 <b>같은 종류 구매자 칸마다</b> 카드 숫자만큼 점수를 받아요. 구매자 칸이 <b>은 · 은 · 금</b> 이고 내가 <b>은 3</b> 을 들고 있다면 몇 점일까요?",
+      { tag: "STEP 3 · 직접", title: "점수 계산해 보기", body: "라운드가 끝나면 내 카드와 <b>같은 종류 구매자 칸마다</b> 카드 숫자만큼 점수를 받아요. 구매자 칸이 <b>은 · 은 · 금</b> 이고 내가 <b>은 3</b>을 들고 있다면 몇 점일까요?",
         interactive: { hint: "👆 점수를 골라요", doneText: "✅ 은 3 × 은 구매자 2칸 = 6점!" },
         render(stage, ctrl) {
           const draw = (msg) => {
@@ -200,7 +206,7 @@
       { tag: "STEP 4 · 폭탄", title: "폭탄은 사람에게만 넘겨요", body: "폭탄을 들고 끝나면 숫자만큼 <b>깎여요</b>. 폭탄은 구매자 칸 · 휴지통에 못 넣고 <b>사람과만</b> 바꿔요. 누가 내 폭탄을 가져가면 나는 그 자리에서 <b>+3점</b>! 그리고 <b>−6 폭탄을 든 사람</b>이 다음 라운드 선이에요.",
         boardHtml: `<div class="gm-tut"><div class="gm-board">${faceHtml(11, "", "−6")}${faceHtml(12, "", "−4")}</div><small>다음 선 = −6 폭탄 보유자 → −4 보유자 → 그대로</small></div>`, ms: 5600 },
       { tag: "STEP 5 · 마니또", title: "내 순위는 마니또와 곱해요", body: "3라운드 점수를 모은 뒤 <b>내 점수 × 내 마니또의 점수</b> 가 최종 점수예요. 사람들이 한 바퀴로 이어져 있고, 나는 <b>내가 누구의 마니또인지</b>만 알아요. 내 마니또가 누구인지는 몰라요.",
-        boardHtml: `<div class="gm-tut"><div class="gm-fin" style="width:100%"><div class="r me"><span>예</span><b>🙂 나</b><i class="neg">−156</i><small>내 점수 13 × 마니또의 −12</small></div></div><small>막히면 <b>🧑‍🏫 AI 선생님</b> 이 어디와 바꿀지 알려 줘요</small></div>`, ms: 6000 },
+        boardHtml: `<div class="gm-tut"><div class="gm-fin" style="width:100%"><div class="r me"><span>예</span><b>🙂 나</b><i class="neg">−156</i><small>내 점수 13 × 마니또의 −12</small></div></div><small>막히면 <b>🧑‍🏫 AI 선생님</b>이 어디와 바꿀지 알려 줘요</small></div>`, ms: 6000 },
     ];
   }
 
@@ -223,7 +229,7 @@
       if (!a) return "—";
       const PL = ["구매자 1칸", "구매자 2칸", "구매자 3칸", "휴지통"];
       if (a.t === "peek") return `${PL[a.loc] || "?"} 몰래 봄`;
-      if (a.t === "swap") return `${G.toText(a.to, names)} 와 교환`;
+      if (a.t === "swap") return `${G.toText(a.to, names)}${ja(G.toText(a.to, names),"와")} 교환`;
       return "—";
     },
     review: (V, seat, myA, bestA, info) => {
@@ -233,7 +239,7 @@
       if (!best || !mine) return null;
       const names = info && info.names;
       const f = x => (x >= 0 ? "+" : "") + x.toFixed(1), pc = x => Math.round(x * 100) + "%";
-      return { sev: Math.max(0, Math.min(100, Math.round((best.ev - mine.ev) * 240))), why: `최종 순위에서 남을 이길 몫 — 고급 AI 가 본 최선 ${G.toText(best.to, names)} ${pc(best.win)} (이번 라운드 ${f(best.pts)}점) / 내 선택 ${G.toText(myA.to, names)} ${pc(mine.win)} (${f(mine.pts)}점) · 마니또는 모르는 것으로 보고, 남은 교환은 무작위로 가정` };
+      return { sev: Math.max(0, Math.min(100, Math.round((best.ev - mine.ev) * 240))), why: `최종 순위에서 남을 이길 몫 — 고급 AI가 본 최선 ${G.toText(best.to, names)} ${pc(best.win)} (이번 라운드 ${f(best.pts)}점) / 내 선택 ${G.toText(myA.to, names)} ${pc(mine.win)} (${f(mine.pts)}점) · 마니또는 모르는 것으로 보고, 남은 교환은 무작위로 가정` };
     },
     coach: (V, me, since, names) => G.coach(V, me, since, names),
     tutorial,

@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 저격 홀덤 — 화면 (카드 1~10 · 공유 4장 · 베팅 · 저격 · 생존 75개 · 선생님 · 복기 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.sniper;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CATS = K.CATS;
@@ -315,8 +321,8 @@
       if (myA.t !== "fold" && bestA.t === "fold") r.push(`승률 ${pct(J.eq)}로 칩 ${J.c}개를 더 넣으면 손해예요`);
       if (myA.t === "raise" && bestA.t !== "raise" && bestA.t !== "fold") r.push("승률이 올릴 만큼 높지 않아요");
       if (bestA.t === "raise" && myA.t !== "raise" && myA.t !== "fold") r.push("센 패는 올려서 판을 키워야 이길 때 더 받아요");
-      why = loss <= 0.5 ? `고급 AI: ${best} — 승률 ${pct(J.eq)} 로 셈한 기대 칩이 거의 같아요 (${f(J.best.ev)} vs ${f(J.my.ev)})`
-        : `고급 AI: ${best} — 승률 ${pct(J.eq)} 로 셈한 기대 칩 ${f(J.best.ev)} vs 내 수 ${f(J.my.ev)}${r.length ? " · " + r.join(" · ") : ""}`;
+      why = loss <= 0.5 ? `고급 AI: ${best} — 승률 ${pct(J.eq)}${ja(pct(J.eq),"로")} 셈한 기대 칩이 거의 같아요 (${f(J.best.ev)} vs ${f(J.my.ev)})`
+        : `고급 AI: ${best} — 승률 ${pct(J.eq)}${ja(pct(J.eq),"로")} 셈한 기대 칩 ${f(J.best.ev)} vs 내 수 ${f(J.my.ev)}${r.length ? " · " + r.join(" · ") : ""}`;
     } else {
       why = loss <= 0.5 ? `고급 AI: ${best} — 이길 몫이 거의 같아요 (${pct(J.best.w)} vs ${pct(J.my.w)})`
         : `고급 AI: ${best} — 굴려 본 이길 몫 ${pct(J.best.w)} vs 내 수 ${pct(J.my.w)} (판돈 ${J.pot}개)${!bestA.pass ? ` · 상대가 ${hn(bestA.c, bestA.num)}일 확률 ${pct(J.best.f)}` : ""}`;
@@ -350,10 +356,10 @@
         boardHtml: tb(`<div class="sn-tbl">${fakeRow("선", "가", "레이즈 6", "걸음 6", "54")}${fakeRow("2", "나", "콜 5", "걸음 6", "54")}${fakeRow("3", "다", "포기", "걸음 1", "59", "", "fold")}</div>`), ms: 7000 },
       { tag: "STEP 4 · 진행 ② 족보", title: "공유 4 + 개인 2 → 가장 좋은 조합", body: "<b>포카드 &gt; 풀하우스 &gt; 스트레이트</b>(5장 연속) <b>&gt; 트리플 &gt; 투페어 &gt; 원페어 &gt; 하이카드</b>. 족보 이름은 <b>가장 높은 숫자 + 족보</b> (4·5·6·7·8 → 8 스트레이트, 7·7·5·5 → 7 투페어, 풀하우스는 트리플 숫자).",
         boardHtml: tb(`<div class="sn-mid">${grp("공유 카드", cards([7, 5, 7, 1], [1, 1, 1, 0]))}${grp("내 패", cards([5, 3], [1, 0]))}</div><div class="sn-hn">내 족보 <b>7 투페어</b> (7·7·5·5)</div>`), ms: 7000 },
-      { tag: "STEP 5 · 직접", title: "저격 — 상대 족보를 맞혀요", body: "2차 베팅이 끝나면 개인 카드를 펼치기 전에 <b>선부터</b> 족보 하나를 <b>저격</b>해요. 저격당한 족보는 <b>꼴찌</b>! 가가 크게 레이즈했어요 — 공유 7 · 7 이 있으니 <b>7 트리플</b>이 의심돼요. 저격해 봐요.",
+      { tag: "STEP 5 · 직접", title: "저격 — 상대 족보를 맞혀요", body: "2차 베팅이 끝나면 개인 카드를 펼치기 전에 <b>선부터</b> 족보 하나를 <b>저격</b>해요. 저격당한 족보는 <b>꼴찌</b>! 가가 크게 레이즈했어요 — 공유 7 · 7이 있으니 <b>7 트리플</b>이 의심돼요. 저격해 봐요.",
         interactive: { hint: "👆 트리플 → 7 → 저격", doneText: "✅ 가의 7 트리플이 꼴찌 — 9 투페어로 판돈을 가져요" },
         render(stage, ctrl) {
-          let c = -1, num = 0, done = false, msg = "가의 레이즈 — 7 이 한 장 더 있을지도";
+          let c = -1, num = 0, done = false, msg = "가의 레이즈 — 7이 한 장 더 있을지도";
           const draw = () => {
             const ok = c >= 0 && num > 0 && K.validSnipe(c, num);
             const tc = done ? -1 : c !== GOAL.c ? GOAL.c : -1, tn = done || tc >= 0 ? -1 : num !== GOAL.num ? GOAL.num : -1, tg = !done && tc < 0 && tn < 0;
@@ -370,7 +376,7 @@
             if (t.dataset.n !== undefined) { const n = +t.dataset.n; num = num === n ? 0 : n; ctrl.sfx("tap"); draw(); return; }
             if (c === GOAL.c && num === GOAL.num) { done = true; ctrl.sfx("win"); msg = "🏆 <b>가의 7 트리플 저격!</b> 남은 내 9 투페어가 1등"; draw(); ctrl.complete(); return; }
             const name = hn(c, num);
-            msg = c === 2 && num === 9 ? `<b>${name}</b>는 내 족보예요 — 내 것을 지우면 안 돼요` : `<b>${name}</b>${eul(name)} 저격했지만 가는 그 족보가 아니었어요 — <b>트리플 · 7</b> 을 골라요`;
+            msg = c === 2 && num === 9 ? `<b>${name}</b>는 내 족보예요 — 내 것을 지우면 안 돼요` : `<b>${name}</b>${eul(name)} 저격했지만 가는 그 족보가 아니었어요 — <b>트리플 · 7</b>을 골라요`;
             ctrl.sfx("tap"); c = -1; num = 0; draw();
           };
           draw();

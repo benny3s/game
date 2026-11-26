@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 믹스 앤 매치 — 화면 (노란 선 카드 · 합 말하기 키패드 · AI 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.mixmatch;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const SRC = "방송: 피의 게임 3 · 14화 파이널 매치 3라운드 '믹스 앤 매치' (3명) · 확인 영상: 웨이브 '[피의 게임3] 우승자 탄생 앞둔 마지막 라운드' 14회 하이라이트 (규칙 설명 · 카드 6장 화면)";
@@ -148,7 +154,7 @@
     } else if (run) {
       const ev = V.log.filter(e => e.k === "ans" && e.r === V.round).slice(-2).map(e => `${esc(lab(e.s))} ${said(e)} ❌`).join(" · ");
       if (spec) info = `👀 카드를 겹쳐 두 숫자의 합을 맞히는 중이에요${ev ? ` — ${ev}` : ""}`;
-      else if (An && An.open) info = `✍️ 합을 눌러 입력해요 — <b>확정</b> 을 누르면 말한 거예요 <span class="mm-cd">15</span>초 안에 · 1.5초 넘게 망설이다 물러나면 틀린 걸로 쳐요`;
+      else if (An && An.open) info = `✍️ 합을 눌러 입력해요 — <b>확정</b>을 누르면 말한 거예요 <span class="mm-cd">15</span>초 안에 · 1.5초 넘게 망설이다 물러나면 틀린 걸로 쳐요`;
       else if (canIn) info = `🙋 합을 알겠으면 <b>정답!</b> — 아직이면 기다려요 (3초마다 다음 카드)${ev ? `<br>${ev}` : ""}`;
       else if (lockMe) info = `🔒 틀려서 쉬는 중이에요 — 곧 다시 말할 수 있어요 · 카드는 계속 봐요`;
       else info = `⏳ 다른 사람을 기다려요`;
@@ -238,7 +244,7 @@
     let rec;
     if (locked) rec = `🔒 쉬는 중 — 그동안 카드를 계속 겹쳐 후보를 좁혀 둬요 (지금 합 후보 ${an.best} · ${pct(an.p)}).`;
     else if (an.p >= 0.9) rec = `🙋 <b>정답!</b> 합 <b>${an.best}</b> — 확실해요 (${pct(an.p)}). 빨리 눌러야 해요.`;
-    else if (an.p >= 0.5) rec = `🤔 합 <b>${an.best}</b> 가 가장 유력(${pct(an.p)})하지만 틀리면 10초 쉬어요 — 한 장 더 보고 말하거나, 상대가 빨라 보이면 도전해요.`;
+    else if (an.p >= 0.5) rec = `🤔 합 <b>${an.best}</b>${ja(an.best, "이")} 가장 유력(${pct(an.p)})하지만 틀리면 10초 쉬어요 — 한 장 더 보고 말하거나, 상대가 빨라 보이면 도전해요.`;
     else rec = `⏳ 아직 이르니 <b>기다려요</b> — 합 후보가 많아요(가장 유력한 합도 ${pct(an.p)}). ${V.stage < 6 ? "카드가 더 나와요." : "후보를 지워 가며 좁혀요."}`;
     const why = `켜진 선이 없는 자리는 '안 켜짐'이 아니라 <b>아직 안 켜졌을 수도</b> 있어요 — 같은 숫자의 카드를 3장 다 봐야 확정돼요(지금 첫째 ${an.jA}장 · 둘째 ${an.jB}장). 켜진 선이 하나라도 있으면 그 선이 없는 숫자는 후보에서 지워요.`;
     return { opp, mine, rec, why };
@@ -253,8 +259,8 @@
     if (myA.t === "ans") {
       const pm = an.ps[myA.sum] || 0;
       const sev = pm < 0.05 ? 85 : pm < 0.35 ? 70 : pm < 0.6 ? 45 : pm < 0.85 ? 20 : 0;
-      if (!sev) return { sev: 0, why: `카드 ${nc}장으로 합 ${myA.sum} 가 맞을 확률이 ${pct(pm)} 라 좋은 선택이었어요.`, my: actText(myA), best: actText(bestA) };
-      return { sev, why: `카드 ${nc}장만 보고 합 ${myA.sum} 를 말했는데 맞을 확률이 약 ${pct(pm)} 였어요 (가장 유력한 합 ${an.best} ${pct(an.p)}) — 틀리면 10초(카드 3장) 동안 못 말해요.`, my: actText(myA), best: actText(bestA) };
+      if (!sev) return { sev: 0, why: `카드 ${nc}장으로 합 ${myA.sum}${ja(myA.sum, "이")} 맞을 확률이 ${pct(pm)} 라 좋은 선택이었어요.`, my: actText(myA), best: actText(bestA) };
+      return { sev, why: `카드 ${nc}장만 보고 합 ${myA.sum}${ja(myA.sum,"을")} 말했는데 맞을 확률이 약 ${pct(pm)} 였어요 (가장 유력한 합 ${an.best} ${pct(an.p)}) — 틀리면 10초(카드 3장) 동안 못 말해요.`, my: actText(myA), best: actText(bestA) };
     }
     if (bestA && bestA.t === "ans" && an.p >= 0.85) return { sev: 45, why: `카드 ${nc}장으로 합이 ${an.best} 일 확률이 ${pct(an.p)} 였는데 기다렸어요 — 상대가 먼저 말할 수 있어요.`, my: actText(myA), best: actText(bestA) };
     return { sev: 0, why: `카드 ${nc}장으로는 합이 ${an.best} 일 확률이 ${pct(an.p)} 뿐이라 기다린 게 맞아요.`, my: actText(myA), best: actText(bestA) };
@@ -285,7 +291,7 @@
         boardHtml: row(numSvg(26, COLS[1]), `<span class="big">+</span>`, numSvg(93, COLS[2])), ms: 6200 },
       { tag: "STEP 3 · 홀수 · 짝수", title: "1·3·5번째 = 첫째 숫자, 2·4·6번째 = 둘째 숫자", body: "카드 6장은 번갈아 두 숫자를 이뤄요. <b>1 · 3 · 5번째</b> 카드를 겹치면 <b>첫째 숫자</b>, <b>2 · 4 · 6번째</b> 카드를 겹치면 <b>둘째 숫자</b>가 나타나요. 지금 어느 숫자의 카드인지 번호로 가려 두면 헷갈리지 않아요.",
         boardHtml: `<div class="mm-tut"><div class="grp">첫째 숫자 = 1 · 3 · 5번째 카드</div><div class="row">${[0, 2, 4].map(k => fig(k, LA[k / 2])).join("")}</div><div class="grp">둘째 숫자 = 2 · 4 · 6번째 카드</div><div class="row">${[1, 3, 5].map(k => fig(k, LB[(k - 1) / 2])).join("")}</div><small>방송 1라운드 카드 6장 — 3초마다 한 장씩 나왔어요</small></div>`, ms: 7500 },
-      { tag: "STEP 4 · 겹치기", title: "세 장을 겹치면 숫자가 보여요", body: "같은 숫자의 카드 세 장을 한 장에 겹쳐요(색깔 = 어느 카드의 선인지). 선 하나가 여러 장에 나올 수도 있어요. 왼쪽은 <b>26</b>, 오른쪽은 <b>93</b> — 더한 <b>119</b> 가 방송 1라운드의 정답이었어요.",
+      { tag: "STEP 4 · 겹치기", title: "세 장을 겹치면 숫자가 보여요", body: "같은 숫자의 카드 세 장을 한 장에 겹쳐요(색깔 = 어느 카드의 선인지). 선 하나가 여러 장에 나올 수도 있어요. 왼쪽은 <b>26</b>, 오른쪽은 <b>93</b> — 더한 <b>119</b>가 방송 1라운드의 정답이었어요.",
         boardHtml: `<div class="mm-tut"><div class="row"><figure><span class="grp">1 · 3 · 5번째</span>${ov([0, 2, 4], LA)}${lg(LA, [0, 2, 4])}</figure><figure><span class="grp">2 · 4 · 6번째</span>${ov([1, 3, 5], LB)}${lg(LB, [1, 3, 5])}</figure></div><div class="row"><span class="big">26 + 93 = 119</span></div></div>`, ms: 7500 },
       { tag: "STEP 5 · 말하기", title: "합을 알면 '정답!' — 맞으면 1점", body: "두 숫자를 알아냈으면 <b>🙋 정답!</b> 을 누르고 <b>합</b>을 입력해 <b>확정</b>해요(15초 안에). <b>맞으면 1점</b>(그 라운드 끝), <b>틀리면 10초 동안</b> 말할 수 없어요. 눌러 놓고 1.5초 넘게 망설이다 물러나도 틀린 걸로 쳐요. 카드가 더 나오기 전에 말하면 빠르지만 틀릴 수도 있어요. <b>5라운드</b> 뒤 점수가 더 높은 사람이 승리, 같으면 연장!",
         boardHtml: row(`<span class="big">🙋 정답! → 119</span>`), ms: 7500 },
@@ -293,12 +299,12 @@
         interactive: { hint: "👆 세 숫자 중 고르기", doneText: "✅ 맞아요! 93 — 이렇게 겹쳐서 읽어요" },
         render(stage, ctrl) {
           let msg = "겹친 모양을 보고 숫자를 골라요";
-          const tips = { 98: "98 은 아니에요 — 일의 자리에 왼쪽 세로 선이 없어요 (8 이 아니라 3)", 83: "83 은 아니에요 — 십의 자리 왼쪽 아래에 선이 없어요 (8 이 아니라 9)" };
+          const tips = { 98: "98은 아니에요 — 일의 자리에 왼쪽 세로 선이 없어요 (8이 아니라 3)", 83: "83은 아니에요 — 십의 자리 왼쪽 아래에 선이 없어요 (8이 아니라 9)" };
           const draw = () => { stage.innerHTML = `<div class="mm-tut">${ov([1, 3, 5], LB)}${lg(LB, [1, 3, 5])}<div class="ch">${[98, 93, 83].map(n => `<button type="button" class="btn" data-n="${n}">${n}</button>`).join("")}</div><div class="msg">${msg}</div></div>`; };
           stage.onclick = e => {
             const b = e.target.closest("[data-n]"); if (!b) return;
             if (+b.dataset.n === 93) { ctrl.sfx("win"); msg = "🏆 정답이에요!"; draw(); ctrl.complete(); }
-            else { ctrl.sfx("tap"); msg = tips[b.dataset.n] || `${b.dataset.n} 는 아니에요 — 십의 자리 · 일의 자리 모양을 다시 봐요`; draw(); }
+            else { ctrl.sfx("tap"); msg = tips[b.dataset.n] || `${b.dataset.n}${ja(b.dataset.n,"은")} 아니에요 — 십의 자리 · 일의 자리 모양을 다시 봐요`; draw(); }
           };
           draw();
         } },

@@ -44,7 +44,7 @@
       if (!isD(s[i])) return s[i] === "=" ? "= 옆에는 숫자만 올 수 있어요" : i === 0 ? "숫자로 시작해야 해요" : "기호는 이웃해서 쓸 수 없어요";
       let j = i; while (j < s.length && isD(s[j])) j++;
       const t = s.slice(i, j);
-      if (t.length > 1 && t[0] === "0") return "두 자리 이상 수는 0 으로 시작할 수 없어요";
+      if (t.length > 1 && t[0] === "0") return "두 자리 이상 수는 0으로 시작할 수 없어요";
       const v = +t; if (v >= BOUND) return TOOBIG;
       nums.push(v); i = j;
       if (i < s.length) {
@@ -61,7 +61,7 @@
       let v = nums[e];
       for (let m = e - 1; m >= k; m--) {
         if (v < 0 || v > 24) return "지수가 너무 커요 (24 이하)";
-        if (nums[m] === 0 && v === 0) return "0^0 은 쓸 수 없어요";
+        if (nums[m] === 0 && v === 0) return "0^0은 쓸 수 없어요";
         v = Math.pow(nums[m], v); if (v >= BOUND) return TOOBIG;
       }
       terms.push(v); if (e < ops.length) tops.push(ops[e]);
@@ -74,7 +74,7 @@
       const o = tops[m], x = terms[m + 1];
       if (o === "+" || o === "-") { vals.push(acc); vops.push(o); acc = [x, 1]; continue; }
       if (o === "×") acc = frac(acc[0] * x, acc[1]);
-      else { if (x === 0) return "0 으로 나눌 수 없어요"; acc = frac(acc[0], acc[1] * x); }
+      else { if (x === 0) return "0으로 나눌 수 없어요"; acc = frac(acc[0], acc[1] * x); }
       if (big(acc)) return TOOBIG;
     }
     vals.push(acc);

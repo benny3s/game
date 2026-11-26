@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 숫자 경매 — 화면 (3~6명 · 블록 고르기 · 입찰/패스 · 반납 고르기 · 공개 · 1분 규칙 · AI 선생님) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const N = window.SVCores.numauction;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const BL = N.BLOCKS, NB = N.NB;
@@ -376,7 +382,7 @@
           const kTot = X >= 0 && X !== seat ? Math.max(V.haveSum[X], top + 1) : -1, canKill = kTot > 0 && kTot - pile <= freeSum;
           if (canKill && pen > 0.05) {
             const kill = myA.t === "bid" && T >= kTot;
-            if (kill) out = { sev: 0, why: `${head}. 합 ${T} 은 다음 사람이 낼 수 있는 블록(${V.haveSum[X]})을 넘어 그 사람이 대신 받고, 나는 낸 블록을 돌려받아요 — 확실히 피한 수예요` };
+            if (kill) out = { sev: 0, why: `${head}. 합 ${T}${ja(T,"은")} 다음 사람이 낼 수 있는 블록(${V.haveSum[X]})을 넘어 그 사람이 대신 받고, 나는 낸 블록을 돌려받아요 — 확실히 피한 수예요` };
             else {
               const loss = myA.t === "pass" ? pen + pile / price : 0.5 * pen;
               out = { sev: rvSev(loss, myA.t === "pass" ? 100 : 45), why: `${head}. 받으면 약 −${fmt(Math.round(pen * 10) / 10)}점${myA.t === "pass" && pile > 0 ? ` · 낸 블록 ${pile}도 사라져요` : ""} — 합 ${kTot} 까지 올리면 다음 사람이 못 넘겨 대신 받고 나는 블록을 돌려받아요${myA.t === "pass" ? "" : " (이 합이면 확실)"}` };

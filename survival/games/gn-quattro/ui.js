@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 콰트로 — 화면 (내 카드 4장 · 관전 플레이어 11명 · 열기 / 교환 / 엿보기 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const G = window.SVCores["gn-quattro"];
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -48,7 +54,7 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
   const nameOf = (ctx, i) => (ctx.seats[i] && ctx.seats[i].name) || `${i + 1}번`;
   const tile = (c, o, cls) => (c === null || c === undefined ? `<b class="qt-t hid ${cls || ""}">?</b>` : `<b class="qt-t c${G.col(c)}${o ? " op" : ""} ${cls || ""}"><i>${G.COLN[G.col(c)]}</i>${G.num(c)}${o ? "<u>공개</u>" : ""}</b>`);
   const cname = c => `${G.CEM[G.col(c)]}${G.num(c)}`;
-  const WHY = { sum: "둘 다 콰트로 — 합이 큰 쪽", max: "합이 같아 가장 큰 숫자로", one: "한 명만 콰트로", zero: "검정 0 을 열어서", none: "둘 다 콰트로를 못 만들어서", tie: "합도 가장 큰 숫자도 같아서" };
+  const WHY = { sum: "둘 다 콰트로 — 합이 큰 쪽", max: "합이 같아 가장 큰 숫자로", one: "한 명만 콰트로", zero: "검정 0을 열어서", none: "둘 다 콰트로를 못 만들어서", tie: "합도 가장 큰 숫자도 같아서" };
   let RS = null;
   const rs = (V, ctx) => {
     const last = V.log.length ? V.log[V.log.length - 1].i : 0, key = `${ctx.g}|${last}|${V.turn}|${V.peekUsed ? 1 : 0}`;
@@ -81,7 +87,7 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
       h += `<div class="qt-gs"><div class="lb">관전 플레이어 ${G.GUESTS}명 (AI) — 한 사람과 한 번만 교환</div><div class="qt-gg">${V.gex.map((ex, g) => `<button data-g="${g}" class="${ex ? "ex" : ""}${S.guest === g ? " sel" : ""}${V.peeked && V.peeked.g === g ? " pk" : ""}" ${ex || !mine ? "disabled" : ""}>${ex ? "✓" : ""}${g + 1}${V.peeked && V.peeked.g === g ? "👁" : ""}</button>`).join("")}</div></div>`;
       if (V.peeked) {
         const recv = G.guestPick(V.peeked.cards, openedMine, R.zeroLoses);
-        h += `<div class="qt-pk">👁 관전 ${V.peeked.g + 1}번의 카드 ${V.peeked.cards.map(c => tile(c, false, "sm")).join("")}${nOpenMine >= 1 ? ` — 교환하면 <b>${cname(V.peeked.cards[recv])}</b> 를 받아요` : ""}</div>`;
+        h += `<div class="qt-pk">👁 관전 ${V.peeked.g + 1}번의 카드 ${V.peeked.cards.map(c => tile(c, false, "sm")).join("")}${nOpenMine >= 1 ? ` — 교환하면 <b>${cname(V.peeked.cards[recv])}</b>${ja(cname(V.peeked.cards[recv]),"을")} 받아요` : ""}</div>`;
       }
     } else if (watch) h += `<div class="qt-info">관전 플레이어 ${G.GUESTS}명은 AI — 교환을 하면 열린 카드와 안 겹치는 가장 큰 카드를 줘요</div>`;
     h += logHtml(V, ctx, me, watch);
@@ -97,7 +103,7 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
       const zeroWarn = R.zeroLoses && selC === 0;
       const hint = nOpenMine === 0 ? "먼저 카드를 <b>1장 열어야</b> 교환할 수 있어요 — 카드를 누르고 [열기]" : "카드를 열거나, <b>카드 + 관전 플레이어</b>를 눌러 교환해요";
       h += `<div class="qt-info hint">${hint}${blockOpen ? `<br><span class="warn">마지막 카드는 ${G.GUESTS}명과 모두 교환한 뒤에 열 수 있어요 (${V.nEx}/${G.GUESTS})</span>` : ""}</div>`;
-      if (zeroWarn) h += `<div class="qt-info"><span class="warn">⚠️ 검정 0 은 열면 바로 져요 — 교환으로 바꿔요</span></div>`;
+      if (zeroWarn) h += `<div class="qt-info"><span class="warn">⚠️ 검정 0은 열면 바로 져요 — 교환으로 바꿔요</span></div>`;
       const canOpen = S.card !== null && !blockOpen && !zeroWarn, canSwap = nOpenMine >= 1 && V.nEx < R.maxEx && S.card !== null && S.guest !== null && !V.gex[S.guest], canPeek = R.peek && !V.peekUsed && S.guest !== null && !V.gex[S.guest];
       acts = `<div class="qt-acts"><button data-a="open" class="${canOpen ? "go" : ""}" ${canOpen ? "" : "disabled"}>🔓 카드 열기</button><button data-a="swap" class="${canSwap ? "go" : ""}" ${canSwap ? "" : "disabled"}>${canSwap ? `🔁 교환 (↔ 관전 ${S.guest + 1})` : "🔁 교환"}</button>${R.peek && !V.peekUsed ? `<button data-a="peek" class="${canPeek ? "go" : ""}" ${canPeek ? "" : "disabled"}>👁 엿보기${canPeek ? ` (관전 ${S.guest + 1})` : ""}</button>` : ""}</div>`;
     } else h += `<div class="qt-info">${watch ? "구경 중" : "상대가 생각하는 중이에요…"}</div>`;
@@ -126,13 +132,13 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
       { tag: "STEP 1 · 목표", title: "콰트로 — 색도 숫자도 모두 다른 4장", body: "카드는 <b>빨강 · 파랑 · 초록 · 노랑</b> 각 1~10 (그리고 검정 0 한 장) — 모두 41장이에요. 딜러가 섞어 <b>탈락후보 두 사람에게 4장씩</b>, 나머지 11명에게 3장씩 나눠 줘요. 4장을 <b>색도 숫자도 전부 다르게</b> 모으면 <b>콰트로</b>, 합이 더 큰 콰트로를 만든 쪽이 승자예요. 가장 큰 콰트로는 7 + 8 + 9 + 10 = 34!",
         boardHtml: `<div class="qt-tut">${row(four)}<div class="qt-info">🟥3 · 🟦9 · 🟨7 · 🟩10 → 색 4개 · 숫자 4개 모두 달라서 콰트로! (합 29)</div></div>`, ms: 7000 },
       { tag: "STEP 2 · 열기와 교환", title: "열어야 교환할 수 있어요", body: "먼저 카드 <b>1장을 오픈</b>해야 교환을 시작할 수 있어요 (오픈한 카드는 모두에게 보이고, <b>교환할 수 없어요</b>). 교환은 나머지 플레이어(관전 플레이어)와 카드 <b>1장씩 맞바꾸기</b> — 한 사람과 한 번만 할 수 있어요. 더 바꿀 게 없으면 나머지 카드도 오픈해요.",
-        boardHtml: `<div class="qt-tut"><div class="qt-row">${tile(mk(0, 7), true)}${tile(mk(1, 3), false)}${tile(mk(2, 3), false)}${tile(mk(3, 10), false)}</div><div class="qt-info">🟥7 은 열어 둔 카드 — 나머지 3장은 아직 비밀 (교환하면 바뀔 수 있어요)</div></div>`, ms: 7000 },
+        boardHtml: `<div class="qt-tut"><div class="qt-row">${tile(mk(0, 7), true)}${tile(mk(1, 3), false)}${tile(mk(2, 3), false)}${tile(mk(3, 10), false)}</div><div class="qt-info">🟥7은 열어 둔 카드 — 나머지 3장은 아직 비밀 (교환하면 바뀔 수 있어요)</div></div>`, ms: 7000 },
       { tag: "STEP 3 · 관전 플레이어", title: "열린 카드와 안 겹치는 가장 큰 카드를 줘요", body: "방송에선 관전 플레이어와 협상하지만, 우리 판의 관전 플레이어(AI)는 교환할 때 <b>내가 열어 둔 카드와 색 · 숫자가 겹치지 않는 카드</b> 중 가장 큰 카드를 줘요. 맞는 카드가 없으면 가장 낮은 카드를 줘요 — 그래서 <b>좋은 카드를 일찍 열어 두는 게</b> 유리해요.",
-        boardHtml: `<div class="qt-tut"><div class="qt-row">${tile(mk(0, 7), true)}</div><div class="qt-info">열린 카드 🟥7 · 관전 플레이어의 카드:</div><div class="qt-row">${tile(mk(0, 9), false, "sm")}${tile(mk(1, 9), false, "sm")}${tile(mk(1, 4), false, "sm")}</div><div class="qt-info">🟥9 는 색이 겹쳐요 → 🟦9 를 줘요 (안 겹치는 카드 중 가장 커요)</div></div>`, ms: 8000 },
-      { tag: "STEP 4 · 승패", title: "합이 큰 콰트로가 이겨요", body: "마지막 카드까지 오픈하면 판정해요. <b>둘 다 콰트로</b>면 합이 큰 쪽 → 합이 같으면 <b>더 높은 숫자 카드</b>를 가진 쪽이 이겨요. <b>한 명만 콰트로</b>면 그쪽 승리, 못 만든 쪽은 패배 (둘 다 못 하면 무승부). 1화 판은 4장을 다 열기 전에 <b>11명 전원과 교환</b>(총 11번)해야 하고, 오픈된 <b>검정 0 은 무조건 패배</b>예요. 12화 판은 교환 3명까지, 검정 0 도 색 하나로 인정해요.",
+        boardHtml: `<div class="qt-tut"><div class="qt-row">${tile(mk(0, 7), true)}</div><div class="qt-info">열린 카드 🟥7 · 관전 플레이어의 카드:</div><div class="qt-row">${tile(mk(0, 9), false, "sm")}${tile(mk(1, 9), false, "sm")}${tile(mk(1, 4), false, "sm")}</div><div class="qt-info">🟥9는 색이 겹쳐요 → 🟦9를 줘요 (안 겹치는 카드 중 가장 커요)</div></div>`, ms: 8000 },
+      { tag: "STEP 4 · 승패", title: "합이 큰 콰트로가 이겨요", body: "마지막 카드까지 오픈하면 판정해요. <b>둘 다 콰트로</b>면 합이 큰 쪽 → 합이 같으면 <b>더 높은 숫자 카드</b>를 가진 쪽이 이겨요. <b>한 명만 콰트로</b>면 그쪽 승리, 못 만든 쪽은 패배 (둘 다 못 하면 무승부). 1화 판은 4장을 다 열기 전에 <b>11명 전원과 교환</b>(총 11번)해야 하고, 오픈된 <b>검정 0은 무조건 패배</b>예요. 12화 판은 교환 3명까지, 검정 0도 색 하나로 인정해요.",
         boardHtml: `<div class="qt-tut"><div class="qt-info">나 ${[mk(2, 10), mk(1, 9), mk(3, 8), mk(0, 2)].map(cname).join(" ")} = <b>29</b></div><div class="qt-info">상대 ${[mk(0, 9), mk(1, 8), mk(2, 7), mk(3, 5)].map(cname).join(" ")} = <b>29</b> → 합이 같아요</div><div class="qt-info">가장 높은 숫자 10 · 9 → 내가 이겨요!</div></div>`, ms: 10000 },
-      { tag: "STEP 5 · 직접", title: "교환할 카드를 골라 봐요", body: "🟥7 은 열어 뒀어요. <b>콰트로가 되려면</b> 어떤 카드를 바꿔야 할까요? (힌트: 숫자가 겹치는 카드가 있어요)",
-        interactive: { hint: "👆 바꿔야 할 카드를 눌러요", doneText: "✅ 숫자 3 이 두 장(🟦3 · 🟨3)이라 콰트로가 안 돼요 — 둘 중 한 장을 교환해요!" },
+      { tag: "STEP 5 · 직접", title: "교환할 카드를 골라 봐요", body: "🟥7은 열어 뒀어요. <b>콰트로가 되려면</b> 어떤 카드를 바꿔야 할까요? (힌트: 숫자가 겹치는 카드가 있어요)",
+        interactive: { hint: "👆 바꿔야 할 카드를 눌러요", doneText: "✅ 숫자 3이 두 장(🟦3 · 🟨3)이라 콰트로가 안 돼요 — 둘 중 한 장을 교환해요!" },
         render(stage, ctrl) {
           const cs = [mk(0, 7), mk(1, 3), mk(2, 3), mk(3, 10)];
           stage.innerHTML = `<div class="qt-tut"><div class="qt-row">${cs.map((c, i) => (i === 0 ? tile(c, true) : `<button class="qt-t c${G.col(c)}" data-w="${i}"><i>${G.COLN[G.col(c)]}</i>${G.num(c)}</button>`)).join("")}</div><div class="qt-info" id="qt-tm">어떤 카드를 바꿀까요?</div></div>`;
@@ -149,13 +155,13 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
     name: "콰트로", emoji: "🃏", short: "색도 숫자도 다른 4장을 먼저 모아요 · 관전 플레이어와 카드 교환", min: 2, max: 2, defN: 2, board: false,
     show: "더 지니어스 · 시즌 2 · 콰트로", season: "시즌 2 룰 브레이커",
     opts: [{ k: "ver", label: "판", items: [["a", "1화 1회전 (11명 전원과 교환)"], ["b", "12화 결승 3회전 (교환 3명 · 엿보기)"]], def: "a" }],
-    diff: "방송은 탈락후보와 나머지 플레이어 11명이 협상해서 카드를 주고받지만, 우리는 관전 플레이어가 AI 라서 '열린 카드와 안 겹치는 가장 큰 카드'를 줘요 (없으면 가장 낮은 카드, 1화 판은 0 을 안 줘요) · 차례를 번갈아 한 가지씩 해요 (방송은 동시에) · 엿보기는 차례를 쓰지 않아요 · 12화 판의 멀리건과 아이템은 뺐어요 · 비기면 12화 방송은 게임을 다시 하지만 우리는 무승부로 끝내요 (둘 다 콰트로를 못 만들 때는 방송 설명이 없어요)",
+    diff: "방송은 탈락후보와 나머지 플레이어 11명이 협상해서 카드를 주고받지만, 우리는 관전 플레이어가 AI 라서 '열린 카드와 안 겹치는 가장 큰 카드'를 줘요 (없으면 가장 낮은 카드, 1화 판은 0을 안 줘요) · 차례를 번갈아 한 가지씩 해요 (방송은 동시에) · 엿보기는 차례를 쓰지 않아요 · 12화 판의 멀리건과 아이템은 뺐어요 · 비기면 12화 방송은 게임을 다시 하지만 우리는 무승부로 끝내요 (둘 다 콰트로를 못 만들 때는 방송 설명이 없어요)",
     howto: [
       "카드는 <b>빨강 · 파랑 · 초록 · 노랑</b> 각 1~10 + 검정 <b>0</b> 한 장 = 41장 — 딜러가 섞어 <b>탈락후보 두 사람에게 4장씩</b>, 나머지 11명(관전 플레이어)에게 3장씩",
       "<b>콰트로</b> = 숫자도 색도 모두 다른 4장 — 합이 더 큰 콰트로를 만든 쪽이 승자 (최대 34)",
       "먼저 <b>1장을 오픈</b>해야 교환할 수 있고, 오픈한 카드는 교환할 수 없어요 · 교환은 관전 플레이어와 <b>1장씩</b>, 한 사람과 <b>한 번만</b>",
       "마지막 카드까지 오픈하면 판정 — <b>둘 다 콰트로</b>면 합이 큰 쪽 → 합이 같으면 더 높은 숫자를 가진 쪽 · 한 명만 콰트로면 그쪽 승 · 둘 다 못 하면 무승부",
-      "1화 판: 4장을 다 열기 전에 11명 전원과 교환 (총 11번) · 오픈된 0 은 무조건 패 / 12화 판: 교환은 3명까지, 관전 플레이어 1명의 카드 3장을 엿볼 수 있고, 검정 0 도 색 하나로 인정",
+      "1화 판: 4장을 다 열기 전에 11명 전원과 교환 (총 11번) · 오픈된 0은 무조건 패 / 12화 판: 교환은 3명까지, 관전 플레이어 1명의 카드 3장을 엿볼 수 있고, 검정 0도 색 하나로 인정",
     ],
     sub: V => (V.over ? "끝" : V.rules.mustAll ? `교환 ${V.nExs.join(" : ")} / ${G.GUESTS}` : `교환 ${V.nExs.join(" : ")} / ${V.rules.maxEx}`),
     chip: (V, i) => ({ t: `교환 ${V.nExs[i]}`, on: V.needs.includes(i) && !V.over, out: false }),
@@ -177,12 +183,12 @@ button.qt-t.sel{transform:translateY(-5px);border-color:#fff;box-shadow:0 5px 14
       const k = info && Number.isFinite(info.k) ? info.k : 0, sd = info && Number.isFinite(info.seed) ? info.seed : 1, seedv = ((sd ^ Math.imul(k + 1, 0x9e3779b1)) >>> 0) || 1;
       const NORM = G.UB + G.UW * 26, pc = x => `${Math.round(x * 100)}%`, sm = x => (x.q ? ` (합 평균 ${x.sum.toFixed(0)})` : "");
       const opened = V.mine.filter(x => x.o).map(x => x.c), card = myA.t === "open" && V.mine[myA.c] ? V.mine[myA.c].c : null;
-      const zero = card === 0 && V.rules.zeroLoses ? "검정 0 을 열면 바로 지는 판이에요 · " : card !== null && G.qCap(opened) !== null && G.qCap(opened.concat(card)) === null ? "이 카드를 열면 이미 열린 카드와 색이나 숫자가 겹쳐 콰트로를 못 만들어요 · " : "";
+      const zero = card === 0 && V.rules.zeroLoses ? "검정 0을 열면 바로 지는 판이에요 · " : card !== null && G.qCap(opened) !== null && G.qCap(opened.concat(card)) === null ? "이 카드를 열면 이미 열린 카드와 색이나 숫자가 겹쳐 콰트로를 못 만들어요 · " : "";
       let ref = bestA, note = "", rn = "고급 AI 수";
       if (bestA.t === "peek") {   // 고급 AI 는 늘 엿보기부터 해요 (차례를 안 씀) — 엿보기 없이 둔 내 수는 '엿보기 없이 둘 수 있는 가장 좋은 수'와 견줘요
         ref = G.bestPlain(V, seedv, 24); if (!ref) return null; rn = "엿보기 없는 최선 수";
-        note = ` · 고급 AI 는 먼저 엿보기를 해요 (차례를 안 써요) — 엿보기 없이 가장 좋은 수: ${window.SVUI["gn-quattro"].actText(ref, V)}`;
-        if (JSON.stringify(myA) === JSON.stringify(ref)) return { sev: 0, why: "엿보기 없이 둘 수 있는 가장 좋은 수예요 — 고급 AI 는 그 전에 엿보기부터 해요 (차례를 안 써서 먼저 써도 손해가 없어요)" };
+        note = ` · 고급 AI는 먼저 엿보기를 해요 (차례를 안 써요) — 엿보기 없이 가장 좋은 수: ${window.SVUI["gn-quattro"].actText(ref, V)}`;
+        if (JSON.stringify(myA) === JSON.stringify(ref)) return { sev: 0, why: "엿보기 없이 둘 수 있는 가장 좋은 수예요 — 고급 AI는 그 전에 엿보기부터 해요 (차례를 안 써서 먼저 써도 손해가 없어요)" };
       }
       const c = G.compareActs(V, myA, ref, seedv, 160);
       if (c.same) return { sev: 0, why: "관전 플레이어 누구와 바꿔도 같은 수예요 — 아직 카드를 모르는 사람은 서로 구별이 안 되니 결과도 같아요" };

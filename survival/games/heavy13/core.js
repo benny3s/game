@@ -15,6 +15,12 @@
   else (root.SVCores = root.SVCores || {}).heavy13 = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const ROUNDS = 14, PER = 7, CAPW = 13;
   const SUM = a => a.reduce((x, y) => x + y, 0);
 
@@ -289,7 +295,7 @@
       const txt = b.kind === "pass" ? "패스" : V.picks[me].chip === 3 ? `${PN[b.pi]} 받침대에 놓기` : "놓기";
       const bp = o.find(x => x.kind === "put");
       const tie = b.kind === "pass" && bp && !bp.now && Math.abs(bp.e - b.e) < 0.1;
-      return { opp, mine, rec: txt, why: b.kind === "pass" ? (tie ? `놓아도 패스해도 예상 벌점은 약 ${b.e.toFixed(1)}점으로 같아요 — 패스하면 이 바위를 가장 나중에 놓아서 받침대 합을 지금 ${bp.after} 으로 올리지 않아요.` : `지금 놓으면 예상 벌점이 약 ${bp ? bp.e.toFixed(1) : "?"}점${bp && bp.now ? ` (놓자마자 넘쳐서 ${bp.now}개)` : ""}이고, 패스하면 약 ${b.e.toFixed(1)}점이에요 — 뒤에 놓는 사람들이 받침대를 먼저 넘치게 할 수 있어서 가장 나중에 놓아요.`) : `이 선택이면 이번 라운드 예상 벌점은 약 ${b.e.toFixed(1)}점이에요${b.now ? ` (놓자마자 넘쳐서 ${b.now}개를 받아요)` : ""}.` };
+      return { opp, mine, rec: txt, why: b.kind === "pass" ? (tie ? `놓아도 패스해도 예상 벌점은 약 ${b.e.toFixed(1)}점으로 같아요 — 패스하면 이 바위를 가장 나중에 놓아서 받침대 합을 지금 ${bp.after}${ja(bp.after,"로")} 올리지 않아요.` : `지금 놓으면 예상 벌점이 약 ${bp ? bp.e.toFixed(1) : "?"}점${bp && bp.now ? ` (놓자마자 넘쳐서 ${bp.now}개)` : ""}이고, 패스하면 약 ${b.e.toFixed(1)}점이에요 — 뒤에 놓는 사람들이 받침대를 먼저 넘치게 할 수 있어서 가장 나중에 놓아요.`) : `이 선택이면 이번 라운드 예상 벌점은 약 ${b.e.toFixed(1)}점이에요${b.now ? ` (놓자마자 넘쳐서 ${b.now}개를 받아요)` : ""}.` };
     }
     return { opp, mine, rec: "다른 사람을 기다려요", why: "" };
   }

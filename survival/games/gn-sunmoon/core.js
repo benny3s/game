@@ -12,6 +12,12 @@
   else (root.SVCores = root.SVCores || {})["gn-sunmoon"] = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const MARKS = ["해", "달", "별"], EM = ["☀️", "🌙", "⭐"];
   const START = 4, TRUTH = 0.5;
   const WIT = ["하나", "두리", "세나", "네리", "다솜", "여름", "이든", "온새", "지음", "라온", "보람", "아라"];
@@ -275,7 +281,7 @@
       const b = V.bets[opp], t = sum(b), before = O + t, top = [0, 1, 2].sort((x, y) => b[y] - b[x])[0], mk = MARKS[top];
       o = t === 0 ? `${who}(선)이 한 칩도 안 걸었어요 (한도 ${Math.min(before, Math.floor(C / 2))}칩 중 0) → 확실한 정보가 없거나 칩을 지키는 중.` :
         b.filter(x => x > 0).length === 1 ? `${who}(선)이 ${EM[top]}${mk}에만 ${t}칩 (가진 ${before}칩의 ${Math.round(t / before * 100)}%) → 귀띔이 ${mk}${ira(mk)} 믿는 듯해요. 귀띔이 맞을 확률은 50%라 상대 베팅만 보면 이 칸이 정답일 확률도 약 50%예요.` :
-          `${who}(선)이 ${bTxt(b)} 로 나눠 걸었어요 (모두 ${t}칩, 가진 ${before}칩의 ${Math.round(t / before * 100)}%) → 확신이 약해 보여요.`;
+          `${who}(선)이 ${bTxt(b)}${ja(bTxt(b),"로")} 나눠 걸었어요 (모두 ${t}칩, 가진 ${before}칩의 ${Math.round(t / before * 100)}%) → 확신이 약해 보여요.`;
       o += habitTxt(H, who);
     } else if (V.phase === "first" && first) {
       o = (V.lim > 0 ? `${who}${eun(who)} 아직 안 걸었어요. 내가 선이라 0~${V.lim}칩(상대 칩 ${O}의 절반)을 걸 수 있고, 내가 ${V.lim}칩 걸면 상대는 최소 ${Math.min(2 * V.lim, O)}칩을 걸어야 해요.` : `${who}${eun(who)} 아직 안 걸었어요. 상대 칩이 ${O}개뿐이라 내가 걸 수 있는 칩은 0개예요.`) + habitTxt(H, who);

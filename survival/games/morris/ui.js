@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 나인 멘스 모리스 — 화면 (점 24개 판 · 놓기 / 옮기기 / 날기 · 밀 → 빼기 · 3판 2선승 · 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.morris;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const NP = 24, XY = K.XY, LBL = K.LBL;
@@ -200,7 +206,7 @@ span.mo-p{cursor:default}
   // ── 선생님 (판이 모두 공개라 보이는 것 그대로) ──
   const L = i => LBL[i];
   const list = a => [...new Set(a)].sort((x, y) => x - y).map(L).join(" · ");
-  const actText = a => a.t === "place" ? `${L(a.to)} 에 말 놓기` : a.t === "move" ? `${L(a.from)} 말을 ${ro(L(a.to))} 옮기기` : `${L(a.at)} 의 상대 말 빼기`;
+  const actText = a => a.t === "place" ? `${L(a.to)}에 말 놓기` : a.t === "move" ? `${L(a.from)} 말을 ${ro(L(a.to))} 옮기기` : `${L(a.at)}의 상대 말 빼기`;
   function whyText(V, me, r) {
     const t = r.tags, out = [];
     if (t.includes("win")) out.push("상대 말이 2개가 돼서 이 판을 이겨요");
@@ -211,7 +217,7 @@ span.mo-p{cursor:default}
     if (t.includes("two")) out.push("내 말 2개 + 빈 점 1개 줄이 생겨 다음 차례에 밀을 노려요");
     if (t.includes("open")) out.push("밀을 잠깐 열어서 다음에 다시 닫으면 또 뺄 수 있어요");
     if (t.includes("fly")) out.push("말이 3개라 멀리 날아가요");
-    if (t.includes("skipMill")) out.push(`${L(r.millAt)} 에서 밀을 바로 만들 수도 있지만, 몇 수 앞까지 읽어 보면 이 수가 더 나아요 (밀 자리는 그대로 남거나 상대의 더 큰 위협을 먼저 막아요)`);
+    if (t.includes("skipMill")) out.push(`${L(r.millAt)}에서 밀을 바로 만들 수도 있지만, 몇 수 앞까지 읽어 보면 이 수가 더 나아요 (밀 자리는 그대로 남거나 상대의 더 큰 위협을 먼저 막아요)`);
     if (t.includes("cantBlock")) out.push(`상대 밀 자리(${list(r.opE)})로 갈 수 있는 내 말이 없어서 막을 수는 없어요 — 대신 다음을 준비해요`);
     else if (t.includes("noBlock")) out.push(`상대 밀 자리(${list(r.opE)})를 막는 것보다 이 수가 낫다고 읽었어요`);
     else if (r.oppAfter > 0 && !t.includes("mill") && !t.includes("win")) out.push(`다만 이 수 뒤에도 상대가 밀을 만들 자리가 ${r.oppAfter}곳 남아요`);
@@ -228,17 +234,17 @@ span.mo-p{cursor:default}
     const p = [];
     if (!evs.length) p.push(V.ply === 0 && V.round === 1 ? "아직 아무도 말을 두지 않았어요." : "내 지난 차례 뒤 상대가 둔 수는 없어요.");
     else {
-      const parts = evs.slice(-3).map(e => e.k === "pl" ? `${L(e.to)} 에 놓음${e.mill ? "(밀!)" : ""}` : e.k === "mv" ? `${L(e.from)} → ${L(e.to)}${e.fly ? " 날기" : ""}${e.mill ? "(밀!)" : ""}` : `내 ${L(e.at)} 말을 뺌`);
+      const parts = evs.slice(-3).map(e => e.k === "pl" ? `${L(e.to)}에 놓음${e.mill ? "(밀!)" : ""}` : e.k === "mv" ? `${L(e.from)} → ${L(e.to)}${e.fly ? " 날기" : ""}${e.mill ? "(밀!)" : ""}` : `내 ${L(e.at)} 말을 뺌`);
       p.push(`상대: ${parts.join(" · ")}${evs.length > 3 ? ` (그 전 ${evs.length - 3}번 더)` : ""}.`);
     }
     if (play) {
-      if (A.opp.length) p.push(`상대가 다음 차례에 ${list(A.opp.map(t => t.empty))} 에 말을 넣으면 밀이에요 — 판에 '!' 로 표시했어요.`);
+      if (A.opp.length) p.push(`상대가 다음 차례에 ${list(A.opp.map(t => t.empty))}에 말을 넣으면 밀이에요 — 판에 '!' 로 표시했어요.`);
       else p.push("지금 상대가 바로 만들 수 있는 밀은 없어요.");
     }
     // 📊 내 흐름
     let m = `내 말 ${V.total[me]}개 (판 위 ${V.board[me]} · 놓을 말 ${V.hand[me]}) · 상대 ${V.total[opp]}개.`;
     if (V.bo === 3) m += ` 판 승 ${V.wins[me]} : ${V.wins[opp]} (2승이면 끝).`;
-    if (play && A.me.length) m += ` 내가 ${list(A.me.map(t => t.empty))} 에 넣으면 밀 (★).`;
+    if (play && A.me.length) m += ` 내가 ${list(A.me.map(t => t.empty))}에 넣으면 밀 (★).`;
     if (play && V.fly[me]) m += " 내 말이 3개라 날 수 있어요 — 2개가 되면 져요.";
     if (play && V.fly[opp]) m += " 상대는 말이 3개라 아무 데로나 날아와요 — 내 2개 줄을 조심!";
     if (play && V.q3 > 0) m += ` 교착 ${V.q3}/${V.Q3}수 — 빼기 없이 ${V.Q3}수가 되면 말이 적은 쪽이 져요.`;
@@ -248,7 +254,7 @@ span.mo-p{cursor:default}
     else if (V.phase !== "play") rec = "판이 끝났어요 — 다음 판을 준비해요.";
     else if (V.turn !== me) rec = "상대 차례예요 — 내 차례가 되면 추천해 드려요.";
     else if (!A.rec) rec = "둘 수 있는 수가 없어요.";
-    else { rec = `${actText(A.rec.a)}${A.rec.rm >= 0 ? ` → 밀 완성, 그다음 ${L(A.rec.rm)} 의 상대 말 빼기` : ""}.`; why = whyText(V, me, A.rec); }
+    else { rec = `${actText(A.rec.a)}${A.rec.rm >= 0 ? ` → 밀 완성, 그다음 ${L(A.rec.rm)}의 상대 말 빼기` : ""}.`; why = whyText(V, me, A.rec); }
     return { opp: p.join(" "), mine: m, rec, why };
   }
 
@@ -259,8 +265,8 @@ span.mo-p{cursor:default}
     const W = J.WINV - 50, loss = Math.max(0, Math.round(J.best - J.my));
     const ex = a => K.explain(Vb, seat, a), em = ex(myA), eb = ex(bestA), has = (e, t) => e.tags.includes(t);
     let sev, why;
-    if (J.best >= W && J.my < W) { sev = 100; why = `고급 AI 의 수(${actText(bestA)})면 몇 수 안에 이 판을 이기는 길이 있었어요`; }
-    else if (J.my <= -W && J.best > -W) { sev = 100; why = `이 수 뒤엔 상대가 몇 수 안에 이기는 길이 생겨요 — ${actText(bestA)} 로 버틸 수 있었어요`; }
+    if (J.best >= W && J.my < W) { sev = 100; why = `고급 AI의 수(${actText(bestA)})면 몇 수 안에 이 판을 이기는 길이 있었어요`; }
+    else if (J.my <= -W && J.best > -W) { sev = 100; why = `이 수 뒤엔 상대가 몇 수 안에 이기는 길이 생겨요 — ${actText(bestA)}${ja(actText(bestA),"로")} 버틸 수 있었어요`; }
     else {
       sev = loss >= 150 ? 90 : loss >= 90 ? 75 : loss >= 60 ? 60 : loss >= 30 ? 40 : loss > 8 ? 20 : 5;
       const r = [];

@@ -289,12 +289,12 @@
       let why = "";
       if (r && seated) {
         const ratio = Math.round(100 * mb / r.M), top = win >= 0 ? r.bids[win] : null;
-        why = win === me ? `내 ${fmt(mb)}은 최고가 M 의 ${ratio}%로 M 이하 중 가장 높은 값(겹치는 값 없음)이라 이겼어요 (+${r.pts}점).`
-          : r.over[me] ? `내 ${fmt(mb)}은 M ${fmt(r.M)}의 ${ratio}%라 M 을 넘어 무효예요 — M 의 어림 범위를 벗어났어요.`
-            : r.dup[me] ? `내 ${fmt(mb)}은 다른 사람과 같은 값이라 서로 무효예요 — 끝자리를 어긋나게 해야 해요 (M 의 ${ratio}%).`
-              : win >= 0 ? `내 ${fmt(mb)}(M 의 ${ratio}%)은 유효하지만 ${nm(win)}의 ${fmt(top)}(M 의 ${Math.round(100 * top / r.M)}%)이 더 높아서 졌어요 — ${fmt(top - mb)} 차이.`
-                : `모두 M 을 넘었거나 같은 값이라 득점한 사람이 없어요.`;
-      } else if (r) why = win >= 0 ? `최고가 M ${fmt(r.M)} 이하 중 가장 높은 값(${fmt(r.bids[win])})이 이겼어요.` : "모두 M 을 넘었거나 같은 값이라 득점한 사람이 없어요.";
+        why = win === me ? `내 ${fmt(mb)}은 최고가 M의 ${ratio}%로 M 이하 중 가장 높은 값(겹치는 값 없음)이라 이겼어요 (+${r.pts}점).`
+          : r.over[me] ? `내 ${fmt(mb)}은 M ${fmt(r.M)}의 ${ratio}%라 M을 넘어 무효예요 — M의 어림 범위를 벗어났어요.`
+            : r.dup[me] ? `내 ${fmt(mb)}은 다른 사람과 같은 값이라 서로 무효예요 — 끝자리를 어긋나게 해야 해요 (M의 ${ratio}%).`
+              : win >= 0 ? `내 ${fmt(mb)}(M의 ${ratio}%)은 유효하지만 ${nm(win)}의 ${fmt(top)}(M의 ${Math.round(100 * top / r.M)}%)이 더 높아서 졌어요 — ${fmt(top - mb)} 차이.`
+                : `모두 M을 넘었거나 같은 값이라 득점한 사람이 없어요.`;
+      } else if (r) why = win >= 0 ? `최고가 M ${fmt(r.M)} 이하 중 가장 높은 값(${fmt(r.bids[win])})이 이겼어요.` : "모두 M을 넘었거나 같은 값이라 득점한 사람이 없어요.";
       return { opp: r ? `최고가 M = ${fmt(r.M)} · ${win < 0 ? "이번 판 득점 없음" : `${win === me ? "내가" : jp(nm(win), "이", "가")} +${r.pts}점`} · 제시(M 대비): ${r.bids.map((b, i) => `${nm(i)} ${Math.round(100 * b / r.M)}%${r.over[i] ? "🚫" : r.dup[i] ? "⚠️" : ""}`).join(" · ")}` : "", mine: seated ? `승점 나 ${V.points[me]} · 남은 예산 ${won(V.left[me])} · 남은 점수 ${ptsLeft({ round: V.round + 1 })}점` : `남은 점수 ${ptsLeft({ round: V.round + 1 })}점`, rec: "결과를 보고 다음 판을 준비해요", why };
     }
     if (!seated) return { opp: "구경 중이에요 — 손님 5명이 몰래 낸 가격 중 최고가(M)가 이번 승부의 기준이에요.", mine: `${V.round}/${V.rounds} 판 · 이번 판 ${V.pts}점`, rec: "자리에 앉으면 내 차례마다 알려 드려요", why: "M 이하 중 가장 높은 값이 이기고, 같은 값은 서로 무효예요." };
@@ -307,13 +307,13 @@
     if (V.phase === "info") {
       const q = askPlan(V, me, "hard", () => 0.5), iv = infoValue(V, V.round * 7919 + V.itemId * 31 + 5), g = q.priv.guest, o = q.priv.kind === "price" ? "rank" : "price";
       rec = `${V.guests[g].name}의 ${q.priv.kind === "price" ? "가격" : "순위"} 묻기`;
-      why = `${gname(g)} ${q.priv.kind === "price" ? "가격을" : "순위를"} 물으면 최고가(M)의 불확실성이 약 ${pct(iv[q.priv.kind][g])} 줄어요 (같은 손님의 ${o === "price" ? "가격을" : "순위를"} 물으면 약 ${pct(iv[o][g])}). 10개 합계가 큰 ${jp(gname(g), "은", "는")} 이번에 최고가를 냈을 확률이 약 ${pct(iv.pMax[g])}예요 (가장 작은 손님은 ${pct(Math.min(...iv.pMax))}). 가격을 직접 알면 M 의 하한을 잡을 수 있어요.`;
+      why = `${gname(g)} ${q.priv.kind === "price" ? "가격을" : "순위를"} 물으면 최고가(M)의 불확실성이 약 ${pct(iv[q.priv.kind][g])} 줄어요 (같은 손님의 ${o === "price" ? "가격을" : "순위를"} 물으면 약 ${pct(iv[o][g])}). 10개 합계가 큰 ${jp(gname(g), "은", "는")} 이번에 최고가를 냈을 확률이 약 ${pct(iv.pMax[g])}예요 (가장 작은 손님은 ${pct(Math.min(...iv.pMax))}). 가격을 직접 알면 M의 하한을 잡을 수 있어요.`;
     } else if (V.phase === "bid" && V.needs.includes(me)) {
       const sd = V.round * 104729 + V.itemId, pl = bidPlan(V, me, "hard", sampler(sd));
       if (pl.p >= 1) {
         const ev = evalBids(V, me, [Math.max(1, Math.round(pl.p / 2)), pl.p, Math.min(V.bidMax, Math.round(pl.p * 1.5))], sd), [lo, mid, hi] = ev.bids;
         rec = `약 ${won(pl.p)} (끝자리를 흩뜨려서)`;
-        why = `이길 확률 약 ${pct(pl.pw)} (추정 M 중앙 ${won(quant(S, 0.5))}의 ${pct1(pl.p / Math.max(1, quant(S, 0.5)))}). 비교: ${won(lo.b)} → ${pct(lo.pw)} · ${won(mid.b)} → ${pct(mid.pw)} · ${won(hi.b)} → ${pct(hi.pw)}. M 을 넘기면 무효, 남과 같은 값이면 둘 다 무효 — 끝자리를 어긋나게! 예산이 ${won(V.left[me])} 남았으니 ${V.pts >= 4 ? "4점이 걸린 마지막 판을 위해 아껴 둔 만큼 과감하게" : `이번 판 ${V.pts}점에 쓰는 ${won(pl.p)}은 남은 예산의 ${pct1(pl.p / Math.max(1, V.left[me]))}예요 — 점수가 큰 뒤 라운드를 위해 너무 많이 쓰지 말아요`}.`;
+        why = `이길 확률 약 ${pct(pl.pw)} (추정 M 중앙 ${won(quant(S, 0.5))}의 ${pct1(pl.p / Math.max(1, quant(S, 0.5)))}). 비교: ${won(lo.b)} → ${pct(lo.pw)} · ${won(mid.b)} → ${pct(mid.pw)} · ${won(hi.b)} → ${pct(hi.pw)}. M을 넘기면 무효, 남과 같은 값이면 둘 다 무효 — 끝자리를 어긋나게! 예산이 ${won(V.left[me])} 남았으니 ${V.pts >= 4 ? "4점이 걸린 마지막 판을 위해 아껴 둔 만큼 과감하게" : `이번 판 ${V.pts}점에 쓰는 ${won(pl.p)}은 남은 예산의 ${pct1(pl.p / Math.max(1, V.left[me]))}예요 — 점수가 큰 뒤 라운드를 위해 너무 많이 쓰지 말아요`}.`;
       } else { rec = "낼 수 있는 예산이 없어요"; why = `남은 예산 ${won(V.left[me])}에서 남은 라운드마다 1원씩은 남겨야 해서 이번 판에는 낼 수 없어요.`; }
     } else if (V.phase === "bid") { rec = "다른 사람을 기다려요"; why = "이미 제시했어요."; }
     return { opp: oppTxt, mine: mineTxt, rec, why };

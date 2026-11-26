@@ -16,6 +16,12 @@
   else (root.SVCores = root.SVCores || {})["gn-formulaauction"] = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const TARGET = 10, NLOT = 24, SPECIAL = 13, ABS = 11, MIN_N = 3, MAX_N = 5, SEARCH_CAP = 90000;
   const GARNETS = [7, 14, 15, 11, 7];            // 방송 시작 가넷 (김경란 · 박은지 · 성규 · 이상민 · 홍진호 순서가 아니라 값만 — 자리는 씨앗으로 섞어요)
   // 경매 순서표 (방송 그래픽): n = 숫자 타일 · o = 기호 타일 · sp = 특별경매
@@ -337,7 +343,7 @@
         if (!P.block) continue;
         const gh = G[cur.s], thr = threatW(gh) * Math.max(0, gh);
         if (P.block === 1 && gh < 0.95) continue;
-        out.push({ a: { t: "bid", c }, u: thr - price(c), why: `낙찰방해 — ${cur.s + 1}번이 얻는 값 ${gh.toFixed(2)} 를 막아요`, block: 1, g: gh });
+        out.push({ a: { t: "bid", c }, u: thr - price(c), why: `낙찰방해 — ${cur.s + 1}번이 얻는 값 ${gh.toFixed(2)}${ja(gh.toFixed(2),"을")} 막아요`, block: 1, g: gh });
         continue;
       }
       let pw = 1;
@@ -402,7 +408,7 @@
     return V.nums[j].length + V.ops[j].length === 0 ? "아직 타일이 없어요" : dn > 0 ? `숫자가 ${dn}개 남아요 (기호가 필요)` : dn < 0 ? `기호가 ${-dn}개 남아요 (숫자가 필요)` : "아직 식이 안 돼요";
   }
   const stepTxt = (V, j) => { const di = distInfo(V.nums[j], V.ops[j], V.lot), x = di.d === 0 ? "이미 10!" : di.d === 3 ? "3번 이상 더 사야 해요" : `앞으로 ${di.d}번 더 사면 10 (${di.w}가지)`; return x; };
-  const actTxt = a => (a.t === "pass" ? "이번 창은 넘겨요" : a.t === "bid" ? `큐브 ${a.c} 를 내요` : `가넷 ${a.g}개를 불러요`);
+  const actTxt = a => (a.t === "pass" ? "이번 창은 넘겨요" : a.t === "bid" ? `큐브 ${a.c}${ja(a.c,"을")} 내요` : `가넷 ${a.g}개를 불러요`);
   function coach(V, me, since, names) {
     me = me >= 0 && me < V.n ? me : (V.seat >= 0 && V.seat < V.n ? V.seat : 0);
     const nm = i => (names && names[i]) || `${i + 1}번`, rivals = []; for (let j = 0; j < V.n; j++) if (j !== me) rivals.push(j);
@@ -412,22 +418,22 @@
     const who = dangerous === undefined ? "" : `${nm(dangerous)}${eun(nm(dangerous))} 타일 ${tilesOf(V, dangerous)} — ${stepTxt(V, dangerous)}`;
     if (V.over) {
       const w = V.winner;
-      return { opp: w >= 0 ? `${nm(w)}${iga(nm(w))} ${V.fin[w].expr} = 10 을 완성했어요.` : `24회가 끝났어요 — 10 에 가장 가까운 수식이 우승이에요.`, mine: `${stat} · ${formTxt(V, me)}`, rec: V.ranks[me] === 0 ? "우승이에요!" : "다음 판엔 큐브를 아껴 가며 필요한 타일만 노려 봐요", why: "한 번 낸 큐브는 이긴 사람 것도 사라져요 — 처음부터 높은 큐브로 한 번에 끝내면 적게 써요. 상대가 곧 10 을 만들 때는 같은 큐브로 막는 낙찰방해가 가장 싸요." };
+      return { opp: w >= 0 ? `${nm(w)}${iga(nm(w))} ${V.fin[w].expr} = 10을 완성했어요.` : `24회가 끝났어요 — 10에 가장 가까운 수식이 우승이에요.`, mine: `${stat} · ${formTxt(V, me)}`, rec: V.ranks[me] === 0 ? "우승이에요!" : "다음 판엔 큐브를 아껴 가며 필요한 타일만 노려 봐요", why: "한 번 낸 큐브는 이긴 사람 것도 사라져요 — 처음부터 높은 큐브로 한 번에 끝내면 적게 써요. 상대가 곧 10을 만들 때는 같은 큐브로 막는 낙찰방해가 가장 싸요." };
     }
     if (V.phase === "show") {
       const L = V.last;
       if (!L) return { opp: "다음 경매를 기다려요", mine: stat, rec: "—", why: "" };
-      const res = L.k === "win" ? `${nm(L.s)}${iga(nm(L.s))} 큐브 ${L.c} 로 낙찰` : L.k === "void" ? `같은 큐브(${L.c})가 나와 낙찰방해 — 타일은 버려졌어요` : L.k === "gwin" ? `${nm(L.s)}${iga(nm(L.s))} 가넷 ${L.g}개로 절대큐브 11 을 얻었어요` : "아무도 입찰하지 않아 타일이 버려졌어요";
+      const res = L.k === "win" ? `${nm(L.s)}${iga(nm(L.s))} 큐브 ${L.c}${ja(L.c,"로")} 낙찰` : L.k === "void" ? `같은 큐브(${L.c})가 나와 낙찰방해 — 타일은 버려졌어요` : L.k === "gwin" ? `${nm(L.s)}${iga(nm(L.s))} 가넷 ${L.g}개로 절대큐브 11을 얻었어요` : "아무도 입찰하지 않아 타일이 버려졌어요";
       return { opp: `${V.lot}회 결과: ${res}.${who ? " " + who : ""}`, mine: `${stat} · ${formTxt(V, me)}`, rec: "다음 경매를 기다려요", why: `${V.lot}회까지 끝났어요${RESTS[V.lot] ? " (방송에선 작전타임 10분)" : ""}. 남은 경매 ${NLOT - V.lot}번 · 큐브는 쓰는 만큼 사라져요.` };
     }
     const mt = V.needs.includes(me), pl = mt ? planFor(V, me, "hard") : null, best = pl ? pl.cands.slice().sort((a, b) => b.u - a.u)[0] : null;
     if (V.phase === "gbid") {
       const rv = rivals.reduce((m, j) => Math.max(m, V.gar[j]), 0);
-      return { opp: `가넷은 나 ${V.gar[me]}개 · ${rivals.map(j => `${nm(j)} ${V.gar[j]}개`).join(" · ")} — 졌을 땐 가넷을 돌려받아요.${V.hi ? ` 지금 ${nm(V.hi.s)}${iga(nm(V.hi.s))} ${V.hi.g}개를 불렀어요.` : ""}`, mine: `${stat} · 가넷 ${V.gar[me]}개`, rec: mt ? actTxt(best.a) : "다른 사람들이 고르는 중이에요", why: `숫자큐브 11 은 어떤 경매에서든 이겨요(한 번). 낙찰받으면 부른 가넷이 사라지고, 못 받으면 그대로예요 — 가장 많이 가진 상대가 ${rv}개라서 ${Math.min(V.gar[me], rv + 1)}개면 이길 수 있는 선이에요.` };
+      return { opp: `가넷은 나 ${V.gar[me]}개 · ${rivals.map(j => `${nm(j)} ${V.gar[j]}개`).join(" · ")} — 졌을 땐 가넷을 돌려받아요.${V.hi ? ` 지금 ${nm(V.hi.s)}${iga(nm(V.hi.s))} ${V.hi.g}개를 불렀어요.` : ""}`, mine: `${stat} · 가넷 ${V.gar[me]}개`, rec: mt ? actTxt(best.a) : "다른 사람들이 고르는 중이에요", why: `숫자큐브 11은 어떤 경매에서든 이겨요(한 번). 낙찰받으면 부른 가넷이 사라지고, 못 받으면 그대로예요 — 가장 많이 가진 상대가 ${rv}개라서 ${Math.min(V.gar[me], rv + 1)}개면 이길 수 있는 선이에요.` };
     }
     const g = pl ? pl.G[me] : 0, others = pl ? rivals.map(j => `${nm(j)} +${pl.G[j].toFixed(2)}`).join(" · ") : "";
     const gTxt = pl ? `이 타일이 나에게 주는 값 ${g.toFixed(2)} (상대: ${others})` : "";
-    return { opp: `${V.lot}회 ${tt}${V.hi ? ` — 지금 ${nm(V.hi.s)}${iga(nm(V.hi.s))} 큐브 ${V.hi.c} 로 서 있어요` : " — 아직 입찰이 없어요"}. ${who}`, mine: `${stat} · ${formTxt(V, me)} · ${stepTxt(V, me)}`, rec: mt ? actTxt(best.a) : "다른 사람들의 선택을 기다려요", why: mt ? `${gTxt}. ${best.why}${best.block ? " (같은 큐브를 내면 낸 큐브는 둘 다 버려져요)" : ""}` : `이번 창엔 내가 고를 게 없어요(${V.hi && V.hi.s === me ? "내가 서 있는 입찰자예요" : "낼 수 있는 큐브가 없어요"}).` };
+    return { opp: `${V.lot}회 ${tt}${V.hi ? ` — 지금 ${nm(V.hi.s)}${iga(nm(V.hi.s))} 큐브 ${V.hi.c}${ja(V.hi.c,"로")} 서 있어요` : " — 아직 입찰이 없어요"}. ${who}`, mine: `${stat} · ${formTxt(V, me)} · ${stepTxt(V, me)}`, rec: mt ? actTxt(best.a) : "다른 사람들의 선택을 기다려요", why: mt ? `${gTxt}. ${best.why}${best.block ? " (같은 큐브를 내면 낸 큐브는 둘 다 버려져요)" : ""}` : `이번 창엔 내가 고를 게 없어요(${V.hi && V.hi.s === me ? "내가 서 있는 입찰자예요" : "낼 수 있는 큐브가 없어요"}).` };
   }
 
   return { id: "gn-formulaauction", TARGET, NLOT, SPECIAL, ABS, MIN_N, MAX_N, GARNETS, LOTS, RESTS, PROF, init, needs, apply, view, over, ranks, legal, auto, advance, ai, aiWith, coach, planFor, gainOf, distInfo, stateVal, evalSeq, hit10, reach10, bestOf, cmpForm, fmt, fmtV, exprOf, validSize, keyOf, finals, scoreOf, tileOf, tileTxt, tilesOf, formTxt, stepTxt, actTxt };

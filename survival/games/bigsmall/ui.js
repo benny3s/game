@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 빅 스몰 — 화면 (딜러 카드 · 대결 카드 · 베팅 · 손패 · 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.bigsmall;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const bits = K.bits, R = K.R;
@@ -218,7 +224,7 @@ span.bs-h{cursor:default;display:grid;place-items:center}
     const df = V.chips[me] - V.chips[opp];
     let m = `칩 나 ${V.chips[me]} · 상대 ${V.chips[opp]} (${df ? (df > 0 ? "+" : "−") + Math.abs(df) : "같음"}). 남은 라운드 ${left} (내 대결 ${myDuel} · 베팅 ${myBet}).`;
     if (!V.over) m += ` 이번 라운드 뒤 남은 대결(나 ${K.pop(V.dset[me])}번 · 상대 ${K.pop(V.dset[opp])}번)로 기대되는 칩, 베팅 빼고: 나 +${ev(me).toFixed(1)} · 상대 +${ev(opp).toFixed(1)}.`;
-    m += " 0 은 늘 스몰 · 10 은 늘 빅이에요.";
+    m += " 0은 늘 스몰 · 10은 늘 빅이에요.";
     // 💡 추천 · 👉 뜻 (고급 AI 의 계산)
     let rec, why = "";
     if (V.over) rec = "끝났어요.";
@@ -228,7 +234,7 @@ span.bs-h{cursor:default;display:grid;place-items:center}
       rec = `${actText(Rr.a)}.`;
       if (V.phase === "duel") {
         const c = countTxt(V.hand[me], V.D), mix = Rr.mix.map(([P, q]) => `${P} ${pct(q)}`).join(" · ");
-        why = `상대가 보기엔 내 손패가 ${c.txt} — 늘 같은 식으로 내면 읽혀요. 고급 AI 계산은 ${mix} 로 섞어 내기 (그러면 빅일 확률 ${pct(Rr.pB)} · 스몰 ${pct(Rr.pS)}${Rr.pT > 0.01 ? ` · 같음 ${pct(Rr.pT)}` : ""})`;
+        why = `상대가 보기엔 내 손패가 ${c.txt} — 늘 같은 식으로 내면 읽혀요. 고급 AI 계산은 ${mix}${ja(mix,"로")} 섞어 내기 (그러면 빅일 확률 ${pct(Rr.pB)} · 스몰 ${pct(Rr.pS)}${Rr.pT > 0.01 ? ` · 같음 ${pct(Rr.pT)}` : ""})`;
         if (Rr.a.v > V.D) why += ` · ${eul(Rr.a.v)} 내면 대결 승 +${Rr.a.v - V.D}`;
         else if (Rr.a.v === V.D) why += ` · 같은 숫자는 대결도 베팅도 비겨요 (큰 카드를 아끼고 상대 베팅을 무르기)`;
         else why += ` · 이번엔 대결을 버리고 큰 카드를 아껴요`;
@@ -250,7 +256,7 @@ span.bs-h{cursor:default;display:grid;place-items:center}
     const r = [];
     if (Vb.phase === "duel") {
       const E = J.E, inMix = E.x[E.rows.indexOf(myA.v)] >= 0.05;
-      if (!inMix) r.push(`고급 AI 는 이 장면에서 ${E.rows.filter((P, i) => E.x[i] >= 0.05).join(" · ")} 중에서 섞어 내요`);
+      if (!inMix) r.push(`고급 AI는 이 장면에서 ${E.rows.filter((P, i) => E.x[i] >= 0.05).join(" · ")} 중에서 섞어 내요`);
       if (myA.v > Vb.D && bestA.v <= Vb.D) r.push("큰 카드를 지금 쓰면 남은 대결에서 받을 칩이 줄어요");
       if (myA.v < Vb.D && bestA.v > Vb.D) r.push(`${eul(bestA.v)} 내면 대결 승 +${bestA.v - Vb.D}`);
     } else {
@@ -282,7 +288,7 @@ span.bs-h{cursor:default;display:grid;place-items:center}
         boardHtml: tb(miniHand(0x7FF, 0, false)), ms: 5200 },
       { tag: "STEP 3 · 대결", title: "딜러보다 크면 차이만큼", body: "대결하는 사람은 공개된 딜러 카드를 보고 내 카드 한 장을 <b>뒷면</b>으로 내요. 딜러보다 <b>크면 차이만큼 칩</b>을 받아요 (7 vs 3 → +4). 작거나 같으면 칩 변화 없음.",
         boardHtml: tb(table(3, 7, null)), ms: 5600 },
-      { tag: "STEP 4 · 베팅", title: "빅 · 스몰에 칩 걸기", body: "베팅하는 사람은 대결 카드가 딜러보다 <b>크면 빅 ▲</b>, <b>작으면 스몰 ▼</b> 에 칩을 걸어요. 맞으면 건 만큼 <b>더 받고</b>, 틀리면 건 칩을 <b>잃어요</b>. 같은 숫자면 돌려받아요.",
+      { tag: "STEP 4 · 베팅", title: "빅 · 스몰에 칩 걸기", body: "베팅하는 사람은 대결 카드가 딜러보다 <b>크면 빅 ▲</b>, <b>작으면 스몰 ▼</b>에 칩을 걸어요. 맞으면 건 만큼 <b>더 받고</b>, 틀리면 건 칩을 <b>잃어요</b>. 같은 숫자면 돌려받아요.",
         boardHtml: tb(table(3, 7, ["S", 2])), ms: 5600 },
       { tag: "STEP 5 · 직접", title: "틀릴 수 없는 베팅", body: "딜러 <b>7</b>, 상대 손패는 <b>0 · 2 · 5</b> 뿐 — 무엇을 내도 7보다 작아요. <b>스몰</b>을 고르고 걸어 봐요!",
         interactive: { hint: "👆 스몰 → 걸기", doneText: "✅ 맞았어요! 상대 손패를 세면 확실한 베팅이 보여요" },
@@ -302,7 +308,7 @@ span.bs-h{cursor:default;display:grid;place-items:center}
           };
           draw();
         } },
-      { tag: "STEP 6 · 승패", title: "카드는 아껴 쓰기", body: "각자 대결은 <b>9번</b>, 카드는 11장이라 <b>2장이 남아요</b>. 0 은 늘 스몰 · 10 은 늘 빅이라 상대가 읽기 쉬워요 — 섞어 내야 해요. 🧑‍🏫 선생님은 상대 손패를 세서 빅 · 스몰 확률과 걸 칩을 알려 줘요.",
+      { tag: "STEP 6 · 승패", title: "카드는 아껴 쓰기", body: "각자 대결은 <b>9번</b>, 카드는 11장이라 <b>2장이 남아요</b>. 0은 늘 스몰 · 10은 늘 빅이라 상대가 읽기 쉬워요 — 섞어 내야 해요. 🧑‍🏫 선생님은 상대 손패를 세서 빅 · 스몰 확률과 걸 칩을 알려 줘요.",
         boardHtml: tb(table(5, 10, ["B", 4])), ms: 6400 },
     ];
   }

@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 컬러턴 — 화면 (6×6 판 · 칩 올리기 / 옮기기 · 숨은 지뢰 · 🔒 · '!' 표시 · 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const K = window.SVCores.colorturn;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const W = 6, NC = 36;
@@ -175,7 +181,7 @@ span.ct-c{cursor:default}
     return c;
   }
   const list = a => [...new Set(a)].sort((x, y) => x - y).map(lbl).join(" · ");
-  const actText = a => a.t === "place" ? `새 칩을 ${lbl(a.to)} 에 올리기` : `${lbl(a.from)} 칩을 ${lbl(a.to)} 로 옮기기`;
+  const actText = a => a.t === "place" ? `새 칩을 ${lbl(a.to)}에 올리기` : `${lbl(a.from)} 칩을 ${lbl(a.to)}${ja(lbl(a.to),"로")} 옮기기`;
   function whyText(V, me, r) {
     const t = r.tags, a = r.a, mc = me + 1, out = [];
     if (t.includes("win")) out.push("4목이 완성돼서 바로 이겨요");
@@ -199,15 +205,15 @@ span.ct-c{cursor:default}
     if (evs.length) {
       const e = evs[evs.length - 1], more = evs.length > 1 ? ` (그 전에도 ${evs.length - 1}번 더 두었어요)` : "";
       if (e.k === "pass") p.push(`상대는 움직일 수 있는 수가 없어 차례를 넘겼어요${more}.`);
-      else p.push(`상대가 ${e.k === "place" ? `${lbl(e.to)} 에 새 칩을 올렸어요` : `${lbl(e.from)} 칩을 ${lbl(e.to)} 로 옮겼어요`}${e.flip ? " — 지뢰를 밟아 칩 색이 바뀌었어요" : ""}${more}.`);
+      else p.push(`상대가 ${e.k === "place" ? `${lbl(e.to)}에 새 칩을 올렸어요` : `${lbl(e.from)} 칩을 ${lbl(e.to)}${ja(lbl(e.to),"로")} 옮겼어요`}${e.flip ? " — 지뢰를 밟아 칩 색이 바뀌었어요" : ""}${more}.`);
     }
     if (!over && V.turn === me && V.lastTo >= 0) p.push(`방금 옮긴 칩(${lbl(V.lastTo)})은 🔒 이라 이번 차례에 못 골라요.`);
-    if (A.opp.length) p.push(`상대 색 3개가 이어진 줄이 ${A.opp.length}개 있어요 — 빈칸 ${list(A.opp.map(t => t.empty))} 에 상대 색이 들어가면 4목! (판에 '!' 로 표시했어요)`);
+    if (A.opp.length) p.push(`상대 색 3개가 이어진 줄이 ${A.opp.length}개 있어요 — 빈칸 ${list(A.opp.map(t => t.empty))}에 상대 색이 들어가면 4목! (판에 '!' 로 표시했어요)`);
     else p.push("지금 상대의 3목 위협은 없어요.");
     // 📊 내 흐름
     const before = since >= 0 ? replay(V.log, since).filter(c => c === mc).length : -1;
     let m = `내 칩(${COL[me]})은 판 위 ${V.score[me]}개 · 남은 칩 ${V.left[me]}개${before >= 0 && before !== V.score[me] ? ` (지난 내 차례 전 ${before}개)` : ""} · 상대는 판 위 ${V.score[opp]}개예요.`;
-    if (A.me.length) m += ` 내 3목 줄 ${A.me.length}개 — 빈칸 ${list(A.me.map(t => t.empty))} 에 내 색이 들어가면 4목 (★).`;
+    if (A.me.length) m += ` 내 3목 줄 ${A.me.length}개 — 빈칸 ${list(A.me.map(t => t.empty))}에 내 색이 들어가면 4목 (★).`;
     const rp = [];
     for (let r = 0; r < W; r++) { const unk = []; for (let c = 0; c < W; c++) if (V.known[r * W + c] === 0) unk.push(r * W + c); if (unk.length) rp.push({ r, p: A.mineProb[unk[0]] }); }
     if (rp.length) { rp.sort((a, b) => a.p - b.p || a.r - b.r); m += ` 안 밟은 칸이 지뢰일 확률은 줄마다 달라요 — 가장 낮은 곳은 ${rp[0].r + 1}줄(약 ${Math.round(rp[0].p * 100)}%).`; }
@@ -277,7 +283,7 @@ span.ct-c{cursor:default}
       const legal = new Set(K.gen(V.cells, seat, V.placed[seat], V.lastTo));
       const code = a => (a.t === "place" ? (36 << 6) | a.to : (a.from << 6) | a.to);
       if (!legal.has(code(myA)) || !legal.has(code(bestA))) return none;
-      if (code(myA) === code(bestA)) return { sev: 0, why: "고급 AI 와 같은 수예요" };
+      if (code(myA) === code(bestA)) return { sev: 0, why: "고급 AI와 같은 수예요" };
       const m = probe(V, seat, myA), b = probe(V, seat, bestA);
       let sev = 0, why;
       const sameAsAi = !!(info && info.same);
@@ -340,7 +346,7 @@ span.ct-c{cursor:default}
           };
           draw([]);
         } },
-      { tag: "STEP 6 · 승패", title: "먼저 4목, 아니면 무승부", body: "4목이 이어지면 그 색이 이겨요 — 상대 차례에 <b>내 색 4목이 생겨도 내 승</b>! 60턴이 지나도 없으면 무승부예요. 지뢰는 AI 도 못 봐요. 줄 끝 숫자(지뢰 수/안 밟은 칸 수)와 <b>🧑‍🏫 AI 선생님</b>의 확률이 단서예요.",
+      { tag: "STEP 6 · 승패", title: "먼저 4목, 아니면 무승부", body: "4목이 이어지면 그 색이 이겨요 — 상대 차례에 <b>내 색 4목이 생겨도 내 승</b>! 60턴이 지나도 없으면 무승부예요. 지뢰는 AI도 못 봐요. 줄 끝 숫자(지뢰 수/안 밟은 칸 수)와 <b>🧑‍🏫 AI 선생님</b>의 확률이 단서예요.",
         boardHtml: `<div class="ct-tut"><span style="font-size:42px">🏆</span><div class="ct-pair"><span class="ct-pill">2/4</span><span class="ar">= 안 밟은 칸 4개 중 지뢰 2개</span></div></div>`, ms: 6200 },
     ];
   }

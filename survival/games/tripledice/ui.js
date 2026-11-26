@@ -97,10 +97,10 @@ span.td-h{cursor:default}
   // 예측 상태 한 줄 — 맞히려면 얼마나 더 (x = 이번 라운드 승점, left = 남은 제출 수, top = 한 번에 얻을 수 있는 최대)
   function needTxt(p, x, left, top) {
     const mx = x + left * top;
-    if (p === 0) return x > 0 ? `ZERO 는 이미 깨졌어요 (${fmt(x)}점)` : left ? `ZERO — 남은 ${left}번도 단독 꼴찌여야 해요` : "ZERO 성공 (+40)";
-    if (p === 1) return x >= 7 ? `MIN 은 이미 넘쳤어요 (${fmt(x)}점)` : x > 0 ? `MIN 범위 안 (${fmt(x)}점) — 7점이 되지 않게` : mx > 0 ? "MIN — 한 번은 점수를 얻어야 해요 (7점 미만으로)" : "MIN 실패 (0점)";
-    if (p === 2) return x > 10 ? `MORE 는 이미 넘쳤어요 (${fmt(x)}점)` : x >= 7 ? `MORE 범위 안 (${fmt(x)}점) — 10점을 넘지 않게 (+${fmt(10 - x)}까지)` : mx >= 7 ? `MORE — ${fmt(7 - x)}~${fmt(10 - x)}점 더` : `MORE 는 남은 제출로 7점이 안 돼요`;
-    return x > 10 ? `MAX 성공 범위 (${fmt(x)}점) — 더 얻을수록 2배` : mx > 10 ? `MAX — ${fmt(10 - x)}점 넘게 더` : "MAX 는 남은 제출로 10점을 넘길 수 없어요";
+    if (p === 0) return x > 0 ? `ZERO는 이미 깨졌어요 (${fmt(x)}점)` : left ? `ZERO — 남은 ${left}번도 단독 꼴찌여야 해요` : "ZERO 성공 (+40)";
+    if (p === 1) return x >= 7 ? `MIN은 이미 넘쳤어요 (${fmt(x)}점)` : x > 0 ? `MIN 범위 안 (${fmt(x)}점) — 7점이 되지 않게` : mx > 0 ? "MIN — 한 번은 점수를 얻어야 해요 (7점 미만으로)" : "MIN 실패 (0점)";
+    if (p === 2) return x > 10 ? `MORE는 이미 넘쳤어요 (${fmt(x)}점)` : x >= 7 ? `MORE 범위 안 (${fmt(x)}점) — 10점을 넘지 않게 (+${fmt(10 - x)}까지)` : mx >= 7 ? `MORE — ${fmt(7 - x)}~${fmt(10 - x)}점 더` : `MORE는 남은 제출로 7점이 안 돼요`;
+    return x > 10 ? `MAX 성공 범위 (${fmt(x)}점) — 더 얻을수록 2배` : mx > 10 ? `MAX — ${fmt(10 - x)}점 넘게 더` : "MAX는 남은 제출로 10점을 넘길 수 없어요";
   }
 
   // 이 기기에서만: 고른 주사위 · 예측 카드 (장면이 바뀌면 지움)
@@ -253,7 +253,7 @@ span.td-h{cursor:default}
     else if (V.hist.length) { const H = V.hist[V.hist.length - 1]; p.push(`지난 라운드 예측: ${V.order.map(s => `${nm(s)} ${PREDS[H.pred[s]]}${H.ok[s] ? "✓" : "✗"}`).join(" · ")}.`); }
     if (!V.over && V.trick >= 1 && (V.tricks.length >= 1)) {
       const z = opps.filter(s => V.rp[s] === 0);
-      if (z.length) p.push(`${z.map(nm).join(" · ")}: 이번 라운드 아직 0점 — ZERO(+40) 일 수 있어요. 같은 꼴찌가 한 번만 생겨도 ZERO 는 깨져요.`);
+      if (z.length) p.push(`${z.map(nm).join(" · ")}: 이번 라운드 아직 0점 — ZERO(+40) 일 수 있어요. 같은 꼴찌가 한 번만 생겨도 ZERO는 깨져요.`);
     }
     if (!V.over) {
       const strong = [];
@@ -311,8 +311,8 @@ span.td-h{cursor:default}
     const sev = loss >= 8 ? 90 : loss >= 5 ? 75 : loss >= 3 ? 60 : loss >= 1.5 ? 40 : loss > 0.5 ? 20 : 5;
     const r = [];
     if (myA.t === "pred") {
-      if (myA.p === 0) r.push("ZERO 는 세 번 모두 단독 꼴찌여야 해요");
-      if (myA.p === 3 && bestA.p < 3) r.push("MAX 는 세 번 중 두 번은 1위를 해야 해요");
+      if (myA.p === 0) r.push("ZERO는 세 번 모두 단독 꼴찌여야 해요");
+      if (myA.p === 3 && bestA.p < 3) r.push("MAX는 세 번 중 두 번은 1위를 해야 해요");
     } else {
       const ds = Vb.dice[seat], mk = K.keyOf(myA.d.map(i => ds[i].v)), bk = K.keyOf(bestA.d.map(i => ds[i].v));
       if (mk > bk) r.push("센 묶음을 지금 쓰면 남은 제출이 약해지거나 예측 범위를 넘어요");
@@ -328,7 +328,7 @@ span.td-h{cursor:default}
     const order = V.tot.map((t, s) => s).sort((a, b) => V.tot[b] - V.tot[a] || a - b);
     const who = s => (s === me ? " 나" : names && names[s] ? ` ${esc(names[s])}` : "");
     const rows = order.map(s => `${V.ranks[s] + 1}위${who(s)} <b>${fmt(V.tot[s])}점</b> — ${V.hist.map(H => `${H.r}R ${PREDS[H.pred[s]]}${H.ok[s] ? "✓" : "✗"} +${fmt(H.gain[s])}`).join(" · ")}`);
-    return `<div class="td-res"><div>라운드별 예측 · 얻은 승점 (✓ = 맞힘 · 2배, ZERO 는 +40)</div>${rows.map(x => `<div>${x}</div>`).join("")}</div>`;
+    return `<div class="td-res"><div>라운드별 예측 · 얻은 승점 (✓ = 맞힘 · 2배, ZERO는 +40)</div>${rows.map(x => `<div>${x}</div>`).join("")}</div>`;
   }
 
   // ── 1분 규칙 ──
@@ -373,7 +373,7 @@ span.td-h{cursor:default}
           };
           draw();
         } },
-      { tag: "STEP 6 · 승패 · 특수", title: "예측 2배 · ZERO +40", body: "라운드 끝에 예측이 맞으면 그 라운드 승점 <b>2배</b> (MORE 9점 → 18점). <b>ZERO</b> 를 맞히면 <b>+40</b> — 세 번 모두 <b>단독 꼴찌</b>여야 해서 다른 사람이 같은 꼴찌를 만들면 깨져요. 🧑‍🏫 선생님은 라운드를 굴려 보고 예측 · 낼 주사위를 숫자로 추천해요.",
+      { tag: "STEP 6 · 승패 · 특수", title: "예측 2배 · ZERO +40", body: "라운드 끝에 예측이 맞으면 그 라운드 승점 <b>2배</b> (MORE 9점 → 18점). <b>ZERO</b>를 맞히면 <b>+40</b> — 세 번 모두 <b>단독 꼴찌</b>여야 해서 다른 사람이 같은 꼴찌를 만들면 깨져요. 🧑‍🏫 선생님은 라운드를 굴려 보고 예측 · 낼 주사위를 숫자로 추천해요.",
         boardHtml: tb(`<div class="td-tbl">${fakeRow("선", "가", '<span class="ok">MORE ✓</span> · 9점 ×2', [[5, "w"], [5, "w"], [5, "w"]], "+18")}${fakeRow(2, "나", '<span class="ok">ZERO ✓</span> · 0점 +40', [[1, "w"], [2, "w"], [4, "w"]], "+40")}</div>`), ms: 7200 },
     ];
   }
@@ -388,9 +388,9 @@ span.td-h{cursor:default}
       "준비물: 각자 <b>흰 주사위 9개</b>(모두에게 공개) + <b>빨강 · 파랑</b> 히든 주사위(나만 봄)를 라운드마다 굴림",
       "진행 ① 예측: 이번 라운드 승점을 몰래 냄 — <b>ZERO</b> 0점 · <b>MIN</b> 0 초과 7 미만 · <b>MORE</b> 7 이상 10 이하 · <b>MAX</b> 10 초과",
       "진행 ② 제출: 선부터 주사위 <b>3개</b>씩 (히든은 뒷면 → 모두 낸 뒤 공개), 한 라운드에 <b>세 번</b> · 남은 2개는 버림",
-      "조합: <b>트리플</b>(같은 수 3) &gt; <b>스트레이트</b>(이어진 3, 6-1 은 안 이어짐) &gt; <b>더블</b> &gt; <b>싱글</b> · 같으면 조합 숫자 → 남은 숫자가 높은 쪽 · 완전히 같으면 동률",
+      "조합: <b>트리플</b>(같은 수 3) &gt; <b>스트레이트</b>(이어진 3, 6-1은 안 이어짐) &gt; <b>더블</b> &gt; <b>싱글</b> · 같으면 조합 숫자 → 남은 숫자가 높은 쪽 · 완전히 같으면 동률",
       "승점: 1위 <b>6</b> · 2위 <b>3</b> · 3위 <b>1</b> · 4위 <b>0</b> (동률은 평균) · 1위가 다음 제출의 선 (동률이면 누적 승점이 높은 사람)",
-      "라운드 끝: 예측이 맞으면 그 라운드 승점 <b>2배</b> · <b>ZERO</b> 를 맞히면 <b>+40</b> (세 번 모두 단독 꼴찌여야 함)",
+      "라운드 끝: 예측이 맞으면 그 라운드 승점 <b>2배</b> · <b>ZERO</b>를 맞히면 <b>+40</b> (세 번 모두 단독 꼴찌여야 함)",
       SRC, "※ 방송과 다른 점: " + DIFF,
     ],
     sub: V => (V.over ? "끝" : `${V.round}/${V.R}라운드 · ${V.phase === "pred" ? "예측" : V.phase === "rend" ? "정산" : `제출 ${V.trick}/3`}`),

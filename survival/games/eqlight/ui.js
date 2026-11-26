@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 수식 신호등 — 화면 (9칸 입력줄 · 키패드 · 색 힌트 기록 · 상대 추측 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const H = window.SVCores.eqlight;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const LEN = 9;
@@ -171,12 +177,12 @@ button.eql-c{cursor:pointer}
     const demoSecret = "12+3×4=24", demoGuess = "13+2×4=24", demoFb = H.feedback(demoGuess, demoSecret);
     const greens = [...demoFb].filter(c => c === "g").length;
     return [
-      { tag: "STEP 1 · 목표", title: "서로의 9칸 수식을 맞혀요", body: "각자 <b>성립하는 9칸 수식</b>을 몰래 만들어 내요. 숫자 0-9 와 기호 <b>+ − × ÷ ^ =</b> 를 쓸 수 있고, 기호끼리 붙으면 안 돼요. 그다음 서로 상대 수식을 <b>동시에</b> 추측해요.",
+      { tag: "STEP 1 · 목표", title: "서로의 9칸 수식을 맞혀요", body: "각자 <b>성립하는 9칸 수식</b>을 몰래 만들어 내요. 숫자 0-9와 기호 <b>+ − × ÷ ^ =</b> 를 쓸 수 있고, 기호끼리 붙으면 안 돼요. 그다음 서로 상대 수식을 <b>동시에</b> 추측해요.",
         boardHtml: `<div class="eql-tut">${cellsHtml(demoSecret, null)}<small>이런 수식이에요 — 12 + 3×4 = 24 (곱셈 먼저!)</small></div>`, ms: 6400 },
       { tag: "STEP 2 · 직접", title: "성립하는 수식을 골라요", body: "계산 순서는 <b>^ → × ÷ → + −</b> 예요. 아래 셋 중 <b>실제로 성립하는</b> 수식을 눌러 보세요.",
         interactive: { hint: "👆 성립하는 수식을 눌러요", doneText: "✅ 12 + 12 = 24 — 성립해요!" },
         render(stage, ctrl) {
-          const opts = [["12+3×4=60", "× 를 먼저 해서 12+12=24 예요 (60 이 아니에요)"], ["12+3×4=24", ""], ["12+3×4=25", "24 이고 25 가 아니에요"]];
+          const opts = [["12+3×4=60", "× 를 먼저 해서 12+12=24 예요 (60이 아니에요)"], ["12+3×4=24", ""], ["12+3×4=25", "24 이고 25가 아니에요"]];
           const draw = msg => { stage.innerHTML = `<div class="eql-tut"><div class="opts">${opts.map(([s], i) => `<button class="opt" data-w="${i}">${s}</button>`).join("")}</div><small>${msg || "하나만 맞아요"}</small></div>`; };
           stage.onclick = e => {
             const b = e.target.closest("[data-w]"); if (!b) return; ctrl.sfx("tap");
@@ -187,8 +193,8 @@ button.eql-c{cursor:pointer}
         } },
       { tag: "STEP 3 · 힌트", title: "칸마다 색으로 알려 줘요", body: "추측하면 칸마다 색 힌트가 와요. <b>초록</b> = 그 자리가 맞아요 · <b>노랑</b> = 수식에 있지만 자리가 달라요 · <b>빨강</b> = 수식에 없어요. 같은 글자를 정답보다 많이 쓰면 남는 건 빨강이에요.",
         boardHtml: `<div class="eql-tut"><small>정답이 ${demoSecret} 일 때</small>${cellsHtml(demoGuess, demoFb)}<div class="eql-leg"><span><i style="background:#15803d"></i>초록 자리 맞음</span><span><i style="background:#a16207"></i>노랑 자리 다름</span><span><i style="background:#7f1d1d"></i>빨강 없음</span></div></div>`, ms: 8200 },
-      { tag: "STEP 4 · 직접", title: "힌트를 읽어 봐요", body: `정답이 <b>${demoSecret}</b> 일 때 <b>${demoGuess}</b> 를 추측했어요. 초록 칸은 몇 개일까요?`,
-        interactive: { hint: "👆 초록 칸 수를 눌러요", doneText: `✅ 초록 ${greens}칸 · 노랑 2칸 (3 과 2 의 자리만 바뀌었어요)` },
+      { tag: "STEP 4 · 직접", title: "힌트를 읽어 봐요", body: `정답이 <b>${demoSecret}</b> 일 때 <b>${demoGuess}</b>${ja(demoGuess,"을")} 추측했어요. 초록 칸은 몇 개일까요?`,
+        interactive: { hint: "👆 초록 칸 수를 눌러요", doneText: `✅ 초록 ${greens}칸 · 노랑 2칸 (3과 2의 자리만 바뀌었어요)` },
         render(stage, ctrl) {
           const draw = msg => { stage.innerHTML = `<div class="eql-tut">${cellsHtml(demoGuess, demoFb)}<div style="display:flex;gap:8px">${[5, greens, 9].sort((a, b) => a - b).map(n => `<button class="opt" style="width:64px" data-w="${n}">${n}</button>`).join("")}</div><small>${msg || "초록 칸 수는?"}</small></div>`; };
           stage.onclick = e => {
@@ -211,7 +217,7 @@ button.eql-c{cursor:pointer}
       "칸마다 <b>초록</b>(자리 맞음) · <b>노랑</b>(자리만 다름) · <b>빨강</b>(없음) 힌트",
       "상대 수식을 <b>먼저 맞히면 승리</b> — 같이 맞히거나 20라운드가 지나면 무승부",
     ],
-    note: "방송과 다른 점: 시간 제한 없음, 같은 라운드에 둘 다 맞히면 무승부 · 20라운드가 지나면 무승부, 수는 천만 미만 · 지수 24 이하 (계산 중간값도) · 0^0 불가, 앞자리 0 은 두 자리 이상 수에만 금지. 방송에선 이 게임이 '넘버 워들(Nerdle)' 을 그대로 가져온 것이래요.",
+    note: "방송과 다른 점: 시간 제한 없음, 같은 라운드에 둘 다 맞히면 무승부 · 20라운드가 지나면 무승부, 수는 천만 미만 · 지수 24 이하 (계산 중간값도) · 0^0 불가, 앞자리 0은 두 자리 이상 수에만 금지. 방송에선 이 게임이 '넘버 워들(Nerdle)' 을 그대로 가져온 것이래요.",
     sub: V => (V.over ? "끝" : V.phase === "set" ? "수식 만들기" : `${V.round}/${V.maxRound}라운드`),
     chip: (V, i) => ({ t: V.phase === "set" ? (V.secretSet[i] ? "준비 ✓" : "만드는 중") : `${V.guesses[i].length}번 추측`, on: V.needs.includes(i) && !V.over, out: false }),
     render, result,
@@ -220,7 +226,7 @@ button.eql-c{cursor:pointer}
     review: (V, seat, myA) => {
       if (!V || !myA || myA.t !== "guess" || !V.guesses || !V.guesses[seat] || !V.guesses[seat].length) return null;
       const hist = V.guesses[seat], ok = H.consistent(myA.g, hist);
-      if (ok) return { sev: 0, why: "앞 힌트와 모두 맞는 수식이에요 — 고급 AI 는 남은 후보를 더 잘게 가르는 추측을 골라요" };
+      if (ok) return { sev: 0, why: "앞 힌트와 모두 맞는 수식이에요 — 고급 AI는 남은 후보를 더 잘게 가르는 추측을 골라요" };
       const n = H.findCands(hist, H.mkr(hist.length * 977 + 5), 40, 30000).length;
       return { sev: 50, why: `앞 힌트와 어긋나는 수식이라 정답일 수 없어요 — 힌트와 맞는 후보는 ${n}${n >= 40 ? "개 이상" : "개"} 남아 있었어요` };
     },

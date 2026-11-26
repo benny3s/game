@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 블라인드 베팅 — 화면 (상대 블라인드만 보임 · 베팅 · 오픈 카드 · 나온 카드 기록 · AI 선생님 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const BB = window.SVCores.blindbet;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const range = n => Array.from({ length: n }, (_, k) => k + 1);
@@ -98,7 +104,7 @@
     } else {
       cls = spec || R.w === A ? "" : "bad";
       head = spec ? `🏆 ${lab(R.w)} 승 · 판돈 ${R.gain}칩` : R.w === A ? `🏆 이겼어요 · 판돈 ${R.gain}칩` : `😵 졌어요 · 상대가 판돈 ${R.gain}칩`;
-      sub = `${lab(0)} ${R.blind[0]}+${R.open[0]}=<b>${R.sums[0]}</b> vs ${lab(1)} ${R.blind[1]}+${R.open[1]}=<b>${R.sums[1]}</b>` + (R.sums[0] === R.sums[1] ? " · 합이 같아서 오픈 카드가 큰 쪽 승" : "") + (R.bonus ? ` · ⚡ 오픈 ${R.open[R.w]} 로 이겨서 칩 ${R.bonus}개를 더 가져가요` : "");
+      sub = `${lab(0)} ${R.blind[0]}+${R.open[0]}=<b>${R.sums[0]}</b> vs ${lab(1)} ${R.blind[1]}+${R.open[1]}=<b>${R.sums[1]}</b>` + (R.sums[0] === R.sums[1] ? " · 합이 같아서 오픈 카드가 큰 쪽 승" : "") + (R.bonus ? ` · ⚡ 오픈 ${R.open[R.w]}${ja(R.open[R.w],"로")} 이겨서 칩 ${R.bonus}개를 더 가져가요` : "");
     }
     return `<div class="bb-res ${cls}"><b>${head}</b><span>${sub}</span></div>`;
   }
@@ -156,8 +162,8 @@
     else if (picking) {
       const sel = selFor(V, ctx);
       acts = `<div class="bb-opens">${V.left[me].map(v => `<button type="button" class="bb-ob${v <= BB.LOWOPEN ? " lo" : ""}${sel.v === v ? " on" : ""}" data-v="${v}" aria-label="오픈 카드 ${v}">${v}</button>`).join("")}</div>
-        <button class="btn primary big" data-a="open" ${sel.v == null ? "disabled" : ""}>${sel.v == null ? "오픈 카드를 골라요 (⚡ 1·2 로 이기면 +10칩)" : `🔒 오픈 ${sel.v} 내기`}</button>`;
-    } else if (!spec && V.phase === "pick" && V.mine != null) acts = `<div class="bb-note">🔒 오픈 카드를 냈어요 · <b>${esc(nm(O))}</b> 이(가) 낼 때까지 기다려요…</div>`;
+        <button class="btn primary big" data-a="open" ${sel.v == null ? "disabled" : ""}>${sel.v == null ? "오픈 카드를 골라요 (⚡ 1·2로 이기면 +10칩)" : `🔒 오픈 ${sel.v} 내기`}</button>`;
+    } else if (!spec && V.phase === "pick" && V.mine != null) acts = `<div class="bb-note">🔒 오픈 카드를 냈어요 · <b>${esc(nm(O))}</b>${ja(esc(nm(O)),"이")} 낼 때까지 기다려요…</div>`;
     else acts = `<div class="bb-note">${spec ? (V.needs.length ? V.needs.map(i => esc(nm(i))).join(" · ") + " 생각 중…" : "") : "잠시만요…"}</div>`;
     h += `<div class="bb-acts">${acts}</div>`;
     stage.innerHTML = h;
@@ -202,7 +208,7 @@
     const nr = V.acts.filter(x => x.s === o && x.a === "raise").length;
     let opp = `${on}의 블라인드는 <b>${bo}</b>예요 (나는 보이고, 상대는 자기 것을 몰라요). `;
     opp += bo >= BB.BIGB ? `${BB.BIGB} 이상이라 상대가 폴드하면 칩 ${BB.EXTRA}개를 더 내서 쉽게 접지 않을 거예요. ` : bo <= 3 ? "블라인드가 작아서 오픈 카드가 커야 이길 수 있어요. " : "";
-    opp += `남은 오픈 카드: ${L.join(" ") || "없음"}${L.some(x => x <= BB.LOWOPEN) ? " (⚡ 1·2 가 남아 있어요)" : ""}.`;
+    opp += `남은 오픈 카드: ${L.join(" ") || "없음"}${L.some(x => x <= BB.LOWOPEN) ? " (⚡ 1·2가 남아 있어요)" : ""}.`;
     if (nr) opp += ` 이번 턴 상대가 레이즈를 ${nr}번 했어요 — 상대 눈에 내 블라인드가 낮아 보였을 수 있어요.`;
     const mine = `${head}. 판돈 ${V.pot}칩${V.carry ? ` (이월 ${V.carry} 포함)` : ""}. 내 블라인드는 아직 안 나온 카드 중 하나예요 — 평균 ${eB.toFixed(1)}, ${BB.BIGB} 이상일 확률 ${pc(ch.pBig)}%. 내 남은 오픈 카드: ${V.left[me].join(" ")}.`;
     const toCall = V.cur - V.bet[me];
@@ -210,7 +216,7 @@
     if (V.phase === "bet" && V.needs.includes(me) && ch.opts.length) {
       const os = ch.opts.slice().sort((a, b) => b.ev - a.ev), b0 = os[0];
       const nmO = x => (x.a.t === "fold" ? "폴드" : x.a.t === "call" ? (toCall > 0 ? `콜 ${toCall}칩` : "체크") : `레이즈 → ${x.a.to}칩`);
-      rec = `${nmO(b0)} 이(가) 가장 좋아 보여요 (기대 칩 ${sgn(b0.ev)}).` + (os[1] ? ` 다음은 ${nmO(os[1])} (${sgn(os[1].ev)}).` : "");
+      rec = `${nmO(b0)}${ja(nmO(b0),"이")} 가장 좋아 보여요 (기대 칩 ${sgn(b0.ev)}).` + (os[1] ? ` 다음은 ${nmO(os[1])} (${sgn(os[1].ev)}).` : "");
       ex = "블라인드 + 오픈 카드의 합이 큰 쪽이 판돈을 가져가요. 내 블라인드를 모르니 상대 베팅과 나온 카드 표로 짐작해요." + (toCall > 0 ? ` 폴드하면 내 블라인드가 ${BB.BIGB} 이상일 확률(${pc(ch.pBig)}%)만큼 칩 ${BB.EXTRA}개를 더 낼 수 있어요.` : "");
     } else if (V.phase === "bet") {
       rec = ch.best ? `상대 차례예요. 이대로 공개까지 가면 오픈 카드는 ${ch.best.x}번이 가장 좋아요 (이길 확률 약 ${pc(ch.best.pWin)}%).` : "상대 차례예요.";
@@ -220,9 +226,9 @@
       ex = "오픈 카드는 낸 뒤에 되돌릴 수 없어요. 공개되면 쓴 카드가 표에 기록돼요.";
     } else {
       const b = ch.best, lo = ch.rows.find(r => r.x <= BB.LOWOPEN);
-      rec = b ? `오픈 카드 <b>${b.x}</b> 를 내면 이길 확률 약 ${pc(b.pWin)}% (비길 ${pc(b.pTie)}%, 기대 칩 ${sgn(b.ev)})로 가장 좋아요.` : "낼 카드가 없어요.";
+      rec = b ? `오픈 카드 <b>${b.x}</b>${ja(b.x,"을")} 내면 이길 확률 약 ${pc(b.pWin)}% (비길 ${pc(b.pTie)}%, 기대 칩 ${sgn(b.ev)})로 가장 좋아요.` : "낼 카드가 없어요.";
       if (lo && b && lo.x !== b.x) rec += ` ⚡ ${lo.x}번은 이기면 보너스 10칩이지만 이길 확률이 ${pc(lo.pWin)}%예요.`;
-      ex = "높은 오픈 카드를 이길 판에 쓰고, 질 것 같으면 낮은 카드를 아껴요. 1·2 로 이기면 상대 칩 10개를 더 가져오지만, 상대가 1·2 로 이기면 내가 10개를 잃어요.";
+      ex = "높은 오픈 카드를 이길 판에 쓰고, 질 것 같으면 낮은 카드를 아껴요. 1·2로 이기면 상대 칩 10개를 더 가져오지만, 상대가 1·2로 이기면 내가 10개를 잃어요.";
     }
     return { opp, mine, rec, why: ex };
   }
@@ -274,9 +280,9 @@
         if (!sup.length) sup.push(se.mix.indexOf(Math.max(...se.mix)));
         const bi = sup.reduce((m, i) => (se.rowMean[i] > se.rowMean[m] ? i : m), sup[0]), best = ch.rows.find(r => r.x === se.X[bi]) || ch.rows[0];
         const loss = Math.max(0, best.ev - mine.ev);
-        const mixTxt = mp >= 0.08 ? ` · 고급 AI 도 ${pcn(mp)}% 섞어 내요` : "";
+        const mixTxt = mp >= 0.08 ? ` · 고급 AI도 ${pcn(mp)}% 섞어 내요` : "";
         const why = best.x === myA.v || loss < 0.05 ? `오픈 ${myA.v}: 이길 확률 ~${pcn(mine.pWin)}% · 기대 ${sg(mine.ev)}칩${mixTxt}`
-          : `오픈 ${myA.v}: 이길 확률 ~${pcn(mine.pWin)}% · 기대 ${sg(mine.ev)}칩 / 고급 AI 가 즐겨 내는 ${best.x}: ~${pcn(best.pWin)}% · ${sg(best.ev)}칩${mixTxt}`;
+          : `오픈 ${myA.v}: 이길 확률 ~${pcn(mine.pWin)}% · 기대 ${sg(mine.ev)}칩 / 고급 AI가 즐겨 내는 ${best.x}: ~${pcn(best.pWin)}% · ${sg(best.ev)}칩${mixTxt}`;
         return fin(mp >= 0.1 ? Math.min(15, loss * REV_K) : loss * REV_K, why);
       }
     } catch (e) { /* 계산 못 하면 아래 */ }
@@ -328,7 +334,7 @@
       "<b>준비물</b> — 오픈 카드 1~10(한 세트씩) · 블라인드 카드 1~12 두 세트(24장) · 칩",
       "<b>진행</b> — 턴마다 블라인드 카드를 한 장씩 받아요 (내 것은 못 보고 상대 것만 보임) → 기본 1칩 → 콜 · 레이즈 · 폴드 → 오픈 카드를 동시에 한 장씩",
       "<b>승패</b> — 블라인드 + 오픈 카드의 합이 큰 쪽이 그 턴 칩을 가져가요 · 폴드하면 상대가 가져가요",
-      "<b>특수</b> — 오픈 1 · 2 로 이기면 상대 칩 10개를 더 · 폴드한 사람의 블라인드가 11 · 12 면 칩 10개를 더 내요 · 오픈 10장을 다 쓰면 라운드 끝",
+      "<b>특수</b> — 오픈 1 · 2로 이기면 상대 칩 10개를 더 · 폴드한 사람의 블라인드가 11 · 12 면 칩 10개를 더 내요 · 오픈 10장을 다 쓰면 라운드 끝",
       SRC,
       "※ " + DIFF,
     ],

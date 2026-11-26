@@ -16,6 +16,12 @@
   else (root.SVCores = root.SVCores || {}).gemmarket = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const CARDS = [
     { k: "d", v: 5 }, { k: "d", v: 6 }, { k: "g", v: 4 }, { k: "g", v: 5 }, { k: "s", v: 2 }, { k: "s", v: 3 }, { k: "s", v: 4 },
     { k: "c", v: 1 }, { k: "c", v: 1 }, { k: "c", v: 2 }, { k: "c", v: 2 }, { k: "b", v: -6 }, { k: "b", v: -4 },
@@ -352,11 +358,11 @@
       }
       const L = A && A.t === "swap" ? evalRank(V, me, TIER.hard, coachRng(V, me)) : [], best = A && A.t === "swap" ? L.find(x => x.to === A.to) || { to: A.to, win: 0, pts: 0 } : null;
       if (best) {
-        rec = `${esc(toText(best.to, names))} 와 교환`;
+        rec = `${esc(toText(best.to, names))}${ja(esc(toText(best.to, names)),"와")} 교환`;
         const sg = x => (x >= 0 ? "+" : "") + x.toFixed(1);
         const top3 = L.slice(0, 3).map(x => `${esc(toText(x.to, names))} ${Math.round(x.win * 100)}% (이번 라운드 ${sg(x.pts)}점)`).join(" · ");
-        const known = V.forWho >= 0 ? `나 · 내가 마니또인 ${who} 를 뺀 사람 중 한 명을 같은 확률로 가정` : "누가 마니또인지 모르니 모두 같은 확률로 가정";
-        why = `최종 순위에서 남을 이길 몫(괄호는 이번 라운드 내 점수 기대값): ${top3}. 내 마니또는 모르니 ${known}하고, 남은 교환 ${total - V.step - 1}번과 다음 라운드는 무작위로 가정했어요.${V.bombLock ? " 폭탄은 사람에게만 넘길 수 있어요 — 이미 폭탄을 든 사람이면 그쪽이 +3 을 받아요." : ""}${V.peeked ? "" : " 몰래 보기(한 번)로 구매자 칸을 먼저 확인할 수도 있어요."}`;
+        const known = V.forWho >= 0 ? `나 · 내가 마니또인 ${who}${ja(who,"을")} 뺀 사람 중 한 명을 같은 확률로 가정` : "누가 마니또인지 모르니 모두 같은 확률로 가정";
+        why = `최종 순위에서 남을 이길 몫(괄호는 이번 라운드 내 점수 기대값): ${top3}. 내 마니또는 모르니 ${known}하고, 남은 교환 ${total - V.step - 1}번과 다음 라운드는 무작위로 가정했어요.${V.bombLock ? " 폭탄은 사람에게만 넘길 수 있어요 — 이미 폭탄을 든 사람이면 그쪽이 +3을 받아요." : ""}${V.peeked ? "" : " 몰래 보기(한 번)로 구매자 칸을 먼저 확인할 수도 있어요."}`;
       }
     } else if (V.phase === "show") rec = "결과를 확인하고 다음 라운드를 준비해요";
     return { opp, mine, rec, why };

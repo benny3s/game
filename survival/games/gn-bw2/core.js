@@ -337,7 +337,7 @@
     if (V.over) {
       const r0 = S[me] > S[opp] ? "내가 이겼어요" : S[me] < S[opp] ? "아쉽지만 졌어요" : "끝까지 비겼어요";
       const rows = V.hist.map(e => e.n), tot = [0, 1].map(i => rows.reduce((s, n) => s + (typeof n[i] === "number" ? n[i] : 0), 0));
-      return { opp: `승부가 끝났어요. ${who}${eun(who)} 백(두 자릿수) ${V.hist.filter(e => e.col[opp] === "W").length}번 · 흑 ${V.hist.filter(e => e.col[opp] === "B").length}번을 냈고, 정확한 수는 이제 복기에서 다 볼 수 있어요.`, mine: `${scoreTxt} → ${r0} · ${V.hist.length}라운드${V.ext ? ` (연장 ${V.ext}번)` : ""}`, rec: "한 판 더 해 봐요!", why: `총 ${tot[me]}포인트를 쓴 나와 ${tot[opp]}포인트를 쓴 ${who} — 흑과 백 II 는 '적은 차이로 이기고 큰 차이로 지는' 것이 핵심이에요 (이긴 ${V.hist.filter(e => e.w === me).length}라운드 · 진 ${V.hist.filter(e => e.w === opp).length}라운드).` };
+      return { opp: `승부가 끝났어요. ${who}${eun(who)} 백(두 자릿수) ${V.hist.filter(e => e.col[opp] === "W").length}번 · 흑 ${V.hist.filter(e => e.col[opp] === "B").length}번을 냈고, 정확한 수는 이제 복기에서 다 볼 수 있어요.`, mine: `${scoreTxt} → ${r0} · ${V.hist.length}라운드${V.ext ? ` (연장 ${V.ext}번)` : ""}`, rec: "한 판 더 해 봐요!", why: `총 ${tot[me]}포인트를 쓴 나와 ${tot[opp]}포인트를 쓴 ${who} — 흑과 백 II는 '적은 차이로 이기고 큰 차이로 지는' 것이 핵심이에요 (이긴 ${V.hist.filter(e => e.w === me).length}라운드 · 진 ${V.hist.filter(e => e.w === opp).length}라운드).` };
     }
     const oppTxt = hist.length
       ? `${who}${eun(who)} 지금까지 백 ${nW}번 · 흑 ${nB}번, 나를 이긴 라운드 ${win}번. ${oppStat} → 남은 포인트는 ${inf.qLo === inf.qHi ? inf.qLo : `${inf.qLo}~${inf.qHi}`}쯤이에요.`
@@ -373,7 +373,7 @@
     const opp1 = `${who}${eun(who)} 후라서 내 색과 표시등을 보고 정해요. 내가 ${b.col === "W" ? "백" : "흑"}을 내면 ${who}${iga(who)} 확실히 이기려면 ${b.sure}포인트가 필요하다고 읽어요 (${oppStat} · 남은 ${inf.qLo}~${inf.qHi}쯤).`;
     return {
       opp: opp1, mine: mineTxt, rec: `${b.x}포인트 (${b.col === "W" ? "백" : "흑"})`,
-      why: `${b.x}${eul(String(b.x))} 내면 ${b.drop ? `표시등이 ${lite(myP)}칸 → ${b.lite}칸으로 꺼져서 상대가 먼저 알아채요` : "표시등은 그대로예요"} · ${who}${iga(who)} 덤빌 확률 약 ${pc(b.pc || 0)} → 내가 이길 확률 약 ${pc(b.pw)}${b.pt > 0.005 ? ` (비길 확률 ${pc(b.pt)})` : ""} · 남는 ${b.Pn}포인트로 ${left - 1}라운드를 더 해야 해요. 0 을 내면 거의 100% 져도 포인트를 아껴요.`,
+      why: `${b.x}${eul(String(b.x))} 내면 ${b.drop ? `표시등이 ${lite(myP)}칸 → ${b.lite}칸으로 꺼져서 상대가 먼저 알아채요` : "표시등은 그대로예요"} · ${who}${iga(who)} 덤빌 확률 약 ${pc(b.pc || 0)} → 내가 이길 확률 약 ${pc(b.pw)}${b.pt > 0.005 ? ` (비길 확률 ${pc(b.pt)})` : ""} · 남는 ${b.Pn}포인트로 ${left - 1}라운드를 더 해야 해요. 0을 내면 거의 100% 져도 포인트를 아껴요.`,
     };
   }
 

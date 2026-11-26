@@ -146,7 +146,7 @@
     const k = cur(st);
     if (seat !== k.seat) return { ok: false, err: "지금은 차례가 아니에요" };
     if (!a || typeof a !== "object") return { ok: false, err: "모르는 행동이에요" };
-    if (a.b !== undefined && a.b !== k.b) return { ok: false, err: `지금은 판 ${BN[k.b]} 에 둘 차례예요` };
+    if (a.b !== undefined && a.b !== k.b) return { ok: false, err: `지금은 판 ${BN[k.b]}에 둘 차례예요` };
     const bd = st.B[k.b], c = bd.c;
     let f, t;
     if (a.t === "place") {

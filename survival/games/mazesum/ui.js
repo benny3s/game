@@ -291,7 +291,7 @@ button.mz-c{cursor:pointer}
     const none = { sev: 0, why: "" };
     try {
       if (!V || !myA || (seat !== 0 && seat !== 1)) return none;
-      if (V.phase === "memo") return myA.t === "ready" ? { sev: 0, why: "외운 칸은 기록에 남지 않아서 이 수는 AI 와 견주지 않아요", my: "다 외웠어요", best: "다 외웠어요" } : none;
+      if (V.phase === "memo") return myA.t === "ready" ? { sev: 0, why: "외운 칸은 기록에 남지 않아서 이 수는 AI와 견주지 않아요", my: "다 외웠어요", best: "다 외웠어요" } : none;
       const q = V.q; if (V.phase !== "ask" || !q || V.hold !== seat) return none;
       const np = M.paths(q.s, q.e).length;
       const bt = bestA && bestA.t === "path" && Array.isArray(bestA.cells) ? `길 ${pathTxt(bestA.cells)}` : bestA && bestA.t === "pass" ? "넘김" : "";
@@ -303,10 +303,10 @@ button.mz-c{cursor:pointer}
       if (myA.t !== "path" || M.pathErr(q, myA.cells)) return none;
       const cells = myA.cells, n = cells.length, key = cells.join(","), lo = n * (n + 1) / 2, hi = n * (39 - n) / 2;
       const my = `길 ${pathTxt(cells)}`;
-      if (q.sum < lo || q.sum > hi) return { sev: 55, why: `${n}칸 길은 서로 다른 1~19 의 합이라 ${lo}~${hi} 사이만 나와요 — 문제의 합 ${q.sum}${sf(q.sum, "은", "는")} 이 길로 만들 수 없어요`, my, best };
+      if (q.sum < lo || q.sum > hi) return { sev: 55, why: `${n}칸 길은 서로 다른 1~19의 합이라 ${lo}~${hi} 사이만 나와요 — 문제의 합 ${q.sum}${sf(q.sum, "은", "는")} 이 길로 만들 수 없어요`, my, best };
       if (V.tries.some(t => t.cells && t.cells.join(",") === key)) return { sev: 55, why: "이 길은 앞서 오답으로 나온 길이에요 — 같은 길을 또 내면 똑같이 틀려요", my, best };
       const avg = (q.sum / n).toFixed(1);
-      return { sev: 0, why: `내 길 ${n}칸: 합 ${q.sum}${sf(q.sum, "이", "가")}면 칸마다 평균 ${avg} (1~19 의 평균은 10) · 외운 숫자는 기록에 없어서 AI 와는 견주지 않아요`, my, best };
+      return { sev: 0, why: `내 길 ${n}칸: 합 ${q.sum}${sf(q.sum, "이", "가")}면 칸마다 평균 ${avg} (1~19의 평균은 10) · 외운 숫자는 기록에 없어서 AI 와는 견주지 않아요`, my, best };
     } catch (e) { return none; }
   }
 

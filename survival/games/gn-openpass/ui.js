@@ -161,7 +161,7 @@
     if (mine && V.pool) {
       if (!S.sel) S.sel = G.pickDeck(Object.fromEntries(V.pool.map(g => [g.key, g.n])), 10);
       const tot = Object.values(S.sel).reduce((s, x) => s + x, 0), nn = V.pool.filter(g => typeof g.f === "number").reduce((s, g) => s + (S.sel[g.key] || 0), 0);
-      h += `<div class="op-info hint">카드를 누르면 한 장씩 늘어요 (가진 수를 넘으면 0 으로). 낸 카드는 <b>섞여서 뒷면으로</b> 깔려요 — 뒷면 색만 보여요.</div><div class="op-sub">`;
+      h += `<div class="op-info hint">카드를 누르면 한 장씩 늘어요 (가진 수를 넘으면 0으로). 낸 카드는 <b>섞여서 뒷면으로</b> 깔려요 — 뒷면 색만 보여요.</div><div class="op-sub">`;
       for (const col of G.BACKS) {
         const gs = V.pool.filter(g => g.b === col); if (!gs.length) continue;
         h += `<div class="op-gp"><div class="lb">${G.BACK_NAME[col]} 뒷면</div><div class="op-ch">${gs.map(g => `<button class="${CB[col]} ${typeof g.f === "string" ? "sy" : ""} ${S.sel[g.key] ? "on" : ""}" data-k="${g.key}">${face(g.f)}<i>${S.sel[g.key] || 0}/${g.n}</i></button>`).join("")}</div></div>`;
@@ -287,13 +287,13 @@
       { tag: "STEP 1 · 목표", title: "수식판 10칸으로 큰 값을 만들어요", body: "카드를 한 장씩 <b>오픈</b>하면 수식판에 들어가요. 카드는 <b>등호(=) 바로 옆 오른쪽 끝(1번 칸)부터 왼쪽으로</b> 채워지고, <b>열 장이 모두 채워지면</b> 수식을 완성해 계산해요. <b>수식값이 가장 높은 사람이 우승</b>, 가장 낮은 사람이 <b>탈락후보</b>예요. (방송 기록: 홍진호 10×8×8×8×7 = 35,840)",
         boardHtml: `<div class="op-tut">${cells(A)}<div class="op-info op-ex">${ex(A)}<br><span style="font-size:11.5px;font-weight:700">10번 칸은 아직 비었어요 — 다음 카드는 맨 왼쪽에 놓여요</span></div></div>`, ms: 8000 },
       { tag: "STEP 2 · 카드와 팩", title: "카드는 기본 20장 + 가넷으로 산 팩", body: "<b>기본카드</b>는 숫자 0~9 각 1장과 기호 <b>− 3 · ÷ 3 · × 2 · + 2</b>. 가넷으로 카드(<b>1가넷 검정 · 2가넷 빨강 · 3가넷 파랑</b> 팩)를 사서 늘리고, 그중 <b>20장</b>을 골라 카드 더미를 만들어 딜러에게 내요. 큰 숫자와 ×(곱셈)가 많은 파랑 팩이 가장 강해요. 팩마다 <b>뒷면 색이 달라요</b> (기본카드는 모두 검정 뒷면).",
-        boardHtml: `<div class="op-tut"><div class="op-sw3">${["검정", "빨강", "파랑"].map((n, i) => `<div class="op-s f ${["cb", "cr", "cu"][i]}" style="font-size:12px">${n}</div>`).join("")}</div><div class="op-info">파랑 뒷면에는 7·8·9 가 많고, 빨강은 4·5·6 이 많아요 — 뒷면 색은 힌트일 뿐 (검정에도 7·8 이 있어요)</div></div>`, ms: 8000 },
+        boardHtml: `<div class="op-tut"><div class="op-sw3">${["검정", "빨강", "파랑"].map((n, i) => `<div class="op-s f ${["cb", "cr", "cu"][i]}" style="font-size:12px">${n}</div>`).join("")}</div><div class="op-info">파랑 뒷면에는 7·8·9가 많고, 빨강은 4·5·6이 많아요 — 뒷면 색은 힌트일 뿐 (검정에도 7·8이 있어요)</div></div>`, ms: 8000 },
       { tag: "STEP 3 · 오픈 / 패스", title: "앞면은 열기 전엔 몰라요", body: "내가 낸 20장은 <b>섞여서 뒷면으로</b> 깔려요 (색만 보여요). 카드마다 <b>오픈</b>(수식에 포함 — 등호 옆 1번 칸부터 왼쪽으로 놓여요) 또는 <b>패스</b>(카드 제거) — 패스는 <b>최대 10장</b>, 10칸이 차면 끝나요. 패스를 다 쓰면 남은 카드는 자동으로 열려요.",
         boardHtml: `<div class="op-tut"><div class="op-dk" style="width:100%">${["cu", "cb", "cu", "cr", "cu", "cb", "cu", "cu", "cr", "cb"].map((c, i) => `<div class="op-c ${c} ${i === 3 ? "now" : ""} ${i === 1 ? "pass" : ""}"></div>`).join("")}</div><div class="op-info">⏭ 두 번째 카드는 패스 (✕) · 노란 테두리가 지금 카드예요</div></div>`, ms: 8000 },
-      { tag: "STEP 4 · 계산 규칙", title: "겹친 카드는 맨 왼쪽만, 곱셈이 먼저", body: "숫자끼리 · 기호끼리 나란히 놓이면 <b>맨 왼쪽 카드만</b> 남고 나머지는 버려져요 (왼쪽 = 나중에 연 카드라서, 나중에 연 카드가 남아요). 등호 옆 <b>첫 카드가 기호면 등호와 겹쳐 무효</b>, <b>열 번째(맨 왼쪽) 카드가 기호면 그 앞에 0</b> 이 있는 것으로 계산해요. × ÷ 가 + − 보다 먼저예요.",
+      { tag: "STEP 4 · 계산 규칙", title: "겹친 카드는 맨 왼쪽만, 곱셈이 먼저", body: "숫자끼리 · 기호끼리 나란히 놓이면 <b>맨 왼쪽 카드만</b> 남고 나머지는 버려져요 (왼쪽 = 나중에 연 카드라서, 나중에 연 카드가 남아요). 등호 옆 <b>첫 카드가 기호면 등호와 겹쳐 무효</b>, <b>열 번째(맨 왼쪽) 카드가 기호면 그 앞에 0</b>이 있는 것으로 계산해요. × ÷ 가 + − 보다 먼저예요.",
         boardHtml: `<div class="op-tut">${cells(B, [1, 3, 5])}<div class="op-info op-ex">${ex(B)}<br><span style="font-size:11.5px;font-weight:700">연 순서(오른쪽부터): − · 5 · × · + · 4 · 3 — 흐린 카드는 겹치거나 끝 기호라 무효</span></div></div>`, ms: 9500 },
-      { tag: "STEP 5 · 직접", title: "× 9 의 왼쪽에 어떤 카드가 올 때 가장 클까요?", body: "수식판 등호 옆에 <b>9</b>, 그 왼쪽에 <b>×</b> 가 놓여 있어요. 다음 카드는 맨 왼쪽에 놓여요. 앞면이 <b>2 · 7 · + · ÷</b> 중 하나일 때 값이 가장 커지는 카드는?",
-        interactive: { hint: "👆 가장 큰 값이 되는 카드를 눌러요", doneText: "✅ 7 이 오면 7 × 9 = 63! 기호가 오면 맨 왼쪽 기호(새 기호)만 남고 × 는 버려져서 값이 안 커져요." },
+      { tag: "STEP 5 · 직접", title: "× 9의 왼쪽에 어떤 카드가 올 때 가장 클까요?", body: "수식판 등호 옆에 <b>9</b>, 그 왼쪽에 <b>×</b>가 놓여 있어요. 다음 카드는 맨 왼쪽에 놓여요. 앞면이 <b>2 · 7 · + · ÷</b> 중 하나일 때 값이 가장 커지는 카드는?",
+        interactive: { hint: "👆 가장 큰 값이 되는 카드를 눌러요", doneText: "✅ 7이 오면 7 × 9 = 63! 기호가 오면 맨 왼쪽 기호(새 기호)만 남고 × 는 버려져서 값이 안 커져요." },
         render(stage, ctrl) {
           stage.innerHTML = `<div class="op-tut">${cells(["*", 9])}<div class="op-opt">${["2", "7", "+", "÷"].map(x => `<button data-w="${x}">${x}</button>`).join("")}</div><div class="op-info" id="op-tm">? × 9 — 어떤 카드가 가장 클까요?</div></div>`;
           stage.onclick = e => {
@@ -310,7 +310,7 @@
     name: "오픈, 패스", emoji: "🔓", short: "뒷면 카드를 열거나 넘기며 10칸 수식판으로 가장 큰 값을 만들어요", min: 2, max: 7, defN: 4, board: false,
     show: "더 지니어스 · 시즌 1 · 오픈, 패스", season: "시즌 1 게임의 법칙",
     opts: [{ k: "gar", label: "시작 가넷", items: [[0, "추가 팩 없음 (기본 카드만)"], [4, "가넷 4개 (방송에서 산 3~5가넷쯤)"], [8, "가넷 8개 (방송 시작 가넷 최저)"], [10, "가넷 10개 (방송 시작 가넷 평균쯤)"]], def: 4 }],
-    diff: "방송은 시작 가넷이 8~13개로 달라 가넷이 적은 사람부터 하고 우승 가넷 5개 · 2위 2개를 주지만, 우리는 같은 가넷으로 시작 · 순서 무작위 · 가넷 보상 없음 · 공동 구입 · 뒷면 방향 요령 없음 · 0 으로 나누면 그 항은 0, 소수는 그대로 비교(같은 값이면 같은 등수) · 곱셈 · 나눗셈 먼저 (곱셈은 방송 결과 128 로 확인, 나눗셈은 방송 예 없음) · 최대 7명",
+    diff: "방송은 시작 가넷이 8~13개로 달라 가넷이 적은 사람부터 하고 우승 가넷 5개 · 2위 2개를 주지만, 우리는 같은 가넷으로 시작 · 순서 무작위 · 가넷 보상 없음 · 공동 구입 · 뒷면 방향 요령 없음 · 0으로 나누면 그 항은 0, 소수는 그대로 비교(같은 값이면 같은 등수) · 곱셈 · 나눗셈 먼저 (곱셈은 방송 결과 128로 확인, 나눗셈은 방송 예 없음) · 최대 7명",
     howto: [
       "<b>기본카드 20장</b> + 가넷으로 산 카드(<b>1 · 2 · 3가넷</b> = 검정 · 빨강 · 파랑 <b>팩</b>) — 그중 <b>20장</b>으로 카드 더미를 만들어 내요",
       "카드 더미는 <b>섞여서 뒷면으로</b> 깔려요 (색만 보여요) · 한 장씩 <b>오픈</b>하면 수식판의 <b>등호(=) 옆 오른쪽 끝부터 왼쪽으로</b> 놓이고, <b>패스</b>하면 카드 제거 (패스는 최대 10장)",

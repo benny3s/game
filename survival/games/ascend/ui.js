@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 오름차순 — 화면 (시트 · 숫자 부르기 · 칸 고르기 · 라운드 공개 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const A = window.SVCores.ascend;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -84,7 +90,7 @@
   function callerOf(V) { for (let k = V.log.length - 1; k >= 0; k--) if (V.log[k].k === "say") return V.log[k].s; return -1; }
   function logText(V, ctx) {
     const e = V.log[V.log.length - 1]; if (!e) return "";
-    if (e.k === "say") return `${esc(ga(nameOf(ctx, e.s), e.s === ctx.me))} ${e.v} 을(를) 불렀어요`;
+    if (e.k === "say") return `${esc(ga(nameOf(ctx, e.s), e.s === ctx.me))} ${e.v}${ja(e.v,"을")} 불렀어요`;
     if (e.k === "put") return `${esc(ga(nameOf(ctx, e.s), e.s === ctx.me))} 적었어요`;
     if (e.k === "round") return `${e.r}번째 라운드 시작`;
     if (e.k === "end") return `${e.r}번째 라운드 끝`;
@@ -125,7 +131,7 @@
       const pick = V.phase === "put" && ctx.canAct;
       h += `<div class="as-me"><div class="hd"><span>내 시트</span><span>이어진 ${run.len}칸${run.len > 1 ? ` (${rangeTxt(run)})` : ""} · 최대 ${pot}칸 가능 · 빈칸 ${empties}</span></div>${sheetHtml(mine, { run, pick, sel: SEL.c, ghost: V.cur })}</div>`;
       if (V.phase === "say" && ctx.canAct) acts = `<div class="note">내 시트에 가장 잘 맞는 숫자를 불러요</div><div class="as-nums">${Array.from({ length: 10 }, (_, k) => `<button class="btn" data-a="say" data-v="${k + 1}">${k + 1}</button>`).join("")}</div>`;
-      else if (pick) acts = `<div class="note">${SEL.c >= 0 ? `${SEL.c + 1}번째 칸에 ${V.cur} 을(를) 적을까요?` : `${V.cur} 을(를) 적을 빈칸을 눌러요`}</div><button class="btn primary big" data-a="put" ${SEL.c >= 0 ? "" : "disabled"}>✔ 여기에 적기</button>`;
+      else if (pick) acts = `<div class="note">${SEL.c >= 0 ? `${SEL.c + 1}번째 칸에 ${V.cur}${ja(V.cur,"을")} 적을까요?` : `${V.cur}${ja(V.cur,"을")} 적을 빈칸을 눌러요`}</div><button class="btn primary big" data-a="put" ${SEL.c >= 0 ? "" : "disabled"}>✔ 여기에 적기</button>`;
       else if (V.phase === "put") acts = `<div class="note">다른 사람이 적는 중… (${V.done.filter(Boolean).length}/${V.n})</div>`;
       else acts = `<div class="note">${esc(ga(nameOf(ctx, V.turn), V.turn === me))} 숫자를 고르는 중…</div>`;
     } else acts = `<div class="note">구경 중이에요 · 시트는 라운드가 끝나면 보여요</div>`;
@@ -177,14 +183,14 @@
       const L = A.evalPut(sh, V.cur, A.seqs(r, 60, empties), 5), best = L[0];
       let a = best.c - 1; while (a >= 0 && sh[a] == null) a--;
       let b = best.c + 1; while (b < 10 && sh[b] == null) b++;
-      rec = `${V.cur} 을(를) ${best.c + 1}번째 칸에`;
+      rec = `${V.cur}${ja(V.cur,"을")} ${best.c + 1}번째 칸에`;
       const ln = a >= 0 ? `왼쪽 이웃 ${sh[a]}` : "왼쪽은 시트 끝", rn = b < 10 ? `오른쪽 이웃 ${sh[b]}` : "오른쪽은 시트 끝";
-      why = `${ln} · ${rn} 사이에 ${V.cur} 이(가) 들어가면 오름차순이 끊기지 않고 양쪽 빈칸에 쓸 여지도 남아요. 앞으로 숫자가 고르게 불린다고 보면 이어질 칸 수 예상은 약 ${f1(best.ev)}칸${L[1] ? ` (다음으로 좋은 ${L[1].c + 1}번째 칸은 ${f1(L[1].ev)}칸)` : ""}이에요.`;
+      why = `${ln} · ${rn} 사이에 ${V.cur}${ja(V.cur,"이")} 들어가면 오름차순이 끊기지 않고 양쪽 빈칸에 쓸 여지도 남아요. 앞으로 숫자가 고르게 불린다고 보면 이어질 칸 수 예상은 약 ${f1(best.ev)}칸${L[1] ? ` (다음으로 좋은 ${L[1].c + 1}번째 칸은 ${f1(L[1].ev)}칸)` : ""}이에요.`;
     } else if (V.phase === "say" && V.needs.includes(me)) {
       const L = A.evalSay(sh, 30, r, 2), best = L[0];
-      rec = `${best.v} 을(를) 불러요`;
-      why = `모두의 시트에 똑같이 들어가는 숫자예요. ${best.v} 은(는) 내 시트 ${best.c + 1}번째 칸에 잘 맞아 예상 ${f1(best.ev)}칸까지 이어져요 — 내 시트에만 딱 맞는 숫자를 고르는 게 이득이에요.`;
-    } else if (V.phase === "put") { rec = "다른 사람이 적는 중이에요"; why = `불린 숫자 ${V.cur} 은(는) 이미 내 시트에 적었어요. 상대는 같은 숫자를 어디에 둘지 고민 중이에요.`; }
+      rec = `${best.v}${ja(best.v,"을")} 불러요`;
+      why = `모두의 시트에 똑같이 들어가는 숫자예요. ${best.v}${ja(best.v,"은")} 내 시트 ${best.c + 1}번째 칸에 잘 맞아 예상 ${f1(best.ev)}칸까지 이어져요 — 내 시트에만 딱 맞는 숫자를 고르는 게 이득이에요.`;
+    } else if (V.phase === "put") { rec = "다른 사람이 적는 중이에요"; why = `불린 숫자 ${V.cur}${ja(V.cur,"은")} 이미 내 시트에 적었어요. 상대는 같은 숫자를 어디에 둘지 고민 중이에요.`; }
     else if (V.phase === "say") { rec = `${ga(nm(V.turn), false)} 숫자를 부를 차례예요`; why = "부르는 사람도 내 시트가 아니라 자기 시트에 맞는 숫자를 고르기 쉬워요."; }
     return { opp, mine, rec, why };
   }
@@ -212,7 +218,7 @@
         const v = V.cur, L = A.evalPut(sh, v, A.seqs(r, S, empt), 10);
         const m = L.find(x => x.c === myA.c), b = L.find(x => x.c === bestA.c) || L[0];
         if (!m || !b) return none;
-        if (m.c === b.c) return { sev: 0, why: `고급 AI 와 같은 칸이에요 (${m.c + 1}번째 칸 · ${nbTxt(sh, m.c, v)}) — 이어질 칸 예상 ${f1(m.ev)}칸`, my: `${v}${josa(v, "을", "를")} ${m.c + 1}번째 칸에`, best: `${v}${josa(v, "을", "를")} ${b.c + 1}번째 칸에` };
+        if (m.c === b.c) return { sev: 0, why: `고급 AI와 같은 칸이에요 (${m.c + 1}번째 칸 · ${nbTxt(sh, m.c, v)}) — 이어질 칸 예상 ${f1(m.ev)}칸`, my: `${v}${josa(v, "을", "를")} ${m.c + 1}번째 칸에`, best: `${v}${josa(v, "을", "를")} ${b.c + 1}번째 칸에` };
         let sev = sevOf(b.ev - m.ev); if (info && info.same) sev = Math.min(sev, 15);
         return {
           sev, my: `${v}${josa(v, "을", "를")} ${m.c + 1}번째 칸에`, best: `${v}${josa(v, "을", "를")} ${b.c + 1}번째 칸에`,
@@ -221,11 +227,11 @@
       }
       const L = A.evalSay(sh, S, r, 3), m = L.find(x => x.v === myA.v), b = L.find(x => x.v === bestA.v) || L[0];
       if (!m || !b) return none;
-      if (m.v === b.v) return { sev: 0, why: `고급 AI 와 같은 숫자예요 — ${m.v}${josa(m.v, "은", "는")} 내 시트 ${m.c + 1}번째 칸에 맞아 이어질 칸 예상 ${f1(m.ev)}칸`, my: `${m.v} 소리침`, best: `${b.v} 소리침` };
+      if (m.v === b.v) return { sev: 0, why: `고급 AI와 같은 숫자예요 — ${m.v}${josa(m.v, "은", "는")} 내 시트 ${m.c + 1}번째 칸에 맞아 이어질 칸 예상 ${f1(m.ev)}칸`, my: `${m.v} 소리침`, best: `${b.v} 소리침` };
       let sev = sevOf(b.ev - m.ev); if (info && info.same) sev = Math.min(sev, 15);
       return {
         sev, my: `${m.v} 소리침`, best: `${b.v} 소리침`,
-        why: `내가 부른 ${m.v}${josa(m.v, "은", "는")} 내 시트 ${m.c + 1}번째 칸에 맞아 이어질 칸 예상 ${f1(m.ev)}칸, 고급 AI 의 ${b.v}${josa(b.v, "은", "는")} ${b.c + 1}번째 칸에 맞아 ${f1(b.ev)}칸이에요${b.ev - m.ev >= 0.2 ? ` (${f1(b.ev - m.ev)}칸 차이)` : " (거의 같아요)"}`,
+        why: `내가 부른 ${m.v}${josa(m.v, "은", "는")} 내 시트 ${m.c + 1}번째 칸에 맞아 이어질 칸 예상 ${f1(m.ev)}칸, 고급 AI의 ${b.v}${josa(b.v, "은", "는")} ${b.c + 1}번째 칸에 맞아 ${f1(b.ev)}칸이에요${b.ev - m.ev >= 0.2 ? ` (${f1(b.ev - m.ev)}칸 차이)` : " (거의 같아요)"}`,
       };
     } catch (e) { return none; }
   }
@@ -238,23 +244,23 @@
       { tag: "STEP 1 · 목표", title: "숫자를 작은 쪽에서 큰 쪽으로 길게 이어요", body: "10칸 시트에 1~10 숫자를 적어요. 왼쪽에서 오른쪽으로 <b>점점 커지는(같아도 OK) 칸</b>이 가장 길게 이어질수록 높은 점수예요.",
         boardHtml: `<div class="as-tut">${mini([1, 2, 2, 4, 5, 5, 7, 3, 9, 6], { from: 0, len: 7 })}<small>노란 칸 7개가 이어져요 → 이 시트는 7점</small></div>`, ms: 5200 },
       { tag: "STEP 2 · 시작", title: "딜러가 숫자 1개를 먼저 적어 줘요", body: "라운드가 시작되면 딜러가 <b>1~10 중 숫자 하나</b>를 내 시트 아무 칸에 적어 줘요. 이 숫자는 <b>나만</b> 볼 수 있어요.",
-        boardHtml: `<div class="as-tut">${mini([null, null, null, null, null, 6, null, null, null, null])}<small>🔒 6 은 딜러가 정한 칸 · 나머지는 내가 채워요</small></div>`, ms: 5000 },
+        boardHtml: `<div class="as-tut">${mini([null, null, null, null, null, 6, null, null, null, null])}<small>🔒 6은 딜러가 정한 칸 · 나머지는 내가 채워요</small></div>`, ms: 5000 },
       { tag: "STEP 3 · 진행", title: "한 명씩 숫자를 부르면 모두가 적어요", body: "순번대로 한 사람이 1~10 중 숫자를 불러요 (같은 숫자를 또 불러도 돼요). 모두가 <b>동시에</b> 그 숫자를 자기 시트의 <b>빈칸 하나</b>에 적어요. 아홉 번 부르면 10칸이 다 차요.",
-        boardHtml: `<div class="as-tut"><div class="as-call" style="width:100%"><span class="as-big">7</span><small>순번인 사람이 "7!" 을 불렀어요 → 내 빈칸에 7 을 적어요</small></div>${mini([2, null, null, 5, null, 6, null, null, 9, null])}</div>`, ms: 5800 },
-      { tag: "STEP 4 · 직접 해 봐요", title: "불린 숫자를 알맞은 칸에 적어요", body: "빈칸 3개에 불린 숫자 <b>2 → 5 → 8</b> 을 차례로 적어서 10칸을 모두 이어 보세요. 앞 칸보다 작거나 뒤 칸보다 크면 끊겨요!",
-        interactive: { hint: "👆 반짝이는 빈칸을 눌러 숫자를 적어요", doneText: "✅ 1~10 이 한 줄로 이어졌어요!" },
+        boardHtml: `<div class="as-tut"><div class="as-call" style="width:100%"><span class="as-big">7</span><small>순번인 사람이 "7!" 을 불렀어요 → 내 빈칸에 7을 적어요</small></div>${mini([2, null, null, 5, null, 6, null, null, 9, null])}</div>`, ms: 5800 },
+      { tag: "STEP 4 · 직접 해 봐요", title: "불린 숫자를 알맞은 칸에 적어요", body: "빈칸 3개에 불린 숫자 <b>2 → 5 → 8</b>을 차례로 적어서 10칸을 모두 이어 보세요. 앞 칸보다 작거나 뒤 칸보다 크면 끊겨요!",
+        interactive: { hint: "👆 반짝이는 빈칸을 눌러 숫자를 적어요", doneText: "✅ 1~10이 한 줄로 이어졌어요!" },
         render(stage, ctrl) {
           const base = [1, null, 3, 4, null, 6, 7, null, 9, 10], q = [2, 5, 8];
           let sh = base.slice(), k = 0, msg = "";
           const draw = () => {
             const run = A.runOf(sh);
-            stage.innerHTML = `<div class="as-tut"><div class="as-call" style="width:100%"><span class="as-big">${k < q.length ? q[k] : "✓"}</span><small>${k < q.length ? `${q[k]} 을(를) 적을 빈칸을 눌러요` : "모두 적었어요!"}</small></div>${`<div class="as-sheet">${cells(sh, { pick: k < q.length, run })}</div>`}<small>${msg}</small></div>`;
+            stage.innerHTML = `<div class="as-tut"><div class="as-call" style="width:100%"><span class="as-big">${k < q.length ? q[k] : "✓"}</span><small>${k < q.length ? `${q[k]}${ja(q[k],"을")} 적을 빈칸을 눌러요` : "모두 적었어요!"}</small></div>${`<div class="as-sheet">${cells(sh, { pick: k < q.length, run })}</div>`}<small>${msg}</small></div>`;
             if (k >= q.length && run.len === 10) ctrl.complete();
           };
           stage.onclick = e => {
             const b = e.target.closest("[data-c]"); if (!b || k >= q.length) return;
             const c = +b.dataset.c; sh[c] = q[k]; ctrl.sfx("tap");
-            if (sh.filter(x => x != null).some((x, i, a) => i && x < a[i - 1])) { msg = `💥 ${q[k]} 이(가) 거기 들어가면 끊겨요 — 처음부터 다시!`; sh = base.slice(); k = 0; }
+            if (sh.filter(x => x != null).some((x, i, a) => i && x < a[i - 1])) { msg = `💥 ${q[k]}${ja(q[k],"이")} 거기 들어가면 끊겨요 — 처음부터 다시!`; sh = base.slice(); k = 0; }
             else { msg = ""; k++; }
             draw();
           };

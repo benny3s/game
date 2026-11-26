@@ -201,7 +201,7 @@
   function review(Vb, seat, myA, bestA) {
     const my = actText(myA, Vb), best = actText(bestA, Vb);
     if (!Vb || !myA || !bestA || Vb.phase !== "play" || myA.t !== "put" || bestA.t !== "put") return { sev: 0, why: "", my, best };
-    if (myA.p === bestA.p) return { sev: 0, why: "고급 AI 와 같은 자리", my, best };
+    if (myA.p === bestA.p) return { sev: 0, why: "고급 AI와 같은 자리", my, best };
     const N = Vb.N, own = Vb.own, sm = K.scoreAt(own, N, myA.p, seat), sb = K.scoreAt(own, N, bestA.p, seat), bp = CN(Vb, bestA.p);
     if (sm.a5) return { sev: 0, why: "5목 — 이기는 수", my, best };
     // 내 돌 · 상대 돌을 거꾸로 기억했다면 좋은 수였나 (착각 짐작)
@@ -210,7 +210,7 @@
     if (sb.a5 && !sm.a5) return { sev: 95, why: `${bp}에 두면 바로 5목이었어요 — 내 돌 4개가 그 줄에 있었어요${mixed}`, my, best };
     if (sb.d5 && !sm.d5 && !sm.a5) return { sev: 90, why: `상대 돌 4개가 한 줄이었어요 — ${bp}에 막아야 다음 수에 안 져요${mixed}`, my, best };
     if (sb.a4 >= 2 && sm.a4 < 2 && !sm.d5) return { sev: 62, why: `${bp}에 두면 다음 수에 5목 자리가 두 곳 (열린 4 · 4-4) — 이기는 길이었어요${mixed}`, my, best };
-    if (sb.d4 >= 2 && sm.d4 < 2 && sm.a4 < 2 && !sm.d5) return { sev: 68, why: `상대가 다음 수에 5목 자리 두 곳을 만드는 점(열린 3 꼴)을 안 막았어요 — 고급 AI 는 ${bp}${mixed}`, my, best };
+    if (sb.d4 >= 2 && sm.d4 < 2 && sm.a4 < 2 && !sm.d5) return { sev: 68, why: `상대가 다음 수에 5목 자리 두 곳을 만드는 점(열린 3 꼴)을 안 막았어요 — 고급 AI는 ${bp}${mixed}`, my, best };
     const vm = sm.att + 0.95 * sm.def, vb = sb.att + 0.95 * sb.def;
     const d = vb > 0 ? (vb - vm) / vb : 0;
     return { sev: Math.max(0, Math.min(50, Math.round(d * 60))), why: `5칸 창 점수 내 수 ${Math.round(vm)} · 고급 AI 수 ${Math.round(vb)}${mixed}`, my, best };

@@ -1,6 +1,12 @@
 /* 베니 서바이벌 · 벽바둑 — 화면 (7×7 판 · 말 놓기 → 이동 → 벽 · 예상 영역 색 · 1분 규칙) */
 (() => {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const W = window.SVCores.wallgo;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const R = 7, COL = ["239,68,68", "59,130,246", "34,197,94"], HEX = ["#ef4444", "#3b82f6", "#22c55e"], DN = ["위", "오른쪽", "아래", "왼쪽"];
@@ -134,7 +140,7 @@
         const left = V.pool[me];
         if (!S.kind || !left[S.kind]) S.kind = left.sq ? "sq" : "ci";
         acts = V.variant === "ii" ? `<div class="wg-kinds">${["sq", "ci"].map(k => `<button class="btn${S.kind === k ? " sel" : ""}" data-kind="${k}" ${left[k] ? "" : "disabled"}>${KOK[k]} ${left[k]}</button>`).join("")}</div>` : "";
-        acts += `<div class="note">${V.variant === "ii" ? `${KOK[S.kind]} 을 ` : "말을 "}놓을 <b>빈 칸</b>을 눌러요 (남은 말 ${left.sq + left.ci}개)</div>`;
+        acts += `<div class="note">${V.variant === "ii" ? `${KOK[S.kind]}${ja(KOK[S.kind],"을")} ` : "말을 "}놓을 <b>빈 칸</b>을 눌러요 (남은 말 ${left.sq + left.ci}개)</div>`;
       } else acts = `<div class="note">${V.cur >= 0 ? `${nm(V.cur)} 차례 — 말을 놓는 중…` : ""}</div>`;
     } else if (V.phase === "move") {
       if (myTurn) acts = `<div class="note">${S.pi === null ? "움직일 <b>내 말</b>을 눌러요 (깜빡이는 말)" : `갈 곳을 눌러요 <b>(노란 테두리)</b>${V.round === 1 && !V.broke[me] ? " · 주황 점선 = 벽 부수기(한 번뿐, 두 번 눌러 확정)" : ""}`}</div>${S.pi !== null ? `<button class="btn" data-a="cancel">↩ 다른 말 고르기</button>` : ""}`;
@@ -203,7 +209,7 @@
           };
           draw();
         } },
-      { tag: "STEP 3 · 원형 말", title: "원형 말은 한 칸 + 꺾어서 한 칸 (Ⅱ)", body: "시즌 3 의 원형 말(●)은 한 칸 가고, 원하면 <b>왼쪽/오른쪽으로 꺾어서 한 칸 더</b> 갈 수 있어요. 곧게 두 칸은 못 가요. (원작 벽바둑은 사각 말만 써요)",
+      { tag: "STEP 3 · 원형 말", title: "원형 말은 한 칸 + 꺾어서 한 칸 (Ⅱ)", body: "시즌 3의 원형 말(●)은 한 칸 가고, 원하면 <b>왼쪽/오른쪽으로 꺾어서 한 칸 더</b> 갈 수 있어요. 곧게 두 칸은 못 가요. (원작 벽바둑은 사각 말만 써요)",
         boardHtml: `<div class="wg-tut">${boardHtml({ ...demo([P(0, "ci", 3, 3), P(1, "sq", 0, 0)], { noTerr: true }) }, { dest: Object.fromEntries([[2, 3], [4, 3], [3, 2], [3, 4], [2, 2], [2, 4], [4, 2], [4, 4]].map(x => [x.join(","), "ok"])) })}<small>노란 칸이 원형 말이 갈 수 있는 곳이에요</small></div>`, ms: 7800 },
       { tag: "STEP 4 · 직접", title: "움직인 말의 한 면에 벽을 꼭 세워요", body: "이동이 끝나면 그 말의 <b>위·오른쪽·아래·왼쪽 중 한 면</b>에 벽을 세워요 (이미 벽이 있는 면은 안 돼요). 벽으로 상대를 막고 내 영역을 지켜요. 한 면을 골라 보세요.",
         interactive: { hint: "👆 벽 세울 면을 눌러요", doneText: "✅ 벽이 섰어요 — 이제 상대 차례!" },
@@ -232,7 +238,7 @@
       "모두의 말이 벽으로 갈라지면 끝 — 말이 있는 구역의 <b>칸 수 합</b>이 큰 사람이 이겨요",
       "1라운드 1등은 생존, 나머지 둘이 2라운드(1:1) — 진 사람 탈락 · 모두가 연달아 움직일 수 없으면 그 라운드도 끝나요",
     ],
-    note: "방송과 다른 점: 시간 제한(90초) 없음, 3명 고정(빈 자리는 AI), 2라운드 고정 말 자리는 선 B2·F6 / 후 F2·B6 으로 우리가 정함, 같은 점수·같은 큰 구역이면 나중에 두는 사람이 위, 움직일 말이 없으면 차례 넘김. 방송은 데스룸 5일차 '벽바둑'(시즌 2)과 데드 어게인 4일차 '벽바둑 Ⅱ'(시즌 3) 둘 다 이 규칙이에요.",
+    note: "방송과 다른 점: 시간 제한(90초) 없음, 3명 고정(빈 자리는 AI), 2라운드 고정 말 자리는 선 B2·F6 / 후 F2·B6으로 우리가 정함, 같은 점수·같은 큰 구역이면 나중에 두는 사람이 위, 움직일 말이 없으면 차례 넘김. 방송은 데스룸 5일차 '벽바둑'(시즌 2)과 데드 어게인 4일차 '벽바둑 Ⅱ'(시즌 3) 둘 다 이 규칙이에요.",
     sub: V => (V.over ? "끝" : `${V.round}라운드 · ${V.phase === "place" ? "말 놓기" : V.phase === "move" ? "말 이동" : "벽 세우기"}`),
     chip: (V, i) => { const act = V.ord.includes(i); return { t: V.over ? (V.ranks[i] === 0 ? "🏆" : V.ranks[i] === 1 ? "2등" : "탈락") : !act ? "생존 ✓" : V.cur === i ? "내 차례" : "", on: V.cur === i && !V.over, out: V.over ? V.ranks[i] === 2 : false }; },
     render, result,
@@ -240,7 +246,7 @@
     actText: (a, V) => {
       const DN = ["위", "오른쪽", "아래", "왼쪽"];
       if (!a) return "—";
-      if (a.t === "place") return `${W.coord(a.r, a.c)} 에 ${a.k === "ci" ? "원형" : "사각"} 말 놓음`;
+      if (a.t === "place") return `${W.coord(a.r, a.c)}에 ${a.k === "ci" ? "원형" : "사각"} 말 놓음`;
       if (a.t === "move") { const P = V && V.pieces && V.pieces[a.p]; return `${P ? W.coord(P.r, P.c) + " 말 이동: " : "말 이동: "}${(a.dirs || []).map(d => DN[d]).join(" → ")}${a.brk != null ? " (벽 부수기)" : ""}`; }
       if (a.t === "wall") return `${DN[a.d]}쪽에 벽`;
       return "—";

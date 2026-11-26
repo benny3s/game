@@ -135,7 +135,7 @@
           stage.innerHTML = `<div class="ip-tut"><div>${c(2)}</div><div class="ip-btns" style="width:100%"><button class="btn primary" data-k="call">콜 · 공개</button><button class="btn" data-k="raise">레이즈</button><button class="btn fold" data-k="fold">폴드</button></div></div>`;
           stage.onclick = e => { const b = e.target.closest("[data-k]"); if (!b) return; if (b.dataset.k === "raise") { ctrl.sfx("win"); stage.innerHTML = `<div class="ip-tut"><div class="row">${c(2, "lose")}${c(7, "win")}</div><div class="ip-res">내 카드 7 > 2 · 레이즈가 통했어요!</div></div>`; ctrl.complete(); } else ctrl.sfx("tap"); };
         } },
-      { tag: "STEP 4 · 함정", title: "10 을 들고 포기하면 패널티 10칩", body: "포기(폴드)한 카드가 <b>10</b>이었다면 <b>패널티로 칩 10개</b>를 상대에게 더 줘야 해요. 내 카드를 모르니까 큰 베팅에 겁먹고 포기했다가 당하는 게 핵심 함정! 두 카드가 <b>같은 숫자</b>면 승자 없이, 베팅된 칩을 <b>기본베팅으로 걸어 두고</b> 다음 판을 해요 (그 판 이긴 사람이 가져가요).",
+      { tag: "STEP 4 · 함정", title: "10을 들고 포기하면 패널티 10칩", body: "포기(폴드)한 카드가 <b>10</b>이었다면 <b>패널티로 칩 10개</b>를 상대에게 더 줘야 해요. 내 카드를 모르니까 큰 베팅에 겁먹고 포기했다가 당하는 게 핵심 함정! 두 카드가 <b>같은 숫자</b>면 승자 없이, 베팅된 칩을 <b>기본베팅으로 걸어 두고</b> 다음 판을 해요 (그 판 이긴 사람이 가져가요).",
         boardHtml: `<div class="ip-tut"><div class="ip-res bad">내가 폴드 → 내 카드는 10!<br>기본 1칩 + 패널티 10칩 = −11칩</div></div>`, ms: 7200 },
       { tag: "STEP 5 · 세기", title: "남은 카드를 세요", body: "공개된 카드는 버려져요. 20장 안에서 <b>남은 숫자</b>를 세면 내 카드를 더 잘 짐작해요 (화면 아래 숫자 줄). 한 사람이 <b>칩을 모두 잃으면</b> 바로 끝! 막히면 <b>🧑‍🏫 AI 선생님</b>에게 물어봐요.",
         boardHtml: `<div class="ip-tut"><div class="ip-track">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(r => `<span class="ip-pip${r === 3 || r === 9 ? " gone" : ""}">${r}<i>${r === 3 || r === 9 ? "○○" : "●●"}</i></span>`).join("")}</div></div>`, ms: 5000 },
@@ -165,7 +165,7 @@
     if (!Number.isFinite(em) || !Number.isFinite(eb)) return null;
     const sev = Math.round(Math.min(100, Math.max(0, 100 * loss / Math.max(2, 0.15 * (V.start || 30)))));
     const o = V.cards[1 - seat], P = E.P, fold = myA.t === "fold" || bestA.t === "fold";
-    const why = `내 수 ${shortAct(myA)} 기대 칩 ${sgn(em)} · 고급 AI ${shortAct(bestA)} 기대 칩 ${sgn(eb)}${loss <= 0.05 ? " (거의 같아요)" : ""} — 상대 카드 ${o} 기준 내 카드가 더 클 확률 약 ${pcs(P.win)}${P.draw >= 0.01 ? ` · 같을 확률 ${pcs(P.draw)}` : ""}${fold ? ` · 내 카드가 10일 확률 ${pcs(P.p10)} (10 을 들고 폴드하면 −10칩)` : ""}${bestA.t === "raise" && P.win < 0.4 ? " · 상대가 접을 가능성까지 계산한 값이에요" : ""}`;
+    const why = `내 수 ${shortAct(myA)} 기대 칩 ${sgn(em)} · 고급 AI ${shortAct(bestA)} 기대 칩 ${sgn(eb)}${loss <= 0.05 ? " (거의 같아요)" : ""} — 상대 카드 ${o} 기준 내 카드가 더 클 확률 약 ${pcs(P.win)}${P.draw >= 0.01 ? ` · 같을 확률 ${pcs(P.draw)}` : ""}${fold ? ` · 내 카드가 10일 확률 ${pcs(P.p10)} (10을 들고 폴드하면 −10칩)` : ""}${bestA.t === "raise" && P.win < 0.4 ? " · 상대가 접을 가능성까지 계산한 값이에요" : ""}`;
     return { sev, why };
   };
 
@@ -183,7 +183,7 @@
       "<b>기본베팅 칩 1개씩</b> → <b>선 플레이어부터</b> 베팅 · <b>같은 개수</b>로 베팅(콜)하면 바로 카드 공개 · <b>더 많이</b> 베팅(레이즈)하면 계속 · 하지 않고 <b>포기</b>(폴드)",
       "포기한 카드가 <b>10</b>이었다면 <b>패널티로 칩 10개</b>를 상대에게 줘요 · 두 카드가 같은 숫자면 베팅된 칩을 <b>기본베팅으로 걸어 두고</b> 다음 게임",
       "한 사람이 <b>칩을 모두 잃으면</b> 끝 · 남은 카드를 세면 유리해요",
-      "<b>특수</b> — 칩이 0 이 돼도 이월된 판돈이 남아 있으면 다음 판에서 가려요 · 포기 벌칙은 가진 칩까지만 내요 · <b>30판</b>이 끝나면 칩이 많은 쪽 승리 (남은 이월 판돈은 반씩 나눠요 — 끝없는 판을 막는 우리 판 상한, 방송엔 없어요)",
+      "<b>특수</b> — 칩이 0이 돼도 이월된 판돈이 남아 있으면 다음 판에서 가려요 · 포기 벌칙은 가진 칩까지만 내요 · <b>30판</b>이 끝나면 칩이 많은 쪽 승리 (남은 이월 판돈은 반씩 나눠요 — 끝없는 판을 막는 우리 판 상한, 방송엔 없어요)",
     ],
     sub: V => V.over ? "끝" : `${V.round}판${V.carry ? ` · 이월 ${V.carry}` : ""}`,
     chip: (V, i) => ({ t: `🪙${V.chips[i]}`, on: V.needs.includes(i) && !V.over, out: V.chips[i] <= 0 }),

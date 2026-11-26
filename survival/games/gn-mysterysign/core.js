@@ -16,6 +16,12 @@
   else (root.SVCores = root.SVCores || {})["gn-mysterysign"] = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  // 조사 고르기: 끝 글자 받침으로 (숫자는 읽는 소리 — 0 영 · 1 일 · 3 삼 · 6 육 · 7 칠 · 8 팔 · 10 십 은 받침, 영문 L R M N 도 받침) · t = 은 · 을 · 와 · 로 (로 는 으로/로)
+  const ja = (w, t) => { let s = String(w).replace(/<[^>]*>/g, "").trim(), b = 0; if (!/%$/.test(s)) { s = s.replace(/[)\]\s]+$/, ""); const c = s.slice(-1);
+    if (/[가-힣]/.test(c)) { const k = (c.charCodeAt(0) - 44032) % 28; b = k === 0 ? 0 : k === 8 ? 2 : 1; }
+    else if (/\d/.test(c)) b = c === "0" ? 1 : ({ 1: 2, 3: 1, 6: 1, 7: 2, 8: 2 })[c] || 0;
+    else if (/[A-Za-z]/.test(c)) b = /[lr]/i.test(c) ? 2 : /[mn]/i.test(c) ? 1 : 0; }
+    return t === "로" ? (b === 1 ? "으로" : "로") : ({ 이: "가이", 은: "는은", 을: "를을", 와: "와과" })[t][b ? 1 : 0]; };
   const NO_BUZZ = 99999, WINDOW = 60000, MAXH = 16, MAXN = 9999999, RDN = 3 * 16 + 8;
   const HMIN = (typeof window !== "undefined" && window.SVHuman && window.SVHuman.MIN) || 120;
   const ITEMS = ["double", "safe", "secret"];
@@ -54,8 +60,8 @@
     { id: "dsumprod", tv: 4, kind: "자릿수", name: "(자리 합) × (자리 합)", txt: "(앞 수의 각 자리 수의 합) × (뒤 수의 각 자리 수의 합)", f: (a, b) => BigInt(dsum(ds(a)) * dsum(ds(b))) },
     { id: "countsay", tv: 5, kind: "이어 쓰기", name: "숫자 + 개수 세어 쓰기", txt: "두 수를 이어 쓴 숫자들을 처음 나온 순서대로 '숫자 + 그 숫자의 개수' 로 이어 쓴 수", f: (a, b) => { const s = ds(a) + ds(b), cnt = {}, ord = []; for (const c of s) { if (!cnt[c]) ord.push(c); cnt[c] = (cnt[c] || 0) + 1; } return BigInt(ord.map(c => c + cnt[c]).join("")); } },
     { id: "dsumall", tv: 6, kind: "자릿수", name: "모든 자리 수의 합", txt: "두 수의 모든 자리 수를 더한 값", f: (a, b) => BigInt(dsum(ds(a) + ds(b))) },
-    { id: "clock12", tv: 7, kind: "나머지", name: "합 ÷ 12 의 나머지 (시계)", txt: "(두 수의 합) ÷ 12 의 나머지 값 (시계 문제)", f: (a, b) => (a + b) % 12n },
-    { id: "holes", tv: 8, kind: "모양", name: "구멍 개수", txt: "두 수에 들어 있는 숫자의 구멍 개수를 모두 더한 값 (0 · 6 · 9 는 1개, 8 은 2개)", f: (a, b) => { let t = 0; for (const c of ds(a) + ds(b)) t += HOLE[+c]; return BigInt(t); } },
+    { id: "clock12", tv: 7, kind: "나머지", name: "합 ÷ 12의 나머지 (시계)", txt: "(두 수의 합) ÷ 12의 나머지 값 (시계 문제)", f: (a, b) => (a + b) % 12n },
+    { id: "holes", tv: 8, kind: "모양", name: "구멍 개수", txt: "두 수에 들어 있는 숫자의 구멍 개수를 모두 더한 값 (0 · 6 · 9는 1개, 8은 2개)", f: (a, b) => { let t = 0; for (const c of ds(a) + ds(b)) t += HOLE[+c]; return BigInt(t); } },
     { id: "sumtimesb", tv: 9, kind: "식 만들기", name: "(합) × 뒤 수", txt: "(두 수의 합) × 뒤 수", f: (a, b) => (a + b) * b },
     { id: "gcd", tv: 10, kind: "약수", name: "최대공약수", txt: "두 수의 최대공약수", f: (a, b) => gcdB(a, b) },
     { id: "primesbetween", tv: 11, kind: "약수", name: "사이 소수 개수", txt: "두 수 사이(두 수는 빼고)에 있는 소수의 개수", f: (a, b) => { const lo = Number(mn(a, b)), hi = Number(mx(a, b)); return hi - lo < 2 ? 0n : BigInt(piOf(hi - 1) - piOf(lo)); } },
@@ -66,7 +72,7 @@
     { id: "lcm", tv: 0, kind: "약수", name: "최소공배수", txt: "두 수의 최소공배수", f: (a, b) => (a / gcdB(a, b)) * b },
     { id: "concat", tv: 0, kind: "이어 쓰기", name: "이어 붙이기", txt: "앞 수 뒤에 뒤 수를 이어 붙인 수", f: (a, b) => BigInt(ds(a) + ds(b)) },
     { id: "digrange", tv: 0, kind: "자릿수", name: "가장 큰 자리 − 가장 작은 자리", txt: "두 수의 모든 자리 수 중 가장 큰 수에서 가장 작은 수를 뺀 값", f: (a, b) => { const s = ds(a) + ds(b); let hi = 0, lo = 9; for (const c of s) { hi = Math.max(hi, +c); lo = Math.min(lo, +c); } return BigInt(hi - lo); } },
-    { id: "prodmod7", tv: 0, kind: "나머지", name: "곱 ÷ 7 의 나머지", txt: "(두 수의 곱) ÷ 7 의 나머지 값", f: (a, b) => (a * b) % 7n },
+    { id: "prodmod7", tv: 0, kind: "나머지", name: "곱 ÷ 7의 나머지", txt: "(두 수의 곱) ÷ 7의 나머지 값", f: (a, b) => (a * b) % 7n },
     { id: "sqminus", tv: 0, kind: "식 만들기", name: "앞 수 제곱 − 뒤 수", txt: "앞 수를 제곱한 값에서 뒤 수를 뺀 값", f: (a, b) => a * a - b },
     { id: "mult3", tv: 0, kind: "약수", name: "사이 3의 배수 개수", txt: "두 수 사이(두 수는 빼고)에 있는 3의 배수의 개수", f: (a, b) => { const lo = mn(a, b), hi = mx(a, b); return hi - lo < 2n ? 0n : (hi - 1n) / 3n - lo / 3n; } },
     { id: "odddigs", tv: 0, kind: "모양", name: "홀수 숫자 개수", txt: "두 수에 들어 있는 홀수 숫자(1 · 3 · 5 · 7 · 9)의 개수", f: (a, b) => { let t = 0; for (const c of ds(a) + ds(b)) if ((+c) % 2) t++; return BigInt(t); } },
@@ -188,7 +194,7 @@
     if (st.phase === "pick") {
       if (a.t !== "num") return { ok: false, err: "숫자를 하나 내요" };
       const n = normNum(a.n);
-      if (!n) return { ok: false, err: `0 을 뺀 1 ~ ${MAXN} 의 자연수를 내요` };
+      if (!n) return { ok: false, err: `0을 뺀 1 ~ ${MAXN}의 자연수를 내요` };
       if (!st.pend) { st.pend = { s: seat, n }; return { ok: true }; }
       const fa = st.pend.n, ba = n, f = st.front, hintNo = st.hintNo;
       const sec = [st.ri.secret[0] && hintNo === 1 ? 1 : 0, st.ri.secret[1] && hintNo === 1 ? 1 : 0];
@@ -399,26 +405,26 @@
     }
     if (V.phase === "buzz") {
       const o1 = `${who}${eun(who)} 같은 힌트를 보고 있어요.${stat}`;
-      if (V.mine) return { opp: o1, mine, rec: "버저를 눌렀어요 — 상대 시간과 견주는 중이에요", why: "먼저 누른 쪽(ms 가 작은 쪽)이 정답을 댈 기회를 얻어요." };
-      if (info.best && info.sure) return { opp: o1, mine, rec: `지금 버저! 정답은 ${info.best.ans}`, why: `후보 규칙 ${nC}가지(${ruleNames(info.best.ids, 3)})가 모두 같은 답 ${info.best.ans} 을(를) 내요 → 정답 확률 100% · 틀리면 −1 이지만 맞히면 라운드가 끝나요.` };
-      if (info.best) return { opp: o1, mine, rec: info.conf >= 0.7 ? `${info.best.ans} 이(가) 유력해요 — 버저를 눌러 볼 만해요` : "아직 답이 갈려요 — 넘기고 다음 힌트를 봐요", why: `답 ${info.best.ans} 은 후보 ${info.best.ids.length}/${info.total}가지 (${Math.round(info.conf * 100)}%) · 틀리면 −1 에다 상대에게 기회가 넘어가요.` };
+      if (V.mine) return { opp: o1, mine, rec: "버저를 눌렀어요 — 상대 시간과 견주는 중이에요", why: "먼저 누른 쪽(ms가 작은 쪽)이 정답을 댈 기회를 얻어요." };
+      if (info.best && info.sure) return { opp: o1, mine, rec: `지금 버저! 정답은 ${info.best.ans}`, why: `후보 규칙 ${nC}가지(${ruleNames(info.best.ids, 3)})가 모두 같은 답 ${info.best.ans}${ja(info.best.ans,"을")} 내요 → 정답 확률 100% · 틀리면 −1 이지만 맞히면 라운드가 끝나요.` };
+      if (info.best) return { opp: o1, mine, rec: info.conf >= 0.7 ? `${info.best.ans}${ja(info.best.ans,"이")} 유력해요 — 버저를 눌러 볼 만해요` : "아직 답이 갈려요 — 넘기고 다음 힌트를 봐요", why: `답 ${info.best.ans}${ja(info.best.ans,"은")} 후보 ${info.best.ids.length}/${info.total}가지 (${Math.round(info.conf * 100)}%) · 틀리면 −1 에다 상대에게 기회가 넘어가요.` };
       return { opp: o1, mine, rec: "넘기고 다음 힌트를 봐요", why: "후보가 없으면 힌트를 더 모아야 규칙이 보여요 (최대 16개까지 나와요)." };
     }
     if (V.phase === "ans" || V.phase === "ans2") {
       const myTurn = V.caller === me, wr = V.wrong.length ? ` 이번 라운드에서 이미 틀린 답: ${V.wrong.join(" · ")}.` : "";
       const o1 = myTurn ? `${who}${eun(who)} 내 답을 기다려요.${wr}` : `${who}${iga(who)} 답을 쓰는 중이에요${V.phase === "ans2" ? " (기회가 넘어왔어요)" : ""}.${wr}`;
       if (!myTurn) return { opp: o1, mine, rec: "상대가 답하는 동안 후보를 다시 따져 봐요", why: V.phase === "ans" ? "틀리면 기회가 나에게 넘어와요 — 틀린 답은 후보에서 빠져서 남은 답이 더 분명해져요." : "이 답도 틀리면 다음 힌트로 넘어가요." };
-      if (info.best) return { opp: o1, mine, rec: `${info.best.ans} 을(를) 써요`, why: `후보 규칙 ${info.total}가지 중 ${info.best.ids.length}가지(${Math.round(info.conf * 100)}%)가 ${info.best.ans} 이에요${V.phase === "ans2" ? " · 자신 없으면 넘겨도 감점이 없어요" : ""}.` };
+      if (info.best) return { opp: o1, mine, rec: `${info.best.ans}${ja(info.best.ans,"을")} 써요`, why: `후보 규칙 ${info.total}가지 중 ${info.best.ids.length}가지(${Math.round(info.conf * 100)}%)가 ${info.best.ans} 이에요${V.phase === "ans2" ? " · 자신 없으면 넘겨도 감점이 없어요" : ""}.` };
       return { opp: o1, mine, rec: V.phase === "ans2" ? "자신 없으면 넘겨요 (감점 없음)" : "후보가 없어요 — 짐작으로 써야 해요", why: "버저를 누른 뒤엔 답을 내야 하고, 틀리면 −1 이에요 (무감점 아이템이면 0)." };
     }
     if (L) {
       const w2 = L.s >= 0 ? nm(L.s) : "";
       const txt = L.void ? "힌트를 16개까지 열었지만 아무도 못 맞혔어요 — 이번 라운드는 무효예요."
         : L.tmo ? `${w2}${iga(w2)} 시간 안에 답을 못 썼어요 → ${L.gain ? `${L.gain}점` : "감점 없음"}.`
-          : L.hit ? `${w2}${iga(w2)} ${L.n} 으로 정답! +${L.gain}점${L.mult === 2 ? " (더블 스코어)" : ""}.`
-            : `${w2}${iga(w2)} ${L.n} 로 오답 → ${L.gain ? `${L.gain}점` : "감점 없음(무감점)"}.`;
+          : L.hit ? `${w2}${iga(w2)} ${L.n}${ja(L.n,"로")} 정답! +${L.gain}점${L.mult === 2 ? " (더블 스코어)" : ""}.`
+            : `${w2}${iga(w2)} ${L.n}${ja(L.n,"로")} 오답 → ${L.gain ? `${L.gain}점` : "감점 없음(무감점)"}.`;
       const rule = L.end && L.rule !== undefined ? ` 숨은 규칙은 "${RULES[L.rule].txt}" 이었어요 (답 ${L.ans}).` : "";
-      return { opp: txt + rule, mine, rec: L.end ? "다음 라운드를 준비해요" : L.stage === 1 ? `${nm(1 - L.s)}에게 기회가 넘어가요` : "다음 힌트로 넘어가요", why: L.end ? `힌트 ${L.h}개에서 끝났어요.` : `틀린 답 ${L.n === null ? "" : L.n + " "}은(는) 후보에서 빠져요.` };
+      return { opp: txt + rule, mine, rec: L.end ? "다음 라운드를 준비해요" : L.stage === 1 ? `${nm(1 - L.s)}에게 기회가 넘어가요` : "다음 힌트로 넘어가요", why: L.end ? `힌트 ${L.h}개에서 끝났어요.` : `틀린 답 ${L.n === null ? "" : L.n + " "}${ja(L.n === null ? "" : L.n + " ","은")} 후보에서 빠져요.` };
     }
     return { opp: `${who}의 점수는 ${S[opp]}점이에요.`, mine, rec: "다음 라운드를 준비해요", why: "" };
   }
