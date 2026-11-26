@@ -122,7 +122,7 @@
     if (!e) return h + `<p>🏁 <b>끝</b> — 마지막 모습이에요. ◀ 로 되돌려 보거나 🙋 로 내 수만 골라 봐요.</p>`;
     if (e.adv) return h + `<p>⏭ 결과를 보여 주고 다음 단계로 넘어가는 곳이에요.</p>`;
     const mine = isMine(k), c = A.cmps[k];
-    h += `<p>${mine ? "🙋" : "👀"} <b>${nm(e.s)}</b> 의 수 <b>${esc(actText(ui, e.a, R.view(e.s), names))}</b></p>`;
+    h += `<p>${mine ? "🙋" : "👀"} <b>${nm(e.s)}</b>의 수 <b>${esc(actText(ui, e.a, R.view(e.s), names))}</b></p>`;
     if (mine) {
       if (c) {
         const tag = c.same ? `✅ 고급 AI 도 ${c.total}번 중 ${c.hit}번 고른 수예요` : `🔸 고급 AI 는 <b>${esc(c.best)}</b> 쪽을 골랐어요 (${c.total}번 중 ${c.topN}번)`;
@@ -164,7 +164,16 @@
     const rg = $("revRange"); if (rg && +rg.value !== A.k) rg.value = A.k;
     const badBtn = $("revBar").querySelector('[data-rv="bad"]'); if (badBtn) badBtn.hidden = !A.bads.length;
     if (A.coach) { try { A.coach.set(coachHtml()); } catch (err) {} }
+    lift();
     if (A.fit) { try { A.fit($("revStage"), ui); } catch (err) {} }
+  }
+  // 선생님 창 기본 자리(화면 아래에서 80px)는 판 화면 독 위인데, 복기 막대(글 · 슬라이더 · 단추)는 더 높아 슬라이더를 덮음 (11-27)
+  //  → 사람이 끌어다 둔 자리가 아니면 복기 동안만 막대 위로 올림. 닫으면 셸이 접기/숨기기로 원래 자리를 다시 잡음.
+  function lift() {
+    const c = A && A.coach, bar = $("revBar"); if (!c || !c.el || c.el.hidden || !bar) return;
+    const el = c.el; if (el.style.top && el.style.top !== "auto") return;
+    const bt = bar.getBoundingClientRect().top, cb = el.getBoundingClientRect();
+    if (bt > 0 && cb.height > 0 && cb.bottom > bt - 6) el.style.bottom = Math.ceil(innerHeight - bt + 6) + "px";
   }
   function go(k) { if (!A) return; A.k = Math.max(0, Math.min(A.R.N, k | 0)); if (A.sfx) A.sfx("tap"); draw(); }
 
@@ -234,7 +243,7 @@
     document.body.classList.add("playing");
     $("revBar").innerHTML = barHtml(R.N);
     $("rev").hidden = false;
-    if (A.coach) { A.coach.show(); A.coach.collapse(false); }
+    if (A.coach) { A.coach.show(); A.coach.collapse(false); if (A.coach.onChange) A.unsub = A.coach.onChange(() => requestAnimationFrame(() => { lift(); refit(); })); }
     A.k = 0; draw();
     analyze();
     return true;
@@ -242,6 +251,7 @@
   function close(silent) {
     if (!A) return;
     const a = A; A = null;
+    if (a.unsub) { try { a.unsub(); } catch (e) {} }
     $("rev").hidden = true; $("revStage").innerHTML = ""; $("revStage").classList.remove("sv-coachfit"); $("revStage").style.removeProperty("--sv-sh"); $("revStage").style.paddingBottom = "";
     if (!a.playing) document.body.classList.remove("playing");
     if (a.coach && a.coachWas) { if (!a.coachWas.v) a.coach.hide(); else a.coach.collapse(a.coachWas.c); }
@@ -280,7 +290,7 @@
   });
   document.addEventListener("input", e => { if (A && e.target && e.target.id === "revRange") go(+e.target.value); });
 
-  function refit() { if (A && A.fit) { try { A.fit($("revStage"), A.ui); } catch (err) {} } }
+  function refit() { if (A) lift(); if (A && A.fit) { try { A.fit($("revStage"), A.ui); } catch (err) {} } }
   addEventListener("resize", refit);
 
   window.SVReview = {
