@@ -5,6 +5,8 @@ let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('FAIL:', m); } };
 const ap = (st, s, a) => G.apply(st, s, a);
 const sampler = G.sampler;
+// 시험 편의: 첫 순서 추첨을 번호 순으로 고정 (추첨 자체는 아래 별도 시험)
+const init0 = o => { const st = G.init(o); st.order = [...Array(st.n).keys()]; return st; };
 const sup = (st, list) => list.forEach((s, i) => { const r = ap(st, i, { t: 'sup', s }); if (!r.ok) throw new Error('sup ' + r.err); });
 // 지정한 코인을 뽑게 (박스 앞에 끼워 넣고 → draw 가 무작위라 직접 hand 를 정함: 시험용으로 st.hand 를 덮어씀)
 function turn(st, coins, zs) {
@@ -27,7 +29,7 @@ function turn(st, coins, zs) {
 // 2) 시작 · 박스
 {
   ok(G.init({ n: 2, seed: 1 }).n === 4 && G.init({ n: 12, seed: 1 }).n === 8, '인원 4~8명');
-  const st = G.init({ n: 4, seed: 3 });
+  const st = init0({ n: 4, seed: 3 });
   ok(!ap(st, 0, { t: 'sup', s: [1, 1] }).ok && !ap(st, 0, { t: 'sup', s: [0] }).ok && !ap(st, 0, { t: 'sup', s: [0, 5] }).ok && !ap(st, 0, { t: 'draw' }).ok, '응원 캐릭터는 서로 다른 2개 · 시작 단계엔 뽑을 수 없어요');
   sup(st, [[0, 1], [0, 1], [2, 3], [3, 4]]);
   ok(st.phase === 'race' && st.boxAll.length === 12 && st.box.length === 12, '남은 3종씩 → 박스 3×인원 = 12개');
@@ -37,7 +39,7 @@ function turn(st, coins, zs) {
 }
 // 3) 한 라운드: 구역 순서대로 이동
 {
-  const st = G.init({ n: 4, seed: 3 }); sup(st, [[0, 1], [0, 1], [2, 3], [3, 4]]);
+  const st = init0({ n: 4, seed: 3 }); sup(st, [[0, 1], [0, 1], [2, 3], [3, 4]]);
   turn(st, [2, 2, 2], [0, 0, 0]);                 // 0번: 구미호 3개 → 1구역
   turn(st, [3, 3, 4], [1, 1, 1]);                 // 1번: 2구역에 좀비 · 미라
   turn(st, [0, 0, 4], [2, 2, 0]);                 // 2번: 4구역에 뱀파이어 2 · 1구역에 좀비 1
@@ -51,7 +53,7 @@ function turn(st, coins, zs) {
 }
 // 4) 코인 포기: 다음 라운드 맨 마지막 · 다음 사람이 1번 · 한 라운드에 한 명
 {
-  const st = G.init({ n: 5, seed: 4 }); sup(st, [[0, 1], [0, 2], [1, 2], [3, 4], [2, 3]]);
+  const st = init0({ n: 5, seed: 4 }); sup(st, [[0, 1], [0, 2], [1, 2], [3, 4], [2, 3]]);
   turn(st, [0, 1, 2], [0, 0, 0]);
   ok(ap(st, 1, { t: 'skip' }).ok && G.needs(st).join() === '2', '1번 다음 2번(자리 1)이 코인을 포기하면 다음은 자리 2');
   ok(!ap(st, 2, { t: 'skip' }).ok, '앞 순서가 이미 포기했으면 못 해요');
@@ -60,23 +62,30 @@ function turn(st, coins, zs) {
   ok(st.round === 1 && st.order.join() === '2,3,4,0,1', '다음 라운드: 포기한 자리 1 은 맨 뒤 · 그다음 자리 2 가 1번 (' + st.order.join() + ')');
   const v = G.view(st, 0); ok(v.hist[0].skipper === 1 && v.hist[0].turns.length === 4, '포기한 사람은 코인을 안 놓아요');
   // 뽑은 뒤엔 포기 못 함
-  const s2 = G.init({ n: 4, seed: 4 }); sup(s2, [[0, 1], [0, 1], [2, 3], [3, 4]]);
+  const s2 = init0({ n: 4, seed: 4 }); sup(s2, [[0, 1], [0, 1], [2, 3], [3, 4]]);
   ap(s2, 0, { t: 'draw' }); ok(!ap(s2, 0, { t: 'skip' }).ok && ap(s2, 0, { t: 'place', z: [0, 1, 2] }).ok, '뽑고 나서는 포기할 수 없어요 · 뽑은 코인 3개를 놓아야 해요');
-  const s3 = G.init({ n: 4, seed: 4 }); sup(s3, [[0, 1], [0, 1], [2, 3], [3, 4]]);
+  const s3 = init0({ n: 4, seed: 4 }); sup(s3, [[0, 1], [0, 1], [2, 3], [3, 4]]);
   ap(s3, 0, { t: 'draw' }); ok(!ap(s3, 0, { t: 'place', z: [0, 1] }).ok && !ap(s3, 0, { t: 'place', z: [0, 1, 3] }).ok && !ap(s3, 1, { t: 'draw' }).ok, '코인 3개 모두 · 구역 0~2 · 내 차례만');
+}
+// 4b) 골인 13칸 · 첫 순서 추첨 · 옛 복기(v1)
+{
+  const a = G.init({ n: 6, seed: 11 }), b = G.init({ n: 6, seed: 11 });
+  ok(a.goal === 13 && a.order.slice().sort().join() === '0,1,2,3,4,5' && a.order.join() === b.order.join(), '새 판: 골인 13칸 · 첫 순서는 씨앗 추첨(같은 씨앗 = 같은 순서)');
+  const seen = new Set(); for (let sd = 1; sd <= 12; sd++) seen.add(G.init({ n: 6, seed: sd }).order.join());
+  ok(seen.size > 6, '씨앗마다 첫 순서가 달라요');
 }
 // 5) 골인 · 점수
 {
-  const mk = () => { const st = G.init({ n: 4, seed: 3 }); sup(st, [[0, 1], [0, 1], [2, 3], [3, 4]]); return st; };
-  const st = mk(); st.pos = [0, 0, 0, 11, 0];
+  const mk = () => { const st = init0({ n: 4, seed: 3 }); sup(st, [[0, 1], [0, 1], [2, 3], [3, 4]]); return st; };
+  const st = mk(); st.pos = [0, 0, 0, 12, 0];
   turn(st, [3, 3, 3], [0, 0, 0]); turn(st, [0, 0, 0], [2, 2, 2]); turn(st, [1, 1, 1], [1, 1, 1]); turn(st, [2, 2, 2], [2, 2, 2]);
-  ok(st.over && st.fin === 3 && st.pos.join() === '0,0,0,12,0' && st.hist[0].moves.length === 1, '1구역에서 골인하면 즉시 끝 — 2 · 4구역은 안 움직여요');
+  ok(st.over && st.fin === 3 && st.pos.join() === '0,0,0,13,0' && st.hist[0].moves.length === 1, '1구역에서 골인하면 즉시 끝 — 2 · 4구역은 안 움직여요');
   ok(G.charScores([12, 5, 5, 3, 3]).sc.join() === '3,1,1,0,0', '공동 2등은 1점씩');
   ok(G.charScores([12, 8, 5, 5, 1]).sc.join() === '3,2,1,1,0', '공동 3등은 1점씩');
   ok(G.charScores([12, 8, 6, 3, 1]).sc.join() === '3,2,1,0,0', '1등 3 · 2등 2 · 3등 1');
   ok(G.charScores([12, 8, 8, 3, 1]).sc.join() === '3,1,1,0,0', '공동 2등이면 3등(여기선 4등) 응원자는 0점');
   // 점수: 0번 [0,1], 1번 [0,1], 2번 [2,3], 3번 [3,4] — 위치 [5,12,1,2,0] 이면 강시 1등
-  const t = mk(); t.pos = [5, 11, 1, 2, 0];
+  const t = mk(); t.pos = [5, 12, 1, 2, 0];
   turn(t, [1, 1, 1], [0, 0, 0]); turn(t, [0, 0, 0], [2, 2, 2]); turn(t, [4, 4, 4], [1, 1, 1]); turn(t, [2, 2, 2], [2, 2, 2]);
   // 1구역: 강시 3 → 12 골인 → 끝. 순위 강시(12) 뱀파이어(5) 미라(2) 구미호(1) 좀비(0)
   ok(t.over && t.pts.join() === '5,5,1,1', '점수: 응원한 두 캐릭터 점수 합 (뱀파이어 2 + 강시 3 = 5)');
@@ -86,7 +95,7 @@ function turn(st, coins, zs) {
 }
 // 6) 숨은 정보
 {
-  const mk = s1 => { const st = G.init({ n: 4, seed: 9 }); sup(st, [[0, 1], s1, [2, 3], [3, 4]]); return st; };
+  const mk = s1 => { const st = init0({ n: 4, seed: 9 }); sup(st, [[0, 1], s1, [2, 3], [3, 4]]); return st; };
   const A = mk([0, 2]), B = mk([1, 4]);   // 1번의 응원만 다름 (0번이 보는 것은 같아야 함 — 단, 박스 구성은 달라지므로 뽑히는 코인이 다를 수 있어 view 지문만 비교)
   const vA = G.view(A, 0), vB = G.view(B, 0);
   ok(vA.mySup.join() === vB.mySup.join() && !('supAll' in vA) && vA.sup === null && vA.hand === null, '남의 응원 캐릭터는 안 보이고 내 것만 보여요');
@@ -98,7 +107,7 @@ function turn(st, coins, zs) {
   ap(st, 0, { t: 'place', z: [0, 1, 2] });
   ok(G.view(st, 3).turns.length === 1 && G.view(st, 3).turns[0].coins.length === 3, '놓은 코인과 구역은 모두에게 공개');
   // 같은 공개 정보 + 다른 남의 응원 → AI · 선생님 결정이 같아야 함 (남의 응원은 view 에 없으니 당연히 같음 — 같은 상황을 만들어 검사)
-  const mk2 = sp => { const s = G.init({ n: 4, seed: 9 }); sup(s, [[0, 1], sp, [2, 3], [3, 4]]); s.box = [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1]; s.boxAll = s.box.slice(); ap(s, 0, { t: 'draw' }); s.hand = [2, 3, 4]; return s; };
+  const mk2 = sp => { const s = init0({ n: 4, seed: 9 }); sup(s, [[0, 1], sp, [2, 3], [3, 4]]); s.box = [0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1]; s.boxAll = s.box.slice(); ap(s, 0, { t: 'draw' }); s.hand = [2, 3, 4]; return s; };
   const X = mk2([0, 2]), Y = mk2([1, 4]);
   X.order = [1, 0, 2, 3]; Y.order = [1, 0, 2, 3]; X.idx = 1; Y.idx = 1;
   const vx = G.view(X, 0), vy = G.view(Y, 0);
@@ -112,7 +121,7 @@ function turn(st, coins, zs) {
   for (const N of [4, 6, 8]) {
     const sum = { hard: 0, normal: 0, easy: 0 }, cnt = { hard: 0, normal: 0, easy: 0 };
     for (let g = 0; g < 40; g++) {
-      const st = G.init({ n: N, seed: 300 + g }), T = [...Array(N).keys()].map(i => ['hard', 'easy', 'normal'][(i + g) % 3]), rr = sampler(g * 3 + N);
+      const st = init0({ n: N, seed: 300 + g }), T = [...Array(N).keys()].map(i => ['hard', 'easy', 'normal'][(i + g) % 3]), rr = sampler(g * 3 + N);
       let guard = 0;
       while (!G.over(st) && guard++ < 4000) for (const s of G.needs(st)) {
         const V = G.view(st, s), a = G.ai(V, s, T[s], rr), r = ap(st, s, a);
@@ -128,7 +137,7 @@ function turn(st, coins, zs) {
 }
 // 8) 선생님 · view 불변
 {
-  const st = G.init({ n: 5, seed: 5 }); sup(st, [[0, 1], [1, 2], [2, 3], [3, 4], [0, 4]]);
+  const st = init0({ n: 5, seed: 5 }); sup(st, [[0, 1], [1, 2], [2, 3], [3, 4], [0, 4]]);
   const V0 = G.view(st, 0), c0 = G.coach(V0, 0, -1, null);
   ok(['opp', 'mine', 'rec', 'why'].every(k => typeof c0[k] === 'string' && c0[k].length > 3), '선생님: 뽑기 전 설명');
   ap(st, 0, { t: 'draw' });

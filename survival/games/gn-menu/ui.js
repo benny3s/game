@@ -121,12 +121,12 @@
     if (V.phase === "pick" && myA.t === "pick" && bestA.t === "pick" && M[myA.m] && B[myA.b] && B[bestA.b]) {
       const T = G.pickTable(V, seat), mine = T[myA.m].ev[myA.b], best = T[bestA.m].ev[bestA.b], loss = best - mine;
       if (loss < 0.12) return null;
-      return { sev: Math.max(0, Math.min(100, Math.round(100 * loss / 1.3))), why: `${mn(myA.m)}에서 ${lab(B, myA.b)} 칸은 맞을 확률 약 ${pc(T[myA.m].pr[myA.b])} × ${B[myA.b].pts}점 = 기대 ${sg(mine)}점, 고급 AI 의 ${lab(B, bestA.b)} 칸은 약 ${pc(T[bestA.m].pr[bestA.b])} × ${B[bestA.b].pts}점 = ${sg(best)}점이에요 (다들 고르게 고른다고 보고 어림한 값).` };
+      return { sev: Math.max(0, Math.min(100, Math.round(100 * loss / 1.3))), why: `${mn(myA.m)}에서 ${lab(B, myA.b)} 칸은 맞을 확률 약 ${pc(T[myA.m].pr[myA.b])} × ${B[myA.b].pts}점 = 기대 ${sg(mine)}점, 고급 AI의 ${lab(B, bestA.b)} 칸은 약 ${pc(T[bestA.m].pr[bestA.b])} × ${B[bestA.b].pts}점 = ${sg(best)}점이에요 (다들 고르게 고른다고 보고 어림한 값).` };
     }
     if (V.phase === "adjust" && myA.t === "adj" && bestA.t === "adj" && B[myA.b] && B[bestA.b]) {
       const seed = (((info && info.seed) | 0) ^ Math.imul((((info && info.k) | 0) + 1), 0x9e3779b1)) >>> 0, E = G.evalAdjust(V, seat, seed), mine = E.ev[myA.b], best = E.ev[bestA.b], loss = best - mine;
       if (loss < 0.12) return null;
-      return { sev: Math.max(0, Math.min(100, Math.round(100 * loss / 1.3))), why: `내 메뉴와 다른 사람의 박스 위치로 어림한 내 모임 크기: ${lab(B, myA.b)} 칸 약 ${pc(E.pr[myA.b])} × ${B[myA.b].pts}점 = 기대 ${sg(mine)}점, 고급 AI 의 ${lab(B, bestA.b)} 칸은 약 ${pc(E.pr[bestA.b])} × ${B[bestA.b].pts}점 = ${sg(best)}점이에요.` };
+      return { sev: Math.max(0, Math.min(100, Math.round(100 * loss / 1.3))), why: `내 메뉴와 다른 사람의 박스 위치로 어림한 내 모임 크기: ${lab(B, myA.b)} 칸 약 ${pc(E.pr[myA.b])} × ${B[myA.b].pts}점 = 기대 ${sg(mine)}점, 고급 AI의 ${lab(B, bestA.b)} 칸은 약 ${pc(E.pr[bestA.b])} × ${B[bestA.b].pts}점 = ${sg(best)}점이에요.` };
     }
     return null;
   }
@@ -161,7 +161,7 @@
     name: "오늘의 메뉴", emoji: "🍜", short: "같은 메뉴를 고른 사람 수를 맞혀요 · 박스를 옮길 마지막 기회 · 4라운드", min: 3, max: 11, defN: 11, board: false,
     show: "더 지니어스 · 시즌 4 그랜드 파이널 · 3화 메인 매치", season: "시즌 4 그랜드 파이널",
     opts: [],
-    diff: "방송은 11명이지만 우리는 3~11명 (빈 자리는 AI) · 인원이 적으면 예측 칸 범위를 비율로 줄이고 빈 칸은 없애요 (11명이면 방송 그대로) · 방송의 20분 정보 교환 · 담합(11인 연합 · 카드박스 비밀 뚜껑 · 마지막 1분 몰래 옮기기)은 대화가 없어 뺐고 예측 변경은 모두 동시에 한 번만 해요 · 방송은 승점 4점마다 가넷을 주지만 우리는 승점만 비교해요 · 전원 승점이 같아 다시 시작하는 것은 최대 2번까지(그래도 같으면 무승부) · 방송의 단독 우승 생명의 징표는 없어요",
+    diff: "방송은 11명이지만 우리는 3~11명 (빈 자리는 AI) · 인원이 적으면 예측 칸 범위를 비율로 줄이고 빈 칸은 없애요 (11명이면 방송 그대로) · 칸 점수는 칸의 크기(1명 5 · 2~3명 3 · 4~6명 2 · 7~10명 1 · 전원 4)를 따르니 인원이 적으면 칸이 줄어 점수가 달라져요 (예: 4명이면 1명 5 · 2명 3 · 3명 1 · 4명 전원 4, 5명이면 3명 2 · 4명 1) · 첫 예측도 모두 동시에 비공개로 정해요 · 방송의 20분 정보 교환 · 담합(11인 연합 · 카드박스 비밀 뚜껑 · 마지막 1분 몰래 옮기기)은 대화가 없어 뺐고 예측 변경은 모두 동시에 한 번만 해요 · 방송은 승점 4점마다 가넷을 주지만 우리는 승점만 비교해요 · 전원 승점이 같아 다시 시작하는 것은 최대 2번까지(그래도 같으면 무승부) · 방송의 단독 우승 생명의 징표는 없어요",
     howto: [
       "<b>4라운드</b> 동안 승점을 모아 합계가 가장 높으면 우승 · 가장 낮으면 탈락후보 (방송은 11명 · 우리는 3~11명)",
       "각자 <b>짜장면 · 짬뽕 · 볶음밥</b> 중 하나를 몰래 고르고, <b>나와 같은 메뉴를 고른 사람이 나를 포함해 몇 명</b>일지 예측 칸에 박스를 올려요",

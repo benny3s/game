@@ -7,7 +7,7 @@
    · 한 캐릭터가 골인 지점을 지나면 그 즉시 끝 (1구역에서 골인하면 2 · 4구역은 안 움직임) · 골인 지점에 가까운 순서로 1 · 2 · 3등
    · 응원한 캐릭터가 1등이면 3점, 2등 2점, 3등 1점 (두 캐릭터 점수를 더함) · 공동 2등이면 그 캐릭터 응원자는 1점씩 · 3등 응원자는 0 · 공동 3등이면 1점씩
    · 점수가 가장 높으면 우승 · 가장 낮으면 탈락후보
-   우리 판 다듬기: 4~8명 (코인 박스는 3×인원 개) · 골인 = 12칸에 닿거나 넘음 · 연합 · 대화 · 코인 감별(자석 · 무게)이 없어요 ·
+   우리 판 다듬기: 4~8명 (코인 박스는 3×인원 개) · 골인 = 13칸에 닿거나 넘음  · 연합 · 대화 · 코인 감별(자석 · 무게)이 없어요 ·
    동점은 공동 순위 (방송에서 점수 동률 탈락후보는 우승자가 정했지만 우리는 공동) · 방송 9화의 Ⅱ(웅덩이 · 업히기 · 이동 1·2·3칸)는 만들지 않았어요 */
 (function (root, factory) {
   const m = factory();
@@ -16,7 +16,7 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
   const CHARS = [{ n: "뱀파이어", e: "🧛" }, { n: "강시", e: "👲" }, { n: "구미호", e: "🦊" }, { n: "미라", e: "🤕" }, { n: "좀비", e: "🧟" }];
-  const GOAL = 12, MOVES = [1, 2, 4], MAXR = 40;
+  const GOAL = 13, MOVES = [1, 2, 4], MAXR = 40;
   function rnd(st) {
     const a = (st.rs = (st.rs + 0x6D2B79F5) >>> 0);
     let t = Math.imul(a ^ (a >>> 15), a | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
@@ -30,7 +30,9 @@
   function init({ n, seed, cfg }) {
     n = Math.max(4, Math.min(8, n | 0 || 6));
     const c = cfg || {};
-    return { n, rs: (seed >>> 0) || 1, cfg: c, phase: "pick", sup: Array(n).fill(null), boxAll: [], box: [], round: 0, order: [...Array(n).keys()], idx: 0, hand: null, skipper: -1, zone: [zeros(), zeros(), zeros()], turns: [], pos: zeros(), hist: [], over: false, ranks: null, pts: Array(n).fill(0), draw: false, score: Array(n).fill(0), log: [], seq: 0, goal: c.goal || GOAL, fin: -1, charRank: null };
+    const st = { n, rs: (seed >>> 0) || 1, cfg: c, phase: "pick", sup: Array(n).fill(null), boxAll: [], box: [], round: 0, order: [...Array(n).keys()], idx: 0, hand: null, skipper: -1, zone: [zeros(), zeros(), zeros()], turns: [], pos: zeros(), hist: [], over: false, ranks: null, pts: Array(n).fill(0), draw: false, score: Array(n).fill(0), log: [], seq: 0, goal: c.goal || GOAL, fin: -1, charRank: null };
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(rnd(st) * (i + 1)); [st.order[i], st.order[j]] = [st.order[j], st.order[i]]; }   // 첫 라운드 순서는 추첨 (방송: 번호 공)
+    return st;
   }
   function needs(st) {
     if (st.over) return [];
