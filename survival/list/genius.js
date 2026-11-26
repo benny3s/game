@@ -60,7 +60,7 @@
   { id: "gn-invest", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "투자와 기부", emoji: "💰", v: 3,
     short: "대주주는 노리고 수전노는 피해요 · 9라운드 동안 돈을 나눠 써요",
     src: "더 지니어스 시즌 3 투자와 기부 · 8화 메인 매치 · 디글 클래식 투자와 기부 규칙 설명 확인" },
-  { id: "gn-memmaze", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "기억의 미로", emoji: "🧱", v: 1,
+  { id: "gn-memmaze", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "기억의 미로", emoji: "🧱", v: 2,
     short: "보이지 않는 벽 32개를 외워 대각선 끝 도착점에 먼저 · 3칸씩 · 1:1 데스매치",
     src: "더 지니어스 시즌 3 기억의 미로 · 8화 · 9화 데스매치 · 디글 클래식 「[#더지니어스3] 기억의 미로」 규칙 설명 · 나무위키 「더 지니어스:블랙 가넷/8화 · 9화」 이동 기록 확인" },
   { id: "gn-betbw", prog: "genius", season: "S3", seasonName: "블랙가넷", title: "베팅! 흑과 백", emoji: "⚫", v: 2,
