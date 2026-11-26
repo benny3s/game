@@ -12,6 +12,9 @@
   else (root.SVCores = root.SVCores || {})["gn-menu"] = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  const jo = (w, a, b) => { const s = String(w), k = s.charCodeAt(s.length - 1); return s + (k >= 0xAC00 && k <= 0xD7A3 && (k - 0xAC00) % 28 !== 0 ? a : b); };   // 받침 맞춰 조사 (이/가 · 을/를 · 이라고/라고)
+  const ro = w => { const s = String(w), k = s.charCodeAt(s.length - 1), t = (k - 0xAC00) % 28; return s + (k >= 0xAC00 && k <= 0xD7A3 && t !== 0 && t !== 8 ? "으로" : "로"); };   // (으)로: 받침 없거나 ㄹ 이면 '로'
+
   const MENUS = [{ n: "짜장면", e: "🍜" }, { n: "짬뽕", e: "🌶️" }, { n: "볶음밥", e: "🍚" }], ROUNDS = 4, MAXRESET = 2;
   const PTS = [5, 3, 2, 1, 4];   // 1명 · 2~3명 · 4~6명 · 7~10명 · 전원
   function rnd(st) {
@@ -97,7 +100,7 @@
   }
 
   // ── 보이는 것 ─────────────────────────────────────────────
-  function view(st, seat) {
+  function viewRaw(st, seat) {
     const all = seat === "all" || (typeof seat === "number" && seat < 0), me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const adjusting = st.phase === "adjust";
     // 박스를 올린 자리 (메뉴는 비공개) — 변경 단계에서는 모두의 첫 예측 칸이 공개 (그 칸에 올려진 박스)
@@ -206,15 +209,18 @@
     if (V.phase === "pick") {
       const bp = bestPick(V, me, sampler(V.round * 31 + me * 7 + V.hist.length + 3)), T = bp.tbl;
       const rows = V.B.map((b, i) => `${bl(i)} ${pct(T.pr[i])}×${b.pts}점=${f1(T.ev[i])}`).join(" / ");
-      return { opp, mine, rec: `${mn(bp.m)} · 예측 ${bl(bp.b)}`, why: `${mn(bp.m)}를 고르는 사람이 나 말고 ${V.n - 1}명 중 각각 약 ${pct(T.p)}라고 보면, 내 모임 크기별 기대 승점은 ${rows} → ${bl(bp.b)}가 가장 커요. 메뉴는 정보가 없어서 비슷한 값끼리 무작위로 골라요 — 다 같은 메뉴만 고르면 모임이 몰려요.` };
+      return { opp, mine, rec: `${mn(bp.m)} · 예측 ${bl(bp.b)}`, why: `${jo(mn(bp.m), "을", "를")} 고르는 사람이 나 말고 ${V.n - 1}명 중 각각 약 ${pct(T.p)}라고 보면, 내 모임 크기별 기대 승점은 ${rows} → ${jo(bl(bp.b), "이", "가")} 가장 커요. 메뉴는 정보가 없어서 비슷한 값끼리 무작위로 골라요 — 다 같은 메뉴만 고르면 모임이 몰려요.` };
     }
     const M = adjustModel(V, me, sampler(V.round * 17 + me * 5 + V.hist.length + 9)), a = ai(V, me, "hard", sampler(V.round * 17 + me * 5 + V.hist.length + 9));
     const rows = B.map((b, i) => `${bl(i)} ${pct(M.pr[i])}×${b.pts}점=${f1(M.ev[i])}`).join(" / ");
-    return { opp, mine, rec: a.b === V.myBox ? `${bl(V.myBox)} 그대로 두기` : `${bl(V.myBox)} → ${bl(a.b)} 로 옮기기`, why: `내 메뉴(${mn(V.myMenu)})와 다른 사람의 박스 위치(그 칸이 맞았을 모임 크기)를 함께 따져 본 내 모임 크기: ${rows} — ${a.b === V.myBox ? "지금 칸이 가장 높거나 옮겨서 얻는 게 뚜렷하지 않아요" : "옮기면 기대 승점이 뚜렷하게 늘어요"}. 다른 사람의 박스는 그 사람이 믿는 모임 크기일 뿐이라 정답은 아니에요.` };
+    return { opp, mine, rec: a.b === V.myBox ? `${bl(V.myBox)} 그대로 두기` : `${bl(V.myBox)} → ${ro(bl(a.b))} 옮기기`, why: `내 메뉴(${mn(V.myMenu)})와 다른 사람의 박스 위치(그 칸이 맞았을 모임 크기)를 함께 따져 본 내 모임 크기: ${rows} — ${a.b === V.myBox ? "지금 칸이 가장 높거나 옮겨서 얻는 게 뚜렷하지 않아요" : "옮기면 기대 승점이 뚜렷하게 늘어요"}. 다른 사람의 박스는 그 사람이 믿는 모임 크기일 뿐이라 정답은 아니에요.` };
   }
   // 복기용: 받은 view 를 바꾸지 않는 순수 평가
   function evalPick(V, me, mA) { const T = pickTable(V, me); return T[mA.m]; }
   function evalAdjust(V, me, seed) { return adjustModel(V, me, sampler(seed)); }
+
+  // 판 상태(st)의 배열 · 객체를 그대로 넘기지 않게 깊은 복사본으로 (화면 · 다른 코드가 V 를 고쳐도 판이 안 바뀜)
+  const view = (st, seat) => JSON.parse(JSON.stringify(viewRaw(st, seat)));
 
   return { id: "gn-menu", MENUS, ROUNDS, PTS, bands, bandOf, bandLabel, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, menuShare, sizeDist, bandProbs, pickTable, bestPick, adjustModel, evalPick, evalAdjust, sampler, MAXRESET };
 });

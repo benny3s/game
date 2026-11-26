@@ -1,6 +1,9 @@
 /* 베니 서바이벌 · 호러 레이스 — 화면 (응원 캐릭터 2개 · 트랙 · 구역 3개 · 코인 뽑아 놓기 · 코인 포기 · 1분 규칙) */
 (() => {
   "use strict";
+  const jo = (w, a, b) => { const s = String(w), k = s.charCodeAt(s.length - 1); return s + (k >= 0xAC00 && k <= 0xD7A3 && (k - 0xAC00) % 28 !== 0 ? a : b); };   // 받침 맞춰 조사 (이/가 · 을/를 · 이라고/라고)
+  const ro = w => { const s = String(w), k = s.charCodeAt(s.length - 1), t = (k - 0xAC00) % 28; return s + (k >= 0xAC00 && k <= 0xD7A3 && t !== 0 && t !== 8 ? "으로" : "로"); };   // (으)로: 받침 없거나 ㄹ 이면 '로'
+
   const G = window.SVCores["gn-horror"], C = G.CHARS, ZN = ["1칸", "2칸", "4칸"];
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -70,7 +73,7 @@
     });
     const cur = V.turns.map(t => `${nm(t.s)} ${t.coins.map((c, k) => C[c].e + ZN[t.z[k]]).join(" ")}`);
     if (cur.length) rows.push(`<div class="hr-ev"><b>${V.round + 1}라운드 놓은 코인</b><br>${cur.join("<br>")}</div>`);
-    if (V.skipper >= 0 && !V.over) rows.push(`<div class="hr-ev">${nm(V.skipper)} 이(가) 코인을 포기했어요 — 이번 라운드엔 더 포기할 수 없어요</div>`);
+    if (V.skipper >= 0 && !V.over) rows.push(`<div class="hr-ev">${jo(nm(V.skipper), "이", "가")} 코인을 포기했어요 — 이번 라운드엔 더 포기할 수 없어요</div>`);
     return `<div class="hr-log" id="hr-log">${rows.length ? rows.join("") : `<div class="hr-ev">아직 라운드가 없어요. 순서대로 코인 3개를 뽑아 구역에 놓으면, 구역마다 코인이 가장 많은 캐릭터가 달려요.</div>`}</div>`;
   }
   function render(stage, V, ctx) {

@@ -1,6 +1,9 @@
 /* 베니 서바이벌 · 오늘의 메뉴 — 화면 (메뉴 3종 · 예측 칸 · 박스 옮기기 · 공개 기록 · 1분 규칙) */
 (() => {
   "use strict";
+  const jo = (w, a, b) => { const s = String(w), k = s.charCodeAt(s.length - 1); return s + (k >= 0xAC00 && k <= 0xD7A3 && (k - 0xAC00) % 28 !== 0 ? a : b); };   // 받침 맞춰 조사 (이/가 · 을/를 · 이라고/라고)
+  const ro = w => { const s = String(w), k = s.charCodeAt(s.length - 1), t = (k - 0xAC00) % 28; return s + (k >= 0xAC00 && k <= 0xD7A3 && t !== 0 && t !== 8 ? "으로" : "로"); };   // (으)로: 받침 없거나 ㄹ 이면 '로'
+
   const G = window.SVCores["gn-menu"], M = G.MENUS;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -107,7 +110,7 @@
     if (!a || typeof a !== "object") return "—";
     const bl = b => (V && V.B && V.B[b] ? lab(V.B, b) : `${(b | 0) + 1}번째 칸`);
     if (a.t === "pick" && M[a.m]) return `${mn(a.m)} 선택 · ${bl(a.b)} 예측`;
-    if (a.t === "adj") return V && V.myBox >= 0 ? (a.b === V.myBox ? `${bl(a.b)} 그대로 확정` : `${bl(V.myBox)} → ${bl(a.b)} 로 옮김`) : `${bl(a.b)} 로 확정`;
+    if (a.t === "adj") return V && V.myBox >= 0 ? (a.b === V.myBox ? `${bl(a.b)} 그대로 확정` : `${bl(V.myBox)} → ${ro(bl(a.b))} 옮김`) : `${ro(bl(a.b))} 확정`;
     return "—";
   }
   const pc = x => Math.round(x * 100) + "%";

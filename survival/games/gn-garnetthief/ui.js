@@ -1,6 +1,9 @@
 /* 베니 서바이벌 · 가넷도둑 — 화면 (순서대로 고르고 말하기 · 거짓 선언 · 역순 공개 기록 · 1분 규칙) */
 (() => {
   "use strict";
+  const jo = (w, a, b) => { const s = String(w), k = s.charCodeAt(s.length - 1); return s + (k >= 0xAC00 && k <= 0xD7A3 && (k - 0xAC00) % 28 !== 0 ? a : b); };   // 받침 맞춰 조사 (이/가 · 을/를 · 이라고/라고)
+  const ro = w => { const s = String(w), k = s.charCodeAt(s.length - 1), t = (k - 0xAC00) % 28; return s + (k >= 0xAC00 && k <= 0xD7A3 && t !== 0 && t !== 8 ? "으로" : "로"); };   // (으)로: 받침 없거나 ㄹ 이면 '로'
+
   const G = window.SVCores["gn-garnetthief"], C = G.CHARS;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const CSS = `
@@ -78,7 +81,7 @@
     } else if (mine) {
       const d = S.touched ? S.d : S.c;
       h += `<div class="gt-info hint">앞사람이 말한 것을 보고 정해요. 이번 라운드에 가넷을 <b>하나도 못 받으면</b> 거짓말한 사람만 1개를 내요.</div>`;
-      h += `<button class="btn big primary" data-a="go" ${S.c >= 0 && d >= 0 ? "" : "disabled"}>${S.c >= 0 && d >= 0 ? (d === S.c ? `🔘 ${C[S.c].n} 고르고 사실대로 말하기` : `🔘 ${C[S.c].n} 고르고 "${C[d].n}"(이)라고 말하기`) : "🔘 먼저 캐릭터를 골라요"}</button>`;
+      h += `<button class="btn big primary" data-a="go" ${S.c >= 0 && d >= 0 ? "" : "disabled"}>${S.c >= 0 && d >= 0 ? (d === S.c ? `🔘 ${C[S.c].n} 고르고 사실대로 말하기` : `🔘 ${C[S.c].n} 고르고 ${jo(C[d].n, "이라고", "라고")} 말하기`) : "🔘 먼저 캐릭터를 골라요"}</button>`;
     } else if (watch) h += `<div class="gt-info">구경 중 — ${V.pos}/${V.n}명이 말했어요</div>`;
     else h += `<div class="gt-info">${V.pos}/${V.n}명이 말했어요 — ${cur >= 0 ? `${esc(nameOf(ctx, cur))} 차례를 기다려요` : ""}</div>`;
     stage.innerHTML = h;
@@ -94,7 +97,7 @@
   function actText(a) {
     if (!a || a.t !== "pick" || !C[a.c]) return "—";
     const d = a.d === undefined || a.d === null ? a.c : a.d;
-    return d === a.c ? `${ce(a.c)} 선택 · 사실대로 말함` : `${ce(a.c)} 선택 · "${C[d] ? C[d].n : "?"}"(이)라고 거짓말`;
+    return d === a.c ? `${ce(a.c)} 선택 · 사실대로 말함` : `${ce(a.c)} 선택 · ${jo(C[d] ? C[d].n : "?", "이라고", "라고")} 거짓말`;
   }
   const sg = x => (Math.abs(x) < 0.005 ? "0" : (x > 0 ? "+" : "−") + Math.abs(x).toFixed(2).replace(/0$/, ""));
   function review(V, seat, myA, bestA, info) {

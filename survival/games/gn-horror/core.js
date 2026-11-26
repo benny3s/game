@@ -119,7 +119,7 @@
   }
 
   // ── 보이는 것 ─────────────────────────────────────────────
-  function view(st, seat) {
+  function viewRaw(st, seat) {
     const everything = seat === "all", me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const turns = st.turns.map(t => ({ s: t.s, coins: t.coins.slice(), z: t.z.slice() }));
     const hist = st.hist.map(h => ({ r: h.r, order: h.order.slice(), skipper: h.skipper, turns: h.turns.map(t => ({ s: t.s, coins: t.coins.slice(), z: t.z.slice() })), zone: h.zone.map(z => z.slice()), moves: h.moves.map(m => (m ? Object.assign({}, m) : null)), pos: h.pos.slice() }));
@@ -246,6 +246,9 @@
     function boxShareText(V) { const s = boxShare(V); return s.map((x, c) => `${CHARS[c].e}${Math.round(x * 100)}%`).join(" "); }
   }
   function evalPlace(V, me, hand, seed) { return evPlace(V, me, hand, sampler(seed), 100); }
+
+  // 판 상태(st)의 배열 · 객체를 그대로 넘기지 않게 깊은 복사본으로 (화면 · 다른 코드가 V 를 고쳐도 판이 안 바뀜)
+  const view = (st, seat) => JSON.parse(JSON.stringify(viewRaw(st, seat)));
 
   return { id: "gn-horror", CHARS, GOAL, MOVES, MAXR, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, boxShare, pickMover, charScores, simMove, worth, evalPlace, evPlace, sampler, PLACE };
 });

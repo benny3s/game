@@ -14,6 +14,9 @@
   else (root.SVCores = root.SVCores || {})["gn-garnetthief"] = m;
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
+  const jo = (w, a, b) => { const s = String(w), k = s.charCodeAt(s.length - 1); return s + (k >= 0xAC00 && k <= 0xD7A3 && (k - 0xAC00) % 28 !== 0 ? a : b); };   // 받침 맞춰 조사 (이/가 · 을/를 · 이라고/라고)
+  const ro = w => { const s = String(w), k = s.charCodeAt(s.length - 1), t = (k - 0xAC00) % 28; return s + (k >= 0xAC00 && k <= 0xD7A3 && t !== 0 && t !== 8 ? "으로" : "로"); };   // (으)로: 받침 없거나 ㄹ 이면 '로'
+
   const CHARS = [{ n: "마피아", e: "🔫" }, { n: "카르텔", e: "🧳" }, { n: "경찰", e: "👮" }, { n: "거지", e: "🥣" }], ROUNDS = 8, START = 5, POT = 4;
   function push(st, e) { e.i = st.seq++; st.log.push(e); if (st.log.length > 40) st.log.shift(); }
   function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
@@ -68,7 +71,7 @@
   const legal = (st, seat) => (st.over || st.order[st.pos] !== seat ? [] : [{ t: "pick", c: 3, d: 3 }]);
 
   // ── 보이는 것 ─────────────────────────────────────────────
-  function view(st, seat) {
+  function viewRaw(st, seat) {
     const everything = seat === "all", me = typeof seat === "number" && seat >= 0 ? seat : -1;
     const hist = st.hist.map(h => ({ r: h.r, leader: h.leader, order: h.order.slice(), real: h.real.slice(), decl: h.decl.slice(), gain: h.gain.slice(), pen: h.pen.slice(), counts: h.counts.slice(), win: h.win, before: h.before.slice(), after: h.after.slice(), liars: h.liars.slice() }));
     const pub = { r: st.round, pos: st.pos, d: st.decl, g: st.gar, h: st.hist.map(h => [h.real, h.decl]), ov: st.over };
@@ -156,11 +159,14 @@
     const alt = [0, 1, 2, 3].map(c => `${cn(c)} 진실 ${f2(T.ev[c][c])}`).join(" / ");
     const trust = T.before.length ? `앞의 ${T.before.length}명이 한 말은 사람마다 정직도(과거 기록, 처음엔 약 60%)만큼 믿어요 · ` : "내가 첫 번째라 믿을 말이 없어요 · ";
     return {
-      opp, mine, rec: a.d === a.c ? `${cn(a.c)} 선택 · 사실대로 말하기` : `${cn(a.c)} 선택 · '${cn(a.d)}' 라고 말하기`,
+      opp, mine, rec: a.d === a.c ? `${cn(a.c)} 선택 · 사실대로 말하기` : `${cn(a.c)} 선택 · ${CHARS[a.d].e}${jo(CHARS[a.d].n, "이라고", "라고")} 말하기`,
       why: `${trust}뒤 ${T.after.length}명은 내 말과 앞의 말을 보고 따라 고를 수 있다고 어림했어요. 내가 받을 가넷 기대값: ${alt} → 고른 수 ${f2(best)}. 거짓말은 이번에 가넷을 못 받을 때만 벌칙 1개라 ${a.d === a.c ? "사실대로 말해도 손해가 없어요" : "뒤 사람을 속여서 얻는 몫이 벌칙 위험보다 커요"}.`,
     };
   }
   function evalMove(V, me, seed) { return evTable(V, me, sampler(seed), 120); }
+
+  // 판 상태(st)의 배열 · 객체를 그대로 넘기지 않게 깊은 복사본으로 (화면 · 다른 코드가 V 를 고쳐도 판이 안 바뀜)
+  const view = (st, seat) => JSON.parse(JSON.stringify(viewRaw(st, seat)));
 
   return { id: "gn-garnetthief", CHARS, ROUNDS, START, POT, payout, orderOf, init, needs, apply, view, over, ranks, legal, auto, advance, ai, coach, profile, bestResponse, evTable, evalMove, sampler };
 });
