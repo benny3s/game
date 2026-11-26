@@ -70,7 +70,7 @@
       const R = V.res; if (R) acts = `<div class="mc-show">${R.rows.slice().sort((a, b) => b.got - a.got || a.s - b.s).map(r => `<div class="r${r.zero ? " zero" : ""}"><b>${r.s === me ? "나" : esc(nm(r.s))}</b><span class="x">${subText(r)} · ${r.phys}장${r.zero ? " · 🚫 가장 많이 냄" : ""}</span><span class="g">${r.got ? "+" + r.got : "0"}</span></div>`).join("")}</div>`;
     } else if (watch) acts = `<div class="note">${V.needs.length ? V.needs.map(i => esc(nm(i))).join(" · ") + (V.phase === "vote" ? " 투표 중…" : " 카드 고르는 중…") : ""}</div>`;
     else if (V.phase === "vote") {
-      if (V.myVote != null) acts = `<div class="note">${CN[V.myVote]} 에 투표했어요 · 다른 사람을 기다려요 (${V.voted.filter(Boolean).length}/${V.n})</div>`;
+      if (V.myVote != null) acts = `<div class="note">${CN[V.myVote]}에 투표했어요 · 다른 사람을 기다려요 (${V.voted.filter(Boolean).length}/${V.n})</div>`;
       else if (can) acts = `<div class="note">어느 색을 <b>메인 컬러</b>로 할까요? 가장 많은 표를 받은 색이 정해져요 (같으면 모두)</div><div class="mc-vote">${[0, 1, 2].map(c => `<button class="c${c}" data-vote="${c}">${CE[c]} ${CN[c]}</button>`).join("")}</div>`;
     } else if (V.phase === "sub") {
       if (V.mySub) acts = `<div class="note">카드를 냈어요 · 다른 사람을 기다려요 (${V.subbed.filter(Boolean).length}/${V.n})</div>`;
@@ -127,7 +127,7 @@
       const R = K.recommend(V, me);
       if (R && V.phase === "vote") {
         const c = R.a.c, o = R.vote.map((x, i) => `${CN[i]} ${x.toFixed(1)}`).join(" · ");
-        rec = `${CN[c]} 에 투표`; why = `각 색이 메인 컬러가 될 때 내 기대 점수: ${o}. 내 손패(⚫${V.hand[0]} ⚪${V.hand[1]} 🔘${V.hand[2]}) 로 점수는 쌓되 가장 많이 내서 0점이 되지 않을 색이 좋아요.`;
+        rec = `${CN[c]}에 투표`; why = `각 색이 메인 컬러가 될 때 내 기대 점수: ${o}. 내 손패(⚫${V.hand[0]} ⚪${V.hand[1]} 🔘${V.hand[2]})로 점수는 쌓되 가장 많이 내서 0점이 되지 않을 색이 좋아요.`;
       } else if (R && V.phase === "sub") {
         const a = R.a, J = K.judge(V, me, a, a), ph = K.physOf(a), pts = K.ptsOf(a, V.main);
         rec = ph ? `${subText(a)} (${ph}장) 내기` : "카드를 내지 않기";
@@ -144,7 +144,7 @@
   }
   const actText = (a, V) => {
     if (!a) return "—";
-    if (a.t === "vote") return `${CN[a.c]} 에 투표`;
+    if (a.t === "vote") return `${CN[a.c]}에 투표`;
     return `${subText(a)} 내기 (${K.physOf(a)}장)`;
   };
   function review(V, seat, myA, bestA) {
