@@ -7,13 +7,13 @@
        ② 규칙 카드 A~H 를 한 장씩 무작위로 받음  ③ 1차 제출: 순서대로 숫자 카드 1장을 뒷면으로 원하는 슬롯에
        ④ 2차 제출: 1차의 역순으로 2장. 숫자 카드를 낼 때 원하는 슬롯에 코인과 함께 규칙 카드를 낼 수 있음
          (한 슬롯에 규칙이 여럿이면 코인을 가장 많이 낸 사람 것만 적용, 나머지는 코인과 함께 사라짐 · 누구 규칙인지는 공개, 코인 수는 비공개)
-       ⑤ 공개 · 등록: 슬롯마다 숫자가 높은 카드부터 등록, 같은 숫자는 먼저 놓은 카드 먼저, LIMIT 을 넘기게 되는 카드는 버리고 다음으로 낮은 카드
-   · 규칙 카드: A LIMIT −3 · B LIMIT +3 · C 최대 카드 수 −1 · D 낮은 숫자부터 등록 · E 처음 낸 6 카드를 1 로 · F 처음 낸 카드 버림
+       ⑤ 공개 · 등록: 슬롯마다 숫자가 높은 카드부터 등록, 같은 숫자는 먼저 놓은 카드 먼저, LIMIT을 넘기게 되는 카드는 버리고 다음으로 낮은 카드
+   · 규칙 카드: A LIMIT −3 · B LIMIT +3 · C 최대 카드 수 −1 · D 낮은 숫자부터 등록 · E 처음 낸 6 카드를 1로 · F 처음 낸 카드 버림
        · G 처음 낸 6 카드 버림 · H 규칙 카드 낸 사람의 첫 카드를 먼저 등록
    · 점수: 등록된 카드 숫자별 — 1→1점 · 2→4점 · 3→5점 · 4→6점 · 5→3점 · 6→2점. 3라운드 합이 높은 순 (1·2위 파이널 직행)
    · 동점: 방송은 1위 3명 이상 · 2위 2명 이상 동점이면 남은 코인 1개 = 1점
    방송과 다른 점(우리가 정함):
-     ① 3~8명 (방송 8명) — 8명보다 적으면 슬롯의 최대 카드 수 · LIMIT 을 (인원 ÷ 8) 배로 줄이고 올림 (slotsFor)
+     ① 3~8명 (방송 8명) — 8명보다 적으면 슬롯의 최대 카드 수 · LIMIT을 (인원 ÷ 8) 배로 줄이고 올림 (slotsFor)
      ② 입찰 동점은 추첨 (방송은 투표룸에 먼저 들어간 사람) · 규칙 카드 코인 동점은 먼저 낸 규칙 카드
      ③ 규칙 카드는 코인 1개 이상과 함께 · 라운드에 한 장 (안 쓰면 그 라운드 끝에 사라짐) · 놓인 규칙 카드는 공개 때까지 안 보임
      ④ 남의 코인 수는 판이 끝날 때까지 비공개 · 동점은 모든 등수에서 남은 코인으로 가르고 그래도 같으면 공동
@@ -249,7 +249,7 @@
       res: open && st.res ? hist[hist.length - 1] : null, hist,
       needs: needs(st), ranks: st.over ? ranks(st) : null, log: st.log.slice(-80), seat, pub: hash(JSON.stringify(pubObj)),
     };
-    // 깊은 복사: 화면 · 선생님 · AI 가 V 를 건드려도 판 상태는 그대로 (복기 · 친구랑이 어긋나지 않게)
+    // 깊은 복사: 화면 · 선생님 · AI가 V 를 건드려도 판 상태는 그대로 (복기 · 친구랑이 어긋나지 않게)
     return JSON.parse(JSON.stringify(v));
   }
 
@@ -314,7 +314,7 @@
     for (const f of sm.fut) {
       let v = f.v;
       if (v < 0) { v = 1; while (mi < sm.myOrder.length) { const x = sm.myOrder[mi++]; if (SKIP[x] > 0) { SKIP[x]--; continue; } v = x; break; } }
-      // 슬롯 고르기: 빈 칸 수만큼 (fit > 1 이면 LIMIT 안에 들어갈 것 같은 슬롯을 그만큼 더 고름 — 사람처럼)
+      // 슬롯 고르기: 빈 칸 수만큼 (fit > 1이면 LIMIT 안에 들어갈 것 같은 슬롯을 그만큼 더 고름 — 사람처럼)
       let tot = 0;
       for (let s = 0; s < SLOTN; s++) { WT[s] = FREE[s] > 0 ? FREE[s] * (SUM[s] + v <= V.defs[s].lim ? sm.fit : 1) : 0; tot += WT[s]; }
       if (tot <= 0) break;
@@ -413,7 +413,7 @@
     return { t: "place", cards: a.cards.map(c => ({ v: c.v, s: c.s })), rule };
   }
 
-  // 💡 추천 = 고급 AI 의 수 그대로 (보이는 것으로 정한 고정 난수)
+  // 💡 추천 = 고급 AI의 수 그대로 (보이는 것으로 정한 고정 난수)
   const recRnd = (V, me) => { let a = parseInt(hash(JSON.stringify([V.round, V.phase, V.ti, V.board, V.hand, V.letter, V.myRule, V.coins[me], me])), 36) >>> 0; return () => { a = (a * 1664525 + 1013904223) >>> 0; return a / 4294967296; }; };
   function recommend(V, me) {
     const r = recRnd(V, me);
