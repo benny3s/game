@@ -236,7 +236,7 @@
     const turn = st.phase === "place" && !st.over ? turnSeat(st) : st.phase === "order" ? st.win : -1;
     const hist = st.hist.map(h => ({ r: h.r, gain: h.gain.slice(), ord: h.ord.slice(), win: h.win, slots: h.slots.map(x => ({ ...x, rule: x.rule ? { ...x.rule } : null, cards: x.cards.map(c => ({ ...c })) })) }));
     const pubObj = { r: st.round, p: st.phase, b: board.map(x => x.map(c => [c.p, open ? c.v : 0])), bd: st.bids.map(b => b != null), w: st.win, o: st.ord, t: st.ti, sc: st.score, h: st.hist.length, ov: st.over, u: st.used };
-    return {
+    const v = {
       n: st.n, R: st.R, round: st.round, phase: st.phase, over: st.over,
       // 그 라운드 슬롯 표는 1차 제출이 시작될 때 공개 (방송: 게임판 구성은 미리 알리지 않고 1차 숫자 카드 제출 때 확인) — 입찰 · 순서 정하기 동안은 null
       defs: all || (st.phase !== "bid" && st.phase !== "order") ? st.defs.map(d => ({ ...d })) : null,
@@ -249,6 +249,8 @@
       res: open && st.res ? hist[hist.length - 1] : null, hist,
       needs: needs(st), ranks: st.over ? ranks(st) : null, log: st.log.slice(-80), seat, pub: hash(JSON.stringify(pubObj)),
     };
+    // 깊은 복사: 화면 · 선생님 · AI 가 V 를 건드려도 판 상태는 그대로 (복기 · 친구랑이 어긋나지 않게)
+    return JSON.parse(JSON.stringify(v));
   }
 
   // ── AI (보이는 것만) ─────────────────────────────────────────

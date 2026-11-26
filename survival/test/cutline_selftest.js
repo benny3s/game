@@ -246,5 +246,18 @@ const T0 = Date.now();
   const V = C.view(st, 4); ok(st.phase === 'place' && V.defs && V.defs.length === 4 && V.defs[0].max === st.defs[0].max, '1차 제출이 시작되면 모두 봄');
   ok(st.coins[2] === 17 && st.coins[0] === 20, '입찰 코인: 낸 만큼 빠짐');
 }
+// 10) view 는 판 상태와 객체를 나눠 쓰지 않음: V 를 깊이 다 바꿔도 판(st)은 그대로
+{
+  const scramble = o => { if (Array.isArray(o)) { for (let i = 0; i < o.length; i++) { if (o[i] && typeof o[i] === 'object') scramble(o[i]); else o[i] = 99; } o.push(99); } else if (o && typeof o === 'object') for (const k of Object.keys(o)) { if (o[k] && typeof o[k] === 'object') scramble(o[k]); else o[k] = 99; } };
+  const st = C.init({ n: 4, seed: 71 }), r = lcg(4); let checks = 0, bad = 0;
+  for (let g = 0; g < 400 && !C.over(st); g++) {
+    const need = C.needs(st);
+    if (!need.length) { C.advance(st); continue; }
+    const s = need[0], snap = J(st);
+    for (const who of [s, -1, 'all']) { scramble(C.view(st, who)); checks++; if (J(st) !== snap) bad++; }
+    C.apply(st, s, C.ai(C.view(st, s), s, 'normal', r));
+  }
+  ok(checks > 50 && bad === 0, `view 를 바꿔도 판 상태 그대로 (${checks - bad}/${checks})`);
+}
 console.log(`cutline selftest: 통과 ${pass} · 실패 ${fail} (${((Date.now() - T0) / 1000).toFixed(1)}초)`);
 process.exit(fail ? 1 : 0);
