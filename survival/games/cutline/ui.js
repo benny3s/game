@@ -27,7 +27,12 @@
 .ct-lb b{font:900 17px var(--round);color:#fff}
 .ct-lb small{font:700 10px var(--round);color:var(--soft);white-space:nowrap}
 .ct-lb small.hot{color:#fde68a}
-.ct-hid{font-size:11px;color:var(--soft);opacity:.75}
+.ct-mini{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;flex:none}
+.ct-mini span{display:grid;justify-items:center;padding:3px 2px;border-radius:9px;background:rgba(0,0,0,.24);border:1px solid rgba(255,255,255,.09);line-height:1.15}
+.ct-mini b{font:900 15px var(--round);color:#fff}
+.ct-mini small{font:700 10px var(--round);color:var(--soft)}
+.ct-mini i{font-style:normal;font:700 9.5px var(--round);color:var(--soft);opacity:.8;white-space:nowrap}
+.ct-lock{flex:none;text-align:center;font-size:11px;color:var(--soft);line-height:1.3}
 .ct-cells{display:flex;gap:3px;flex-wrap:nowrap;min-width:0}
 .ct-c{--oc:#64748b;position:relative;display:grid;place-items:center;width:30px;height:36px;flex:none;border-radius:7px;background:#f8fafc;color:#0f172a;border:2px solid var(--oc);border-top-width:5px;font:900 16px/1 var(--round)}
 .ct-c i{position:absolute;top:-1px;left:0;right:0;text-align:center;font:800 8px/1 var(--round);font-style:normal;color:#334155;opacity:.85;overflow:hidden;white-space:nowrap}
@@ -81,7 +86,7 @@
 .ct-pts span{font:800 12px var(--round);border-radius:8px;padding:3px 7px;background:#f8fafc;color:#0f172a}
 .ct-pts span b{color:#b45309}
 .ct-rl{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;font-size:11.5px;color:#e9d5ff;width:100%;max-width:340px}
-.sv-coachfit .ct-top,.sv-coachfit .ct-ord,.sv-coachfit .ct-note,.sv-coachfit .ct-gain,.sv-coachfit .ct-rules{display:none}
+.sv-coachfit .ct-lock,.sv-coachfit .ct-top,.sv-coachfit .ct-ord,.sv-coachfit .ct-note,.sv-coachfit .ct-gain,.sv-coachfit .ct-rules{display:none}
 .sv-coachfit .ct-board{gap:3px}
 .sv-coachfit .ct-row{min-height:30px;padding:1px 5px;grid-template-columns:46px minmax(0,1fr)}
 .sv-coachfit .ct-lb small{font-size:9px}
@@ -123,7 +128,7 @@
     const me = ctx.me, open = V.phase === "show" || V.over, res = open ? V.res : null;
     if (!V.defs) {                                       // 입찰 · 순서 정하기: 이번 라운드 표는 아직 비공개 (1차 제출 때 공개)
       const last = V.hist && V.hist.length ? V.hist[V.hist.length - 1] : null;
-      return `<div class="ct-board">${[0, 1, 2, 3].map(s => `<div class="ct-row"><span class="ct-lb"><b>${SL[s]}</b><small>?장·?</small></span><span class="ct-hid">${last ? `지난 라운드 ${last.slots[s].max}장·${last.slots[s].lim}` : ""}</span></div>`).join("")}<div class="ct-note sm">🔒 이번 라운드 슬롯 표(최대 카드 수 · LIMIT)는 1차 제출이 시작될 때 공개돼요</div></div>`;
+      return `<div class="ct-mini">${[0, 1, 2, 3].map(s => `<span><b>${SL[s]}</b><small>?장·?</small>${last ? `<i>지난 ${last.slots[s].max}장·${last.slots[s].lim}</i>` : ""}</span>`).join("")}</div><div class="ct-lock">🔒 이번 라운드 슬롯 표(최대 카드 수 · LIMIT)는 1차 제출 때 공개</div>`;
     }
     return `<div class="ct-board">${(o.only || [0, 1, 2, 3]).map(s => {
       const def = V.defs[s], placed = V.board[s], R = res ? res.slots[s] : null, pend = o.pend ? o.pend.filter(c => c.s === s) : [];
