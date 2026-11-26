@@ -113,13 +113,17 @@
 
   // ── 선생님 ──
   const pc = x => Math.round(x * 100) + "%";
+  // 조사 받침: 숫자는 끝 자리 읽기(0영 1일 3삼 6육 7칠 8팔 = 받침, 10 · 20 … 은 십), 이름은 끝 글자 받침
+  const jong = v => { const s = String(v), d = s.slice(-1); if (/[0-9]/.test(d)) { if (d === "0" && !s.includes(".") && +s !== 0) return 1; return "013678".includes(d) ? ("178".includes(d) ? 8 : 1) : 0; }
+    const c = s.charCodeAt(s.length - 1); return c >= 0xac00 && c <= 0xd7a3 ? (c - 0xac00) % 28 : 0; };
+  const ro = v => (jong(v) && jong(v) !== 8 ? "으로" : "로"), gwa = v => (jong(v) ? "과" : "와"), iga = v => (jong(v) ? "이" : "가");
   function coach(V, me, since, names) {
     const nm = i => esc((names && names[i]) || `${i + 1}번`);
     if (V.over) return { opp: "판이 끝났어요.", mine: `내 승점 ${V.score[me]} · ${V.ranks[me] + 1}등`, rec: "한 판 더 해 봐요!", why: "" };
     const lastTurns = V.res ? V.res.turns : [];
     // 👀 상대 흐름: 공개된 것 (처치 · 막타 · 얻은 무기)
     const kl = lastTurns.flatMap(t => t.ev.filter(e => e.k === "kill"));
-    let opp = kl.length ? `지난 라운드 처치: ${kl.map(e => `${e.by === me ? "나" : nm(e.by)}가 ${MON[e.mon].nm} (+${e.gain})`).join(", ")}` : (V.round > 1 ? "지난 라운드엔 처치가 없었어요 — 남의 공격은 비공개예요." : "첫 라운드예요 — 남의 선택 · 몬스터 남은 체력은 비공개, 처치만 공개돼요.");
+    let opp = kl.length ? `지난 라운드 처치: ${kl.map(e => `${e.by === me ? "내가" : nm(e.by) + iga(nm(e.by))} ${MON[e.mon].nm} (+${e.gain})`).join(", ")}` : (V.round > 1 ? "지난 라운드엔 처치가 없었어요 — 남의 공격은 비공개예요." : "첫 라운드예요 — 남의 선택 · 몬스터 남은 체력은 비공개, 처치만 공개돼요.");
     const holders = V.loot.map((l, s) => ({ s, n: l.map(w => WP[w].em).join("") })).filter(x => x.s !== me && x.n);
     if (holders.length) opp += ` · 얻은 특수 무기 (쓴 것은 몰라요): ${holders.map(x => `${nm(x.s)} ${x.n}`).join(" ")}`;
     // 📊 내 흐름
@@ -133,7 +137,7 @@
         const row = R.rows.find(r => r.a.f === a.f && r.a.w === a.w && (r.a.f2 == null ? null : r.a.f2) === (a.f2 == null ? null : a.f2)) || R.rows[0], m = V.field[a.f];
         rec = `전장 ${a.f + 1}${a.f2 != null ? `·${a.f2 + 1}` : ""} ${W(a.w)}`;
         const ex = K.expectBefore(V, me), eh = ex.hp[a.f], alt = R.rows.filter(r => r !== row).slice(0, 1)[0];
-        why = `${MON[m.i].nm}의 남은 체력은 안 보여요 — 최대 ${m.max}에서 내 공격 ${m.est}과 지나간 순서 ${m.age}번을 합쳐 지금 약 ${ex.cur[a.f] == null ? "?" : ex.cur[a.f].toFixed(1)}로 짐작하고, 내 앞 ${pos - 1}명이 때리고 나면 약 ${eh == null ? "?" : eh.toFixed(1)} 남을 거예요. 이 수로 내가 마지막 일격을 넣을 확률 ${pc(row.kill)} (기대 ${row.u >= 0 ? "+" : ""}${row.u.toFixed(1)}점)${alt ? ` · 다음 후보 ${W(alt.a.w)} 전장 ${alt.a.f + 1}: ${pc(alt.kill)}` : ""}.${a.w !== "dagger" ? ` 특수 무기는 쓰면 사라지니 막타가 될 때만 써요.` : ""}`;
+        why = `${MON[m.i].nm}의 남은 체력은 안 보여요 — 최대 ${m.max}에서 내 공격 ${m.est}${gwa(m.est)} 지나간 순서 ${m.age}번을 합쳐 지금 약 ${ex.cur[a.f] == null ? "?로" : ex.cur[a.f].toFixed(1) + ro(ex.cur[a.f].toFixed(1))} 짐작하고, 내 앞 ${pos - 1}명이 때리고 나면 약 ${eh == null ? "?" : eh.toFixed(1)} 남을 거예요. 이 수로 내가 마지막 일격을 넣을 확률 ${pc(row.kill)} (기대 ${row.u >= 0 ? "+" : ""}${row.u.toFixed(1)}점)${alt ? ` · 다음 후보 ${W(alt.a.w)} 전장 ${alt.a.f + 1}: ${pc(alt.kill)}` : ""}.${a.w !== "dagger" ? ` 특수 무기는 쓰면 사라지니 막타가 될 때만 써요.` : ""}`;
       }
     } else if (V.phase === "show") { rec = "결과를 보고 다음 라운드를 준비해요"; why = "몬스터 체력은 숨겨져 있어요 — 처치 기록과 내가 준 피해로 막타 자리를 짐작해 봐요."; }
     return { opp, mine, rec, why };
