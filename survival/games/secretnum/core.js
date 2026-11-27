@@ -289,6 +289,8 @@
     if (!P.samples) { g[s] = 1 + Math.floor(R0() * R); for (let j = 0; j < n; j++) if (j !== s && R0() < 0.5) g[j] = 1 + Math.floor(R0() * R); return { t: "sheet", g }; }
     const rows = sheetRows(V, s);
     for (const r of rows) { const thr = r.j === s ? P.thr : P.thrO; if (r.top && r.p >= thr) g[r.j] = r.top; }
+    // 번호는 사람마다 달라요 — 같은 번호를 두 칸에 적었으면 확률이 높은 칸만 남김
+    for (const r of rows) if (g[r.j] != null) for (const q of rows) if (q.j !== r.j && g[q.j] === g[r.j] && (q.p > r.p || (q.p === r.p && q.j < r.j))) { g[r.j] = null; break; }
     return { t: "sheet", g };
   }
   function aiWith(V, s, P, rnd) {
