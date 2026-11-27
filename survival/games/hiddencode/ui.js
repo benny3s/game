@@ -201,7 +201,7 @@
     let rec = "기다려요", why = "";
     if (V.needs.includes(me)) {
       const R = recOf(V, me), a = R && R.a;
-      if (a && a.t === "pick") { rec = `주사위 눈 <b>${a.v}</b>`; why = `집사 눈 ${V.butler.join(" · ")} 과 겹치지 않게 고르면 숫자를 칸에 나눠 넣었을 때 규칙이 더 잘 갈려요.`; }
+      if (a && a.t === "pick") { rec = `주사위 눈 <b>${a.v}</b>`; why = `집사 눈 ${V.butler.join(" · ")}${ja(V.butler[V.butler.length - 1], "와")} 겹치지 않게 고르면 숫자를 칸에 나눠 넣었을 때 규칙이 더 잘 갈려요.`; }
       else if (a) {
         const eh = R.e != null ? R.e : H.length, left = V.tests - V.tcnt[me];
         if (a.t === "say") {
@@ -238,11 +238,11 @@
     const starH = `<div class="hc-star"><span class="cap">문제 도형</span>${star.map((x, i) => `<div class="hc-c"><i>${LET[i]}</i><b>${x}</b></div>`).join("")}</div>`;
     const tilesH = (used) => `<div class="hc-tiles">${tv.map((v, i) => `<div class="hc-t${used && used.has(i) ? " used" : ""}"><span>${v}</span><small>${i < 2 ? "🎲 집사" : i === 2 ? "나" : "AI" + (i - 2)}</small></div>`).join("")}</div>`;
     return [
-      { tag: "STEP 1 · 목표", title: "숨겨진 규칙을 알아내요", body: "별 모양 <b>문제 도형</b>의 칸 A~E 에 숫자가 적혀 있어요. <b>숨겨진 규칙</b> 하나가 이 숫자들로 <b>결괏값</b>을 만들어요. 규칙을 알아내 <b>이 도형의 결괏값</b>을 먼저 외치면 <b>1점</b>, <b>3점</b>을 먼저 얻으면 승리 (5문제까지, 동점이면 연장)!",
+      { tag: "STEP 1 · 목표", title: "숨겨진 규칙을 알아내요", body: "별 모양 <b>문제 도형</b>의 칸 A~E에 숫자가 적혀 있어요. <b>숨겨진 규칙</b> 하나가 이 숫자들로 <b>결괏값</b>을 만들어요. 규칙을 알아내 <b>이 도형의 결괏값</b>을 먼저 외치면 <b>1점</b>, <b>3점</b>을 먼저 얻으면 승리 (5문제까지, 동점이면 연장)!",
         boardHtml: `<div class="hc-tut">${starH}<div style="font-size:30px">❓ → ?</div></div>`, ms: 7600 },
       { tag: "STEP 2 · 숫자 획득", title: "주사위 눈을 모아 숫자 5개", body: "집사가 주사위를 굴려 숫자를 공개하고(3명이면 2개), 나는 <b>내 주사위 눈 1개</b>를 골라 모두 <b>동시에</b> 내요. 그렇게 모인 <b>숫자 5개</b>가 시험에 쓸 재료예요.",
         boardHtml: `<div class="hc-tut">${tilesH()}</div>`, ms: 7000 },
-      { tag: "STEP 3 · 시험", title: "5개를 모두 빈 별 칸에 넣어 봐요", body: "숫자 5개를 <b>모두</b> 칸 A~E 에 넣어요. 한 칸에 둘 이상 <b>붙여서 두 자리</b>(6 · 4 → 64)로 만들어도 돼요. 시험하면 숨은 규칙이 계산한 <b>결과</b>가 나와요 — 이 결과로 규칙을 짐작해요. (예: 64 · 15 · 3 을 넣으면 결과 64 → 짝수 칸의 합?)",
+      { tag: "STEP 3 · 시험", title: "5개를 모두 빈 별 칸에 넣어 봐요", body: "숫자 5개를 <b>모두</b> 칸 A~E에 넣어요. 한 칸에 둘 이상 <b>붙여서 두 자리</b>(6 · 4 → 64)로 만들어도 돼요. 시험하면 숨은 규칙이 계산한 <b>결과</b>가 나와요 — 이 결과로 규칙을 짐작해요. (예: 64 · 15 · 3 을 넣으면 결과 64 → 짝수 칸의 합?)",
         boardHtml: `<div class="hc-tut">${tilesH()}<div class="hc-board">${["64", "·", "15", "3", "·"].map((v, i) => `<div class="hc-s${v !== "·" ? " full" : ""}"><i>${LET[i]}</i><b>${v}</b></div>`).join("")}</div><div class="hc-log" style="width:100%"><div class="r new"><span class="a">A 64 · C 15 · D 3</span><span class="res">→ 64</span></div></div></div>`, ms: 8800 },
       { tag: "STEP 4 · 직접", title: "숫자 5개를 칸에 넣고 시험해요", body: "아래 숫자를 눌러 칸에 넣어 보세요 (5개 모두). <b>🔗 붙이기</b>를 누르고 다음 숫자를 누르면 앞 숫자 옆에 붙어요. 다 넣고 <b>시험</b>!",
         interactive: { hint: "👆 숫자 5개를 칸에 넣고 시험", doneText: "✅ 시험 결과 나왔어요 — 이 결과로 규칙을 짐작해요" },
@@ -273,9 +273,9 @@
   window.SVUI.hiddencode = {
     name: "히든코드", emoji: "🔐", short: "숫자를 칸에 넣어 시험하며 숨은 규칙을 알아내요", min: 2, max: 3, defN: 3, board: false, src: SRC, diff: DIFF,
     howto: [
-      "방송: 별 모양 <b>문제 도형</b> A~E 에 숫자가 적혀 있고, <b>숨겨진 규칙</b>이 그 숫자들로 <b>결괏값</b>을 만들어요 — 규칙을 알아내 이 도형의 결괏값을 외치면 1점",
+      "방송: 별 모양 <b>문제 도형</b> A~E에 숫자가 적혀 있고, <b>숨겨진 규칙</b>이 그 숫자들로 <b>결괏값</b>을 만들어요 — 규칙을 알아내 이 도형의 결괏값을 외치면 1점",
       "집사가 주사위를 굴려 숫자를 공개하고, 각자 <b>내 주사위 눈 1개</b>를 골라 동시에 내서 <b>숫자 5개</b>를 모아요",
-      "숫자 5개를 <b>모두</b> 빈 별의 칸 A~E 에 넣어요 (붙여서 두 자리 이상도 돼요) → 숨은 규칙이 계산한 <b>결과</b>가 나와요 · 시험 결과는 내 것만 보여요 (한 숫자로 3번까지)",
+      "숫자 5개를 <b>모두</b> 빈 별의 칸 A~E에 넣어요 (붙여서 두 자리 이상도 돼요) → 숨은 규칙이 계산한 <b>결과</b>가 나와요 · 시험 결과는 내 것만 보여요 (한 숫자로 3번까지)",
       "알았으면 <b>결괏값</b>을 외쳐요 — 맞으면 1점 · 틀리면 감점 없이 <b>다음 한 단계는 못 외침</b> (방송은 상대에게 30초 발언권) · 아무도 못 맞히면 숫자 획득을 되풀이",
       "<b>3점</b> 먼저 얻으면 승리 · 5문제 뒤엔 최다 승점 · 동점이면 연장 · 숨은 규칙 후보는 📓 수첩에 12개 (방송 예: 짝수 칸의 합 · 곱 − 합 · 한글 ㅇ 개수)",
     ],
