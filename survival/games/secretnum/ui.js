@@ -74,7 +74,7 @@
     if (f.k === "add") return f.v != null ? `합 ${f.v}` : `합 ${f.lo}~${f.hi} 사이`;
     if (f.k === "mul") return `곱의 일의 자리 ${f.v}`;
     if (f.k === "div") return `큰 수 ÷ 작은 수의 몫 ${f.v}`;
-    return `두 번호 사이 0 의 개수 ${f.v}`;
+    return `두 번호 사이 0의 개수 ${f.v}`;
   };
   const sel = { key: "", k: null };
   const tkLine = tk => `<div class="sn-tks">${KINDS.map(k => `<span class="${tk[k] ? "" : "z"}" title="${KN[k].nm}">${KN[k].em}×${tk[k]}</span>`).join("")}</div>`;
@@ -214,7 +214,7 @@
       if (sheetHintFull.key !== key) { sheetHintFull.key = key; sheetHintFull.open = false; }
       rec = rows.length ? `확률 50% 넘는 칸이 ${rows.length}개 — 가장 확실한 칸은 <b>${rows[0].j === me ? "내 번호" : nmOf(names, rows[0].j) + " 님의 번호"}</b> (확률 ${pc(rows[0].p)}).${sheetHintFull.open ? " " + sheetHintFull.full : ` <button type="button" class="sn-hbtn" data-snhint>💡 전체 답안지 보기</button>`}` : `확률 50% 넘는 칸이 없어요 — 전부 비워 두는 게 안전해요 (0점).`;
       const ev = K.expScore(V, me, g);
-      why = `틀리면 내 번호 −5 · 남 −1, 맞으면 +5 · +1 이라 확률이 50% 를 넘는 칸만 적어요. 이 답안지의 기대 점수는 ${ev >= 0 ? "+" : ""}${ev.toFixed(1)}점이에요 (빈칸 = 0).`;
+      why = `틀리면 내 번호 −5 · 남 −1, 맞으면 +5 · +1 이라 확률이 50%를 넘는 칸만 적어요. 이 답안지의 기대 점수는 ${ev >= 0 ? "+" : ""}${ev.toFixed(1)}점이에요 (빈칸 = 0).`;
     } else if (V.phase === "meet" && V.needs.includes(me)) {
       const Rc = K.recommend(V, me);
       if (Rc && Rc.a) {
@@ -254,16 +254,16 @@
     return [
       { tag: "STEP 1 · 목표", title: "내 번호를 맞혀요", body: "모두 <b>번호 카드</b> 한 장을 받아요 (방송은 1~100, 우리는 1~(10×인원) · 번호는 서로 달라요). 그런데 <b>내 번호도 남의 번호도 아무도 몰라요!</b> 사람들과 만나 힌트를 모아 번호를 추리하는 게임이에요. 끝나면 <b>모두의 번호</b>를 답안지에 적어요.",
         boardHtml: `<div class="sn-tut"><div class="sn-tut"><span class="num">?</span></div><small>내 번호도 모른다</small></div>`, ms: 6600 },
-      { tag: "STEP 2 · 티켓", title: "티켓 4종 — 쓰면 사라져요", body: "시작할 때 티켓 한 세트: <b>➕ 더하기</b>(두 번호의 합 · 아주 작거나 큰 합은 '3~20 사이' 같은 범위로만) · <b>✖️ 곱하기</b>(곱의 일의 자리) · <b>➗ 나누기</b>(큰 수 ÷ 작은 수의 몫) · <b>0️⃣ 영</b>(두 번호 사이의 0 의 개수 — 예: 44 와 88 사이엔 50 · 60 · 70 · 80 이라 4).",
+      { tag: "STEP 2 · 티켓", title: "티켓 4종 — 쓰면 사라져요", body: "시작할 때 티켓 한 세트: <b>➕ 더하기</b>(두 번호의 합 · 아주 작거나 큰 합은 '3~20 사이' 같은 범위로만) · <b>✖️ 곱하기</b>(곱의 일의 자리) · <b>➗ 나누기</b>(큰 수 ÷ 작은 수의 몫) · <b>0️⃣ 영</b>(두 번호 사이의 0의 개수 — 예: 44와 88 사이엔 50 · 60 · 70 · 80 이라 4).",
         boardHtml: `<div class="sn-tut"><div class="sn-tks">${KINDS.map(k => `<span>${KN[k].em} ${KN[k].nm}</span>`).join("")}</div></div>`, ms: 7600 },
       { tag: "STEP 3 · 만남", title: "둘이 같은 티켓을 내면 같은 힌트", body: "라운드마다 <b>짝이 정해져</b> 공개돼요 (홀수면 한 명 쉼). 두 사람이 <b>동시에 티켓</b>을 골라 같으면 <b>둘 다 같은 힌트</b>를 받아요. 다르면 서로 뭘 냈는지 보고 <b>한 번 더</b> — 또 다르면 둘 다 낸 티켓만 잃어요. 건너뛰기는 잃는 것이 없어요. 힌트는 두 사람만 알고 <b>📒 수첩</b>에 적혀요.",
         boardHtml: `<div class="sn-tut"><div class="sn-pairs" style="width:100%"><div class="sn-pr me"><b>나</b><i>↔</i><b>민수</b><em>⏳</em></div><div class="sn-pr"><b>지은</b><i>↔</i><b>하늘</b><em>✅</em></div></div></div>`, ms: 7800 },
-      { tag: "STEP 4 · 직접", title: "힌트를 읽어 봐요", body: "나와 민수가 <b>➕ 더하기</b> 티켓을 냈어요. 내 번호는 12, 민수 번호는 25 라면 둘이 받는 힌트는? (두 번호의 합이에요)",
-        interactive: { hint: "👆 알맞은 힌트를 눌러요", doneText: "✅ 12 + 25 = 37 — 둘 다 37 을 받아요" },
+      { tag: "STEP 4 · 직접", title: "힌트를 읽어 봐요", body: "나와 민수가 <b>➕ 더하기</b> 티켓을 냈어요. 내 번호는 12, 민수 번호는 25라면 둘이 받는 힌트는? (두 번호의 합이에요)",
+        interactive: { hint: "👆 알맞은 힌트를 눌러요", doneText: "✅ 12 + 25 = 37 — 둘 다 37을 받아요" },
         render(stage, ctrl) {
           let done = false;
           const draw = () => { stage.innerHTML = `<div class="sn-tut"><div class="opt"><span class="num">12</span><span class="num">25</span></div><div class="sn-note" style="width:100%"><div class="r"><span class="rr">1R</span><span>민수 님 · ➕ 더하기</span><span class="h">${done ? "37" : "?"}</span></div></div><div class="opt">${[13, 37, 5].map(v => `<button data-v="${v}" ${done ? "disabled" : ""}>${v}</button>`).join("")}</div></div>`; };
-          stage.onclick = e => { const b = e.target.closest("[data-v]"); if (!b || done) return; ctrl.sfx("tap"); if (+b.dataset.v === 37) { done = true; draw(); ctrl.complete(); } else ctrl.toast("합은 12 + 25 예요"); };
+          stage.onclick = e => { const b = e.target.closest("[data-v]"); if (!b || done) return; ctrl.sfx("tap"); if (+b.dataset.v === 37) { done = true; draw(); ctrl.complete(); } else ctrl.toast("합은 12 + 25예요"); };
           draw();
         } },
       { tag: "STEP 5 · 점수", title: "답안지 — 자신 없으면 비워 둬요", body: "끝나면 <b>모두의 번호</b>를 적어요. 내 번호 맞으면 <b>+5</b> 틀리면 −5, 남의 번호는 맞으면 <b>+1</b> 틀리면 −1, <b>빈칸은 0</b>. 전부 맞추면 +5, 그리고 <b>내 번호를 맞힌 사람 1명당 −1</b>. 점수가 높은 사람이 1등!",
