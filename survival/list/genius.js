@@ -14,7 +14,7 @@
   { id: "gn-formulaauction", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "수식 경매", emoji: "🧮", v: 4,
     short: "큐브로 타일을 사 모아 답이 10 인 수식을 먼저 만들어요",
     src: "더 지니어스 시즌 1 수식 경매 · 9화 메인 매치 · 디글 클래식 「[#더지니어스1] 수식 경매01~06」 규칙 설명 · 순서표 확인" },
-  { id: "gn-samepic", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "같은 그림 찾기", emoji: "🖼️", v: 2,
+  { id: "gn-samepic", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "같은 그림 찾기", emoji: "🖼️", v: 3,
     short: "말 앞 카드와 같은 그림을 그림판에서 찾아 결승점으로 · 틀리면 벨트가 밀려요 · 1:1 데스매치",
     src: "더 지니어스 시즌 1 11화 · 시즌 2 8화 · 시즌 4 7화 데스매치 같은 그림 찾기 (나무위키 「같은 그림 찾기」 문서 룰 · 회차 문서 확인 — 치킨차차 변형, 같은 숫자 찾기와는 다른 게임)" },
   { id: "gn-link-gyeolhap", prog: "genius", season: "S1", seasonName: "게임의 법칙", title: "결! 합!", emoji: "🔷", link: "../genius/",
