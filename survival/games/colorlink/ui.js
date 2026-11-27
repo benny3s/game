@@ -6,7 +6,7 @@
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const { COLORS, MINLEN } = K;
   const SRC = "방송: 데블스 플랜: 데드 어게인 · 7일차 결승 2회전 컬러 링크 (장동민 vs 현경렬) — 나무위키 '데블스 플랜: 데드 어게인/7일차' 룰 + 영상 대조 (마지막 라운드 풀이 해설 영상 자막: 6칸 · 불가능 선언 뒤 5분 증명 · 3대 2)";
-  const DIFF = "판 크기 · 벽 · 미리 놓인 말은 방송 화면을 구하지 못해 우리가 만든 판 (7×7 에서 9×9, 라운드마다 처음 판은 반드시 풀 수 있게 만들어요) · 쓰는 색은 라운드마다 6~8색 (방송 14색 28개 중) · 색 14개 이름표는 A~L + 검정 X · 흰색 Y 로 우리가 정함 · 놓을 말을 다 놓아 더 못 놓으면 불가능 선언만 할 수 있고 · 아무도 안 놓은 처음엔 선언 불가 · 길은 칸을 눌러 이어요 (끌어서도 됨) · 시간 제한 3분 · 5분은 옵션 (기본 끔, 켜면 시간 초과가 바로 그 라운드 패) · 5라운드 안에 3점이 안 나올 수 없어서 (한 라운드마다 1점) 동점 연장 없음";
+  const DIFF = "판 크기 · 벽 · 미리 놓인 말은 방송 화면을 구하지 못해 우리가 만든 판 (7×7 에서 9×9, 라운드마다 처음 판은 반드시 풀 수 있게 만들어요) · 쓰는 색은 라운드마다 6~8색 (방송 14색 28개 중) · 색 14개 이름표는 A~L + 검정 X · 흰색 Y로 우리가 정함 · 놓을 말을 다 놓아 더 못 놓으면 불가능 선언만 할 수 있고 · 아무도 안 놓은 처음엔 선언 불가 · 길은 칸을 눌러 이어요 (끌어서도 됨) · 시간 제한 3분 · 5분은 옵션 (기본 끔, 켜면 시간 초과가 바로 그 라운드 패) · 5라운드 안에 3점이 안 나올 수 없어서 (한 라운드마다 1점) 동점 연장 없음";
   const CSS = `
 .cl-st{flex:none;min-height:40px;display:grid;place-items:center;text-align:center;font-size:12.5px;line-height:1.35;color:var(--soft);padding:0 2px}
 .cl-st b{color:#fde68a}
@@ -407,7 +407,7 @@
       const ps = a.paths || {};
       const keys = Object.keys(ps);
       const first = keys.length ? +keys[0] : -1;
-      if (a.t === "giveup") { rec = "증명하기 어려워요"; why = `고급 AI 가 이을 길을 찾지 못했어요 — ${K.unsatWhy(V)}`; }
+      if (a.t === "giveup") { rec = "증명하기 어려워요"; why = `고급 AI가 이을 길을 찾지 못했어요 — ${K.unsatWhy(V)}`; }
       else {
         HINT = HINT.key === `${V.pub}|${me}` ? HINT : { key: `${V.pub}|${me}`, open: false };
         const step = c0 => c0 >= 0 ? `${kn(first)} 길은 ${CN(V, ps[first][0])}에서 ${CN(V, ps[first][1])} 쪽으로 시작해요` : "";
@@ -497,8 +497,8 @@
         boardHtml: tb(boardHtml(V2, { owner: {} })), ms: 6000 },
       { tag: "STEP 3 · 진행", title: "번갈아 서로 다른 색 2개", body: "선공은 말 <b>1개</b>, 그다음부터 번갈아 <b>서로 다른 색 2개</b>를 빈 칸에 놓아요 (3분). 1라운드 선후공은 동전, 다음부터는 진 사람이 골라요. 판이 꽉 찰수록 이을 길이 줄어요.",
         boardHtml: tb(boardHtml(V3, { owner: {}, pend: { 11: 6, 22: 2 } })), ms: 6000 },
-      { tag: "STEP 4 · 직접", title: "길은 6칸 이상!", body: "5×5 판의 <b>A</b> 두 말을 이어 보세요. 가까워도 길은 <b>6칸 이상</b>이라 빙 돌아야 해요. 왼쪽 위 A 를 누르고 이어 갈 칸을 차례로 눌러요 (끌어도 돼요).",
-        interactive: { hint: "👆 A 에서 시작해 6칸 넘게 이어요", doneText: "✅ 6칸 이상으로 이었어요!" },
+      { tag: "STEP 4 · 직접", title: "길은 6칸 이상!", body: "5×5 판의 <b>A</b> 두 말을 이어 보세요. 가까워도 길은 <b>6칸 이상</b>이라 빙 돌아야 해요. 왼쪽 위 A를 누르고 이어 갈 칸을 차례로 눌러요 (끌어도 돼요).",
+        interactive: { hint: "👆 A에서 시작해 6칸 넘게 이어요", doneText: "✅ 6칸 이상으로 이었어요!" },
         render(stage, ctrl) {
           let done = false, msg = "A 말을 눌러 시작해요";
           const path = []; let act = false;
@@ -508,7 +508,7 @@
             if (done) return;
             const t = e.target.closest("[data-c]"); if (!t) return;
             const c = +t.dataset.c;
-            if (!act) { if (c === 0 || c === 4) { path.length = 0; path.push(c); act = true; msg = `A 에서 시작 — 이어 갈 칸을 눌러요 (${path.length}칸)`; ctrl.sfx("tap"); draw(); } return; }
+            if (!act) { if (c === 0 || c === 4) { path.length = 0; path.push(c); act = true; msg = `A에서 시작 — 이어 갈 칸을 눌러요 (${path.length}칸)`; ctrl.sfx("tap"); draw(); } return; }
             const head = path[path.length - 1];
             if (path.length > 1 && c === path[path.length - 2]) { path.pop(); msg = `한 칸 되돌렸어요 (${path.length}칸)`; draw(); return; }
             if (!nb[head].includes(c) || path.includes(c)) { msg = "이어 가는 끝 칸 옆 빈 칸을 눌러요"; ctrl.sfx("tap"); draw(); return; }
@@ -517,7 +517,7 @@
               if (path.length >= MINLEN) { done = true; msg = `🎉 <b>${path.length}칸</b> — 6칸 이상으로 이었어요!`; ctrl.sfx("win"); draw(); ctrl.complete(); return; }
               path.pop(); msg = `짝에 닿았지만 <b>${path.length + 1}칸</b>이에요 — 6칸 이상이어야 해요. 돌아서 가 봐요`; ctrl.sfx("tap"); draw(); return;
             }
-            msg = `${path.length}칸 — 계속 이어요 (짝 A 까지, 6칸 이상)`; ctrl.sfx("tap"); draw();
+            msg = `${path.length}칸 — 계속 이어요 (짝 A까지, 6칸 이상)`; ctrl.sfx("tap"); draw();
           };
           draw();
         } },

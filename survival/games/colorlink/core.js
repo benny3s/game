@@ -8,7 +8,7 @@
    방송과 다른 점 · 우리가 정한 것: 판 크기 · 벽 · 미리 놓인 말은 방송 화면을 못 구해 우리가 만든 판 (라운드마다 생성기로 만들고 처음 판은 반드시 풀 수 있음) ·
      판은 7×7 에서 9×9 까지 · 놓을 수 있는 말은 이 라운드에 쓰는 6~8색 · 놓을 말이 모자라 못 놓으면 '불가능 선언'만 할 수 있음 ·
      시간 제한(3분 · 5분)은 옵션 (기본 끔) · 4번의 선언 전 아무도 안 놓았으면 선언 불가
-   재현 약속: 시계 · Math.random 을 안 써요 (AI 는 받은 rnd 또는 view 에서 만든 씨앗만). */
+   재현 약속: 시계 · Math.random 을 안 써요 (AI는 받은 rnd 또는 view 에서 만든 씨앗만). */
 (function (root, factory) {
   const m = factory();
   if (typeof module === "object" && module.exports) module.exports = m;
