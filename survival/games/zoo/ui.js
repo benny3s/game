@@ -4,7 +4,7 @@
   const K = window.SVCores.zoo, SP = K.SP, COND = K.COND;
   const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const SRC = "방송: 데블스 플랜 시즌 1 · 4일차 메인 매치 (9명) · 규칙 확인: 나무위키 4일차 문서 (룰 · 크레딧 경매 · 낙찰 규칙 · 점수 · 라운드 기록, 공식 클립에서 규칙 장면은 못 찾음)";
-  const DIFF = "3~6명 (방송 9명) · 입찰은 순서 없이 동시에 몰래 (방송은 한 명씩 차례로 비공개) · 대화 · 동맹 · 도와주기 · 피스 증감 없음 (순위만) · 카드 3장 순서와 공개할 1장은 내가 고름 · 개인 조건 10종은 우리가 만든 'A 타일이 B 타일보다 많다' 10개 · 타일은 상자(A · B)마다 5종 × 4개 = 20개씩 5라운드 (방송 글이 '박스마다 20개' 와 '합쳐 20개' 로 엇갈려 '박스마다 20개' 로 함 · 판 25칸에 낙찰 타일 20개) · 무효(합이 같거나 낙찰 그룹 최고액이 같음)는 한 라운드에서 두 번까지 다시 하고 세 번째도 무효면 타일을 버림 · 한 그룹에만 걸렸으면 그 그룹이 낙찰 · 크레딧이 0 이면 그 라운드는 쉼 · 같은 조합 줄은 한 번만 셈 · 낙찰 승자의 정체는 끝까지 비공개 (끝나면 공개)";
+  const DIFF = "3~6명 (방송 9명) · 입찰은 모두 동시에 몰래 (방송은 한 명씩 차례로, 정순 · 역순을 번갈아 해서 뒤 사람이 앞 사람 눈치를 보는 전략이 있었는데 그 맛이 빠짐) · 배치 방식은 방송 원문상 입찰할 때 함께 정하는 것으로 읽히지만 우리는 낙찰된 뒤 타일을 골라 놓음 · 대화 · 동맹 · 도와주기 · 피스 증감 없음 (순위만) · 카드 3장 순서와 공개할 1장은 내가 고름 · 개인 조건 10종은 우리가 만든 'A 타일이 B 타일보다 많다' 10개 · 타일은 상자(A · B)마다 5종 × 4개 = 20개씩 5라운드 (방송 글이 '박스마다 20개' 와 '합쳐 20개' 로 엇갈려 '박스마다 20개' 로 함 · 판 25칸에 낙찰 타일 20개) · 무효(합이 같거나 낙찰 그룹 최고액이 같음)는 한 라운드에서 두 번까지 다시 하고 세 번째도 무효면 타일을 버림 · 한 그룹에만 걸렸으면 그 그룹이 낙찰 · 크레딧이 0 이면 그 라운드는 쉼 · 같은 조합 줄은 한 번만 셈 · 낙찰 승자의 정체는 끝까지 비공개 (끝나면 공개) · 같은 조합 줄은 한 번만 세는 것은 원문에 없는 우리 해석 · 한계: 타일 추첨 · 숨은 조합이 운이라 인원이 많을수록 0점 동률이 많아요";
   const CSS = `
 .zo-top{display:flex;align-items:center;gap:4px;flex:none;flex-wrap:wrap}
 .zo-rd{font:900 14px var(--round);color:#fde68a;background:rgba(0,0,0,.3);border:1px solid rgba(245,179,1,.35);border-radius:99px;padding:3px 10px;white-space:nowrap}
@@ -18,7 +18,7 @@
 .zo-box{border-radius:12px;padding:5px 6px;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.14);color:#fff;font:800 12px var(--round);display:grid;gap:3px;text-align:left}
 .zo-box.sel{border-color:#fde68a;background:rgba(245,179,1,.14)}
 .zo-box.win{border-color:#86efac;background:rgba(34,197,94,.1)}
-.zo-box .t{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;font-size:20px;line-height:1.15;text-align:center}
+.zo-box .t{display:flex;flex-wrap:wrap;justify-content:center;gap:1px 3px;font-size:20px;line-height:1.15;text-align:center}
 .zo-box .h{display:flex;justify-content:space-between;color:var(--soft);font-size:11.5px}
 .zo-me{display:flex;flex-direction:column;gap:5px;border:1px solid rgba(134,239,172,.35);background:rgba(34,197,94,.07);border-radius:14px;padding:6px 8px;flex:none}
 .zo-me .hd{font:700 12.5px/1.35 var(--round);color:#bbf7d0}.zo-me .hd b{color:#fff}
@@ -51,7 +51,7 @@
 .zo-tut{display:grid;gap:8px;justify-items:center;width:100%}
 .zo-tut .opt{display:flex;gap:8px;justify-content:center}
 .zo-tut .opt button{min-width:96px;min-height:46px;border-radius:12px;border:2px solid rgba(255,255,255,.2);background:rgba(255,255,255,.07);color:#fff;font:900 16px var(--round)}
-.sv-coachfit .zo-board{--cz:28px}.sv-coachfit .zo-rv,.sv-coachfit .zo-quick{display:none}.sv-coachfit .zo-me{padding:5px 6px;gap:4px}.sv-coachfit .zo-cd{min-height:54px;padding:3px 2px}
+.sv-coachfit .zo-board{--cz:28px;padding:3px}.sv-coachfit .zo-main{flex-direction:column;align-items:stretch;gap:4px}.sv-coachfit .zo-side{grid-template-columns:1fr 1fr;gap:6px;width:100%;flex:none}.sv-coachfit .zo-side .zo-box{flex:1;padding:3px 5px}.sv-coachfit .zo-box .t{font-size:17px}.sv-coachfit .zo-board{align-self:center}.sv-coachfit .zo-bid button.s{width:34px;height:34px}.sv-coachfit .zo-go{min-height:34px;padding:4px}.sv-coachfit .zo-me .hd{font-size:11.5px}.sv-coachfit .zo-q button{width:36px;height:36px;font-size:22px}.sv-coachfit .zo-rv,.sv-coachfit .zo-quick{display:none}.sv-coachfit .zo-me{padding:5px 6px;gap:4px}.sv-coachfit .zo-cd{min-height:54px;padding:3px 2px}
 .zo-hbtn{margin-left:4px;font:800 11.5px var(--round);padding:4px 9px;border-radius:99px;border:1px solid #fde68a;background:rgba(245,179,1,.14);color:#fde68a}`;
   let styled = false;
   const style = () => { if (styled || typeof document === "undefined") return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
@@ -68,7 +68,7 @@
   }
   function boxHtml(V, g, o) {
     const t = V.tiles[g];
-    return `<div class="zo-box${o.sel ? " sel" : ""}${o.win ? " win" : ""}" data-g="${g}"><div class="h"><span>그룹 ${g}</span><span>${o.sum != null ? "합 " + o.sum : o.win ? "낙찰" : ""}</span></div><div class="t">${t.length ? t.map(E).join("") : "·"}</div></div>`;
+    return `<div class="zo-box${o.sel ? " sel" : ""}${o.win ? " win" : ""}" data-g="${g}"><div class="h"><span>그룹 ${g}</span><span>${o.sum != null ? "합 " + o.sum : o.win ? "낙찰" : ""}</span></div><div class="t">${t.length ? t.map(x => `<span>${E(x)}</span>`).join("") : "·"}</div></div>`;
   }
   function revealHtml(V, ctx) {
     const me = ctx.me; if (V.phase === "setup") return "";
@@ -99,12 +99,12 @@
       }
     } else if (V.phase === "bid") {
       if (m.skip) mid = `<div class="zo-me"><div class="hd">크레딧이 없어서 이번 라운드는 쉬어요 💤</div></div>`;
-      else if (m.bid) mid = `<div class="zo-me"><div class="hd">그룹 ${m.bid.g} 에 <b>${m.bid.c}</b> 걸었어요 — 다른 사람을 기다려요 (${V.subbed.filter(Boolean).length}/${V.n})</div></div>`;
+      else if (m.bid) mid = `<div class="zo-me"><div class="hd">그룹 ${m.bid.g}에 <b>${m.bid.c}</b> 걸었어요 — 다른 사람을 기다려요 (${V.subbed.filter(Boolean).length}/${V.n})</div></div>`;
       else if (bidding) {
         const g = S.g, c = Math.max(1, Math.min(m.credits, S.c));
         mid = `<div class="zo-me"><div class="hd"><b>그룹</b>을 눌러 고르고 몰래 걸어요 (합 적은 쪽 낙찰)</div>
           <div class="zo-bid"><button class="s" data-d="-1">−</button><div class="v">${c} <small style="font-size:12px;color:var(--soft)">/ ${m.credits}</small></div><button class="s" data-d="1">+</button><button class="s" data-set="${m.credits}" style="font-size:12px;width:52px">올인</button></div>
-          <button class="btn primary zo-go" data-a="bid" ${g ? "" : "disabled"}>${g ? `그룹 ${g} 에 ${c} 걸기` : "그룹을 골라요 (A · B)"}</button></div>`;
+          <button class="btn primary zo-go" data-a="bid" ${g ? "" : "disabled"}>${g ? `그룹 ${g}에 ${c} 걸기` : "그룹을 골라요 (A · B)"}</button></div>`;
       }
     } else if (V.phase === "place") {
       if (placing) {
@@ -170,7 +170,7 @@
     let rec = "다음 차례를 기다려요", why = "";
     if (V.phase === "bid" && V.needs.includes(me)) {
       const R = K.recommend(V, me), a = R.a, row = R.rows[0], alt = R.rows.find(r => r.a.g !== a.g) || R.rows[1];
-      rec = `그룹 ${a.g} 에 ${a.c} 걸기`;
+      rec = `그룹 ${a.g}에 ${a.c} 걸기`;
       why = `내 조합에 맞는 타일의 가치는 A ${R.VA.toFixed(1)}점 · B ${R.VB.toFixed(1)}점이에요 (조합에 든 동물이 많을수록 · 개인 조건에 도움이 될수록 커요). 남은 크레딧 ${m.credits}개를 ${left}라운드에 나누면 한 번에 약 ${(m.credits / left).toFixed(0)}씩이고, 이 금액이면 낙찰 확률 약 ${pc(row.p)}${alt ? ` (다음 후보 그룹 ${alt.a.g} ${alt.a.c}: ${pc(alt.p)})` : ""}. 합이 적은 쪽이 이기니 너무 많이 걸면 오히려 져요.`;
     } else if (V.phase === "place" && V.needs.includes(me)) {
       const R = K.recommend(V, me), a = R.a, row = R.rows[0];
@@ -189,7 +189,7 @@
   }
   const actText = (a, V) => {
     if (!a) return "—";
-    if (a.t === "bid") return `그룹 ${a.g} 에 ${a.c} 걸기`;
+    if (a.t === "bid") return `그룹 ${a.g}에 ${a.c} 걸기`;
     if (a.t === "place") return `${V && V.queue ? E(V.queue[a.ti]) + " " : ""}타일을 ${a.col + 1}번째 줄에`;
     if (a.t === "combo") return `조합 순서 ${a.ord.join("")} · ${a.show + 1}번째 공개`;
     return "—";
@@ -212,7 +212,7 @@
         boardHtml: `<div class="zo-tut"><div style="display:flex;gap:8px;width:100%"><div class="zo-box" style="flex:1"><div class="h"><span>그룹 A</span></div><div class="t">🐍🦁🐵🐘</div></div><div class="zo-box" style="flex:1"><div class="h"><span>그룹 B</span></div><div class="t">🦜🐍🦁🐵</div></div></div></div>`, ms: 7600 },
       { tag: "STEP 3 · 낙찰", title: "합이 적은 그룹, 그 안의 최고액이 승자", body: "<b>걸린 크레딧 합이 적은 그룹</b>이 낙찰돼요. 그 그룹에서 <b>가장 많이 건 사람</b>이 승자 — 4개 타일을 판에 <b>위에서 떨어뜨려</b> 놓아요 (승자는 비밀!). 합이 같거나 최고액이 같으면 <b>무효</b>, 다시 걸어요. 안 뽑힌 그룹 타일은 버려요.",
         boardHtml: `<div class="zo-tut"><div class="zo-res">A 합 8 · B 합 10 → <b>A 낙찰</b></div></div>`, ms: 7400 },
-      { tag: "STEP 4 · 직접", title: "어느 그룹이 낙찰일까요?", body: "그룹 A 에 모두 합쳐 <b>8</b>, 그룹 B 에 모두 합쳐 <b>10</b> 이 걸렸어요. 낙찰 그룹은?",
+      { tag: "STEP 4 · 직접", title: "어느 그룹이 낙찰일까요?", body: "그룹 A에 모두 합쳐 <b>8</b>, 그룹 B에 모두 합쳐 <b>10</b>이 걸렸어요. 낙찰 그룹은?",
         interactive: { hint: "👆 낙찰 그룹을 눌러요", doneText: "✅ 합이 적은 A 낙찰!" },
         render(stage, ctrl) {
           let done = false;
@@ -230,11 +230,11 @@
     name: "동물원", emoji: "🦁", short: "크레딧 경매로 타일을 따서 내 동물 조합을 판에 쌓아요", min: 3, max: 6, defN: 4, board: false, src: SRC, diff: DIFF,
     opts: [],
     howto: [
-      "방송: 동물 카드 3장을 순서대로 놓은 <b>조합</b>(1장만 공개)과 <b>개인 조건 카드</b>(비공개)를 받아요 · 5×5 판 · 5라운드 · 크레딧 30",
-      "라운드마다 <b>A 그룹 4개 · B 그룹 4개</b> 타일이 공개 → 모두 <b>A 또는 B</b>에 크레딧을 <b>몰래 1 이상</b> 걸어요 (못 따도 돌려받지 못함 · 올인 가능)",
-      "<b>걸린 합이 적은 그룹</b>이 낙찰 · 그 그룹에서 <b>가장 많이 건 사람</b>(비밀)이 타일 4개를 판에 <b>위에서 떨어뜨려</b> 놓아요 · 합이 같거나 최고액이 같으면 무효 · 안 뽑힌 타일은 버려요",
-      "끝나면 내 조합이 (가로 · 세로 · 대각선, 거꾸로도) 순서대로 놓인 줄 <b>1개당 1점</b> · <b>개인 조건</b>(예: 뱀 타일이 앵무새 타일보다 많다)을 이루면 점수 <b>2배</b>",
-      "점수가 가장 높은 사람이 1등 (같으면 공동)",
+      "목표: 5×5 판에 내 동물 조합 <b>3칸 줄</b>을 최대한 많이 만들어 점수가 가장 높은 사람이 1등 (같으면 공동)",
+      "준비: 동물 카드 3장을 순서대로 놓은 <b>조합</b>(1장만 공개)과 <b>개인 조건 카드</b>(비공개), 크레딧 30 · 5라운드",
+      "진행: 라운드마다 <b>A 그룹 · B 그룹</b> 타일이 공개 → 모두 <b>A 또는 B</b>에 크레딧을 <b>몰래 1 이상</b> 걸어요 (못 따도 돌려받지 못함 · 올인 가능) · <b>걸린 합이 적은 그룹</b>이 낙찰, 그 그룹에서 <b>가장 많이 건 사람</b>(비밀)이 타일을 판에 <b>위에서 떨어뜨려</b> 놓아요 · 안 뽑힌 타일은 버려요",
+      "승패: 끝나면 내 조합이 (가로 · 세로 · 대각선, 거꾸로도) 순서대로 놓인 줄 <b>1개당 1점</b> · <b>개인 조건</b>(예: 뱀 타일이 앵무새 타일보다 많다)을 이루면 점수 <b>2배</b>",
+      "특수: 합이 같거나 최고액이 같으면 <b>무효</b>라 다시 걸어요 (두 번까지, 세 번째도 무효면 타일을 버려요) · <b>한 그룹에만 걸렸으면 그 그룹이 낙찰</b> · 크레딧이 0 이면 그 라운드는 쉬어요",
     ],
     sub: V => (V.over ? "끝" : V.phase === "setup" ? "조합 정하기" : `${V.round}/${V.rounds} 라운드 · ${V.phase === "bid" ? "입찰" : V.phase === "place" ? "배치" : "결과"}`),
     chip: (V, i) => ({ t: V.over ? `${V.score[i]}점` : V.phase === "setup" || V.phase === "bid" ? (V.subbed[i] ? "냄" : "…") : "", on: !V.over && V.needs.includes(i), out: false }),
