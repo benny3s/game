@@ -197,7 +197,7 @@
     if (V.over) return { opp: "판이 끝났어요.", mine: watch ? "" : `내 승점 ${V.score[me]}점 · ${V.ranks[me] + 1}위`, rec: "한 판 더 해 봐요!", why: "" };
     if (watch) return { opp, mine: `문제 ${V.round} · 숫자 획득 ${V.set}번째.`, rec: "구경 중이에요.", why: "" };
     const H = K.hyp(V, () => 1, 0), T = K.targets(V, H);
-    const mine = `승점 ${V.score[me]}점 (${V.win}점 선승) · 이 문제 시험 ${V.my.length}번 · 남은 규칙 후보 ${H.length}/${K.NR}개 → 결괏값 후보 ${T.length}가지${T.length && T.length <= 4 ? ` (${T.map(x => fmt(x.v)).join(" · ")})` : ""}.`;
+    const mine = `승점 ${V.score[me]}점 (${V.win}점 선승) · 이 문제 시험 ${V.my.length}번 · 남은 규칙 후보 ${H.length}/${K.NR}개 → 결괏값 후보 ${T.length}가지${CC.open && T.length && T.length <= 4 ? ` (${T.map(x => fmt(x.v)).join(" · ")})` : ""}.`;
     let rec = "기다려요", why = "";
     if (V.needs.includes(me)) {
       const R = recOf(V, me), a = R && R.a;
@@ -205,13 +205,13 @@
       else if (a) {
         const eh = R.e != null ? R.e : H.length, left = V.tests - V.tcnt[me];
         if (a.t === "say") {
-          rec = `정답을 <b>외칠 차례</b>예요 — 후보가 결괏값 하나로 모여요.`; CC.full = `<b>${fmt(a.v)}</b> 를 외쳐요 (${esc(RULES[H[0]].nm)} → ${esc(explain(H[0], V.star))}).`;
+          rec = `정답을 <b>외칠 차례</b>예요 — 후보가 결괏값 하나로 모여요.`; CC.full = `<b>${fmt(a.v)}</b>${ja(fmt(a.v), "을")} 외쳐요 (${esc(RULES[H[0]].nm)} → ${esc(explain(H[0], V.star))}).`;
           why = `${CC.open ? CC.full + " " : ""}남은 후보 ${H.length}개가 모두 같은 결괏값이라 틀릴 일이 없어요.`;
         } else if (a.t === "test") {
           rec = `<b>시험</b>을 해 봐요 (남은 후보 ${H.length}개를 가르는 배치가 있어요).`; CC.full = `<b>${esc(arrTxt(V.nums, a.cells))}</b> 처럼 넣어요.`;
           why = `${CC.open ? CC.full + " " : ""}이 시험이면 후보 ${H.length}개가 평균 ${eh.toFixed(1)}개로 줄어요. 시험 ${left}번 남았어요.`;
         } else {
-          rec = `<b>넘기기</b> — 새 숫자를 받아요.`; why = `후보 ${H.length}개 중 결괏값 후보 ${T.length}가지${T.length ? ` (가장 많은 값 ${fmt(T[0].v)} = ${pc(T[0].n / H.length)})` : ""} — 지금 찍으면 틀릴 수 있고, 시험도 다 썼어요.`;
+          rec = `<b>넘기기</b> — 새 숫자를 받아요.`; why = `후보 ${H.length}개 중 결괏값 후보 ${T.length}가지${T.length ? ` (가장 많은 값이 맞을 확률 ${pc(T[0].n / H.length)})` : ""} — 지금 찍으면 틀릴 수 있고, 시험도 다 썼어요.`;
         }
         if (!CC.open && (a.t === "say" || a.t === "test")) rec += ` <button type="button" class="ep-hbtn" data-hchint>💡 전체 보기</button>`;
       }

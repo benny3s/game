@@ -150,7 +150,7 @@
     if (!a) return "—";
     if (a.t === "card") return `${a.pos + 1}번 카드 고름`;
     if (a.t === "pass") return "포기";
-    if (a.t === "bid") return `큐브 ${a.cubes.join(" + ")} 로 부르기 (+${sum(a.cubes)})`;
+    if (a.t === "bid") return `큐브 ${a.cubes.join(" + ")}${ja(a.cubes[a.cubes.length - 1], "로")} 부르기 (+${sum(a.cubes)})`;
     if (a.t === "sbid") return `비공개 입찰 큐브 ${a.cubes.length}개 (합 ${sum(a.cubes)})`;
     if (a.t === "swap") return "물품 교환";
     if (a.t === "steal") return "물품 강탈";
@@ -180,7 +180,7 @@
       if (V.phase === "pick") { rec = "아무 카드나 골라도 돼요"; why = `남은 카드 ${V.left}장 중 물품 약 ${V.itemsLeft}장 · 특수 ${K.NCARD - 22 - V.spec}장 — 특수 카드가 ${V.endAt - V.spec}번 더 나오면 끝이라 큐브를 너무 아끼면 남아요.`; }
       else if (V.phase === "bid" && a) {
         const b = V.bid, tot = a.t === "bid" ? b.tot[me] + sum(a.cubes) : null;
-        if (a.t === "bid") { rec = `<b>${tot}</b> 까지 올려 불러요.`; CC.full = `큐브 <b>${a.cubes.join(" + ")}</b> (이름으로 짐작하면 ${LV(b.id)}).`; }
+        if (a.t === "bid") { rec = `<b>${tot}</b>까지 올려 불러요.`; CC.full = `큐브 <b>${a.cubes.join(" + ")}</b> (이름으로 짐작하면 ${LV(b.id)}).`; }
         else { rec = "<b>포기</b>해요."; CC.full = `이름으로 짐작하면 ${LV(b.id)} — 이 값에 큐브를 더 쓰기엔 아까워요.`; }
         why = `${CC.open ? CC.full + " " : ""}내 큐브 합 ${myC}을 앞으로 나올 물품(약 ${R.ahead ? R.ahead.toFixed(1) : "?"}장)에 값어치대로 나누면 이 물품에 쓸 만큼은 약 ${Math.round(R.w)}예요.`;
         if (!CC.open) rec += ` <button type="button" class="ep-hbtn" data-bahint>💡 전체 보기</button>`;
