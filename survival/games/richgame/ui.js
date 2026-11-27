@@ -22,7 +22,7 @@
 .rg-ctl button{height:44px;border-radius:10px;border:0;background:linear-gradient(#4ade80,#16a34a);color:#052e16;font:900 20px var(--round);cursor:pointer;padding:0}
 .rg-ctl button.m{background:rgba(255,255,255,.12);color:#e2e8f0;border:1px solid rgba(255,255,255,.2)}
 .rg-ctl button:disabled{opacity:.3}
-.rg-ctl .n{display:flex;align-items:baseline;justify-content:center;gap:3px;font:900 20px var(--round);color:#fde68a;line-height:28px;white-space:nowrap;overflow:hidden}
+.rg-ctl .n{display:flex;align-items:baseline;justify-content:center;gap:3px;font:900 20px var(--round);color:#fde68a;line-height:1;white-space:nowrap;overflow:hidden}
 .rg-ctl .n small{font:700 9.5px var(--round);color:var(--soft)}
 .rg-st{flex:none;min-height:34px;display:grid;place-items:center;text-align:center;font:700 12.5px/1.35 var(--round);color:var(--soft);padding:0 2px}
 .rg-st b{color:#fde68a}.rg-st .ok{color:#86efac}.rg-st .no{color:#fca5a5}

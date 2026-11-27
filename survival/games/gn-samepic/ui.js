@@ -52,10 +52,15 @@
 .sp-tmsg{min-height:2.6em;text-align:center;line-height:1.4;color:var(--soft)}
 .sp-tmsg b{color:#fde68a}
 @media (max-height:650px){.sp-row button{height:46px}.sp-st{min-height:32px;font-size:12px}.sp-cd{height:30px;font-size:19px}}
-.sv-coachfit .sp-board{width:min(100%,calc(var(--sv-sh,360px) - 215px))}
-.sv-coachfit .sp-st{min-height:26px;font-size:11.5px}
-.sv-coachfit .sp-cd{height:26px;font-size:17px}
-.sv-coachfit .sp-c .e{font-size:22px}
+.sv-coachfit .sp-board{width:min(100%,max(136px,calc(var(--sv-sh,360px) - 200px)));gap:4px}
+.sv-coachfit .sp-c{font-size:15px;border-radius:9px;border-width:1.5px}
+.sv-coachfit .sp-c.fl .l{font-size:8px;left:3px;top:1px}
+.sv-coachfit .sp-c .mm{font-size:10px}
+.sv-coachfit .sp-bl{gap:2px;padding:3px 6px}
+.sv-coachfit .sp-mt{display:none}
+.sv-coachfit .sp-st{min-height:24px;font-size:11.5px;line-height:1.25}
+.sv-coachfit .sp-cd{height:24px;font-size:16px;border-radius:6px}
+.sv-coachfit .sp-c .e{font-size:19px}
 .sv-coachfit .sp-row button{height:44px}`;
   let styled = false;
   const style = () => { if (styled) return; styled = true; const s = document.createElement("style"); s.textContent = CSS; document.head.appendChild(s); };
